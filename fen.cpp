@@ -54,18 +54,18 @@ int testparse() {
 }
 
 struct ChessBoard {
-    char squares[8][8];
+    char squares[8][8] = {{' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '},
+                          {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '},
+                          {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '},
+                          {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '},
+                          {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '},
+                          {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '},
+                          {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '},
+                          {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '}};
 };
 
 ChessBoard parsePiecePlacement(const std::string& piecePlacement) {
     ChessBoard board;
-
-    // Initialize the board with spaces
-    for (int i = 0; i < 8; i++) {
-        for (int j = 0; j < 8; j++) {
-            board.squares[i][j] = ' ';
-        }
-    }
 
     int rank = 0, file = 0;
 
