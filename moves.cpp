@@ -1,5 +1,4 @@
 #include <vector>
-#include <cctype>
 
 struct Square {
     int rank; // From 0 to 7
@@ -56,41 +55,42 @@ std::vector<Square> kingMoves(const Square& from) {
     return moves;
 }
 
-std::vector<Square> pawnMoves(char piece, const Square& from) {
+std::vector<Square> whitePawnMoves(const Square& from) {
     std::vector<Square> moves;
-
-    if (piece == 'P') {
-        if (from.rank == 1 && from.rank + 2 < 8) {
-            moves.emplace_back(from.rank + 2, from.file);
-        }
-        if (from.rank + 1 < 8) {
-            moves.emplace_back(from.rank + 1, from.file);
-        }
-    } else if (piece == 'p') {
-        if (from.rank == 6 && from.rank - 2 >= 0) {
-            moves.emplace_back(from.rank - 2, from.file);
-        }
-        if (from.rank - 1 >= 0) {
-            moves.emplace_back(from.rank - 1, from.file);
-        }
+    if (from.rank == 1 && from.rank + 2 < 8) {
+        moves.emplace_back(from.rank + 2, from.file);
     }
+    if (from.rank + 1 < 8) {
+        moves.emplace_back(from.rank + 1, from.file);
+    }
+    return moves;
+}
 
+std::vector<Square> blackPawnMoves(const Square& from) {
+    std::vector<Square> moves;
+    if (from.rank == 6 && from.rank - 2 >= 0) {
+        moves.emplace_back(from.rank - 2, from.file);
+    }
+    if (from.rank - 1 >= 0) {
+        moves.emplace_back(from.rank - 1, from.file);
+    }
     return moves;
 }
 
 std::vector<Square> possibleMoves(char piece, const Square& from) {
-    switch (std::tolower(piece)) {
-        case 'r': return rookMoves(from);
-        case 'b': return bishopMoves(from);
-        case 'n': return knightMoves(from);
-        case 'k': return kingMoves(from);
-        case 'q': {
+    switch (piece) {
+        case 'R': case 'r': return rookMoves(from);
+        case 'B': case 'b': return bishopMoves(from);
+        case 'N': case 'n': return knightMoves(from);
+        case 'K': case 'k': return kingMoves(from);
+        case 'Q': case 'q': {
             std::vector<Square> moves = rookMoves(from);
             std::vector<Square> bishop_moves = bishopMoves(from);
             moves.insert(moves.end(), bishop_moves.begin(), bishop_moves.end());
             return moves;
         }
-        case 'p': return pawnMoves(piece, from);
+        case 'P': return whitePawnMoves(from);
+        case 'p': return blackPawnMoves(from);
         default:
             return {}; // Invalid piece
     }
