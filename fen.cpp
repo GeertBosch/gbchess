@@ -39,7 +39,7 @@ ChessPosition parseFEN(const std::string& fen) {
 }
 
 // Test
-int main() {
+int testparse() {
     const std::string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     ChessPosition position = parseFEN(fen);
     
@@ -49,6 +49,52 @@ int main() {
     std::cout << "En Passant Target: " << position.enPassantTarget << "\n";
     std::cout << "Halfmove Clock: " << position.halfmoveClock << "\n";
     std::cout << "Fullmove Number: " << position.fullmoveNumber << "\n";
+
+    return 0;
+}
+
+struct ChessBoard {
+    char squares[8][8];
+};
+
+ChessBoard parsePiecePlacement(const std::string& piecePlacement) {
+    ChessBoard board;
+
+    // Initialize the board with spaces
+    for (int i = 0; i < 8; i++) {
+        for (int j = 0; j < 8; j++) {
+            board.squares[i][j] = ' ';
+        }
+    }
+
+    int rank = 0, file = 0;
+
+    for (char ch : piecePlacement) {
+        if (ch == '/') {
+            rank++;
+            file = 0;
+        } else if (std::isdigit(ch)) {
+            file += ch - '0';  // Move the file by the number of empty squares
+        } else {
+            board.squares[rank][file] = ch;
+            file++;
+        }
+    }
+
+    return board;
+}
+
+// Test
+int main() {
+    const std::string piecePlacement = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
+    ChessBoard board = parsePiecePlacement(piecePlacement);
+
+    for (int i = 0; i < 8; i++) {
+        for (int j = 0; j < 8; j++) {
+            std::cout << board.squares[i][j] << ' ';
+        }
+        std::cout << '\n';
+    }
 
     return 0;
 }
