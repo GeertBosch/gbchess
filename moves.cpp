@@ -1,5 +1,6 @@
-#include <iostream>
 #include <cassert>
+#include <cmath>
+#include <iostream>
 #include <set>
 
 struct Square {
@@ -129,6 +130,32 @@ std::set<Square> possibleMoves(char piece, const Square& from) {
         default:
             return {};  // Return an empty set for invalid pieces
     }
+}
+
+bool movesThroughPieces(const ChessBoard& board, const Square& from, const Square& to) {
+    int rankDiff = to.rank - from.rank;
+    int fileDiff = to.file - from.file;
+
+    // Check if the move isn't horizontal, vertical, or diagonal
+    if (rankDiff != 0 && fileDiff != 0 && abs(rankDiff) != abs(fileDiff)) {
+        return false; // It's not in straight line, thus no need to check further
+    }
+
+    // Calculate the direction of movement for rank and file
+    int rankStep = (rankDiff != 0) ? rankDiff / abs(rankDiff) : 0;
+    int fileStep = (fileDiff != 0) ? fileDiff / abs(fileDiff) : 0;
+
+    int rankPos = from.rank + rankStep;
+    int filePos = from.file + fileStep;
+
+    while (rankPos != to.rank || filePos != to.file) {
+        if (board.squares[rankPos][filePos] != ' ') {
+            return true; // There's a piece in the way
+        }
+        rankPos += rankStep;
+        filePos += fileStep;
+    }
+    return false;
 }
 
 void testPossibleMoves() {
