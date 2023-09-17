@@ -37,6 +37,19 @@ std::set<Square> bishopMoves(const Square& from) {
     return moves;
 }
 
+std::set<Square> queenMoves(const Square& from) {
+    std::set<Square> moves;
+
+    // Combine the moves of a rook and a bishop
+    auto rookMvs = rookMoves(from);
+    auto bishopMvs = bishopMoves(from);
+
+    moves.insert(rookMvs.begin(), rookMvs.end());
+    moves.insert(bishopMvs.begin(), bishopMvs.end());
+
+    return moves;
+}
+
 std::set<Square> knightMoves(const Square& from) {
     std::set<Square> moves;
     int knight_moves[8][2] = {{-2, -1}, {-1, -2}, {1, -2}, {2, -1}, {2, 1}, {1, 2}, {-1, 2}, {-2, 1}};
@@ -90,32 +103,59 @@ std::set<Square> blackPawnMoves(const Square& from) {
 
 std::set<Square> possibleMoves(char piece, const Square& from) {
     switch (piece) {
-        case 'R':
-        case 'r':
-            return rookMoves(from);
-        case 'N':
-        case 'n':
-            return knightMoves(from);
-        case 'B':
-        case 'b':
-            return bishopMoves(from);
-        case 'Q':
-        case 'q':
-            {
-                auto rook = rookMoves(from);
-                auto bishop = bishopMoves(from);
-                rook.insert(bishop.begin(), bishop.end());
-                return rook;
-            }
-        case 'K':
-        case 'k':
-            return kingMoves(from);
         case 'P':
             return whitePawnMoves(from);
         case 'p':
             return blackPawnMoves(from);
+        case 'N': case 'n':
+            return knightMoves(from);
+        case 'B': case 'b':
+            return bishopMoves(from);
+        case 'R': case 'r':
+            return rookMoves(from);
+        case 'Q': case 'q':
+            return queenMoves(from);
+        case 'K': case 'k':
+            return kingMoves(from);
         default:
-            return {};  // Return an empty set for invalid pieces
+            return {};
+    }
+}
+
+void addCaptureIfOnBoard(std::set<Square>& captures, int rank, int file) {
+    if (rank >= 0 && rank < 8 && file >= 0 && file < 8) {
+        captures.insert({rank, file});
+    }
+}
+
+std::set<Square> possibleCaptures(char piece, const Square& from) {
+    switch (piece) {
+        case 'P':  // White Pawn
+        {
+            std::set<Square> captures;
+            addCaptureIfOnBoard(captures, from.rank - 1, from.file - 1);  // Diagonal left
+            addCaptureIfOnBoard(captures, from.rank - 1, from.file + 1);  // Diagonal right
+            return captures;
+        }
+        case 'p':  // Black Pawn
+        {
+            std::set<Square> captures;
+            addCaptureIfOnBoard(captures, from.rank + 1, from.file - 1);  // Diagonal left
+            addCaptureIfOnBoard(captures, from.rank + 1, from.file + 1);  // Diagonal right
+            return captures;
+        }
+        case 'N': case 'n':  // Knight (Both white and black)
+            return knightMoves(from);
+        case 'B': case 'b':  // Bishop (Both white and black)
+            return bishopMoves(from);
+        case 'R': case 'r':  // Rook (Both white and black)
+            return rookMoves(from);
+        case 'Q': case 'q':  // Queen (Both white and black)
+            return queenMoves(from);
+        case 'K': case 'k':  // King (Both white and black)
+            return kingMoves(from);
+        default:
+            return {};
     }
 }
 
