@@ -3,14 +3,7 @@
 #include <sstream>
 #include <vector>
 
-struct ChessPosition {
-    std::string piecePlacement;
-    char activeColor;
-    std::string castlingAvailability;
-    std::string enPassantTarget;
-    int halfmoveClock;
-    int fullmoveNumber;
-};
+#include "common.h"
 
 ChessPosition parseFEN(const std::string& fen) {
     ChessPosition position;
@@ -52,18 +45,6 @@ int testparse() {
 
     return 0;
 }
-
-struct ChessBoard {
-    char squares[8][8];
-
-    ChessBoard() {
-        for (int i = 0; i < 8; ++i) {
-            for (int j = 0; j < 8; ++j) {
-                squares[i][j] = ' ';
-            }
-        }
-    }
-};
 
 ChessBoard parsePiecePlacement(const std::string& piecePlacement) {
     ChessBoard board;

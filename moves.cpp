@@ -3,34 +3,7 @@
 #include <iostream>
 #include <set>
 
-struct Square {
-    int rank;
-    int file;
-
-    Square(int r = 0, int f = 0) : rank(r), file(f) {}
-
-    // Overload the < operator for Square
-    bool operator<(const Square& other) const {
-        if (rank == other.rank) {
-            return file < other.file;
-        }
-        return rank < other.rank;
-    }
-};
-
-struct Move {
-    Square from;
-    Square to;
-
-    Move(const Square& fromSquare, const Square& toSquare) : from(fromSquare), to(toSquare) {}
-
-    // Necessary for using the Move struct in a std::set
-    bool operator<(const Move& other) const {
-        if (from < other.from) return true;
-        if (from == other.from) return to < other.to;
-        return false;
-    }
-};
+#include "common.h"
 
 std::set<Square> rookMoves(const Square& from) {
     std::set<Square> moves;
@@ -184,18 +157,19 @@ std::set<Move> availableMoves(const ChessBoard& board, char activeColor) {
 
     for (int rank = 0; rank < 8; ++rank) {
         for (int file = 0; file < 8; ++file) {
-            char piece = board.squares[rank][file];
+            Square currentSquare{rank, file};
+            char piece = board[currentSquare];
 
             // Skip if the square is empty or if the piece isn't the active color
             if (piece == ' ' || (activeColor == 'w' && std::islower(piece)) || (activeColor == 'b' && std::isupper(piece))) {
                 continue;
             }
 
-            auto possibleSquares = possibleMoves(piece, {rank, file});
+            auto possibleSquares = possibleMoves(piece, currentSquare);
             for (const auto& dest : possibleSquares) {
                 // Check for self-blocking or moving through pieces
-                if (board.squares[dest.rank][dest.file] == ' ' && !movesThroughPieces(board, {rank, file}, dest)) {
-                    moves.insert({{rank, file}, dest});
+                if (board[dest] == ' ' && !movesThroughPieces(board, currentSquare, dest)) {
+                    moves.insert({currentSquare, dest});
                 }
             }
         }
