@@ -18,6 +18,20 @@ struct Square {
     }
 };
 
+struct Move {
+    Square from;
+    Square to;
+
+    Move(const Square& fromSquare, const Square& toSquare) : from(fromSquare), to(toSquare) {}
+
+    // Necessary for using the Move struct in a std::set
+    bool operator<(const Move& other) const {
+        if (from < other.from) return true;
+        if (from == other.from) return to < other.to;
+        return false;
+    }
+};
+
 std::set<Square> rookMoves(const Square& from) {
     std::set<Square> moves;
     for (int i = 0; i < 8; ++i) {
@@ -156,6 +170,38 @@ bool movesThroughPieces(const ChessBoard& board, const Square& from, const Squar
         filePos += fileStep;
     }
     return false;
+}
+
+/**
+ * This availableMoves function iterates over each square on the board. If a piece of the
+ * active color is found, it calculates its possible moves using the possibleMoves function
+ * you already have. For each possible destination square, it checks if the move would
+ * result in self-blocking or moving through other pieces using the movesThroughPieces
+ * function. If neither condition is true, the move is added to the set.
+ */
+std::set<Move> availableMoves(const ChessBoard& board, char activeColor) {
+    std::set<Move> moves;
+
+    for (int rank = 0; rank < 8; ++rank) {
+        for (int file = 0; file < 8; ++file) {
+            char piece = board.squares[rank][file];
+
+            // Skip if the square is empty or if the piece isn't the active color
+            if (piece == ' ' || (activeColor == 'w' && std::islower(piece)) || (activeColor == 'b' && std::isupper(piece))) {
+                continue;
+            }
+
+            auto possibleSquares = possibleMoves(piece, {rank, file});
+            for (const auto& dest : possibleSquares) {
+                // Check for self-blocking or moving through pieces
+                if (board.squares[dest.rank][dest.file] == ' ' && !movesThroughPieces(board, {rank, file}, dest)) {
+                    moves.insert({{rank, file}, dest});
+                }
+            }
+        }
+    }
+
+    return moves;
 }
 
 void testPossibleMoves() {
