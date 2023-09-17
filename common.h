@@ -13,7 +13,7 @@ struct Square {
     int rank;
     int file;
 
-    Square(int r = 0, int f = 0) : rank(r), file(f) {}
+    Square(int r, int f) : rank(r), file(f) {}
 
     // Overload the < operator for Square
     bool operator<(const Square& other) const {
