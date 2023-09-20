@@ -218,6 +218,43 @@ std::set<Move> availableMoves(const ChessBoard& board, char activeColor) {
     return moves;
 }
 
+/**
+ * This function follows the same structure as availableMoves but focuses on captures. It
+ * loops through each square on the board, determines if there's a piece of the active color
+ * on it, and then finds its possible captures. The result is filtered to exclude self-
+ * captures, and those that move through other pieces, adding valid captures to the result
+ * set.
+ */
+std::set<Move> availableCaptures(const ChessBoard& board, char activeColor) {
+    std::set<Move> captures;
+
+    for (int rank = 0; rank < 8; ++rank) {
+        for (int file = 0; file < 8; ++file) {
+            Square from = {rank, file};
+            char piece = board[from];
+
+            // Check if the piece is of the active color
+            if ((std::isupper(piece) && activeColor == 'w') || (std::islower(piece) && activeColor == 'b')) {
+                std::set<Square> possibleCaptureSquares = possibleCaptures(piece, from);
+
+                for (const Square& to : possibleCaptureSquares) {
+                    char targetPiece = board[to];
+
+                    // Exclude self-capture and moves that move through pieces
+                    if (targetPiece == ' ') continue; // No piece to capture
+
+                    if ((std::isupper(piece) && std::islower(targetPiece)) || (std::islower(piece) && std::isupper(targetPiece))) {
+                        if (!movesThroughPieces(board, from, to)) {
+                            captures.insert(Move{from, to});
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return captures;
+}
+
 void testPossibleMoves() {
     // Test rook moves
     {
