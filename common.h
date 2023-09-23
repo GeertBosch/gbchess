@@ -31,14 +31,16 @@ struct Square {
 struct Move {
     Square from;
     Square to;
+    char promotion = 'Q'; // Default promotion to Queen
 
     Move(const Square& fromSquare, const Square& toSquare) : from(fromSquare), to(toSquare) {}
 
-    // Necessary for using the Move struct in a std::set
-    bool operator<(const Move& other) const {
-        if (from < other.from) return true;
-        if (from == other.from) return to < other.to;
-        return false;
+    bool operator<(const Move& rhs) const {
+        if (from < rhs.from) return true;
+        if (rhs.from < from) return false;
+        if (to < rhs.to) return true;
+        if (rhs.to < to) return false;
+        return promotion < rhs.promotion;
     }
 };
 
