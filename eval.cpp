@@ -55,3 +55,13 @@ std::set<Square> findPieces(const ChessBoard& board, char piece) {
     }
     return squares;
 }
+
+bool isInCheck(const ChessBoard& board, char activeColor) {
+    char king = (activeColor == 'w') ? 'K' : 'k';
+    auto kingSquares = findPieces(board, king);
+
+    if(kingSquares.empty()) return false; // No king of the active color is present.
+
+    Square kingSquare = *kingSquares.begin(); // Get the square where the king is located.
+    return isAttacked(board, kingSquare);
+}
