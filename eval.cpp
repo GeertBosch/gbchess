@@ -1,4 +1,5 @@
 #include <map>
+#include <set>
 
 #include "common.h"
 #include "moves.h"
@@ -40,4 +41,17 @@ bool isAttacked(const ChessBoard& board, const Square& square) {
             return true; // The square is attacked by some opponent piece.
     }
     return false; // The square is not attacked by any opponent piece.
+}
+
+std::set<Square> findPieces(const ChessBoard& board, char piece) {
+    std::set<Square> squares;
+    for(int rank = 0; rank < 8; ++rank) {
+        for(int file = 0; file < 8; ++file) {
+            Square sq{rank, file};
+            if(board[sq] == piece) {
+                squares.insert(sq);
+            }
+        }
+    }
+    return squares;
 }
