@@ -1,5 +1,7 @@
 #include <string>
 
+#pragma once
+
 struct ChessPosition {
     std::string piecePlacement;
     char activeColor;

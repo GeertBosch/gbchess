@@ -1,6 +1,7 @@
 #include <map>
 
 #include "common.h"
+#include "moves.h"
 
 /**
  * This function iterates over each square in the board, uses the pieceValues map to find
@@ -25,4 +26,18 @@ float evaluateBoard(const ChessBoard& board) {
     }
 
     return value;
+}
+
+bool isAttacked(const ChessBoard& board, const Square& square) {
+    char piece = board[square];
+    if (piece == ' ') return false; // The square is empty, so it is not attacked.
+
+    char opponentColor = std::isupper(piece) ? 'b' : 'w';
+    auto captures = availableCaptures(board, opponentColor);
+
+    for(const auto& move : captures) {
+        if(move.to == square)
+            return true; // The square is attacked by some opponent piece.
+    }
+    return false; // The square is not attacked by any opponent piece.
 }
