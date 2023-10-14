@@ -66,6 +66,29 @@ ChessBoard parsePiecePlacement(const std::string& piecePlacement) {
     return board;
 }
 
+std::string toString(const ChessBoard& board) {
+    std::stringstream fen;
+    for (int rank = 7; rank >= 0; --rank) { // Start from the 8th rank and go downwards
+        int emptyCount = 0; // Count of consecutive empty squares
+        for (int file = 0; file < 8; ++file) {
+            Square sq{7 - rank, file}; // Adjust the rank based on how it's stored in the ChessBoard
+            char piece = board[sq];
+            if (piece == ' ') { // Empty square
+                ++emptyCount;
+            } else {
+                if (emptyCount > 0) {
+                    fen << emptyCount; // Add the count of empty squares
+                    emptyCount = 0; // Reset the count
+                }
+                fen << piece; // Add the piece
+            }
+        }
+        if (emptyCount > 0) fen << emptyCount; // Add remaining empty squares at the end of the rank
+        if (rank > 0) fen << '/'; // Separate ranks by '/'
+    }
+    return fen.str();
+}
+
 // Test
 int main() {
     const std::string piecePlacement = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
