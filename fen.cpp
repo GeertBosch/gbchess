@@ -89,18 +89,20 @@ std::string toString(const ChessBoard& board) {
     return fen.str();
 }
 
-// Test
+#ifdef fen_TEST
+
+#include <cassert>
+
 int main() {
     const std::string piecePlacement = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
     ChessBoard board = parsePiecePlacement(piecePlacement);
 
-    for (int i = 0; i < 8; i++) {
-        for (int j = 0; j < 8; j++) {
-            std::cout << board.squares[i][j] << ' ';
-        }
-        std::cout << '\n';
-    }
+    auto roundtrip = toString(board);
+    assert(roundtrip == piecePlacement);
+    std::cout << "FEN roundtrip test passed!\n";
 
+    testparse();
     return 0;
 }
 
+#endif

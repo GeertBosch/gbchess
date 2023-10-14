@@ -270,6 +270,7 @@ void applyMove(ChessBoard& board, const Move& move) {
     piece = ' '; // Empty the source square
 }
 
+#ifdef moves_TEST
 void testPossibleMoves() {
     // Test rook moves
     {
@@ -387,3 +388,4 @@ int main() {
     return 0;
 }
 
+#endif
