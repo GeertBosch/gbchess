@@ -57,8 +57,6 @@ struct ChessBoard {
         }
     }
 
-    operator std::string() const;
-
     char& operator[](const Square& sq) {
         return squares[sq.rank][sq.file];
     }
