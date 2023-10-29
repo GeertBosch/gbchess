@@ -5,47 +5,6 @@
 
 #include "common.h"
 
-ChessPosition parseFEN(const std::string& fen) {
-    ChessPosition position;
-
-    std::istringstream iss(fen);
-    std::vector<std::string> tokens;
-    std::string token;
-
-    while (iss >> token) {
-        tokens.push_back(token);
-    }
-
-    if (tokens.size() != 6) {
-        // Handle error: Incorrect FEN format
-        throw std::runtime_error("Incorrect FEN format");
-    }
-
-    position.piecePlacement = tokens[0];
-    position.activeColor = tokens[1][0];
-    position.castlingAvailability = tokens[2];
-    position.enPassantTarget = tokens[3];
-    position.halfmoveClock = std::stoi(tokens[4]);
-    position.fullmoveNumber = std::stoi(tokens[5]);
-
-    return position;
-}
-
-// Test
-int testparse() {
-    const std::string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    ChessPosition position = parseFEN(fen);
-    
-    std::cout << "Piece Placement: " << position.piecePlacement << "\n";
-    std::cout << "Active Color: " << position.activeColor << "\n";
-    std::cout << "Castling Availability: " << position.castlingAvailability << "\n";
-    std::cout << "En Passant Target: " << position.enPassantTarget << "\n";
-    std::cout << "Halfmove Clock: " << position.halfmoveClock << "\n";
-    std::cout << "Fullmove Number: " << position.fullmoveNumber << "\n";
-
-    return 0;
-}
-
 ChessBoard parsePiecePlacement(const std::string& piecePlacement) {
     ChessBoard board;
 
@@ -64,6 +23,25 @@ ChessBoard parsePiecePlacement(const std::string& piecePlacement) {
     }
 
     return board;
+}
+
+ChessPosition parseFEN(const std::string& fen) {
+    std::stringstream ss(fen);
+    ChessPosition position;
+    std::string piecePlacementStr;
+
+    // Read piece placement from the FEN string
+    std::getline(ss, piecePlacementStr, ' ');
+    position.piecePlacement = parsePiecePlacement(piecePlacementStr);
+
+    // Read other components of the FEN string
+    ss >> position.activeColor
+       >> position.castlingAvailability
+       >> position.enPassantTarget
+       >> position.halfmoveClock
+       >> position.fullmoveNumber;
+
+    return position;
 }
 
 std::string toString(const ChessBoard& board) {
@@ -89,9 +67,29 @@ std::string toString(const ChessBoard& board) {
     return fen.str();
 }
 
+std::ostream& operator<<(std::ostream& os, const ChessBoard& board) {
+    os << toString(board);
+    return os;
+}
+
 #ifdef fen_TEST
 
 #include <cassert>
+
+// Test
+int testparse() {
+    const std::string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    ChessPosition position = parseFEN(fen);
+
+    std::cout << "Piece Placement: " << position.piecePlacement << "\n";
+    std::cout << "Active Color: " << position.activeColor << "\n";
+    std::cout << "Castling Availability: " << position.castlingAvailability << "\n";
+    std::cout << "En Passant Target: " << position.enPassantTarget << "\n";
+    std::cout << "Halfmove Clock: " << position.halfmoveClock << "\n";
+    std::cout << "Fullmove Number: " << position.fullmoveNumber << "\n";
+
+    return 0;
+}
 
 void testFEN() {
     std::vector<std::string> testStrings = {

@@ -2,15 +2,6 @@
 
 #pragma once
 
-struct ChessPosition {
-    std::string piecePlacement;
-    char activeColor;
-    std::string castlingAvailability;
-    std::string enPassantTarget;
-    int halfmoveClock;
-    int fullmoveNumber;
-};
-
 struct Square {
     int rank;
     int file;
@@ -64,4 +55,13 @@ struct ChessBoard {
     const char& operator[](const Square& sq) const {
         return squares[sq.rank][sq.file];
     }
+};
+
+struct ChessPosition {
+    ChessBoard piecePlacement;
+    char activeColor;
+    std::string castlingAvailability;
+    std::string enPassantTarget;
+    int halfmoveClock;
+    int fullmoveNumber;
 };
