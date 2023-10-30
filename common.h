@@ -58,7 +58,7 @@ struct ChessBoard {
 };
 
 struct ChessPosition {
-    ChessBoard piecePlacement;
+    ChessBoard board;
     char activeColor;
     std::string castlingAvailability;
     std::string enPassantTarget;

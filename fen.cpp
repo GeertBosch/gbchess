@@ -32,7 +32,7 @@ ChessPosition parseFEN(const std::string& fen) {
 
     // Read piece placement from the FEN string
     std::getline(ss, piecePlacementStr, ' ');
-    position.piecePlacement = parsePiecePlacement(piecePlacementStr);
+    position.board = parsePiecePlacement(piecePlacementStr);
 
     // Read other components of the FEN string
     ss >> position.activeColor
@@ -81,7 +81,7 @@ int testparse() {
     const std::string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     ChessPosition position = parseFEN(fen);
 
-    std::cout << "Piece Placement: " << position.piecePlacement << "\n";
+    std::cout << "Piece Placement: " << position.board << "\n";
     std::cout << "Active Color: " << position.activeColor << "\n";
     std::cout << "Castling Availability: " << position.castlingAvailability << "\n";
     std::cout << "En Passant Target: " << position.enPassantTarget << "\n";

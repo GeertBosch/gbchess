@@ -270,6 +270,42 @@ void applyMove(ChessBoard& board, const Move& move) {
     piece = ' '; // Empty the source square
 }
 
+void applyMove(ChessPosition& position, const Move& move) {
+    // Apply the move to the board
+    applyMove(position.board, move);
+
+    // Update halfMoveClock
+    // Reset on pawn advance or capture, else increment
+    char piece = position.board.squares[move.from.rank][move.from.file];
+    if (tolower(piece) == 'p' || position.board.squares[move.to.rank][move.to.file] != ' ') {
+        position.halfmoveClock = 0;
+    } else {
+        position.halfmoveClock++;
+    }
+
+    // Update fullMoveNumber
+    // Increment after black's move
+    if (position.activeColor == 'b') {
+        position.fullmoveNumber++;
+    }
+
+    // Update activeColor
+    position.activeColor = (position.activeColor == 'w') ? 'b' : 'w';
+
+    // Update castlingAvailability
+    // Here, you should handle the logic to update the castling rights
+    // based on the move made. This includes disabling castling if a rook
+    // or king is moved, or if a rook is captured.
+
+    // Update enPassantTarget
+    // Set the en passant target if a pawn moves two squares forward,
+    // otherwise reset it.
+    // This logic depends on whether a pawn has moved two squares from its original rank.
+
+    // ... add logic for enPassantTarget here ...
+}
+
+
 #ifdef moves_TEST
 void testPossibleMoves() {
     // Test rook moves
