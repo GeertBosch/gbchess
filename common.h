@@ -43,6 +43,11 @@ struct Move {
         if (rhs.to < to) return false;
         return promotion < rhs.promotion;
     }
+
+    // String conversion operator
+    operator std::string() const {
+        return static_cast<std::string>(from) + " " + static_cast<std::string>(to);
+    }
 };
 
 struct ChessBoard {
