@@ -17,7 +17,7 @@ struct Square {
     }
 
     bool operator==(const Square& other) const {
-	return rank == other.rank && file == other.file;
+	    return rank == other.rank && file == other.file;
     }
 };
 
