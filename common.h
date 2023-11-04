@@ -19,6 +19,14 @@ struct Square {
     bool operator==(const Square& other) const {
 	    return rank == other.rank && file == other.file;
     }
+
+    // Conversion to std::string
+    operator std::string() const {
+        std::string squareStr;
+        squareStr += char('a' + file);  // Convert file to letter ('a' to 'h')
+        squareStr += char('1' + rank);  // Convert rank to digit ('1' to '8')
+        return squareStr;
+    }
 };
 
 struct Move {
