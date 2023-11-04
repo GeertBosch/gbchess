@@ -1,16 +1,10 @@
 #include <map>
 #include <set>
+#include <limits>
 
-#include "common.h"
+#include "eval.h"
 #include "moves.h"
 
-/**
- * This function iterates over each square in the board, uses the pieceValues map to find
- * the value of the piece on that square, and adjusts the total value accordingly. White
- * pieces have positive values, and black pieces have negative values, so the returned value
- * represents the advantage to the white player: positive for white's advantage, negative
- * for black's advantage.
- */
 float evaluateBoard(const ChessBoard& board) {
     float value = 0.0f;
     const std::map<char, float> pieceValues = {
@@ -27,4 +21,63 @@ float evaluateBoard(const ChessBoard& board) {
     }
 
     return value;
+}
+
+std::map<Move, float> computeBestMoves(const ChessPosition& position, int depth) {
+    std::map<Move, float> bestMoves;
+
+    // Base case: if depth is zero, return the static evaluation of the position
+    if (depth == 0) {
+        for (const auto& move : computeAllLegalMoves(position)) {
+            ChessPosition newPosition = move.second;
+            float evaluation = evaluateBoard(newPosition.board);
+            bestMoves[move.first] = (position.activeColor == 'w') ? evaluation : -evaluation;
+        }
+        return bestMoves;
+    }
+
+    // Recursive case: compute all legal moves and evaluate them
+    for (const auto& move : computeAllLegalMoves(position)) {
+        ChessPosition newPosition = move.second;
+        // Recursively compute the best moves for the opponent
+        auto opponentBestMoves = computeBestMoves(newPosition, depth - 1);
+
+        // Find the opponent's best move (which is the worst move for us)
+        float bestScore = (position.activeColor == 'w') ? std::numeric_limits<float>::lowest() : std::numeric_limits<float>::max();
+        for (const auto& opponentMove : opponentBestMoves) {
+            if (position.activeColor == 'w') {
+                // White is maximizing
+                bestScore = std::max(bestScore, opponentMove.second);
+            } else {
+                // Black is minimizing
+                bestScore = std::min(bestScore, opponentMove.second);
+            }
+        }
+
+        // Store the move and its evaluation
+        bestMoves[move.first] = bestScore;
+    }
+
+    // For white, we want to maximize the score, and for black, we want to minimize the score.
+    if (position.activeColor == 'w') {
+        // Choose the move with the maximum score
+        float maxEvaluation = std::numeric_limits<float>::lowest();
+        for (const auto& moveEval : bestMoves) {
+            maxEvaluation = std::max(maxEvaluation, moveEval.second);
+        }
+        for (auto& moveEval : bestMoves) {
+            moveEval.second = maxEvaluation - moveEval.second;
+        }
+    } else {
+        // Choose the move with the minimum score
+        float minEvaluation = std::numeric_limits<float>::max();
+        for (const auto& moveEval : bestMoves) {
+            minEvaluation = std::min(minEvaluation, moveEval.second);
+        }
+        for (auto& moveEval : bestMoves) {
+            moveEval.second = moveEval.second - minEvaluation;
+        }
+    }
+
+    return bestMoves;
 }
