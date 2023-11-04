@@ -1,7 +1,7 @@
 all: test
 
-%-test: %.cpp
-	g++ -D$(@:-test=_TEST) -o $@ $^
+%-test: %_test.cpp %.cpp
+	g++ -o $@ $^
 
 eval-test: eval.cpp moves.cpp
 
