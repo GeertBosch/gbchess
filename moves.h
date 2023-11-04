@@ -1,3 +1,4 @@
+#include <map>
 #include <set>
 
 #include "common.h"
@@ -43,4 +44,15 @@ std::set<Square> possibleMoves(char piece, const Square& from);
  * @param from The starting square of the piece for which to calculate possible capture moves.
  * @return A set of squares from which the piece can potentially make a capture.
  */
+
 std::set<Square> possibleCaptures(char piece, const Square& from);
+/**
+ * Computes all legal moves from a given chess position, mapping each move to the resulting
+ * chess position after the move is applied. This function checks for moves that do not leave
+ * or place the king of the active color in check.
+ *
+ * @param position The starting chess position.
+ * @return A map where each key is a legal move and the corresponding value is the new chess
+ *         position resulting from that move.
+ */
+std::map<Move, ChessPosition> computeAllLegalMoves(const ChessPosition& position);

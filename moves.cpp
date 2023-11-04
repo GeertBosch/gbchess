@@ -1,6 +1,7 @@
 #include <cassert>
 #include <cmath>
 #include <iostream>
+#include <map>
 #include <set>
 
 #include "moves.h"
@@ -327,4 +328,40 @@ bool isInCheck(const ChessBoard& board, char activeColor) {
 
     Square kingSquare = *kingSquares.begin(); // Get the square where the king is located.
     return isAttacked(board, kingSquare);
+}
+
+/**
+ * Computes all legal moves from a given chess position, mapping each move to the resulting
+ * chess position after the move is applied. This function checks for moves that do not leave
+ * or place the king of the active color in check.
+ *
+ * @param position The starting chess position.
+ * @return A map where each key is a legal move and the corresponding value is the new chess
+ *         position resulting from that move.
+ */
+std::map<Move, ChessPosition> computeAllLegalMoves(const ChessPosition& position) {
+    std::map<Move, ChessPosition> legalMoves;
+
+    // Gather all possible moves and captures
+    auto moves = availableMoves(position.board, position.activeColor);
+    auto captures = availableCaptures(position.board, position.activeColor);
+
+    // Combine moves and captures into one set
+    moves.insert(captures.begin(), captures.end());
+
+    // Iterate over all moves and captures
+    for (const auto& move : moves) {
+        // Make a copy of the position to apply the move
+        ChessPosition newPosition = position;
+        applyMove(newPosition, move);
+
+        // Check if the move would result in our king being in check
+        // Adjusted to use newPosition.piecePlacement to pass to isInCheck
+        if (!isInCheck(newPosition.board, position.activeColor)) {
+            // If not in check, add the move to the map of legal moves
+            legalMoves[move] = newPosition;
+        }
+    }
+
+    return legalMoves;
 }
