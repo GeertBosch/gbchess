@@ -177,7 +177,7 @@ bool movesThroughPieces(const ChessBoard& board, const Square& from, const Squar
     int filePos = from.file + fileStep;
 
     while (rankPos != to.rank || filePos != to.file) {
-        if (board.squares[rankPos][filePos] != ' ') {
+        if (board[{rankPos, filePos}] != ' ') {
             return true; // There's a piece in the way
         }
         rankPos += rankStep;
@@ -264,8 +264,8 @@ void applyMove(ChessPosition& position, const Move& move) {
 
     // Update halfMoveClock
     // Reset on pawn advance or capture, else increment
-    char piece = position.board.squares[move.from.rank][move.from.file];
-    if (tolower(piece) == 'p' || position.board.squares[move.to.rank][move.to.file] != ' ') {
+    char piece = position.board[move.from];
+    if (tolower(piece) == 'p' || position.board[move.to] != ' ') {
         position.halfmoveClock = 0;
     } else {
         position.halfmoveClock++;

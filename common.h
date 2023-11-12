@@ -51,8 +51,10 @@ struct Move {
 };
 
 struct ChessBoard {
+private:
     char squares[8][8];
 
+public:
     ChessBoard() {
         for (auto& row : squares) {
             for (char& cell : row) {

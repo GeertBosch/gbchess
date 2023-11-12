@@ -13,4 +13,4 @@ eval-test: eval_test.cpp eval.cpp fen.cpp moves.cpp
 test: fen-test moves-test eval-test
 	./fen-test
 	./moves-test
-	./eval-test "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 2
+	./eval-test "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 4
