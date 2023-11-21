@@ -6,8 +6,8 @@
 #include "eval.h"
 #include "moves.h"
 
-constexpr bool debug = 1;
-#define D if (debug) std::cout
+constexpr bool debug = 0;
+#define D if (debug) std::cerr
 
 std::ostream& operator<<(std::ostream& os, const Move& sq) {
     return os << std::string(sq);
@@ -25,10 +25,7 @@ EvaluatedMove::operator std::string() const {
     std::stringstream ss;
     const char* kind[2][2] = {{"", "="}, {"+", "#"}};  // {{check, mate}, {check, mate}}
     ss << move;
-    if (depth <= 1)
-        ss << kind[check][mate];
-    else if (check && mate)
-        ss << " M" << depth;
+    ss << kind[check][mate];
     ss << " " << evaluation << " @ " << depth;
     return ss.str();
 }
@@ -77,7 +74,7 @@ EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
 
     if (allMoves.empty()) {
         D << "No moves available for " << position.activeColor << "!\n";
-        if (debug) printBoard(std::cout, position.board);
+        if (debug) printBoard(std::cerr, position.board);
         return {};
     }
 
@@ -115,8 +112,11 @@ EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
         // Update the best move if the opponent's move is better than our current best.
         if (best < ourMove) {
             D << indent << best << " => " << ourMove << std::endl;
-
             best = ourMove;
+            if (best.check && best.mate) {
+                D << indent << "Checkmate!\n";
+                break;
+            }
         }
     }
 

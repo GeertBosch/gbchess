@@ -57,9 +57,13 @@ struct Move {
 };
 
 class ChessBoard {
-    std::array<char, 64> squares = { ' ' };
+    std::array<char, 64> squares;
 
 public:
+    ChessBoard() {
+        squares.fill(' ');
+    }
+
     char& operator[](const Square& sq) {
         int index = sq.rank * 8 + sq.file;
         return squares[index];

@@ -1,14 +1,17 @@
-all: test
+all: test puzzles
 
 %-test: %_test.cpp %.cpp
 	g++ -o $@ $^
 
 clean:
-	rm -f *.o *-test *.core
+	rm -f *.o *-test *.core puzzles.actual
 
-eval-test: eval_test.cpp eval.cpp fen.cpp moves.cpp
+eval-test: eval_test.cpp eval.cpp fen.cpp moves.cpp 
 	g++ -o $@ $^
 
+puzzles: eval-test puzzles.in puzzles.expected
+	./eval-test 3 < puzzles.in | tee puzzles.actual
+	diff -aB puzzles.actual puzzles.expected
 	
 test: fen-test moves-test eval-test
 	./fen-test
