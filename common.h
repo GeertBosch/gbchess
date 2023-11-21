@@ -1,3 +1,4 @@
+#include <array>
 #include <string>
 
 #pragma once
@@ -55,25 +56,18 @@ struct Move {
     }
 };
 
-struct ChessBoard {
-private:
-    char squares[8][8];
+class ChessBoard {
+    std::array<char, 64> squares = { ' ' };
 
 public:
-    ChessBoard() {
-        for (auto& row : squares) {
-            for (char& cell : row) {
-                cell = ' ';
-            }
-        }
-    }
-
     char& operator[](const Square& sq) {
-        return squares[sq.rank][sq.file];
+        int index = sq.rank * 8 + sq.file;
+        return squares[index];
     }
 
     const char& operator[](const Square& sq) const {
-        return squares[sq.rank][sq.file];
+        int index = sq.rank * 8 + sq.file;
+        return squares[index];
     }
 };
 
