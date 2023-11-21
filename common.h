@@ -34,6 +34,7 @@ struct Move {
     Square to;
     char promotion = 'Q'; // Default promotion to Queen
 
+    Move() : from(Square(-1, -1)), to(Square(-1, -1)) {}
     Move(const Square& fromSquare, const Square& toSquare) : from(fromSquare), to(toSquare) {}
 
     bool operator<(const Move& rhs) const {
@@ -47,6 +48,10 @@ struct Move {
     // String conversion operator
     operator std::string() const {
         return static_cast<std::string>(from) + " " + static_cast<std::string>(to);
+    }
+
+    operator bool() const {
+        return from.rank != to.rank || from.file != to.file;
     }
 };
 

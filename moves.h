@@ -56,3 +56,12 @@ std::set<Square> possibleCaptures(char piece, const Square& from);
  *         position resulting from that move.
  */
 std::map<Move, ChessPosition> computeAllLegalMoves(const ChessPosition& position);
+
+/**
+ * Checks if the specified color is in check on the given chess board.
+ *
+ * @param board The chess board to check.
+ * @param activeColor The color to check for being in check.
+ * @return True if the specified color is in check, false otherwise.
+ */
+bool isInCheck(const ChessBoard& board, char activeColor);

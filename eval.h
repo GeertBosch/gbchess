@@ -1,5 +1,42 @@
 #include <map>
+#include <sstream>
+
 #include "common.h"
+
+static float worstEval = -999;
+static float drawEval = 0;
+static float bestEval = 999;
+
+/**
+ * The evaluation is always from the perspective of the active color. Higher evaluations are better,
+ * zero indicates a draw. Units of evaluation are roughly the value of a pawn.
+ */
+struct EvaluatedMove {
+     Move move; // Defaults to an invalid move
+     float evaluation;
+     bool check;
+     bool mate;
+     int depth;
+
+    EvaluatedMove() : depth(0) {}
+    EvaluatedMove(const Move& move, bool check, bool mate, float evaluation, int depth) : move(move), evaluation(evaluation), check(check), mate(mate), depth(depth) {}
+    EvaluatedMove& operator=(const EvaluatedMove& other) = default;
+    EvaluatedMove operator-() const {
+        auto ret = *this;
+        ret.evaluation *= -1;
+
+        return ret;
+    }
+
+    operator std::string() const;
+
+    bool operator<(const EvaluatedMove& rhs) const {
+        if (!move) return true;
+        if (evaluation < rhs.evaluation) return true;
+        if (rhs.evaluation < evaluation) return false;
+        return depth > rhs.depth;
+    }
+};
 
 /**
  * This function iterates over each square in the board, uses the pieceValues map to find
@@ -11,12 +48,21 @@
 float evaluateBoard(const ChessBoard& board);
 
 /**
+ * Prints the chess board to the specified output stream in grid notation.
+ *
+ * @param os The output stream to print the board to.
+ * @param board The chess board to be printed.
+ */
+void printBoard(std::ostream& os, const ChessBoard& board);
+
+/**
  * Evaluates the best moves from a given chess position up to a certain depth.
  * Each move is evaluated based on the static evaluation of the board or by recursive calls
- * to this function, decreasing the depth until it reaches zero.
+ * to this function, decreasing the depth until it reaches zero. It also accounts for checkmate
+ * and stalemate situations.
  *
  * @param position The current chess position to evaluate.
  * @param depth The depth to which the evaluation should be performed.
  * @return A map of moves to their evaluation score.
  */
-std::map<Move, float> computeBestMoves(const ChessPosition& position, int depth);
+EvaluatedMove computeBestMove(const ChessPosition& position, int depth);

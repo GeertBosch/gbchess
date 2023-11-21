@@ -20,19 +20,19 @@ int main(int argc, char* argv[]) {
     // Parse the FEN string into a ChessPosition
     ChessPosition position = parseFEN(fen);
 
+    // Print the board in grid notation
+    printBoard(std::cout, position.board);
+
     // Evaluate the board
     float evaluation = evaluateBoard(position.board);
     std::cout << "Board Evaluation: " << evaluation << std::endl;
 
     // Compute the best move
-    auto bestMoves = computeBestMoves(position, depth);
+    auto bestMove = computeBestMove(position, depth);
 
     // Print the best moves and their evaluations
-    std::cout << "Best Moves and Evaluations:" << std::endl;
-    for (auto& bestMove : bestMoves) {
-        std::string moveStr = static_cast<std::string>(bestMove.first); // Use the string conversion operator
-        std::cout << moveStr << " " << bestMove.second << std::endl;
-    }
+    std::cout << "Best Move and Evaluation:" << std::endl;
+    std::cout << static_cast<std::string>(bestMove) << std::endl;
 
     return 0;
 }
