@@ -11,14 +11,6 @@ struct Square {
     Square(int r, int f) : _rank(r), _file(f) {}
     Square(int index) : _rank(index / 8), _file(index % 8) {}
 
-    // Overload the < operator for Square
-    bool operator<(const Square& other) const {
-        if (_rank == other._rank) {
-            return _file < other._file;
-        }
-        return _rank < other._rank;
-    }
-
     int rank() const {
         return _rank;
     }
@@ -124,14 +116,6 @@ struct Move {
     Move() : from(Square(-1, -1)), to(Square(-1, -1)) {}
     Move(const Square& fromSquare, const Square& toSquare) : from(fromSquare), to(toSquare) {}
     Move(const Square& fromSquare, const Square& toSquare, PieceType promotion) : from(fromSquare), to(toSquare), promotion(promotion) {}
-
-    bool operator<(const Move& rhs) const {
-        if (from < rhs.from) return true;
-        if (rhs.from < from) return false;
-        if (to < rhs.to) return true;
-        if (rhs.to < to) return false;
-        return promotion < rhs.promotion;
-    }
 
     // String conversion operator
     operator std::string() const {

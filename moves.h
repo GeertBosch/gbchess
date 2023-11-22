@@ -1,6 +1,5 @@
-#include <bitset>
 #include <map>
-#include <set>
+#include <vector>
 
 #include "common.h"
 
@@ -67,6 +66,7 @@ public:
     }
 };
 
+using MoveVector = std::vector<Move>;
 
 /**
  * This availableMoves function iterates over each square on the board. If a piece of the
@@ -75,7 +75,7 @@ public:
  * result in self-blocking or moving through other pieces using the movesThroughPieces
  * function. If neither condition is true, the move is added to the set.
  */
-std::set<Move> availableMoves(const ChessBoard& board, char activeColor);
+void addAvailableMoves(MoveVector& moves, const ChessBoard& board, char activeColor);
 
 /**
  * This function follows the same structure as availableMoves but focuses on captures. It
@@ -84,7 +84,7 @@ std::set<Move> availableMoves(const ChessBoard& board, char activeColor);
  * captures, and those that move through other pieces, adding valid captures to the result
  * set.
  */
-std::set<Move> availableCaptures(const ChessBoard& board, char activeColor);
+void addAvailableCaptures(MoveVector& captures, const ChessBoard& board, char activeColor);
 
 /**
  * Calculates all possible moves for a given chess piece on the board.

@@ -137,11 +137,6 @@ void testSquare() {
     assert(square2.file() == 2);
     assert(square2.index() == 42);
 
-    // Test operator<
-    assert(square1 < square2);
-    assert(!(square2 < square1));
-    assert(!(square1 < square1));
-
     // Test operator==
     assert(square1 == Square(19));
     assert(square2 == Square(42));

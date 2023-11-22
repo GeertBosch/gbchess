@@ -2,7 +2,6 @@
 #include <cmath>
 #include <iostream>
 #include <map>
-#include <set>
 
 #include "moves.h"
 
@@ -186,22 +185,20 @@ bool movesThroughPieces(const ChessBoard& board, const Square& from, const Squar
     return false;
 }
 
-void addMove(std::set<Move>& moves, PieceType type, const Square& from, const Square& to) {
+void addMove(MoveVector& moves, PieceType type, const Square& from, const Square& to) {
     // If promoted, add all possible promotions
     if (type == PieceType::PAWN && (to.rank() == 0 || to.rank() == 7)) {
         for (auto promotion : {PieceType::KNIGHT, PieceType::BISHOP,
                                PieceType::ROOK, PieceType::QUEEN}) {
-            moves.insert(Move{from, to, promotion});
+            moves.emplace_back(Move{from, to, promotion});
         }
     }
     else {
-        moves.insert(Move{from, to});
+        moves.emplace_back(Move{from, to});
     }
 }
 
-std::set<Move> availableMoves(const ChessBoard& board, Color activeColor) {
-    std::set<Move> moves;
-
+void addAvailableMoves(MoveVector& moves, const ChessBoard& board, Color activeColor) {
     for (int rank = 0; rank < 8; ++rank) {
         for (int file = 0; file < 8; ++file) {
             Square currentSquare{rank, file};
@@ -221,14 +218,10 @@ std::set<Move> availableMoves(const ChessBoard& board, Color activeColor) {
             }
         }
     }
-
-    return moves;
 }
 
 
-std::set<Move> availableCaptures(const ChessBoard& board, Color activeColor) {
-    std::set<Move> captures;
-
+void addAvailableCaptures(MoveVector& captures, const ChessBoard& board, Color activeColor) {
     for (int rank = 0; rank < 8; ++rank) {
         for (int file = 0; file < 8; ++file) {
             Square from = {rank, file};
@@ -252,7 +245,6 @@ std::set<Move> availableCaptures(const ChessBoard& board, Color activeColor) {
             }
         }
     }
-    return captures;
 }
 
 void applyMove(ChessBoard& board, const Move& move) {
@@ -308,7 +300,8 @@ bool isAttacked(const ChessBoard& board, const Square& square) {
     if (piece == ' ') return false; // The square is empty, so it is not attacked.
 
     Color opponentColor = std::isupper(piece) ? Color::BLACK : Color::WHITE;
-    auto captures = availableCaptures(board, opponentColor);
+    MoveVector captures;
+    addAvailableCaptures(captures, board, opponentColor);
 
     for(const auto& move : captures) {
         if(move.to == square)
@@ -353,11 +346,9 @@ std::map<Move, ChessPosition> computeAllLegalMoves(const ChessPosition& position
     std::map<Move, ChessPosition> legalMoves;
 
     // Gather all possible moves and captures
-    auto moves = availableMoves(position.board, position.activeColor);
-    auto captures = availableCaptures(position.board, position.activeColor);
-
-    // Combine moves and captures into one set
-    moves.insert(captures.begin(), captures.end());
+    MoveVector moves;
+    addAvailableCaptures(moves, position.board, position.activeColor);
+    addAvailableMoves(moves, position.board, position.activeColor);
 
     // Iterate over all moves and captures
     for (const auto& move : moves) {
