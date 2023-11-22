@@ -44,14 +44,86 @@ struct Square {
     }
 };
 
+enum class Color : uint8_t {
+    WHITE,
+    BLACK
+};
+
+inline std::string to_string(Color color) {
+    return color == Color::WHITE ? "w" : "b";
+}
+
+inline Color operator!(Color color) {
+    return color == Color::WHITE ? Color::BLACK : Color::WHITE;
+}
+
+inline Color color (char color) {
+    assert(color == 'w' || color == 'b');
+    return color == 'b' ? Color::BLACK : Color::WHITE;
+}
+
+
+enum class PieceType : uint8_t {
+    INVALID,
+    PAWN,
+    KNIGHT,
+    BISHOP,
+    ROOK,
+    QUEEN,
+    KING
+};
+
+inline PieceType fromChar(char type) {
+    switch (type) {
+        case 'P':
+        case 'p':
+            return PieceType::PAWN;
+        case 'N':
+        case 'n':
+            return PieceType::KNIGHT;
+        case 'B':
+        case 'b':
+            return PieceType::BISHOP;
+        case 'R':
+        case 'r':
+            return PieceType::ROOK;
+        case 'Q':
+        case 'q':
+            return PieceType::QUEEN;
+        case 'K':
+        case 'k':
+            return PieceType::KING;
+        default:
+            assert(false);
+    }
+}
+
+inline char toChar(PieceType type, Color color) {
+    switch (type) {
+        case PieceType::PAWN:
+            return color == Color::WHITE ? 'P' : 'p';
+        case PieceType::KNIGHT:
+            return color == Color::WHITE ? 'N' : 'n';
+        case PieceType::BISHOP:
+            return color == Color::WHITE ? 'B' : 'b';
+        case PieceType::ROOK:
+            return color == Color::WHITE ? 'R' : 'r';
+        case PieceType::QUEEN:
+            return color == Color::WHITE ? 'Q' : 'q';
+        case PieceType::KING:
+            return color == Color::WHITE ? 'K' : 'k';
+        default:
+            assert(false);
+    }
+}
+
 struct Move {
     Square from;
     Square to;
-    char promotion = 'Q'; // Default promotion to Queen
-
+    PieceType promotion = PieceType::INVALID;
     Move() : from(Square(-1, -1)), to(Square(-1, -1)) {}
     Move(const Square& fromSquare, const Square& toSquare) : from(fromSquare), to(toSquare) {}
-    Move(const Square& fromSquare, const Square& toSquare, char promotionPiece) : from(fromSquare), to(toSquare), promotion(promotionPiece) {}
+    Move(const Square& fromSquare, const Square& toSquare, PieceType promotion) : from(fromSquare), to(toSquare), promotion(promotion) {}
 
     bool operator<(const Move& rhs) const {
         if (from < rhs.from) return true;
@@ -90,23 +162,6 @@ public:
     }
 };
 
-enum class Color : uint8_t {
-    WHITE,
-    BLACK
-};
-
-inline std::string to_string(Color color) {
-    return color == Color::WHITE ? "w" : "b";
-}
-
-inline Color operator!(Color color) {
-    return color == Color::WHITE ? Color::BLACK : Color::WHITE;
-}
-
-inline Color color (char color) {
-    assert(color == 'w' || color == 'b');
-    return color == 'b' ? Color::BLACK : Color::WHITE;
-}
 
 enum CastlingAvailability : uint8_t {
     WHITE_KINGSIDE = 1,

@@ -186,6 +186,19 @@ bool movesThroughPieces(const ChessBoard& board, const Square& from, const Squar
     return false;
 }
 
+void addMove(std::set<Move>& moves, PieceType type, const Square& from, const Square& to) {
+    // If promoted, add all possible promotions
+    if (type == PieceType::PAWN && (to.rank() == 0 || to.rank() == 7)) {
+        for (auto promotion : {PieceType::KNIGHT, PieceType::BISHOP,
+                               PieceType::ROOK, PieceType::QUEEN}) {
+            moves.insert(Move{from, to, promotion});
+        }
+    }
+    else {
+        moves.insert(Move{from, to});
+    }
+}
+
 std::set<Move> availableMoves(const ChessBoard& board, Color activeColor) {
     std::set<Move> moves;
 
@@ -203,7 +216,7 @@ std::set<Move> availableMoves(const ChessBoard& board, Color activeColor) {
             for (const auto& dest : possibleSquares) {
                 // Check for self-blocking or moving through pieces
                 if (board[dest] == ' ' && !movesThroughPieces(board, currentSquare, dest)) {
-                    moves.insert({currentSquare, dest});
+                    addMove(moves, fromChar(piece), currentSquare, dest);
                 }
             }
         }
@@ -235,7 +248,7 @@ std::set<Move> availableCaptures(const ChessBoard& board, Color activeColor) {
                 if (targetPiece == ' ') continue; // No piece to capture
 
                 if (pieceColor != targetPieceColor && !movesThroughPieces(board, from, to))
-                    captures.insert(Move{from, to});
+                    addMove(captures, fromChar(piece), from, to);
             }
         }
     }
@@ -245,15 +258,10 @@ std::set<Move> availableCaptures(const ChessBoard& board, Color activeColor) {
 void applyMove(ChessBoard& board, const Move& move) {
     char& piece = board[move.from];
     char& target = board[move.to];
+    Color color = islower(piece) ? Color::BLACK : Color::WHITE;
 
-    // Check if it's a pawn promotion
-    if ((piece == 'P' && move.to.rank() == 7) || (piece == 'p' && move.to.rank() == 0)) {
-        target = move.promotion; // Promote the pawn to the desired piece
-        if (piece == 'p') // If it's a black pawn, make the promoted piece lowercase
-            target = std::tolower(target);
-    } else {
-        target = piece; // Move the piece to the target square
-    }
+    // Update the target, including promotion if applicable
+    target = move.promotion == PieceType::INVALID ? piece : toChar(move.promotion, color);
     piece = ' '; // Empty the source square
 }
 

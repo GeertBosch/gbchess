@@ -11,7 +11,7 @@ eval-test: eval_test.cpp eval.cpp fen.cpp moves.cpp
 
 puzzles: eval-test puzzles.in puzzles.expected
 	./eval-test 3 < puzzles.in > puzzles.actual
-	@diff -aB puzzles.actual puzzles.expected && echo "All puzzles solved correctly!"
+	@diff -uaB puzzles.actual puzzles.expected && echo "All puzzles solved correctly!"
 	
 test: fen-test moves-test eval-test
 	./fen-test

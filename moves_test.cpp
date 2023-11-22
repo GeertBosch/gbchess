@@ -235,14 +235,14 @@ void testApplyMove() {
         // White pawn promotion
         ChessBoard board;
         board[Square(6, 0)] = 'P';
-        applyMove(board, Move(Square(6, 0), Square(7, 0), 'Q'));
+        applyMove(board, Move(Square(6, 0), Square(7, 0), PieceType::QUEEN));
         assert(board[Square(7, 0)] == 'Q');
         assert(board[Square(6, 0)] == ' ');
 
         // Black pawn promotion
         board[Square(1, 0)] = 'p';
-        applyMove(board, Move(Square(1, 0), Square(0, 0), 'q'));
-        assert(board[Square(0, 0)] == 'q');
+        applyMove(board, Move(Square(1, 0), Square(0, 0), PieceType::ROOK));
+        assert(board[Square(0, 0)] == 'r');
         assert(board[Square(1, 0)] == ' ');
     }
 
@@ -252,15 +252,15 @@ void testApplyMove() {
         ChessBoard board;
         board[Square(6, 0)] = 'P';
         board[Square(7, 1)] = 'r'; // White pawn captures black rook
-        applyMove(board, Move(Square(6, 0), Square(7, 1), 'Q'));
-        assert(board[Square(7, 1)] == 'Q');
+        applyMove(board, Move(Square(6, 0), Square(7, 1), PieceType::BISHOP));
+        assert(board[Square(7, 1)] == 'B');
         assert(board[Square(6, 0)] == ' ');
 
         // Black pawn promotion
         board[Square(1, 0)] = 'p';
         board[Square(0, 1)] = 'R'; // Black pawn captures white rook
-        applyMove(board, Move(Square(1, 0), Square(0, 1), 'q'));
-        assert(board[Square(0, 1)] == 'q');
+        applyMove(board, Move(Square(1, 0), Square(0, 1), PieceType::KNIGHT));
+        assert(board[Square(0, 1)] == 'n');
         assert(board[Square(1, 0)] == ' ');
     }
 
