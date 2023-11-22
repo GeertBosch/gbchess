@@ -1,13 +1,13 @@
 all: test puzzles
 
 %-test: %_test.cpp %.cpp
-	g++ -o $@ $^
+	g++ -g -O0 -o $@ $^
 
 clean:
 	rm -f *.o *-test *.core puzzles.actual
 
 eval-test: eval_test.cpp eval.cpp fen.cpp moves.cpp 
-	g++ -o $@ $^
+	g++ -O2 -o $@ $^
 
 puzzles: eval-test puzzles.in puzzles.expected
 	./eval-test 3 < puzzles.in > puzzles.actual

@@ -3,6 +3,16 @@
 
 #include "moves.h"
 
+std::string toString(SquareSet squares) {
+    std::string str;
+    for (Square sq : squares) {
+        str += static_cast<std::string>(sq);
+        str += " ";
+    }
+    str.pop_back(); // Remove the last space
+    return str;
+}
+
 void testPossibleMoves() {
     // Test rook moves
     {
@@ -60,7 +70,7 @@ void testPossibleMoves() {
 
 void testPossibleCaptures() {
     // Knight tests
-    std::set<Square> moves = possibleCaptures('N', {4, 4});
+    auto moves = possibleCaptures('N', {4, 4});
     assert(moves.count({2, 3}));
     assert(moves.count({2, 5}));
     assert(moves.count({6, 3}));
@@ -114,9 +124,98 @@ void testPossibleCaptures() {
     std::cout << "All possibleCaptures tests passed!" << std::endl;
 }
 
+void testSquare() {
+    // Test constructor with rank and file
+    Square square1(2, 3);
+    assert(square1.rank() == 2);
+    assert(square1.file() == 3);
+    assert(square1.index() == 19);
+
+    // Test constructor with index
+    Square square2(42);
+    assert(square2.rank() == 5);
+    assert(square2.file() == 2);
+    assert(square2.index() == 42);
+
+    // Test operator<
+    assert(square1 < square2);
+    assert(!(square2 < square1));
+    assert(!(square1 < square1));
+
+    // Test operator==
+    assert(square1 == Square(19));
+    assert(square2 == Square(42));
+    assert(!(square1 == square2));
+
+    // Test conversion to std::string
+    assert(static_cast<std::string>(square1) == "d3");
+    assert(static_cast<std::string>(square2) == "c6");
+
+    std::cout << "All Square tests passed!" << std::endl;
+}
+
+void testSquareSet() {
+    SquareSet set;
+
+    // Test empty set
+    assert(set.empty());
+    assert(set.size() == 0);
+
+    // Test insert and count
+    set.insert(Square(0));
+    assert(!set.empty());
+    assert(set.size() == 1);
+    assert(set.count(Square(0)) == 1);
+    assert(set.count(Square(1)) == 0);
+
+    // Test insert and count with multiple squares
+    set.insert(Square(1));
+    set.insert(Square(4));
+    assert(set.size() == 3);
+    assert(set.count(Square(0)) == 1);
+    assert(set.count(Square(1)) == 1);
+    assert(set.count(Square(2)) == 0);
+    assert(set.count(Square(3)) == 0);
+    assert(set.count(Square(4)) == 1);
+
+    // Test iterator
+    set.insert(Square(9));
+    SquareSet::iterator it = set.begin();
+    assert(*it == Square(0));
+    ++it;
+    assert(*it == Square(1));
+    ++it;
+    assert(*it == Square(4));
+    ++it;
+    assert(it != set.end());
+    assert(*it == Square(9));
+    ++it;
+    assert(it == set.end());
+
+    // Test end iterator
+    it = set.end();
+    assert(it == set.end());
+
+    // Test copy constructor
+    SquareSet set2;
+    set2.insert(Square(3));
+    set2.insert(Square(4));
+    set2.insert(Square(5));
+    set.insert(set2.begin(), set2.end());
+    assert(set.size() == 6);
+    assert(set.count(Square(3)) == 1);
+    assert(set.count(Square(4)) == 1);
+    assert(set.count(Square(5)) == 1);
+
+    std::cout << "All SquareSet tests passed!" << std::endl;
+}
+
 int main() {
+    testSquare();
+    testSquareSet();
     testPossibleMoves();
     testPossibleCaptures();
+    std::cout << "All move tests passed!" << std::endl;
     return 0;
 }
 

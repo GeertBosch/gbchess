@@ -1,7 +1,72 @@
+#include <bitset>
 #include <map>
 #include <set>
 
 #include "common.h"
+
+/**
+ * Represents a set of squares on a chess board. This class is like std::set<Square>, but
+ * uses a bitset represented by a uint64_t to store the squares, which is more efficient.
+ */
+class SquareSet {
+    uint64_t _squares = 0;
+public:
+    class iterator;
+
+    void insert(Square square) {
+        _squares |= (1ull << square.index());
+    }
+    void insert(SquareSet other) {
+        _squares |= other._squares;
+    }
+
+    void insert (iterator begin, iterator end) {
+        for (auto it = begin; it != end; ++it) {
+            insert(*it);
+        }
+    }
+
+    bool empty() const {
+        return _squares == 0;
+    }
+
+    size_t size() const {
+        return __builtin_popcountll(_squares);
+    }
+
+    size_t count(Square square) const {
+        return (_squares >> square.index()) & 1;
+    }
+
+    class iterator {
+        friend class SquareSet;
+        uint64_t _squares;
+        iterator(SquareSet squares) : _squares(squares._squares) {}
+    public:
+        iterator operator++() {
+            _squares &= _squares - 1; // Clear the least significant bit
+            return *this;
+        }
+        Square operator*() {
+            return Square(__builtin_ctzll(_squares)); // Count trailing zeros
+        }
+        bool operator==(const iterator& other) {
+            return _squares == other._squares;
+        }
+        bool operator!=(const iterator& other) {
+            return !(_squares == other._squares);
+        }
+    };
+
+    iterator begin() {
+        return {*this};
+    }
+
+    iterator end() {
+        return SquareSet();
+    }
+};
+
 
 /**
  * This availableMoves function iterates over each square on the board. If a piece of the
@@ -31,7 +96,7 @@ std::set<Move> availableCaptures(const ChessBoard& board, char activeColor);
  * @param from The starting square of the piece for which to calculate possible moves.
  * @return A set of squares to which the piece can potentially move.
  */
-std::set<Square> possibleMoves(char piece, const Square& from);
+SquareSet possibleMoves(char piece, const Square& from);
 
 /**
  * Calculates all possible capture moves for a given chess piece on the board.
@@ -45,7 +110,7 @@ std::set<Square> possibleMoves(char piece, const Square& from);
  * @return A set of squares from which the piece can potentially make a capture.
  */
 
-std::set<Square> possibleCaptures(char piece, const Square& from);
+SquareSet possibleCaptures(char piece, const Square& from);
 /**
  * Computes all legal moves from a given chess position, mapping each move to the resulting
  * chess position after the move is applied. This function checks for moves that do not leave

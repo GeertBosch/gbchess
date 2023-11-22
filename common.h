@@ -4,28 +4,41 @@
 #pragma once
 
 struct Square {
-    int rank;
-    int file;
+    int _rank;
+    int _file;
 
-    Square(int r, int f) : rank(r), file(f) {}
+    Square(int r, int f) : _rank(r), _file(f) {}
+    Square(int index) : _rank(index / 8), _file(index % 8) {}
 
     // Overload the < operator for Square
     bool operator<(const Square& other) const {
-        if (rank == other.rank) {
-            return file < other.file;
+        if (_rank == other._rank) {
+            return _file < other._file;
         }
-        return rank < other.rank;
+        return _rank < other._rank;
+    }
+
+    int rank() const {
+        return _rank;
+    }
+
+    int file() const {
+        return _file;
+    }
+
+    int index() const {
+        return _rank * 8 + _file;
     }
 
     bool operator==(const Square& other) const {
-	    return rank == other.rank && file == other.file;
+	    return _rank == other._rank && _file == other._file;
     }
 
     // Conversion to std::string
     operator std::string() const {
         std::string squareStr;
-        squareStr += char('a' + file);  // Convert file to letter ('a' to 'h')
-        squareStr += char('1' + rank);  // Convert rank to digit ('1' to '8')
+        squareStr += char('a' + _file);  // Convert file to letter ('a' to 'h')
+        squareStr += char('1' + _rank);  // Convert rank to digit ('1' to '8')
         return squareStr;
     }
 };
@@ -52,7 +65,7 @@ struct Move {
     }
 
     operator bool() const {
-        return from.rank != to.rank || from.file != to.file;
+        return from._rank != to._rank || from._file != to._file;
     }
 };
 
@@ -65,12 +78,12 @@ public:
     }
 
     char& operator[](const Square& sq) {
-        int index = sq.rank * 8 + sq.file;
+        int index = sq._rank * 8 + sq._file;
         return squares[index];
     }
 
     const char& operator[](const Square& sq) const {
-        int index = sq.rank * 8 + sq.file;
+        int index = sq._rank * 8 + sq._file;
         return squares[index];
     }
 };

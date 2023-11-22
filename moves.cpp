@@ -6,40 +6,40 @@
 
 #include "moves.h"
 
-std::set<Square> rookMoves(const Square& from) {
-    std::set<Square> moves;
+SquareSet rookMoves(const Square& from) {
+    SquareSet moves;
     for (int i = 0; i < 8; ++i) {
-        if (i != from.rank) {
-            moves.insert(Square(i, from.file));
+        if (i != from.rank()) {
+            moves.insert(Square(i, from.file()));
         }
-        if (i != from.file) {
-            moves.insert(Square(from.rank, i));
+        if (i != from.file()) {
+            moves.insert(Square(from.rank(), i));
         }
     }
     return moves;
 }
 
-std::set<Square> bishopMoves(const Square& from) {
-    std::set<Square> moves;
+SquareSet bishopMoves(const Square& from) {
+    SquareSet moves;
     for (int i = 1; i < 8; ++i) {
-        if (from.rank + i < 8 && from.file + i < 8) {
-            moves.insert(Square(from.rank + i, from.file + i));
+        if (from.rank() + i < 8 && from.file() + i < 8) {
+            moves.insert(Square(from.rank() + i, from.file() + i));
         }
-        if (from.rank - i >= 0 && from.file - i >= 0) {
-            moves.insert(Square(from.rank - i, from.file - i));
+        if (from.rank() - i >= 0 && from.file() - i >= 0) {
+            moves.insert(Square(from.rank() - i, from.file() - i));
         }
-        if (from.rank + i < 8 && from.file - i >= 0) {
-            moves.insert(Square(from.rank + i, from.file - i));
+        if (from.rank() + i < 8 && from.file() - i >= 0) {
+            moves.insert(Square(from.rank() + i, from.file() - i));
         }
-        if (from.rank - i >= 0 && from.file + i < 8) {
-            moves.insert(Square(from.rank - i, from.file + i));
+        if (from.rank() - i >= 0 && from.file() + i < 8) {
+            moves.insert(Square(from.rank() - i, from.file() + i));
         }
     }
     return moves;
 }
 
-std::set<Square> queenMoves(const Square& from) {
-    std::set<Square> moves;
+SquareSet queenMoves(const Square& from) {
+    SquareSet moves;
 
     // Combine the moves of a rook and a bishop
     auto rookMvs = rookMoves(from);
@@ -51,12 +51,12 @@ std::set<Square> queenMoves(const Square& from) {
     return moves;
 }
 
-std::set<Square> knightMoves(const Square& from) {
-    std::set<Square> moves;
+SquareSet knightMoves(const Square& from) {
+    SquareSet moves;
     int knight_moves[8][2] = {{-2, -1}, {-1, -2}, {1, -2}, {2, -1}, {2, 1}, {1, 2}, {-1, 2}, {-2, 1}};
     for (int i = 0; i < 8; ++i) {
-        int new_rank = from.rank + knight_moves[i][0];
-        int new_file = from.file + knight_moves[i][1];
+        int new_rank = from.rank() + knight_moves[i][0];
+        int new_file = from.file() + knight_moves[i][1];
         if (new_rank >= 0 && new_rank < 8 && new_file >= 0 && new_file < 8) {
             moves.insert(Square(new_rank, new_file));
         }
@@ -64,13 +64,13 @@ std::set<Square> knightMoves(const Square& from) {
     return moves;
 }
 
-std::set<Square> kingMoves(const Square& from) {
-    std::set<Square> moves;
+SquareSet kingMoves(const Square& from) {
+    SquareSet moves;
     for (int i = -1; i <= 1; ++i) {
         for (int j = -1; j <= 1; ++j) {
             if (i != 0 || j != 0) {
-                int new_rank = from.rank + i;
-                int new_file = from.file + j;
+                int new_rank = from.rank() + i;
+                int new_file = from.file() + j;
                 if (new_rank >= 0 && new_rank < 8 && new_file >= 0 && new_file < 8) {
                     moves.insert(Square(new_rank, new_file));
                 }
@@ -80,29 +80,29 @@ std::set<Square> kingMoves(const Square& from) {
     return moves;
 }
 
-std::set<Square> whitePawnMoves(const Square& from) {
-    std::set<Square> moves;
-    if (from.rank == 1 && from.rank + 2 < 8) {
-        moves.insert(Square(from.rank + 2, from.file));
+SquareSet whitePawnMoves(const Square& from) {
+    SquareSet moves;
+    if (from.rank() == 1 && from.rank() + 2 < 8) {
+        moves.insert(Square(from.rank() + 2, from.file()));
     }
-    if (from.rank + 1 < 8) {
-        moves.insert(Square(from.rank + 1, from.file));
-    }
-    return moves;
-}
-
-std::set<Square> blackPawnMoves(const Square& from) {
-    std::set<Square> moves;
-    if (from.rank == 6 && from.rank - 2 >= 0) {
-        moves.insert(Square(from.rank - 2, from.file));
-    }
-    if (from.rank - 1 >= 0) {
-        moves.insert(Square(from.rank - 1, from.file));
+    if (from.rank() + 1 < 8) {
+        moves.insert(Square(from.rank() + 1, from.file()));
     }
     return moves;
 }
 
-std::set<Square> possibleMoves(char piece, const Square& from) {
+SquareSet blackPawnMoves(const Square& from) {
+    SquareSet moves;
+    if (from.rank() == 6 && from.rank() - 2 >= 0) {
+        moves.insert(Square(from.rank() - 2, from.file()));
+    }
+    if (from.rank() - 1 >= 0) {
+        moves.insert(Square(from.rank() - 1, from.file()));
+    }
+    return moves;
+}
+
+SquareSet possibleMoves(char piece, const Square& from) {
     switch (piece) {
         case 'P':
             return whitePawnMoves(from);
@@ -123,26 +123,26 @@ std::set<Square> possibleMoves(char piece, const Square& from) {
     }
 }
 
-void addCaptureIfOnBoard(std::set<Square>& captures, int rank, int file) {
+void addCaptureIfOnBoard(SquareSet& captures, int rank, int file) {
     if (rank >= 0 && rank < 8 && file >= 0 && file < 8) {
-        captures.insert({rank, file});
+        captures.insert(Square{rank, file});
     }
 }
 
-std::set<Square> possibleCaptures(char piece, const Square& from) {
+SquareSet possibleCaptures(char piece, const Square& from) {
     switch (piece) {
         case 'P':  // White Pawn
         {
-            std::set<Square> captures;
-            addCaptureIfOnBoard(captures, from.rank - 1, from.file - 1);  // Diagonal left
-            addCaptureIfOnBoard(captures, from.rank - 1, from.file + 1);  // Diagonal right
+            SquareSet captures;
+            addCaptureIfOnBoard(captures, from.rank() - 1, from.file() - 1);  // Diagonal left
+            addCaptureIfOnBoard(captures, from.rank() - 1, from.file() + 1);  // Diagonal right
             return captures;
         }
         case 'p':  // Black Pawn
         {
-            std::set<Square> captures;
-            addCaptureIfOnBoard(captures, from.rank + 1, from.file - 1);  // Diagonal left
-            addCaptureIfOnBoard(captures, from.rank + 1, from.file + 1);  // Diagonal right
+            SquareSet captures;
+            addCaptureIfOnBoard(captures, from.rank() + 1, from.file() - 1);  // Diagonal left
+            addCaptureIfOnBoard(captures, from.rank() + 1, from.file() + 1);  // Diagonal right
             return captures;
         }
         case 'N': case 'n':  // Knight (Both white and black)
@@ -161,8 +161,8 @@ std::set<Square> possibleCaptures(char piece, const Square& from) {
 }
 
 bool movesThroughPieces(const ChessBoard& board, const Square& from, const Square& to) {
-    int rankDiff = to.rank - from.rank;
-    int fileDiff = to.file - from.file;
+    int rankDiff = to.rank() - from.rank();
+    int fileDiff = to.file() - from.file();
 
     // Check if the move isn't horizontal, vertical, or diagonal
     if (rankDiff != 0 && fileDiff != 0 && abs(rankDiff) != abs(fileDiff)) {
@@ -173,10 +173,10 @@ bool movesThroughPieces(const ChessBoard& board, const Square& from, const Squar
     int rankStep = (rankDiff != 0) ? rankDiff / abs(rankDiff) : 0;
     int fileStep = (fileDiff != 0) ? fileDiff / abs(fileDiff) : 0;
 
-    int rankPos = from.rank + rankStep;
-    int filePos = from.file + fileStep;
+    int rankPos = from.rank() + rankStep;
+    int filePos = from.file() + fileStep;
 
-    while (rankPos != to.rank || filePos != to.file) {
+    while (rankPos != to.rank() || filePos != to.file()) {
         if (board[{rankPos, filePos}] != ' ') {
             return true; // There's a piece in the way
         }
@@ -223,7 +223,7 @@ std::set<Move> availableCaptures(const ChessBoard& board, char activeColor) {
 
             // Check if the piece is of the active color
             if ((std::isupper(piece) && activeColor == 'w') || (std::islower(piece) && activeColor == 'b')) {
-                std::set<Square> possibleCaptureSquares = possibleCaptures(piece, from);
+                SquareSet possibleCaptureSquares = possibleCaptures(piece, from);
 
                 for (const Square& to : possibleCaptureSquares) {
                     char targetPiece = board[to];
@@ -248,7 +248,7 @@ void applyMove(ChessBoard& board, const Move& move) {
     char& target = board[move.to];
 
     // Check if it's a pawn promotion
-    if ((piece == 'P' && move.to.rank == 0) || (piece == 'p' && move.to.rank == 7)) {
+    if ((piece == 'P' && move.to.rank() == 0) || (piece == 'p' && move.to.rank() == 7)) {
         target = move.promotion; // Promote the pawn to the desired piece
         if (piece == 'p') // If it's a black pawn, make the promoted piece lowercase
             target = std::tolower(target);
@@ -307,8 +307,8 @@ bool isAttacked(const ChessBoard& board, const Square& square) {
     return false; // The square is not attacked by any opponent piece.
 }
 
-std::set<Square> findPieces(const ChessBoard& board, char piece) {
-    std::set<Square> squares;
+SquareSet findPieces(const ChessBoard& board, char piece) {
+    SquareSet squares;
     for(int rank = 0; rank < 8; ++rank) {
         for(int file = 0; file < 8; ++file) {
             Square sq{rank, file};
