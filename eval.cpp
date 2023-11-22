@@ -18,6 +18,9 @@ std::ostream& operator<<(std::ostream& os, const Square& sq) {
 std::ostream& operator<<(std::ostream& os, const EvaluatedMove& sq) {
     return os << std::string(sq);
 }
+std::ostream& operator<<(std::ostream& os, Color color) {
+    return os << (color == Color::BLACK ? 'b' : 'w')    ;
+}
 
 EvaluatedMove::operator std::string() const {
     if (!move)
@@ -86,7 +89,7 @@ EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
         for (const auto& move : allMoves) {
             ChessPosition newPosition = move.second;
             EvaluatedMove ours{move.first, false, false, evaluateBoard(newPosition.board), 0};
-            if (position.activeColor == 'b') ours.evaluation = -ours.evaluation;
+            if (position.activeColor == Color::BLACK) ours.evaluation = -ours.evaluation;
             if (best < ours) {
                 best = ours;
             }

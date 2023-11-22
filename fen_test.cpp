@@ -10,9 +10,9 @@ int testparse() {
     ChessPosition position = parseFEN(fen);
 
     std::cout << "Piece Placement: " << position.board << "\n";
-    std::cout << "Active Color: " << position.activeColor << "\n";
+    std::cout << "Active Color: " << to_string(position.activeColor) << "\n";
     std::cout << "Castling Availability: " << position.castlingAvailability << "\n";
-    std::cout << "En Passant Target: " << position.enPassantTarget << "\n";
+    std::cout << "En Passant Target: " << std::string(position.enPassantTarget) << "\n";
     std::cout << "Halfmove Clock: " << position.halfmoveClock << "\n";
     std::cout << "Fullmove Number: " << position.fullmoveNumber << "\n";
 

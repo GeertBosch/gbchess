@@ -186,7 +186,7 @@ bool movesThroughPieces(const ChessBoard& board, const Square& from, const Squar
     return false;
 }
 
-std::set<Move> availableMoves(const ChessBoard& board, char activeColor) {
+std::set<Move> availableMoves(const ChessBoard& board, Color activeColor) {
     std::set<Move> moves;
 
     for (int rank = 0; rank < 8; ++rank) {
@@ -195,7 +195,7 @@ std::set<Move> availableMoves(const ChessBoard& board, char activeColor) {
             char piece = board[currentSquare];
 
             // Skip if the square is empty or if the piece isn't the active color
-            if (piece == ' ' || (activeColor == 'w' && std::islower(piece)) || (activeColor == 'b' && std::isupper(piece))) {
+            if (piece == ' ' || (activeColor == Color::WHITE && std::islower(piece)) || (activeColor == Color::BLACK && std::isupper(piece))) {
                 continue;
             }
 
@@ -213,30 +213,29 @@ std::set<Move> availableMoves(const ChessBoard& board, char activeColor) {
 }
 
 
-std::set<Move> availableCaptures(const ChessBoard& board, char activeColor) {
+std::set<Move> availableCaptures(const ChessBoard& board, Color activeColor) {
     std::set<Move> captures;
 
     for (int rank = 0; rank < 8; ++rank) {
         for (int file = 0; file < 8; ++file) {
             Square from = {rank, file};
             char piece = board[from];
+            Color pieceColor = islower(piece) ? Color::BLACK : Color::WHITE;
 
             // Check if the piece is of the active color
-            if ((std::isupper(piece) && activeColor == 'w') || (std::islower(piece) && activeColor == 'b')) {
-                SquareSet possibleCaptureSquares = possibleCaptures(piece, from);
+            if (pieceColor != activeColor)
+                continue;
+            SquareSet possibleCaptureSquares = possibleCaptures(piece, from);
 
-                for (const Square& to : possibleCaptureSquares) {
-                    char targetPiece = board[to];
+            for (const Square& to : possibleCaptureSquares) {
+                char targetPiece = board[to];
+                Color targetPieceColor = islower(targetPiece) ? Color::BLACK : Color::WHITE;
 
-                    // Exclude self-capture and moves that move through pieces
-                    if (targetPiece == ' ') continue; // No piece to capture
+                // Exclude self-capture and moves that move through pieces
+                if (targetPiece == ' ') continue; // No piece to capture
 
-                    if ((std::isupper(piece) && std::islower(targetPiece)) || (std::islower(piece) && std::isupper(targetPiece))) {
-                        if (!movesThroughPieces(board, from, to)) {
-                            captures.insert(Move{from, to});
-                        }
-                    }
-                }
+                if (pieceColor != targetPieceColor && !movesThroughPieces(board, from, to))
+                    captures.insert(Move{from, to});
             }
         }
     }
@@ -259,26 +258,29 @@ void applyMove(ChessBoard& board, const Move& move) {
 }
 
 void applyMove(ChessPosition& position, const Move& move) {
+    // Check if the move is a capture or pawn move before applying it to the board
+    bool capture = position.board[move.to] != ' ';
+    bool pawnMove = tolower(position.board[move.from]) == 'p';
+
     // Apply the move to the board
     applyMove(position.board, move);
 
     // Update halfMoveClock
+    ++ position.halfmoveClock;
     // Reset on pawn advance or capture, else increment
-    char piece = position.board[move.from];
-    if (tolower(piece) == 'p' || position.board[move.to] != ' ') {
+    if (pawnMove || capture)
         position.halfmoveClock = 0;
-    } else {
-        position.halfmoveClock++;
-    }
 
     // Update fullMoveNumber
     // Increment after black's move
-    if (position.activeColor == 'b') {
-        position.fullmoveNumber++;
+    if (position.activeColor == Color::BLACK) {
+        ++position.fullmoveNumber;
     }
 
     // Update activeColor
-    position.activeColor = (position.activeColor == 'w') ? 'b' : 'w';
+    auto oldColor = position.activeColor;
+    position.activeColor = !position.activeColor;
+    assert(oldColor != position.activeColor);
 
     // Update castlingAvailability
     // Here, you should handle the logic to update the castling rights
@@ -297,7 +299,7 @@ bool isAttacked(const ChessBoard& board, const Square& square) {
     char piece = board[square];
     if (piece == ' ') return false; // The square is empty, so it is not attacked.
 
-    char opponentColor = std::isupper(piece) ? 'b' : 'w';
+    Color opponentColor = std::isupper(piece) ? Color::BLACK : Color::WHITE;
     auto captures = availableCaptures(board, opponentColor);
 
     for(const auto& move : captures) {
@@ -320,11 +322,11 @@ SquareSet findPieces(const ChessBoard& board, char piece) {
     return squares;
 }
 
-bool isInCheck(const ChessBoard& board, char activeColor) {
-    char king = (activeColor == 'w') ? 'K' : 'k';
+bool isInCheck(const ChessBoard& board, Color activeColor) {
+    char king = (activeColor == Color::WHITE) ? 'K' : 'k';
     auto kingSquares = findPieces(board, king);
 
-    if(kingSquares.empty()) return false; // No king of the active color is present.
+    if (kingSquares.empty()) return false; // No king of the active color is present.
 
     Square kingSquare = *kingSquares.begin(); // Get the square where the king is located.
     return isAttacked(board, kingSquare);

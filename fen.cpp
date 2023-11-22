@@ -30,17 +30,46 @@ ChessPosition parseFEN(const std::string& fen) {
     std::stringstream ss(fen);
     ChessPosition position;
     std::string piecePlacementStr;
+    std::string activeColorStr;
+    std::string castlingAvailabilityStr;
+    std::string enPassantTargetStr;
+    std::string halfmoveClockStr;
 
     // Read piece placement from the FEN string
     std::getline(ss, piecePlacementStr, ' ');
     position.board = parsePiecePlacement(piecePlacementStr);
 
     // Read other components of the FEN string
-    ss >> position.activeColor
-       >> position.castlingAvailability
-       >> position.enPassantTarget
+    ss >> activeColorStr
+       >> castlingAvailabilityStr
+       >> enPassantTargetStr
        >> position.halfmoveClock
        >> position.fullmoveNumber;
+
+    position.activeColor = activeColorStr == "b" ? Color::BLACK : Color::WHITE;
+
+    for (char ch : castlingAvailabilityStr) {
+        switch (ch) {
+            case 'K':
+                position.castlingAvailability |= CastlingAvailability::WHITE_KINGSIDE;
+                break;
+            case 'Q':
+                position.castlingAvailability |= CastlingAvailability::WHITE_QUEENSIDE;
+                break;
+            case 'k':
+                position.castlingAvailability |= CastlingAvailability::BLACK_KINGSIDE;
+                break;
+            case 'q':
+                position.castlingAvailability |= CastlingAvailability::BLACK_QUEENSIDE;
+                break;
+        }
+    }
+
+    if (enPassantTargetStr != "-") {
+        int file = enPassantTargetStr[0] - 'a';
+        int rank = enPassantTargetStr[1] - '1';
+        position.enPassantTarget = Square{rank, file};
+    }
 
     return position;
 }

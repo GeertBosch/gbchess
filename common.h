@@ -1,11 +1,12 @@
 #include <array>
+#include <cassert>
 #include <string>
 
 #pragma once
 
 struct Square {
-    int _rank;
-    int _file;
+    uint8_t _rank;
+    uint8_t _file;
 
     Square(int r, int f) : _rank(r), _file(f) {}
     Square(int index) : _rank(index / 8), _file(index % 8) {}
@@ -88,11 +89,36 @@ public:
     }
 };
 
+enum class Color : uint8_t {
+    WHITE,
+    BLACK
+};
+
+inline std::string to_string(Color color) {
+    return color == Color::WHITE ? "w" : "b";
+}
+
+inline Color operator!(Color color) {
+    return color == Color::WHITE ? Color::BLACK : Color::WHITE;
+}
+
+inline Color color (char color) {
+    assert(color == 'w' || color == 'b');
+    return color == 'b' ? Color::BLACK : Color::WHITE;
+}
+
+enum CastlingAvailability : uint8_t {
+    WHITE_KINGSIDE = 1,
+    WHITE_QUEENSIDE = 2,
+    BLACK_KINGSIDE = 4,
+    BLACK_QUEENSIDE = 8
+};
+
 struct ChessPosition {
     ChessBoard board;
-    char activeColor;
-    std::string castlingAvailability;
-    std::string enPassantTarget;
-    int halfmoveClock;
-    int fullmoveNumber;
+    uint8_t castlingAvailability;
+    Color activeColor;
+    uint8_t halfmoveClock; // If the clock is used, we'll draw before it overflows
+    uint16_t fullmoveNumber; // >65,535 moves is a lot of moves
+    Square enPassantTarget = 0; // 0 indicates no en passant target
 };

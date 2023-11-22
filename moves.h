@@ -129,4 +129,17 @@ std::map<Move, ChessPosition> computeAllLegalMoves(const ChessPosition& position
  * @param activeColor The color to check for being in check.
  * @return True if the specified color is in check, false otherwise.
  */
-bool isInCheck(const ChessBoard& board, char activeColor);
+bool isInCheck(const ChessBoard& board, Color activeColor);
+
+/**
+ * Updates the board with the given move, which may be a capture.
+ * Does not perform any legality checks.
+ */
+void applyMove(ChessBoard& board, const Move& move);
+
+/**
+ * Like the above, but also updates per turn state (active color, castling availability,
+ * en passant target, halfmove clock, and fullmove number).
+ */
+void applyMove(ChessPosition& position, const Move& move);
+

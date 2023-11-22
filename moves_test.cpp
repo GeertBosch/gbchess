@@ -210,11 +210,144 @@ void testSquareSet() {
     std::cout << "All SquareSet tests passed!" << std::endl;
 }
 
+void testApplyMove() {
+    // Test pawn move
+    {
+        ChessBoard board;
+        board[Square(1, 0)] = 'P';
+        applyMove(board, Move(Square(1, 0), Square(2, 0)));
+        assert(board[Square(2, 0)] == 'P');
+        assert(board[Square(1, 0)] == ' ');
+    }
+
+    // Test pawn capture
+    {
+        ChessBoard board;
+        board[Square(1, 0)] = 'P';
+        board[Square(2, 1)] = 'r'; // White pawn captures black rook
+        applyMove(board, Move(Square(1, 0), Square(2, 1)));
+        assert(board[Square(2, 1)] == 'P');
+        assert(board[Square(1, 0)] == ' ');
+    }
+
+    // Test rook move
+    {
+        ChessBoard board;
+        board[Square(7, 0)] = 'R';
+        applyMove(board, Move(Square(7, 0), Square(7, 7)));
+        assert(board[Square(7, 7)] == 'R');
+        assert(board[Square(7, 0)] == ' ');
+    }
+
+    // Test rook capture
+    {
+        ChessBoard board;
+        board[Square(7, 0)] = 'r';
+        board[Square(0, 0)] = 'R'; // Black rook captures white rook
+        applyMove(board, Move(Square(7, 0), Square(0, 0)));
+        assert(board[Square(0, 0)] == 'r');
+        assert(board[Square(7, 0)] == ' ');
+    }
+
+    // Test knight move
+    {
+        ChessBoard board;
+        board[Square(0, 1)] = 'N';
+        applyMove(board, Move(Square(0, 1), Square(2, 2)));
+        assert(board[Square(2, 2)] == 'N');
+        assert(board[Square(0, 1)] == ' ');
+    }
+
+    // Test knight capture
+    {
+        ChessBoard board;
+        board[Square(0, 1)] = 'N';
+        board[Square(2, 2)] = 'r'; // White knight captures black rook
+        applyMove(board, Move(Square(0, 1), Square(2, 2)));
+        assert(board[Square(2, 2)] == 'N');
+        assert(board[Square(0, 1)] == ' ');
+    }
+
+    // Now test the ChessPosition applyMove function for a pawn move
+    {
+        ChessPosition position;
+        position.board[Square(1, 0)] = 'P';
+        position.activeColor = Color::WHITE;
+        position.halfmoveClock = 1;
+        applyMove(position, Move(Square(1, 0), Square(2, 0)));
+        assert(position.board[Square(2, 0)] == 'P');
+        assert(position.board[Square(1, 0)] == ' ');
+        assert(position.activeColor == Color::BLACK);
+        assert(position.halfmoveClock == 0);
+    }
+
+    // Test pawn capture
+    {
+        ChessPosition position;
+        position.board[Square(1, 0)] = 'P';
+        position.board[Square(2, 1)] = 'r'; // White pawn captures black rook
+        position.activeColor = Color::WHITE;
+        position.halfmoveClock = 1;
+        applyMove(position, Move(Square(1, 0), Square(2, 1)));
+        assert(position.board[Square(2, 1)] == 'P');
+        assert(position.board[Square(1, 0)] == ' ');
+        assert(position.activeColor == Color::BLACK);
+        assert(position.halfmoveClock == 0);
+    }
+
+    // Test that the fullmove number is updated correctly on a black move
+    {
+        ChessPosition position;
+        position.board[Square(1, 0)] = 'p';
+        position.activeColor = Color::BLACK;
+        position.halfmoveClock = 1;
+        position.fullmoveNumber = 1;
+        applyMove(position, Move(Square(1, 0), Square(2, 0)));
+        assert(position.board[Square(2, 0)] == 'p');
+        assert(position.board[Square(1, 0)] == ' ');
+        assert(position.activeColor == Color::WHITE);
+        assert(position.halfmoveClock == 0);
+        assert(position.fullmoveNumber == 2);
+    }
+
+    // Test that capture with a non-pawn piece also resets the halfmoveClock
+    {
+        ChessPosition position;
+        position.board[Square(1, 0)] = 'P';
+        position.board[Square(2, 1)] = 'r'; // White pawn captures black rook
+        position.activeColor = Color::WHITE;
+        position.fullmoveNumber = 1;
+        position.halfmoveClock = 1;
+        applyMove(position, Move(Square(1, 0), Square(2, 1)));
+        assert(position.board[Square(2, 1)] == 'P');
+        assert(position.board[Square(1, 0)] == ' ');
+        assert(position.activeColor == Color::BLACK);
+        assert(position.halfmoveClock == 0); // reset due to capture
+        assert(position.fullmoveNumber == 1); // not updated on white move
+    }
+
+    // Test that a move with a non-pawn piece does not reset the halfmoveClock
+    {
+        ChessPosition position;
+        position.board[Square(0, 1)] = 'N';
+        position.activeColor = Color::WHITE;
+        position.halfmoveClock = 1;
+        applyMove(position, Move(Square(0, 1), Square(2, 2)));
+        assert(position.board[Square(2, 2)] == 'N');
+        assert(position.board[Square(0, 1)] == ' ');
+        assert(position.activeColor == Color::BLACK);
+        assert(position.halfmoveClock == 2);
+    }
+
+    std::cout << "All applyMove tests passed!" << std::endl;
+}
+
 int main() {
     testSquare();
     testSquareSet();
     testPossibleMoves();
     testPossibleCaptures();
+    testApplyMove();
     std::cout << "All move tests passed!" << std::endl;
     return 0;
 }
