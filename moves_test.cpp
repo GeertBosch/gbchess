@@ -230,6 +230,40 @@ void testApplyMove() {
         assert(board[Square(1, 0)] == ' ');
     }
 
+    // Test pawn promotion move
+    {
+        // White pawn promotion
+        ChessBoard board;
+        board[Square(6, 0)] = 'P';
+        applyMove(board, Move(Square(6, 0), Square(7, 0), 'Q'));
+        assert(board[Square(7, 0)] == 'Q');
+        assert(board[Square(6, 0)] == ' ');
+
+        // Black pawn promotion
+        board[Square(1, 0)] = 'p';
+        applyMove(board, Move(Square(1, 0), Square(0, 0), 'q'));
+        assert(board[Square(0, 0)] == 'q');
+        assert(board[Square(1, 0)] == ' ');
+    }
+
+    // Test pawn promotion capture
+    {
+        // White pawn promotion
+        ChessBoard board;
+        board[Square(6, 0)] = 'P';
+        board[Square(7, 1)] = 'r'; // White pawn captures black rook
+        applyMove(board, Move(Square(6, 0), Square(7, 1), 'Q'));
+        assert(board[Square(7, 1)] == 'Q');
+        assert(board[Square(6, 0)] == ' ');
+
+        // Black pawn promotion
+        board[Square(1, 0)] = 'p';
+        board[Square(0, 1)] = 'R'; // Black pawn captures white rook
+        applyMove(board, Move(Square(1, 0), Square(0, 1), 'q'));
+        assert(board[Square(0, 1)] == 'q');
+        assert(board[Square(1, 0)] == ' ');
+    }
+
     // Test rook move
     {
         ChessBoard board;

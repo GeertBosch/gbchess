@@ -247,7 +247,7 @@ void applyMove(ChessBoard& board, const Move& move) {
     char& target = board[move.to];
 
     // Check if it's a pawn promotion
-    if ((piece == 'P' && move.to.rank() == 0) || (piece == 'p' && move.to.rank() == 7)) {
+    if ((piece == 'P' && move.to.rank() == 7) || (piece == 'p' && move.to.rank() == 0)) {
         target = move.promotion; // Promote the pawn to the desired piece
         if (piece == 'p') // If it's a black pawn, make the promoted piece lowercase
             target = std::tolower(target);

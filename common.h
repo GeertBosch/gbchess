@@ -51,6 +51,7 @@ struct Move {
 
     Move() : from(Square(-1, -1)), to(Square(-1, -1)) {}
     Move(const Square& fromSquare, const Square& toSquare) : from(fromSquare), to(toSquare) {}
+    Move(const Square& fromSquare, const Square& toSquare, char promotionPiece) : from(fromSquare), to(toSquare), promotion(promotionPiece) {}
 
     bool operator<(const Move& rhs) const {
         if (from < rhs.from) return true;
