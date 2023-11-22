@@ -1,7 +1,8 @@
+#include <chrono>
+#include <cstdlib>  // For std::exit
 #include <iostream>
-#include <string>
 #include <map>
-#include <cstdlib> // For std::exit
+#include <string>
 
 #include "eval.h"
 #include "fen.h"
@@ -9,6 +10,7 @@
 // ... [Other includes and definitions] ...
 void testFromStdIn(int depth) {
     // While there is input on stdin, read a line, parse it as a FEN string and print the best move.
+    auto startTime = std::chrono::high_resolution_clock::now();
     while (std::cin) {
         std::string fen;
         std::getline(std::cin, fen);
@@ -24,6 +26,11 @@ void testFromStdIn(int depth) {
 
         // Print the best moves and their evaluations
         std::cout << static_cast<std::string>(bestMove) << std::endl;
+        auto endTime = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+        auto millis = duration.count();
+        std::cerr << (std::to_string(millis) + " ms: " + fen + " => " +
+                      static_cast<std::string>(bestMove) + "\n");
     }
 }
 
