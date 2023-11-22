@@ -1,7 +1,6 @@
 #include <iostream>
 #include <map>
 #include <set>
-#include <limits>
 
 #include "eval.h"
 #include "moves.h"
@@ -9,8 +8,8 @@
 constexpr bool debug = 0;
 #define D if (debug) std::cerr
 
-std::ostream& operator<<(std::ostream& os, const Move& sq) {
-    return os << std::string(sq);
+std::ostream& operator<<(std::ostream& os, const Move& mv) {
+    return os << std::string(mv);
 }
 std::ostream& operator<<(std::ostream& os, const Square& sq) {
     return os << std::string(sq);
@@ -35,16 +34,17 @@ EvaluatedMove::operator std::string() const {
 
 float evaluateBoard(const ChessBoard& board) {
     float value = 0.0f;
-    const std::map<char, float> pieceValues = {
-        {'P', 1.0f}, {'N', 3.0f}, {'B', 3.0f}, {'R', 5.0f}, {'Q', 9.0f}, // White pieces
-        {'p', -1.0f}, {'n', -3.0f}, {'b', -3.0f}, {'r', -5.0f}, {'q', -9.0f} // Black pieces
+    std::array<float, kNumPieces> pieceValues = {
+        0.0f,
+        1.0f, 3.0f, 3.0f, 5.0f, 9.0f, 0.0f,      // White pieces, not counting the king
+        -1.0f, -3.0f, -3.0f, -5.0f, -9.0f, 0.0f, // Black pieces
     };
 
     for (int rank = 0; rank < 8; ++rank) {
         for (int file = 0; file < 8; ++file) {
             Square square = {rank, file};
-            char piece = board[square];
-            if(pieceValues.count(piece)) value += pieceValues.at(piece);
+            auto piece = board[square];
+            value += pieceValues[static_cast<uint8_t>(piece)];
         }
     }
 
@@ -55,11 +55,11 @@ void printBoard(std::ostream& os, const ChessBoard& board) {
     for (int rank = 7; rank >= 0; --rank) {
         os << rank + 1 << "  ";
         for (int file = 0; file < 8; ++file) {
-            char piece = board[Square(rank, file)];
-            if (piece == ' ') {
+            auto piece = board[Square(rank, file)];
+            if (piece == Piece::INVALID) {
                 os << " .";
             } else {
-                os << ' ' << piece;
+                os << ' ' << to_char(piece);
             }
         }
         os << std::endl;

@@ -75,7 +75,7 @@ using MoveVector = std::vector<Move>;
  * result in self-blocking or moving through other pieces using the movesThroughPieces
  * function. If neither condition is true, the move is added to the set.
  */
-void addAvailableMoves(MoveVector& moves, const ChessBoard& board, char activeColor);
+void addAvailableMoves(MoveVector& moves, const ChessBoard& board, Color activeColor);
 
 /**
  * This function follows the same structure as availableMoves but focuses on captures. It
@@ -84,7 +84,7 @@ void addAvailableMoves(MoveVector& moves, const ChessBoard& board, char activeCo
  * captures, and those that move through other pieces, adding valid captures to the result
  * set.
  */
-void addAvailableCaptures(MoveVector& captures, const ChessBoard& board, char activeColor);
+void addAvailableCaptures(MoveVector& captures, const ChessBoard& board, Color activeColor);
 
 /**
  * Calculates all possible moves for a given chess piece on the board.
@@ -96,7 +96,7 @@ void addAvailableCaptures(MoveVector& captures, const ChessBoard& board, char ac
  * @param from The starting square of the piece for which to calculate possible moves.
  * @return A set of squares to which the piece can potentially move.
  */
-SquareSet possibleMoves(char piece, const Square& from);
+SquareSet possibleMoves(Piece piece, const Square& from);
 
 /**
  * Calculates all possible capture moves for a given chess piece on the board.
@@ -110,7 +110,7 @@ SquareSet possibleMoves(char piece, const Square& from);
  * @return A set of squares from which the piece can potentially make a capture.
  */
 
-SquareSet possibleCaptures(char piece, const Square& from);
+SquareSet possibleCaptures(Piece piece, const Square& from);
 /**
  * Computes all legal moves from a given chess position, mapping each move to the resulting
  * chess position after the move is applied. This function checks for moves that do not leave

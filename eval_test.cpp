@@ -6,6 +6,7 @@
 
 #include "eval.h"
 #include "fen.h"
+#include "moves.h"
 
 // ... [Other includes and definitions] ...
 void testFromStdIn(int depth) {
@@ -34,6 +35,15 @@ void testFromStdIn(int depth) {
     }
 }
 
+std::ostream &operator<<(std::ostream &os, const MoveVector& moves) {
+    os << "[";
+    for (const auto& move : moves) {
+        os << std::string(move) << ", ";
+    }
+    os << "]";
+    return os;
+}
+
 int main(int argc, char* argv[]) {
     if (argc == 2) {
         int depth = std::stoi(argv[1]);
@@ -57,6 +67,18 @@ int main(int argc, char* argv[]) {
     // Evaluate the board
     float evaluation = evaluateBoard(position.board);
     std::cout << "Board Evaluation: " << evaluation << std::endl;
+
+    {
+        MoveVector captures;
+        addAvailableCaptures(captures, position.board, position.activeColor);
+        std::cout << "Captures: " << captures << std::endl;
+    }
+
+    {
+        MoveVector moves;
+        addAvailableMoves(moves, position.board, position.activeColor);
+        std::cout << "Moves: " << moves << std::endl;
+    }
 
     // Compute the best move
     auto bestMove = computeBestMove(position, depth);

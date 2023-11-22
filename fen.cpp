@@ -18,7 +18,7 @@ ChessBoard parsePiecePlacement(const std::string& piecePlacement) {
             file += ch - '0';  // Move the file by the number of empty squares
         } else {
             Square sq{7 - rank, file}; // Adjust the rank based on how it's stored in the ChessBoard
-            board[sq] = ch;
+            board[sq] = toPiece(ch);
             file++;
         }
     }
@@ -80,15 +80,15 @@ std::string toString(const ChessBoard& board) {
         int emptyCount = 0; // Count of consecutive empty squares
         for (int file = 0; file < 8; ++file) {
             Square sq{rank, file}; // Adjust the rank based on how it's stored in the ChessBoard
-            char piece = board[sq];
-            if (piece == ' ') { // Empty square
+            auto piece = board[sq];
+            if (piece == Piece::INVALID) { // Empty square
                 ++emptyCount;
             } else {
                 if (emptyCount > 0) {
                     fen << emptyCount; // Add the count of empty squares
                     emptyCount = 0; // Reset the count
                 }
-                fen << piece; // Add the piece
+                fen << to_char(piece); // Add the piece
             }
         }
         if (emptyCount > 0) fen << emptyCount; // Add remaining empty squares at the end of the rank

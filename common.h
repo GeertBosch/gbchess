@@ -109,6 +109,46 @@ inline char toChar(PieceType type, Color color) {
     }
 }
 
+enum class Piece : uint8_t {
+    INVALID,
+    WHITE_PAWN,
+    WHITE_KNIGHT,
+    WHITE_BISHOP,
+    WHITE_ROOK,
+    WHITE_QUEEN,
+    WHITE_KING,
+    BLACK_PAWN,
+    BLACK_KNIGHT,
+    BLACK_BISHOP,
+    BLACK_ROOK,
+    BLACK_QUEEN,
+    BLACK_KING
+};
+static constexpr uint8_t kNumPieces = static_cast<uint8_t>(Piece::BLACK_KING) + 1;
+
+inline char to_char(Piece piece) {
+    char pieceChars[] = {'.', 'P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k'};
+    return pieceChars[static_cast<uint8_t>(piece)];
+}
+
+inline Color color(Piece piece) {
+    return piece <= Piece::WHITE_KING ? Color::WHITE : Color::BLACK;
+}
+
+inline Piece toPiece(char piece) {
+    std::string pieceChars = " PNBRQKpnbrqk";
+    auto pieceIndex = pieceChars.find(piece);
+    return pieceIndex == std::string::npos ? Piece::INVALID : static_cast<Piece>(pieceIndex);
+}
+
+inline PieceType type(Piece piece) {
+    return static_cast<PieceType>((static_cast<uint8_t>(piece) - 1) % 6 + 1);
+}
+
+inline Piece addColor(PieceType type, Color color) {
+    return static_cast<Piece>(static_cast<uint8_t>(type) + (color == Color::WHITE ? 0 : 6));
+}
+
 struct Move {
     Square from;
     Square to;
@@ -125,27 +165,42 @@ struct Move {
     operator bool() const {
         return from._rank != to._rank || from._file != to._file;
     }
+
+    bool operator<(const Move& other) const {
+        if (from.index() < other.from.index()) {
+            return true;
+        } else if (from.index() == other.from.index()) {
+            if (to.index() < other.to.index()) {
+                return true;
+            } else if (to.index() == other.to.index()) {
+                return promotion < other.promotion;
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
 };
 
 class ChessBoard {
-    std::array<char, 64> squares;
+    std::array<Piece, 64> squares;
 
 public:
     ChessBoard() {
-        squares.fill(' ');
+        squares.fill(Piece::INVALID);
     }
 
-    char& operator[](const Square& sq) {
+    Piece& operator[](Square sq) {
         int index = sq._rank * 8 + sq._file;
         return squares[index];
     }
 
-    const char& operator[](const Square& sq) const {
+    const Piece operator[](Square sq) const {
         int index = sq._rank * 8 + sq._file;
         return squares[index];
     }
 };
-
 
 enum CastlingAvailability : uint8_t {
     WHITE_KINGSIDE = 1,

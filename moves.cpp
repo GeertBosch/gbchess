@@ -101,25 +101,26 @@ SquareSet blackPawnMoves(const Square& from) {
     return moves;
 }
 
-SquareSet possibleMoves(char piece, const Square& from) {
+SquareSet possibleMoves(Piece piece, const Square& from) {
     switch (piece) {
-        case 'P':
+        case Piece::INVALID:
+            break;
+        case Piece::WHITE_PAWN:
             return whitePawnMoves(from);
-        case 'p':
+        case Piece::BLACK_PAWN:
             return blackPawnMoves(from);
-        case 'N': case 'n':
+        case Piece::WHITE_KNIGHT: case Piece::BLACK_KNIGHT:
             return knightMoves(from);
-        case 'B': case 'b':
+        case Piece::WHITE_BISHOP: case Piece::BLACK_BISHOP:
             return bishopMoves(from);
-        case 'R': case 'r':
+        case Piece::WHITE_ROOK: case Piece::BLACK_ROOK:
             return rookMoves(from);
-        case 'Q': case 'q':
+        case Piece::WHITE_QUEEN: case Piece::BLACK_QUEEN:
             return queenMoves(from);
-        case 'K': case 'k':
+        case Piece::WHITE_KING: case Piece::BLACK_KING:
             return kingMoves(from);
-        default:
-            return {};
     }
+    return {};
 }
 
 void addCaptureIfOnBoard(SquareSet& captures, int rank, int file) {
@@ -128,35 +129,36 @@ void addCaptureIfOnBoard(SquareSet& captures, int rank, int file) {
     }
 }
 
-SquareSet possibleCaptures(char piece, const Square& from) {
+SquareSet possibleCaptures(Piece piece, const Square& from) {
     switch (piece) {
-        case 'P':  // White Pawn
+        case Piece::INVALID:
+            break;
+        case Piece::WHITE_PAWN:  // White Pawn
         {
             SquareSet captures;
             addCaptureIfOnBoard(captures, from.rank() - 1, from.file() - 1);  // Diagonal left
             addCaptureIfOnBoard(captures, from.rank() - 1, from.file() + 1);  // Diagonal right
             return captures;
         }
-        case 'p':  // Black Pawn
+        case Piece::BLACK_PAWN:  // Black Pawn
         {
             SquareSet captures;
             addCaptureIfOnBoard(captures, from.rank() + 1, from.file() - 1);  // Diagonal left
             addCaptureIfOnBoard(captures, from.rank() + 1, from.file() + 1);  // Diagonal right
             return captures;
         }
-        case 'N': case 'n':  // Knight (Both white and black)
+        case Piece::WHITE_KNIGHT: case Piece::BLACK_KNIGHT:
             return knightMoves(from);
-        case 'B': case 'b':  // Bishop (Both white and black)
+        case Piece::WHITE_BISHOP: case Piece::BLACK_BISHOP:
             return bishopMoves(from);
-        case 'R': case 'r':  // Rook (Both white and black)
+        case Piece::WHITE_ROOK: case Piece::BLACK_ROOK:
             return rookMoves(from);
-        case 'Q': case 'q':  // Queen (Both white and black)
+        case Piece::WHITE_QUEEN: case Piece::BLACK_QUEEN:
             return queenMoves(from);
-        case 'K': case 'k':  // King (Both white and black)
+        case Piece::WHITE_KING: case Piece::BLACK_KING:
             return kingMoves(from);
-        default:
-            return {};
     }
+    return {};
 }
 
 bool movesThroughPieces(const ChessBoard& board, const Square& from, const Square& to) {
@@ -176,7 +178,7 @@ bool movesThroughPieces(const ChessBoard& board, const Square& from, const Squar
     int filePos = from.file() + fileStep;
 
     while (rankPos != to.rank() || filePos != to.file()) {
-        if (board[{rankPos, filePos}] != ' ') {
+        if (board[{rankPos, filePos}] != Piece::INVALID) {
             return true; // There's a piece in the way
         }
         rankPos += rankStep;
@@ -185,9 +187,9 @@ bool movesThroughPieces(const ChessBoard& board, const Square& from, const Squar
     return false;
 }
 
-void addMove(MoveVector& moves, PieceType type, const Square& from, const Square& to) {
+void addMove(MoveVector& moves, Piece piece, const Square& from, const Square& to) {
     // If promoted, add all possible promotions
-    if (type == PieceType::PAWN && (to.rank() == 0 || to.rank() == 7)) {
+    if (type(piece) == PieceType::PAWN && (to.rank() == 0 || to.rank() == 7)) {
         for (auto promotion : {PieceType::KNIGHT, PieceType::BISHOP,
                                PieceType::ROOK, PieceType::QUEEN}) {
             moves.emplace_back(Move{from, to, promotion});
@@ -202,18 +204,17 @@ void addAvailableMoves(MoveVector& moves, const ChessBoard& board, Color activeC
     for (int rank = 0; rank < 8; ++rank) {
         for (int file = 0; file < 8; ++file) {
             Square currentSquare{rank, file};
-            char piece = board[currentSquare];
+            auto piece = board[currentSquare];
 
             // Skip if the square is empty or if the piece isn't the active color
-            if (piece == ' ' || (activeColor == Color::WHITE && std::islower(piece)) || (activeColor == Color::BLACK && std::isupper(piece))) {
+            if (piece == Piece::INVALID || activeColor != color(piece))
                 continue;
-            }
 
             auto possibleSquares = possibleMoves(piece, currentSquare);
             for (const auto& dest : possibleSquares) {
                 // Check for self-blocking or moving through pieces
-                if (board[dest] == ' ' && !movesThroughPieces(board, currentSquare, dest)) {
-                    addMove(moves, fromChar(piece), currentSquare, dest);
+                if (board[dest] == Piece::INVALID && !movesThroughPieces(board, currentSquare, dest)) {
+                    addMove(moves, piece, currentSquare, dest);
                 }
             }
         }
@@ -225,42 +226,39 @@ void addAvailableCaptures(MoveVector& captures, const ChessBoard& board, Color a
     for (int rank = 0; rank < 8; ++rank) {
         for (int file = 0; file < 8; ++file) {
             Square from = {rank, file};
-            char piece = board[from];
-            Color pieceColor = islower(piece) ? Color::BLACK : Color::WHITE;
+            auto piece = board[from];
 
             // Check if the piece is of the active color
-            if (pieceColor != activeColor)
+            if (color(piece) != activeColor)
                 continue;
             SquareSet possibleCaptureSquares = possibleCaptures(piece, from);
 
             for (const Square& to : possibleCaptureSquares) {
-                char targetPiece = board[to];
-                Color targetPieceColor = islower(targetPiece) ? Color::BLACK : Color::WHITE;
+                auto targetPiece = board[to];
+
+                if (targetPiece == Piece::INVALID) continue; // No piece to capture
 
                 // Exclude self-capture and moves that move through pieces
-                if (targetPiece == ' ') continue; // No piece to capture
-
-                if (pieceColor != targetPieceColor && !movesThroughPieces(board, from, to))
-                    addMove(captures, fromChar(piece), from, to);
+                if (color(piece) != color(targetPiece) && !movesThroughPieces(board, from, to))
+                    addMove(captures, piece, from, to);
             }
         }
     }
 }
 
 void applyMove(ChessBoard& board, const Move& move) {
-    char& piece = board[move.from];
-    char& target = board[move.to];
-    Color color = islower(piece) ? Color::BLACK : Color::WHITE;
+    auto& piece = board[move.from];
+    auto& target = board[move.to];
 
     // Update the target, including promotion if applicable
-    target = move.promotion == PieceType::INVALID ? piece : toChar(move.promotion, color);
-    piece = ' '; // Empty the source square
+    target = move.promotion == PieceType::INVALID ? piece : addColor(move.promotion, color(piece));
+    piece = Piece::INVALID; // Empty the source square
 }
 
 void applyMove(ChessPosition& position, const Move& move) {
     // Check if the move is a capture or pawn move before applying it to the board
-    bool capture = position.board[move.to] != ' ';
-    bool pawnMove = tolower(position.board[move.from]) == 'p';
+    bool capture = position.board[move.to] != Piece::INVALID;
+    bool pawnMove = type(position.board[move.from]) == PieceType::PAWN;
 
     // Apply the move to the board
     applyMove(position.board, move);
@@ -296,10 +294,10 @@ void applyMove(ChessPosition& position, const Move& move) {
 }
 
 bool isAttacked(const ChessBoard& board, const Square& square) {
-    char piece = board[square];
-    if (piece == ' ') return false; // The square is empty, so it is not attacked.
+    auto piece = board[square];
+    if (piece == Piece::INVALID) return false; // The square is empty, so it is not attacked.
 
-    Color opponentColor = std::isupper(piece) ? Color::BLACK : Color::WHITE;
+    Color opponentColor = !color(piece);
     MoveVector captures;
     addAvailableCaptures(captures, board, opponentColor);
 
@@ -310,7 +308,7 @@ bool isAttacked(const ChessBoard& board, const Square& square) {
     return false; // The square is not attacked by any opponent piece.
 }
 
-SquareSet findPieces(const ChessBoard& board, char piece) {
+SquareSet findPieces(const ChessBoard& board, Piece piece) {
     SquareSet squares;
     for(int rank = 0; rank < 8; ++rank) {
         for(int file = 0; file < 8; ++file) {
@@ -324,7 +322,7 @@ SquareSet findPieces(const ChessBoard& board, char piece) {
 }
 
 bool isInCheck(const ChessBoard& board, Color activeColor) {
-    char king = (activeColor == Color::WHITE) ? 'K' : 'k';
+    auto king = addColor(PieceType::KING, activeColor);
     auto kingSquares = findPieces(board, king);
 
     if (kingSquares.empty()) return false; // No king of the active color is present.

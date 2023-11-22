@@ -4,10 +4,12 @@ all: test puzzles
 	g++ -g -O0 -o $@ $^
 
 clean:
-	rm -f *.o *-test *.core puzzles.actual perf.data
+	rm -f *.o *-debug *-test *.core puzzles.actual perf.data
 
 eval-test: eval_test.cpp eval.cpp fen.cpp moves.cpp 
 	g++ -O2 -o $@ $^
+eval-debug: eval_test.cpp eval.cpp fen.cpp moves.cpp 
+	clang++ -O0 -g -o $@ $^
 
 puzzles: eval-test puzzles.in puzzles.expected
 	./eval-test 3 < puzzles.in > puzzles.actual
