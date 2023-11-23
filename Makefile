@@ -7,7 +7,7 @@ clean:
 	rm -f *.o *-debug *-test *.core puzzles.actual perf.data
 
 eval-test: eval_test.cpp eval.cpp fen.cpp moves.cpp 
-	g++ -O2 -o $@ $^
+	g++ -O3 -o $@ $^
 eval-debug: eval_test.cpp eval.cpp fen.cpp moves.cpp 
 	clang++ -O0 -g -o $@ $^
 

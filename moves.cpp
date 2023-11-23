@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cmath>
+#include <iomanip>
 #include <iostream>
 #include <map>
 
@@ -7,9 +8,11 @@
 
 struct MovesTable  {
     // precomputed possible moves for each piece type on each square
-    SquareSet moves[kNumPieces][64];
+    SquareSet moves[kNumPieces][kNumSquares];
     // precomputed possible captures for each piece type on each square
-    SquareSet captures[kNumPieces][64];
+    SquareSet captures[kNumPieces][kNumSquares];
+    // precomputed paths from each square to each other square
+    SquareSet paths[kNumSquares][kNumSquares];
 
     MovesTable();
 } movesTable;
@@ -24,7 +27,37 @@ MovesTable::MovesTable() {
             }
         }
     }
+    for (int from = 0; from < kNumSquares; ++from) {
+        for (int to = 0; to < kNumSquares; ++to) {
+            paths[from][to] = SquareSet::path(Square(from), Square(to));
+        }
+    }
 }
+
+SquareSet SquareSet::occupancy(const ChessBoard& board) {
+    auto& squares = board.squares();
+    auto bitmask = [](uint64_t input) -> uint64_t {
+        input += 0x7f3f1f0f'7f3f1f0full;  // Cause overflow in the right bits
+        input &= 0x80402010'80402010ull;  // These are them, the 8 occupancy bits
+        input >>= 4;                      // The low nibbles is where the action is
+        input += input >> 16;
+        input += input >> 8;
+        input += (input >> 28); // Merge in the high nibbel from the high word
+        input &= 0xffull;
+        return input;
+    };
+
+    uint64_t set = 0;
+    uint64_t input;
+
+    for (int j = 0; j < sizeof(squares); j += sizeof(input)) {
+        memcpy(&input, &squares[j], sizeof(input));
+        set |= bitmask(input) << j;
+    }
+
+    return set;
+}
+
 
 SquareSet rookMoves(const Square& from) {
     SquareSet moves;
@@ -182,13 +215,14 @@ SquareSet possibleCaptures(Piece piece, const Square& from) {
     return {};
 }
 
-bool movesThroughPieces(const ChessBoard& board, const Square& from, const Square& to) {
+SquareSet SquareSet::path(const Square& from, const Square& to) {
+    SquareSet path;
     int rankDiff = to.rank() - from.rank();
     int fileDiff = to.file() - from.file();
 
     // Check if the move isn't horizontal, vertical, or diagonal
     if (rankDiff != 0 && fileDiff != 0 && abs(rankDiff) != abs(fileDiff)) {
-        return false; // It's not in straight line, thus no need to check further
+        return path; // It's not in straight line, thus no need to check further
     }
 
     // Calculate the direction of movement for rank and file
@@ -199,13 +233,16 @@ bool movesThroughPieces(const ChessBoard& board, const Square& from, const Squar
     int filePos = from.file() + fileStep;
 
     while (rankPos != to.rank() || filePos != to.file()) {
-        if (board[{rankPos, filePos}] != Piece::NONE) {
-            return true; // There's a piece in the way
-        }
+        path.insert(Square{rankPos, filePos});
         rankPos += rankStep;
         filePos += fileStep;
     }
-    return false;
+    return path;
+}
+
+bool movesThroughPieces(const SquareSet& occupancy, const Square& from, const Square& to) {
+    auto path = movesTable.paths[from.index()][to.index()];
+    return !(occupancy & path).empty();
 }
 
 void addMove(MoveVector& moves, Piece piece, const Square& from, const Square& to) {
@@ -222,49 +259,47 @@ void addMove(MoveVector& moves, Piece piece, const Square& from, const Square& t
 }
 
 void addAvailableMoves(MoveVector& moves, const ChessBoard& board, Color activeColor) {
+    auto occupied = SquareSet::occupancy(board);
     for (int rank = 0; rank < 8; ++rank) {
         for (int file = 0; file < 8; ++file) {
-            Square currentSquare{rank, file};
-            auto piece = board[currentSquare];
+            Square sq{rank, file};
+            auto piece = board[sq];
 
             // Skip if the square is empty or if the piece isn't the active color
             if (piece == Piece::NONE || activeColor != color(piece))
                 continue;
 
             auto pieceIndex = static_cast<uint8_t>(piece);
-            auto possibleSquares = movesTable.moves[pieceIndex][currentSquare.index()];
+            auto possibleSquares = movesTable.moves[pieceIndex][sq.index()];
             for (const auto& dest : possibleSquares) {
                 // Check for occupied target square or moving through pieces
-                if (board[dest] == Piece::NONE && !movesThroughPieces(board, currentSquare, dest)) {
-                    addMove(moves, piece, currentSquare, dest);
+                if (board[dest] == Piece::NONE && !movesThroughPieces(occupied, sq, dest)) {
+                    addMove(moves, piece, sq, dest);
                 }
             }
         }
     }
 }
 
-
 void addAvailableCaptures(MoveVector& captures, const ChessBoard& board, Color activeColor) {
-    for (int rank = 0; rank < 8; ++rank) {
-        for (int file = 0; file < 8; ++file) {
-            Square from = {rank, file};
-            auto piece = board[from];
+    auto occupancy = SquareSet::occupancy(board);
+    for (Square from = 0; from != Square(kNumSquares); ++from) {
+        auto piece = board[from];
 
-            // Check if the piece is of the active color
-            if (color(piece) != activeColor)
-                continue;
+        // Check if the piece is of the active color
+        if (color(piece) != activeColor)
+            continue;
 
-            auto pieceIndex = static_cast<uint8_t>(piece);
-            SquareSet possibleCaptureSquares = movesTable.captures[pieceIndex][from.index()];
-            for (const Square& to : possibleCaptureSquares) {
-                auto targetPiece = board[to];
+        auto pieceIndex = static_cast<uint8_t>(piece);
+        SquareSet possibleCaptureSquares = movesTable.captures[pieceIndex][from.index()];
+        for (const Square& to : possibleCaptureSquares) {
+            auto targetPiece = board[to];
 
-                if (targetPiece == Piece::NONE) continue; // No piece to capture
+            if (targetPiece == Piece::NONE) continue; // No piece to capture
 
-                // Exclude self-capture and moves that move through pieces
-                if (color(piece) != color(targetPiece) && !movesThroughPieces(board, from, to))
-                    addMove(captures, piece, from, to);
-            }
+            // Exclude self-capture and moves that move through pieces
+            if (color(piece) != color(targetPiece) && !movesThroughPieces(occupancy, from, to))
+                addMove(captures, piece, from, to);
         }
     }
 }

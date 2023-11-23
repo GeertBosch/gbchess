@@ -286,6 +286,34 @@ void testSquareSet() {
 
     std::cout << "All SquareSet tests passed!" << std::endl;
 }
+void testOccupancy() {
+    {
+        ChessBoard board;
+        board[Square(2, 0)] = Piece::WHITE_PAWN;
+        board[Square(3, 1)] = Piece::WHITE_PAWN;
+        board[Square(0, 0)] = Piece::WHITE_ROOK;
+        board[Square(1, 3)] = Piece::WHITE_KNIGHT;
+        board[Square(1, 2)] = Piece::WHITE_BISHOP;
+        board[Square(0, 3)] = Piece::WHITE_QUEEN;
+        board[Square(0, 4)] = Piece::WHITE_KING;
+        board[Square(1, 5)] = Piece::WHITE_BISHOP;
+        board[Square(1, 6)] = Piece::WHITE_KNIGHT;
+        board[Square(4, 7)] = Piece::WHITE_ROOK;
+        board[Square(6, 3)] = Piece::BLACK_PAWN;
+        board[Square(4, 4)] = Piece::BLACK_PAWN;
+        board[Square(6, 5)] = Piece::BLACK_PAWN;
+        board[Square(6, 6)] = Piece::BLACK_PAWN;
+        board[Square(6, 7)] = Piece::BLACK_PAWN;
+        board[Square(7, 0)] = Piece::BLACK_ROOK;
+        board[Square(7, 1)] = Piece::BLACK_KNIGHT;
+        board[Square(7, 2)] = Piece::BLACK_BISHOP;
+        board[Square(7, 3)] = Piece::BLACK_QUEEN;
+        board[Square(7, 4)] = Piece::BLACK_KING;
+        auto squares = SquareSet::occupancy(board);
+        assert(squares.size() == 20);
+    }
+    std::cout << "All occupancy tests passed!" << std::endl;
+}
 
 void testAddAvailableMoves() {
     auto find = [](MoveVector& moves, Move move) -> bool {
@@ -518,6 +546,7 @@ int main() {
     testColor();
     testPossibleMoves();
     testPossibleCaptures();
+    testOccupancy();
     testAddAvailableMoves();
     testApplyMove();
     testIsInCheck();

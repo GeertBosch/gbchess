@@ -23,8 +23,16 @@ public:
         return _index;
     }
 
+    Square operator++() {
+        ++_index;
+        return *this;
+    }
+
     bool operator==(const Square& other) const {
 	    return _index == other._index;
+    }
+    bool operator!=(const Square& other) const {
+        return _index != other._index;
     }
 
     // Conversion to std::string
@@ -35,6 +43,7 @@ public:
         return squareStr;
     }
 };
+static constexpr uint8_t kNumSquares = 64;
 
 enum class Color : uint8_t {
     WHITE,
@@ -144,6 +153,7 @@ struct Move {
     Square from;
     Square to;
     PieceType promotion = PieceType::PAWN; // PAWN indicates no promotion (default)
+
     Move() : from(Square(-1, -1)), to(Square(-1, -1)) {}
     Move(const Square& fromSquare, const Square& toSquare) : from(fromSquare), to(toSquare) {}
     Move(const Square& fromSquare, const Square& toSquare, PieceType promotion) : from(fromSquare), to(toSquare), promotion(promotion) {}
@@ -175,19 +185,23 @@ struct Move {
 };
 
 class ChessBoard {
-    std::array<Piece, 64> squares;
+    std::array<Piece, 64> _squares;
 
 public:
     ChessBoard() {
-        squares.fill(Piece::NONE);
+        _squares.fill(Piece::NONE);
     }
 
     Piece& operator[](Square sq) {
-        return squares[sq.index()];
+        return _squares[sq.index()];
     }
 
     const Piece operator[](Square sq) const {
-        return squares[sq.index()];
+        return _squares[sq.index()];
+    }
+
+    const auto& squares() const {
+        return _squares;
     }
 };
 

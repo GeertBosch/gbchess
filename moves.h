@@ -1,7 +1,9 @@
+#include <cstring>
 #include <map>
 #include <vector>
 
 #include "common.h"
+
 
 /**
  * Represents a set of squares on a chess board. This class is like std::set<Square>, but
@@ -9,19 +11,20 @@
  */
 class SquareSet {
     uint64_t _squares = 0;
+
 public:
+    SquareSet(uint64_t squares) : _squares(squares) {}
     class iterator;
 
-    static SquareSet occupancy(const ChessBoard& board) {
-        SquareSet ret;
-        for (int j = 0; j < 64; ++j) {
-            Square sq(j);
-            if (board[sq] != Piece::NONE) {
-                ret.insert(sq);
-            }
-        }
-        return ret;
-    }
+    SquareSet() = default;
+
+    static SquareSet path(const Square& from, const Square& to);
+
+    /**
+     * Returns the set of non-empty fields on the board.
+     */
+    static SquareSet occupancy(const ChessBoard& board);
+    static SquareSet fastOccupancy(const ChessBoard& board);
 
     void insert(Square square) {
         _squares |= (1ull << square.index());
@@ -30,7 +33,7 @@ public:
         _squares |= other._squares;
     }
 
-    void insert (iterator begin, iterator end) {
+    void insert(iterator begin, iterator end) {
         for (auto it = begin; it != end; ++it) {
             insert(*it);
         }
@@ -48,17 +51,26 @@ public:
         return (_squares >> square.index()) & 1;
     }
 
+    SquareSet operator&(SquareSet other) const {
+        return _squares & other._squares;
+    }
+
+    bool operator==(SquareSet other) const {
+        return _squares == other._squares;
+    }
+
     class iterator {
         friend class SquareSet;
         uint64_t _squares;
         iterator(SquareSet squares) : _squares(squares._squares) {}
+
     public:
         iterator operator++() {
-            _squares &= _squares - 1; // Clear the least significant bit
+            _squares &= _squares - 1;  // Clear the least significant bit
             return *this;
         }
         Square operator*() {
-            return Square(__builtin_ctzll(_squares)); // Count trailing zeros
+            return Square(__builtin_ctzll(_squares));  // Count trailing zeros
         }
         bool operator==(const iterator& other) {
             return _squares == other._squares;
@@ -152,4 +164,3 @@ void applyMove(ChessBoard& board, const Move& move);
  * en passant target, halfmove clock, and fullmove number).
  */
 void applyMove(ChessPosition& position, const Move& move);
-
