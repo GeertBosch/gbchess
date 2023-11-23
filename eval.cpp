@@ -9,10 +9,10 @@ constexpr bool debug = 0;
     if (debug) \
     std::cerr
 
-std::ostream& operator<<(std::ostream& os, const Move& mv) {
+std::ostream& operator<<(std::ostream& os, Move mv) {
     return os << std::string(mv);
 }
-std::ostream& operator<<(std::ostream& os, const Square& sq) {
+std::ostream& operator<<(std::ostream& os, Square sq) {
     return os << std::string(sq);
 }
 std::ostream& operator<<(std::ostream& os, const EvaluatedMove& sq) {
@@ -98,7 +98,7 @@ EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
 
     // Base case: if depth is zero, return the static evaluation of the position
     if (depth == 0) {
-        for (const auto& move : allMoves) {
+        for (auto move : allMoves) {
             ChessPosition newPosition = move.second;
             EvaluatedMove ours{move.first, false, false, evaluateBoard(newPosition.board), 0};
             if (position.activeColor == Color::BLACK)
@@ -112,7 +112,7 @@ EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
     }
 
     // Recursive case: compute all legal moves and evaluate them
-    for (const auto& move : allMoves) {
+    for (auto move : allMoves) {
         const ChessPosition& newPosition = move.second;
         D << indent << position.activeColor << " " << move.first << std::endl;
 

@@ -18,13 +18,12 @@ public:
 
     SquareSet() = default;
 
-    static SquareSet path(const Square& from, const Square& to);
+    static SquareSet path(Square from, Square to);
 
     /**
      * Returns the set of non-empty fields on the board.
      */
     static SquareSet occupancy(const ChessBoard& board);
-    static SquareSet fastOccupancy(const ChessBoard& board);
 
     void insert(Square square) {
         _squares |= (1ull << square.index());
@@ -118,7 +117,7 @@ void addAvailableCaptures(MoveVector& captures, const ChessBoard& board, Color a
  * @param from The starting square of the piece for which to calculate possible moves.
  * @return A set of squares to which the piece can potentially move.
  */
-SquareSet possibleMoves(Piece piece, const Square& from);
+SquareSet possibleMoves(Piece piece, Square from);
 
 /**
  * Calculates all possible capture moves for a given chess piece on the board.
@@ -132,7 +131,7 @@ SquareSet possibleMoves(Piece piece, const Square& from);
  * @return A set of squares from which the piece can potentially make a capture.
  */
 
-SquareSet possibleCaptures(Piece piece, const Square& from);
+SquareSet possibleCaptures(Piece piece, Square from);
 /**
  * Computes all legal moves from a given chess position, mapping each move to the resulting
  * chess position after the move is applied. This function checks for moves that do not leave
@@ -157,10 +156,10 @@ bool isInCheck(const ChessBoard& board, Color activeColor);
  * Updates the board with the given move, which may be a capture.
  * Does not perform any legality checks.
  */
-void applyMove(ChessBoard& board, const Move& move);
+void applyMove(ChessBoard& board, Move move);
 
 /**
  * Like the above, but also updates per turn state (active color, castling availability,
  * en passant target, halfmove clock, and fullmove number).
  */
-void applyMove(ChessPosition& position, const Move& move);
+void applyMove(ChessPosition& position, Move move);

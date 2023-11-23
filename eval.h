@@ -19,7 +19,7 @@ struct EvaluatedMove {
     int depth;
 
     EvaluatedMove() : depth(0) {}
-    EvaluatedMove(const Move& move, bool check, bool mate, float evaluation, int depth)
+    EvaluatedMove(Move move, bool check, bool mate, float evaluation, int depth)
         : move(move), evaluation(evaluation), check(check), mate(mate), depth(depth) {}
     EvaluatedMove& operator=(const EvaluatedMove& other) = default;
     EvaluatedMove operator-() const {

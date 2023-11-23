@@ -59,7 +59,7 @@ SquareSet SquareSet::occupancy(const ChessBoard& board) {
 }
 
 
-SquareSet rookMoves(const Square& from) {
+SquareSet rookMoves(Square from) {
     SquareSet moves;
     for (int i = 0; i < 8; ++i) {
         if (i != from.rank()) {
@@ -72,7 +72,7 @@ SquareSet rookMoves(const Square& from) {
     return moves;
 }
 
-SquareSet bishopMoves(const Square& from) {
+SquareSet bishopMoves(Square from) {
     SquareSet moves;
     for (int i = 1; i < 8; ++i) {
         if (from.rank() + i < 8 && from.file() + i < 8) {
@@ -91,7 +91,7 @@ SquareSet bishopMoves(const Square& from) {
     return moves;
 }
 
-SquareSet queenMoves(const Square& from) {
+SquareSet queenMoves(Square from) {
     SquareSet moves;
 
     // Combine the moves of a rook and a bishop
@@ -104,7 +104,7 @@ SquareSet queenMoves(const Square& from) {
     return moves;
 }
 
-SquareSet knightMoves(const Square& from) {
+SquareSet knightMoves(Square from) {
     SquareSet moves;
     int knight_moves[8][2] = {
         {-2, -1}, {-1, -2}, {1, -2}, {2, -1}, {2, 1}, {1, 2}, {-1, 2}, {-2, 1}};
@@ -118,7 +118,7 @@ SquareSet knightMoves(const Square& from) {
     return moves;
 }
 
-SquareSet kingMoves(const Square& from) {
+SquareSet kingMoves(Square from) {
     SquareSet moves;
     for (int i = -1; i <= 1; ++i) {
         for (int j = -1; j <= 1; ++j) {
@@ -134,7 +134,7 @@ SquareSet kingMoves(const Square& from) {
     return moves;
 }
 
-SquareSet whitePawnMoves(const Square& from) {
+SquareSet whitePawnMoves(Square from) {
     SquareSet moves;
     if (from.rank() == 1 && from.rank() + 2 < 8) {
         moves.insert(Square(from.rank() + 2, from.file()));
@@ -145,7 +145,7 @@ SquareSet whitePawnMoves(const Square& from) {
     return moves;
 }
 
-SquareSet blackPawnMoves(const Square& from) {
+SquareSet blackPawnMoves(Square from) {
     SquareSet moves;
     if (from.rank() == 6 && from.rank() - 2 >= 0) {
         moves.insert(Square(from.rank() - 2, from.file()));
@@ -156,7 +156,7 @@ SquareSet blackPawnMoves(const Square& from) {
     return moves;
 }
 
-SquareSet possibleMoves(Piece piece, const Square& from) {
+SquareSet possibleMoves(Piece piece, Square from) {
     switch (piece) {
         case Piece::NONE:
             break;
@@ -189,7 +189,7 @@ void addCaptureIfOnBoard(SquareSet& captures, int rank, int file) {
     }
 }
 
-SquareSet possibleCaptures(Piece piece, const Square& from) {
+SquareSet possibleCaptures(Piece piece, Square from) {
     switch (piece) {
         case Piece::NONE:
             break;
@@ -226,7 +226,7 @@ SquareSet possibleCaptures(Piece piece, const Square& from) {
     return {};
 }
 
-SquareSet SquareSet::path(const Square& from, const Square& to) {
+SquareSet SquareSet::path(Square from, Square to) {
     SquareSet path;
     int rankDiff = to.rank() - from.rank();
     int fileDiff = to.file() - from.file();
@@ -251,12 +251,12 @@ SquareSet SquareSet::path(const Square& from, const Square& to) {
     return path;
 }
 
-bool movesThroughPieces(const SquareSet& occupancy, const Square& from, const Square& to) {
+bool movesThroughPieces(SquareSet occupancy, Square from, Square to) {
     auto path = movesTable.paths[from.index()][to.index()];
     return !(occupancy & path).empty();
 }
 
-void addMove(MoveVector& moves, Piece piece, const Square& from, const Square& to) {
+void addMove(MoveVector& moves, Piece piece, Square from, Square to) {
     // If promoted, add all possible promotions
     if (type(piece) == PieceType::PAWN && (to.rank() == 0 || to.rank() == 7)) {
         for (auto promotion :
@@ -281,7 +281,7 @@ void addAvailableMoves(MoveVector& moves, const ChessBoard& board, Color activeC
 
             auto pieceIndex = static_cast<uint8_t>(piece);
             auto possibleSquares = movesTable.moves[pieceIndex][sq.index()];
-            for (const auto& dest : possibleSquares) {
+            for (auto dest : possibleSquares) {
                 // Check for occupied target square or moving through pieces
                 if (board[dest] == Piece::NONE && !movesThroughPieces(occupied, sq, dest)) {
                     addMove(moves, piece, sq, dest);
@@ -302,7 +302,7 @@ void addAvailableCaptures(MoveVector& captures, const ChessBoard& board, Color a
 
         auto pieceIndex = static_cast<uint8_t>(piece);
         SquareSet possibleCaptureSquares = movesTable.captures[pieceIndex][from.index()];
-        for (const Square& to : possibleCaptureSquares) {
+        for (Square to : possibleCaptureSquares) {
             auto targetPiece = board[to];
 
             if (targetPiece == Piece::NONE)
@@ -315,7 +315,7 @@ void addAvailableCaptures(MoveVector& captures, const ChessBoard& board, Color a
     }
 }
 
-void applyMove(ChessBoard& board, const Move& move) {
+void applyMove(ChessBoard& board, Move move) {
     auto& piece = board[move.from];
     auto& target = board[move.to];
 
@@ -324,7 +324,7 @@ void applyMove(ChessBoard& board, const Move& move) {
     piece = Piece::NONE;  // Empty the source square
 }
 
-void applyMove(ChessPosition& position, const Move& move) {
+void applyMove(ChessPosition& position, Move move) {
     // Check if the move is a capture or pawn move before applying it to the board
     bool capture = position.board[move.to] != Piece::NONE;
     bool pawnMove = type(position.board[move.from]) == PieceType::PAWN;
@@ -362,7 +362,7 @@ void applyMove(ChessPosition& position, const Move& move) {
     // ... add logic for enPassantTarget here ...
 }
 
-bool isAttacked(const ChessBoard& board, const Square& square) {
+bool isAttacked(const ChessBoard& board, Square square) {
     auto piece = board[square];
     if (piece == Piece::NONE)
         return false;  // The square is empty, so it is not attacked.
@@ -371,7 +371,7 @@ bool isAttacked(const ChessBoard& board, const Square& square) {
     MoveVector captures;
     addAvailableCaptures(captures, board, opponentColor);
 
-    for (const auto& move : captures) {
+    for (auto move : captures) {
         if (move.to == square)
             return true;  // The square is attacked by some opponent piece.
     }
@@ -420,13 +420,12 @@ std::map<Move, ChessPosition> computeAllLegalMoves(const ChessPosition& position
     addAvailableMoves(moves, position.board, position.activeColor);
 
     // Iterate over all moves and captures
-    for (const auto& move : moves) {
+    for (auto move : moves) {
         // Make a copy of the position to apply the move
         ChessPosition newPosition = position;
         applyMove(newPosition, move);
 
         // Check if the move would result in our king being in check
-        // Adjusted to use newPosition.piecePlacement to pass to isInCheck
         if (!isInCheck(newPosition.board, position.activeColor)) {
             // If not in check, add the move to the map of legal moves
             legalMoves[move] = newPosition;

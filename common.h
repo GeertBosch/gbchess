@@ -7,8 +7,6 @@
 class Square {
     uint8_t _index;
 public:
-
-
     Square(int rank, int file) : _index(rank * 8 + file) {}
     Square(int index) : _index(index) {}
 
@@ -28,10 +26,10 @@ public:
         return *this;
     }
 
-    bool operator==(const Square& other) const {
-	    return _index == other._index;
+    bool operator==(Square other) const {
+        return _index == other._index;
     }
-    bool operator!=(const Square& other) const {
+    bool operator!=(Square other) const {
         return _index != other._index;
     }
 
@@ -155,8 +153,9 @@ struct Move {
     PieceType promotion = PieceType::PAWN; // PAWN indicates no promotion (default)
 
     Move() : from(Square(-1, -1)), to(Square(-1, -1)) {}
-    Move(const Square& fromSquare, const Square& toSquare) : from(fromSquare), to(toSquare) {}
-    Move(const Square& fromSquare, const Square& toSquare, PieceType promotion) : from(fromSquare), to(toSquare), promotion(promotion) {}
+    Move(Square fromSquare, Square toSquare) : from(fromSquare), to(toSquare) {}
+    Move(Square fromSquare, Square toSquare, PieceType promotion)
+        : from(fromSquare), to(toSquare), promotion(promotion) {}
 
     // String conversion operator
     operator std::string() const {
@@ -167,7 +166,7 @@ struct Move {
         return from.index() != to.index();
     }
 
-    bool operator<(const Move& other) const {
+    bool operator<(Move other) const {
         if (from.index() < other.from.index()) {
             return true;
         } else if (from.index() == other.from.index()) {
