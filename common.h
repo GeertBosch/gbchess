@@ -4,34 +4,34 @@
 
 #pragma once
 
-struct Square {
-    uint8_t _rank;
-    uint8_t _file;
+class Square {
+    uint8_t _index;
+public:
 
-    Square(int r, int f) : _rank(r), _file(f) {}
-    Square(int index) : _rank(index / 8), _file(index % 8) {}
+
+    Square(int rank, int file) : _index(rank * 8 + file) {}
+    Square(int index) : _index(index) {}
 
     int rank() const {
-        return _rank;
+        return _index / 8;
     }
 
     int file() const {
-        return _file;
+        return _index % 8;
     }
-
     int index() const {
-        return _rank * 8 + _file;
+        return _index;
     }
 
     bool operator==(const Square& other) const {
-	    return _rank == other._rank && _file == other._file;
+	    return _index == other._index;
     }
 
     // Conversion to std::string
     operator std::string() const {
         std::string squareStr;
-        squareStr += char('a' + _file);  // Convert file to letter ('a' to 'h')
-        squareStr += char('1' + _rank);  // Convert rank to digit ('1' to '8')
+        squareStr += char('a' + file());  // Convert file to letter ('a' to 'h')
+        squareStr += char('1' + rank());  // Convert rank to digit ('1' to '8')
         return squareStr;
     }
 };
@@ -183,13 +183,11 @@ public:
     }
 
     Piece& operator[](Square sq) {
-        int index = sq._rank * 8 + sq._file;
-        return squares[index];
+        return squares[sq.index()];
     }
 
     const Piece operator[](Square sq) const {
-        int index = sq._rank * 8 + sq._file;
-        return squares[index];
+        return squares[sq.index()];
     }
 };
 
