@@ -56,7 +56,6 @@ inline Color color (char color) {
 
 
 enum class PieceType : uint8_t {
-    INVALID,
     PAWN,
     KNIGHT,
     BISHOP,
@@ -64,6 +63,7 @@ enum class PieceType : uint8_t {
     QUEEN,
     KING
 };
+static constexpr uint8_t kNumPiecesTypes = static_cast<uint8_t>(PieceType::KING) + 1;
 
 inline PieceType fromChar(char type) {
     switch (type) {
@@ -110,19 +110,9 @@ inline char toChar(PieceType type, Color color) {
 }
 
 enum class Piece : uint8_t {
-    INVALID,
-    WHITE_PAWN,
-    WHITE_KNIGHT,
-    WHITE_BISHOP,
-    WHITE_ROOK,
-    WHITE_QUEEN,
-    WHITE_KING,
-    BLACK_PAWN,
-    BLACK_KNIGHT,
-    BLACK_BISHOP,
-    BLACK_ROOK,
-    BLACK_QUEEN,
-    BLACK_KING
+    NONE,
+    WHITE_PAWN, WHITE_KNIGHT, WHITE_BISHOP, WHITE_ROOK, WHITE_QUEEN, WHITE_KING,
+    BLACK_PAWN, BLACK_KNIGHT, BLACK_BISHOP, BLACK_ROOK, BLACK_QUEEN, BLACK_KING
 };
 static constexpr uint8_t kNumPieces = static_cast<uint8_t>(Piece::BLACK_KING) + 1;
 
@@ -138,21 +128,22 @@ inline Color color(Piece piece) {
 inline Piece toPiece(char piece) {
     std::string pieceChars = " PNBRQKpnbrqk";
     auto pieceIndex = pieceChars.find(piece);
-    return pieceIndex == std::string::npos ? Piece::INVALID : static_cast<Piece>(pieceIndex);
+    return pieceIndex == std::string::npos ? Piece::NONE : static_cast<Piece>(pieceIndex);
 }
 
 inline PieceType type(Piece piece) {
-    return static_cast<PieceType>((static_cast<uint8_t>(piece) - 1) % 6 + 1);
+    return static_cast<PieceType>((static_cast<uint8_t>(piece) - 1) % kNumPiecesTypes);
 }
 
 inline Piece addColor(PieceType type, Color color) {
-    return static_cast<Piece>(static_cast<uint8_t>(type) + (color == Color::WHITE ? 0 : 6));
+    return static_cast<Piece>(static_cast<uint8_t>(type)
+      + (color == Color::WHITE ? 0 : kNumPiecesTypes) + 1);
 }
 
 struct Move {
     Square from;
     Square to;
-    PieceType promotion = PieceType::INVALID;
+    PieceType promotion = PieceType::PAWN; // PAWN indicates no promotion (default)
     Move() : from(Square(-1, -1)), to(Square(-1, -1)) {}
     Move(const Square& fromSquare, const Square& toSquare) : from(fromSquare), to(toSquare) {}
     Move(const Square& fromSquare, const Square& toSquare, PieceType promotion) : from(fromSquare), to(toSquare), promotion(promotion) {}
@@ -163,7 +154,7 @@ struct Move {
     }
 
     operator bool() const {
-        return from._rank != to._rank || from._file != to._file;
+        return from.index() != to.index();
     }
 
     bool operator<(const Move& other) const {
@@ -188,7 +179,7 @@ class ChessBoard {
 
 public:
     ChessBoard() {
-        squares.fill(Piece::INVALID);
+        squares.fill(Piece::NONE);
     }
 
     Piece& operator[](Square sq) {

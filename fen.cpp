@@ -81,7 +81,7 @@ std::string toString(const ChessBoard& board) {
         for (int file = 0; file < 8; ++file) {
             Square sq{rank, file}; // Adjust the rank based on how it's stored in the ChessBoard
             auto piece = board[sq];
-            if (piece == Piece::INVALID) { // Empty square
+            if (piece == Piece::NONE) { // Empty square
                 ++emptyCount;
             } else {
                 if (emptyCount > 0) {

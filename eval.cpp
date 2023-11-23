@@ -1,6 +1,5 @@
 #include <iostream>
-#include <map>
-#include <set>
+#include <string>
 
 #include "eval.h"
 #include "moves.h"
@@ -56,7 +55,7 @@ void printBoard(std::ostream& os, const ChessBoard& board) {
         os << rank + 1 << "  ";
         for (int file = 0; file < 8; ++file) {
             auto piece = board[Square(rank, file)];
-            if (piece == Piece::INVALID) {
+            if (piece == Piece::NONE) {
                 os << " .";
             } else {
                 os << ' ' << to_char(piece);

@@ -12,6 +12,17 @@ class SquareSet {
 public:
     class iterator;
 
+    static SquareSet occupancy(const ChessBoard& board) {
+        SquareSet ret;
+        for (int j = 0; j < 64; ++j) {
+            Square sq(j);
+            if (board[sq] != Piece::NONE) {
+                ret.insert(sq);
+            }
+        }
+        return ret;
+    }
+
     void insert(Square square) {
         _squares |= (1ull << square.index());
     }
@@ -69,11 +80,10 @@ public:
 using MoveVector = std::vector<Move>;
 
 /**
- * This availableMoves function iterates over each square on the board. If a piece of the
- * active color is found, it calculates its possible moves using the possibleMoves function
- * you already have. For each possible destination square, it checks if the move would
- * result in self-blocking or moving through other pieces using the movesThroughPieces
- * function. If neither condition is true, the move is added to the set.
+ * This availableMoves function iterates over each square on the board. If a piece of the active
+ * color is found, it calculates its possible moves using the possibleMoves function you already
+ * have. For each possible destination square, it checks if the move would target an occupied square
+ * or move through other pieces. If neither condition is true, the move is added to the set.
  */
 void addAvailableMoves(MoveVector& moves, const ChessBoard& board, Color activeColor);
 

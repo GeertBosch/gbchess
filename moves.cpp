@@ -5,6 +5,27 @@
 
 #include "moves.h"
 
+struct MovesTable  {
+    // precomputed possible moves for each piece type on each square
+    SquareSet moves[kNumPieces][64];
+    // precomputed possible captures for each piece type on each square
+    SquareSet captures[kNumPieces][64];
+
+    MovesTable();
+} movesTable;
+
+MovesTable::MovesTable() {
+    for (int rank = 0; rank < 8; ++rank) {
+        for (int file = 0; file < 8; ++file) {
+            Square from{rank, file};
+            for (int piece = 0; piece < kNumPieces; ++piece) {
+                moves[piece][from.index()] = possibleMoves(Piece(piece), from);
+                captures[piece][from.index()] = possibleCaptures(Piece(piece), from);
+            }
+        }
+    }
+}
+
 SquareSet rookMoves(const Square& from) {
     SquareSet moves;
     for (int i = 0; i < 8; ++i) {
@@ -103,7 +124,7 @@ SquareSet blackPawnMoves(const Square& from) {
 
 SquareSet possibleMoves(Piece piece, const Square& from) {
     switch (piece) {
-        case Piece::INVALID:
+        case Piece::NONE:
             break;
         case Piece::WHITE_PAWN:
             return whitePawnMoves(from);
@@ -131,7 +152,7 @@ void addCaptureIfOnBoard(SquareSet& captures, int rank, int file) {
 
 SquareSet possibleCaptures(Piece piece, const Square& from) {
     switch (piece) {
-        case Piece::INVALID:
+        case Piece::NONE:
             break;
         case Piece::WHITE_PAWN:  // White Pawn
         {
@@ -178,7 +199,7 @@ bool movesThroughPieces(const ChessBoard& board, const Square& from, const Squar
     int filePos = from.file() + fileStep;
 
     while (rankPos != to.rank() || filePos != to.file()) {
-        if (board[{rankPos, filePos}] != Piece::INVALID) {
+        if (board[{rankPos, filePos}] != Piece::NONE) {
             return true; // There's a piece in the way
         }
         rankPos += rankStep;
@@ -207,13 +228,14 @@ void addAvailableMoves(MoveVector& moves, const ChessBoard& board, Color activeC
             auto piece = board[currentSquare];
 
             // Skip if the square is empty or if the piece isn't the active color
-            if (piece == Piece::INVALID || activeColor != color(piece))
+            if (piece == Piece::NONE || activeColor != color(piece))
                 continue;
 
-            auto possibleSquares = possibleMoves(piece, currentSquare);
+            auto pieceIndex = static_cast<uint8_t>(piece);
+            auto possibleSquares = movesTable.moves[pieceIndex][currentSquare.index()];
             for (const auto& dest : possibleSquares) {
-                // Check for self-blocking or moving through pieces
-                if (board[dest] == Piece::INVALID && !movesThroughPieces(board, currentSquare, dest)) {
+                // Check for occupied target square or moving through pieces
+                if (board[dest] == Piece::NONE && !movesThroughPieces(board, currentSquare, dest)) {
                     addMove(moves, piece, currentSquare, dest);
                 }
             }
@@ -231,12 +253,13 @@ void addAvailableCaptures(MoveVector& captures, const ChessBoard& board, Color a
             // Check if the piece is of the active color
             if (color(piece) != activeColor)
                 continue;
-            SquareSet possibleCaptureSquares = possibleCaptures(piece, from);
 
+            auto pieceIndex = static_cast<uint8_t>(piece);
+            SquareSet possibleCaptureSquares = movesTable.captures[pieceIndex][from.index()];
             for (const Square& to : possibleCaptureSquares) {
                 auto targetPiece = board[to];
 
-                if (targetPiece == Piece::INVALID) continue; // No piece to capture
+                if (targetPiece == Piece::NONE) continue; // No piece to capture
 
                 // Exclude self-capture and moves that move through pieces
                 if (color(piece) != color(targetPiece) && !movesThroughPieces(board, from, to))
@@ -251,13 +274,13 @@ void applyMove(ChessBoard& board, const Move& move) {
     auto& target = board[move.to];
 
     // Update the target, including promotion if applicable
-    target = move.promotion == PieceType::INVALID ? piece : addColor(move.promotion, color(piece));
-    piece = Piece::INVALID; // Empty the source square
+    target = move.promotion == PieceType::PAWN ? piece : addColor(move.promotion, color(piece));
+    piece = Piece::NONE; // Empty the source square
 }
 
 void applyMove(ChessPosition& position, const Move& move) {
     // Check if the move is a capture or pawn move before applying it to the board
-    bool capture = position.board[move.to] != Piece::INVALID;
+    bool capture = position.board[move.to] != Piece::NONE;
     bool pawnMove = type(position.board[move.from]) == PieceType::PAWN;
 
     // Apply the move to the board
@@ -295,7 +318,7 @@ void applyMove(ChessPosition& position, const Move& move) {
 
 bool isAttacked(const ChessBoard& board, const Square& square) {
     auto piece = board[square];
-    if (piece == Piece::INVALID) return false; // The square is empty, so it is not attacked.
+    if (piece == Piece::NONE) return false; // The square is empty, so it is not attacked.
 
     Color opponentColor = !color(piece);
     MoveVector captures;
