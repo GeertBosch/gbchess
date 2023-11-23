@@ -12,14 +12,15 @@ static float bestEval = 999;
  * zero indicates a draw. Units of evaluation are roughly the value of a pawn.
  */
 struct EvaluatedMove {
-     Move move; // Defaults to an invalid move
-     float evaluation;
-     bool check;
-     bool mate;
-     int depth;
+    Move move;  // Defaults to an invalid move
+    float evaluation;
+    bool check;
+    bool mate;
+    int depth;
 
     EvaluatedMove() : depth(0) {}
-    EvaluatedMove(const Move& move, bool check, bool mate, float evaluation, int depth) : move(move), evaluation(evaluation), check(check), mate(mate), depth(depth) {}
+    EvaluatedMove(const Move& move, bool check, bool mate, float evaluation, int depth)
+        : move(move), evaluation(evaluation), check(check), mate(mate), depth(depth) {}
     EvaluatedMove& operator=(const EvaluatedMove& other) = default;
     EvaluatedMove operator-() const {
         auto ret = *this;
@@ -31,9 +32,12 @@ struct EvaluatedMove {
     operator std::string() const;
 
     bool operator<(const EvaluatedMove& rhs) const {
-        if (!move) return true;
-        if (evaluation < rhs.evaluation) return true;
-        if (rhs.evaluation < evaluation) return false;
+        if (!move)
+            return true;
+        if (evaluation < rhs.evaluation)
+            return true;
+        if (rhs.evaluation < evaluation)
+            return false;
         return depth > rhs.depth;
     }
 };

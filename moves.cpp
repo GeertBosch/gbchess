@@ -6,7 +6,7 @@
 
 #include "moves.h"
 
-struct MovesTable  {
+struct MovesTable {
     // precomputed possible moves for each piece type on each square
     SquareSet moves[kNumPieces][kNumSquares];
     // precomputed possible captures for each piece type on each square
@@ -42,7 +42,7 @@ SquareSet SquareSet::occupancy(const ChessBoard& board) {
         input >>= 4;                      // The low nibbles is where the action is
         input += input >> 16;
         input += input >> 8;
-        input += (input >> 28); // Merge in the high nibbel from the high word
+        input += (input >> 28);  // Merge in the high nibbel from the high word
         input &= 0xffull;
         return input;
     };
@@ -106,7 +106,8 @@ SquareSet queenMoves(const Square& from) {
 
 SquareSet knightMoves(const Square& from) {
     SquareSet moves;
-    int knight_moves[8][2] = {{-2, -1}, {-1, -2}, {1, -2}, {2, -1}, {2, 1}, {1, 2}, {-1, 2}, {-2, 1}};
+    int knight_moves[8][2] = {
+        {-2, -1}, {-1, -2}, {1, -2}, {2, -1}, {2, 1}, {1, 2}, {-1, 2}, {-2, 1}};
     for (int i = 0; i < 8; ++i) {
         int new_rank = from.rank() + knight_moves[i][0];
         int new_file = from.file() + knight_moves[i][1];
@@ -163,15 +164,20 @@ SquareSet possibleMoves(Piece piece, const Square& from) {
             return whitePawnMoves(from);
         case Piece::BLACK_PAWN:
             return blackPawnMoves(from);
-        case Piece::WHITE_KNIGHT: case Piece::BLACK_KNIGHT:
+        case Piece::WHITE_KNIGHT:
+        case Piece::BLACK_KNIGHT:
             return knightMoves(from);
-        case Piece::WHITE_BISHOP: case Piece::BLACK_BISHOP:
+        case Piece::WHITE_BISHOP:
+        case Piece::BLACK_BISHOP:
             return bishopMoves(from);
-        case Piece::WHITE_ROOK: case Piece::BLACK_ROOK:
+        case Piece::WHITE_ROOK:
+        case Piece::BLACK_ROOK:
             return rookMoves(from);
-        case Piece::WHITE_QUEEN: case Piece::BLACK_QUEEN:
+        case Piece::WHITE_QUEEN:
+        case Piece::BLACK_QUEEN:
             return queenMoves(from);
-        case Piece::WHITE_KING: case Piece::BLACK_KING:
+        case Piece::WHITE_KING:
+        case Piece::BLACK_KING:
             return kingMoves(from);
     }
     return {};
@@ -201,15 +207,20 @@ SquareSet possibleCaptures(Piece piece, const Square& from) {
             addCaptureIfOnBoard(captures, from.rank() + 1, from.file() + 1);  // Diagonal right
             return captures;
         }
-        case Piece::WHITE_KNIGHT: case Piece::BLACK_KNIGHT:
+        case Piece::WHITE_KNIGHT:
+        case Piece::BLACK_KNIGHT:
             return knightMoves(from);
-        case Piece::WHITE_BISHOP: case Piece::BLACK_BISHOP:
+        case Piece::WHITE_BISHOP:
+        case Piece::BLACK_BISHOP:
             return bishopMoves(from);
-        case Piece::WHITE_ROOK: case Piece::BLACK_ROOK:
+        case Piece::WHITE_ROOK:
+        case Piece::BLACK_ROOK:
             return rookMoves(from);
-        case Piece::WHITE_QUEEN: case Piece::BLACK_QUEEN:
+        case Piece::WHITE_QUEEN:
+        case Piece::BLACK_QUEEN:
             return queenMoves(from);
-        case Piece::WHITE_KING: case Piece::BLACK_KING:
+        case Piece::WHITE_KING:
+        case Piece::BLACK_KING:
             return kingMoves(from);
     }
     return {};
@@ -222,7 +233,7 @@ SquareSet SquareSet::path(const Square& from, const Square& to) {
 
     // Check if the move isn't horizontal, vertical, or diagonal
     if (rankDiff != 0 && fileDiff != 0 && abs(rankDiff) != abs(fileDiff)) {
-        return path; // It's not in straight line, thus no need to check further
+        return path;  // It's not in straight line, thus no need to check further
     }
 
     // Calculate the direction of movement for rank and file
@@ -248,12 +259,11 @@ bool movesThroughPieces(const SquareSet& occupancy, const Square& from, const Sq
 void addMove(MoveVector& moves, Piece piece, const Square& from, const Square& to) {
     // If promoted, add all possible promotions
     if (type(piece) == PieceType::PAWN && (to.rank() == 0 || to.rank() == 7)) {
-        for (auto promotion : {PieceType::KNIGHT, PieceType::BISHOP,
-                               PieceType::ROOK, PieceType::QUEEN}) {
+        for (auto promotion :
+             {PieceType::KNIGHT, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN}) {
             moves.emplace_back(Move{from, to, promotion});
         }
-    }
-    else {
+    } else {
         moves.emplace_back(Move{from, to});
     }
 }
@@ -295,7 +305,8 @@ void addAvailableCaptures(MoveVector& captures, const ChessBoard& board, Color a
         for (const Square& to : possibleCaptureSquares) {
             auto targetPiece = board[to];
 
-            if (targetPiece == Piece::NONE) continue; // No piece to capture
+            if (targetPiece == Piece::NONE)
+                continue;  // No piece to capture
 
             // Exclude self-capture and moves that move through pieces
             if (color(piece) != color(targetPiece) && !movesThroughPieces(occupancy, from, to))
@@ -310,7 +321,7 @@ void applyMove(ChessBoard& board, const Move& move) {
 
     // Update the target, including promotion if applicable
     target = move.promotion == PieceType::PAWN ? piece : addColor(move.promotion, color(piece));
-    piece = Piece::NONE; // Empty the source square
+    piece = Piece::NONE;  // Empty the source square
 }
 
 void applyMove(ChessPosition& position, const Move& move) {
@@ -322,7 +333,7 @@ void applyMove(ChessPosition& position, const Move& move) {
     applyMove(position.board, move);
 
     // Update halfMoveClock
-    ++ position.halfmoveClock;
+    ++position.halfmoveClock;
     // Reset on pawn advance or capture, else increment
     if (pawnMove || capture)
         position.halfmoveClock = 0;
@@ -353,25 +364,26 @@ void applyMove(ChessPosition& position, const Move& move) {
 
 bool isAttacked(const ChessBoard& board, const Square& square) {
     auto piece = board[square];
-    if (piece == Piece::NONE) return false; // The square is empty, so it is not attacked.
+    if (piece == Piece::NONE)
+        return false;  // The square is empty, so it is not attacked.
 
     Color opponentColor = !color(piece);
     MoveVector captures;
     addAvailableCaptures(captures, board, opponentColor);
 
-    for(const auto& move : captures) {
-        if(move.to == square)
-            return true; // The square is attacked by some opponent piece.
+    for (const auto& move : captures) {
+        if (move.to == square)
+            return true;  // The square is attacked by some opponent piece.
     }
-    return false; // The square is not attacked by any opponent piece.
+    return false;  // The square is not attacked by any opponent piece.
 }
 
 SquareSet findPieces(const ChessBoard& board, Piece piece) {
     SquareSet squares;
-    for(int rank = 0; rank < 8; ++rank) {
-        for(int file = 0; file < 8; ++file) {
+    for (int rank = 0; rank < 8; ++rank) {
+        for (int file = 0; file < 8; ++file) {
             Square sq{rank, file};
-            if(board[sq] == piece) {
+            if (board[sq] == piece) {
                 squares.insert(sq);
             }
         }
@@ -383,9 +395,10 @@ bool isInCheck(const ChessBoard& board, Color activeColor) {
     auto king = addColor(PieceType::KING, activeColor);
     auto kingSquares = findPieces(board, king);
 
-    if (kingSquares.empty()) return false; // No king of the active color is present.
+    if (kingSquares.empty())
+        return false;  // No king of the active color is present.
 
-    Square kingSquare = *kingSquares.begin(); // Get the square where the king is located.
+    Square kingSquare = *kingSquares.begin();  // Get the square where the king is located.
     return isAttacked(board, kingSquare);
 }
 

@@ -5,7 +5,9 @@
 #include "moves.h"
 
 constexpr bool debug = 0;
-#define D if (debug) std::cerr
+#define D      \
+    if (debug) \
+    std::cerr
 
 std::ostream& operator<<(std::ostream& os, const Move& mv) {
     return os << std::string(mv);
@@ -17,7 +19,7 @@ std::ostream& operator<<(std::ostream& os, const EvaluatedMove& sq) {
     return os << std::string(sq);
 }
 std::ostream& operator<<(std::ostream& os, Color color) {
-    return os << (color == Color::BLACK ? 'b' : 'w')    ;
+    return os << (color == Color::BLACK ? 'b' : 'w');
 }
 
 EvaluatedMove::operator std::string() const {
@@ -35,8 +37,18 @@ float evaluateBoard(const ChessBoard& board) {
     float value = 0.0f;
     std::array<float, kNumPieces> pieceValues = {
         0.0f,
-        1.0f, 3.0f, 3.0f, 5.0f, 9.0f, 0.0f,      // White pieces, not counting the king
-        -1.0f, -3.0f, -3.0f, -5.0f, -9.0f, 0.0f, // Black pieces
+        1.0f,
+        3.0f,
+        3.0f,
+        5.0f,
+        9.0f,
+        0.0f,  // White pieces, not counting the king
+        -1.0f,
+        -3.0f,
+        -3.0f,
+        -5.0f,
+        -9.0f,
+        0.0f,  // Black pieces
     };
 
     for (int rank = 0; rank < 8; ++rank) {
@@ -76,11 +88,12 @@ EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
 
     if (allMoves.empty()) {
         D << "No moves available for " << position.activeColor << "!\n";
-        if (debug) printBoard(std::cerr, position.board);
+        if (debug)
+            printBoard(std::cerr, position.board);
         return {};
     }
 
-    EvaluatedMove best; // Default to the worst possible move
+    EvaluatedMove best;  // Default to the worst possible move
     auto indent = std::string(std::max(0, 4 - depth) * 4, ' ');
 
     // Base case: if depth is zero, return the static evaluation of the position
@@ -88,7 +101,8 @@ EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
         for (const auto& move : allMoves) {
             ChessPosition newPosition = move.second;
             EvaluatedMove ours{move.first, false, false, evaluateBoard(newPosition.board), 0};
-            if (position.activeColor == Color::BLACK) ours.evaluation = -ours.evaluation;
+            if (position.activeColor == Color::BLACK)
+                ours.evaluation = -ours.evaluation;
             if (best < ours) {
                 best = ours;
             }
@@ -105,7 +119,7 @@ EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
         // Recursively compute the best moves for the opponent, worst for us.
         auto opponentMove = -computeBestMove(newPosition, depth - 1);
 
-        bool mate = !opponentMove.move; // Either checkmate or stalemate
+        bool mate = !opponentMove.move;  // Either checkmate or stalemate
         bool check = isInCheck(newPosition.board, newPosition.activeColor);
         float evaluation = mate ? (check ? bestEval : drawEval) : opponentMove.evaluation;
         EvaluatedMove ourMove(move.first, check, mate, evaluation, opponentMove.depth + 1);

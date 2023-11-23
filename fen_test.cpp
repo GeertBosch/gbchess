@@ -1,6 +1,6 @@
 #include <cassert>
-#include <vector>
 #include <iostream>
+#include <vector>
 
 #include "fen.h"
 
@@ -24,7 +24,7 @@ void testFEN() {
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
         "8/8/8/8/8/8/8/8",
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",
-        "rnbqk2r/pppp1ppp/8/4p3/4P3/8/PPP2PPP/RNBQK2R", // Fixed the string
+        "rnbqk2r/pppp1ppp/8/4p3/4P3/8/PPP2PPP/RNBQK2R",  // Fixed the string
         "4k3/8/8/8/8/8/8/4K3",
         "8/8/8/8/8/8/8/8",
         "4k3/8/8/3Q4/8/8/8/4K3",

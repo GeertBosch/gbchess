@@ -35,7 +35,7 @@ void testFromStdIn(int depth) {
     }
 }
 
-std::ostream &operator<<(std::ostream &os, const MoveVector& moves) {
+std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     os << "[";
     for (const auto& move : moves) {
         os << std::string(move) << ", ";

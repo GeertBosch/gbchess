@@ -4,7 +4,7 @@ all: test puzzles
 	g++ -g -O0 -o $@ $^
 
 clean:
-	rm -f *.o *-debug *-test *.core puzzles.actual perf.data
+	rm -f *.o *-debug *-test *.core puzzles.actual perf.data perf.data.old
 
 eval-test: eval_test.cpp eval.cpp fen.cpp moves.cpp 
 	g++ -O3 -o $@ $^
