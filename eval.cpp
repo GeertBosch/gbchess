@@ -34,33 +34,30 @@ EvaluatedMove::operator std::string() const {
     return ss.str();
 }
 
+// Values of pieces, in centipawns
+static std::array<int16_t, kNumPieces> pieceValues = {
+    0,     // None
+    100,   // White pawn
+    300,   // White knight
+    300,   // White bishop
+    500,   // White rook
+    900,   // White queen
+    0,     // Not counting the white king
+    -100,  // Black pawn
+    -300,  // Black knight
+    -300,  // Black bishop
+    -500,  // Black rook
+    -900,  // Black queen
+    0,     // Not counting the black king
+};
+
 float evaluateBoard(const ChessBoard& board) {
-    float value = 0.0f;
-    std::array<float, kNumPieces> pieceValues = {
-        0.0f,
-        1.0f,
-        3.0f,
-        3.0f,
-        5.0f,
-        9.0f,
-        0.0f,  // White pieces, not counting the king
-        -1.0f,
-        -3.0f,
-        -3.0f,
-        -5.0f,
-        -9.0f,
-        0.0f,  // Black pieces
-    };
+    int32_t value = 0;
 
-    for (int rank = 0; rank < 8; ++rank) {
-        for (int file = 0; file < 8; ++file) {
-            Square square = {rank, file};
-            auto piece = board[square];
-            value += pieceValues[static_cast<uint8_t>(piece)];
-        }
-    }
+    for (auto piece : board.squares())
+        value += pieceValues[static_cast<uint8_t>(piece)];
 
-    return value;
+    return value / 100.0f;
 }
 
 void printBoard(std::ostream& os, const ChessBoard& board) {
