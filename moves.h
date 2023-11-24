@@ -151,6 +151,7 @@ SquareSet possibleCaptures(Piece piece, Square from);
 std::map<Move, ChessPosition> computeAllLegalMoves(const ChessPosition& position);
 
 bool isAttacked(const ChessBoard& board, Square square);
+bool isAttacked(const ChessBoard& board, SquareSet squares);
 
 /**
  * Updates the board with the given move, which may be a capture.

@@ -8,33 +8,6 @@
 #include "fen.h"
 #include "moves.h"
 
-// ... [Other includes and definitions] ...
-void testFromStdIn(int depth) {
-    // While there is input on stdin, read a line, parse it as a FEN string and print the best move.
-    auto startTime = std::chrono::high_resolution_clock::now();
-    while (std::cin) {
-        std::string fen;
-        std::getline(std::cin, fen);
-
-        if (fen.empty())
-            continue;
-
-        // Parse the FEN string into a ChessPosition
-        ChessPosition position = parseFEN(fen);
-
-        // Compute the best move
-        auto bestMove = computeBestMove(position, depth);
-
-        // Print the best moves and their evaluations
-        std::cout << static_cast<std::string>(bestMove) << std::endl;
-        auto endTime = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
-        auto millis = duration.count();
-        std::cerr << (std::to_string(millis) + " ms: " + fen + " => " +
-                      static_cast<std::string>(bestMove) + "\n");
-    }
-}
-
 std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     os << "[";
     for (const auto& move : moves) {
@@ -43,6 +16,69 @@ std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     os << "]";
     return os;
 }
+
+template <typename F>
+void printEvalRate(const F& fun) {
+    auto startTime = std::chrono::high_resolution_clock::now();
+    auto startEvals = evalCount;
+    fun();
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto endEvals = evalCount;
+
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+    auto evals = endEvals - startEvals;
+    auto evalRate = evals / (duration.count() / 1000'000.0);  // evals per second
+
+    std::cerr << evals << " evals in " << duration.count() / 1000 << " ms @ " << evalRate / 1000.0
+              << "K evals/sec" << std::endl;
+}
+
+void printAvailableMoves(const ChessPosition& position) {
+    MoveVector moves;
+    addAvailableMoves(moves, position.board, position.activeColor);
+    std::cout << "Moves: " << moves << std::endl;
+}
+
+void printAvailableCaptures(const ChessPosition& position) {
+    MoveVector captures;
+    addAvailableCaptures(captures, position.board, position.activeColor);
+    std::cout << "Captures: " << captures << std::endl;
+}
+
+void printBestMove(const ChessPosition& position, int depth) {
+    auto bestMove = computeBestMove(position, depth);
+    std::cout << "Best Move: " << static_cast<std::string>(bestMove) << std::endl;
+}
+
+
+void testFromStdIn(int depth) {
+    // While there is input on stdin, read a line, parse it as a FEN string and print the best move.
+    while (std::cin) {
+        std::string fen;
+        std::getline(std::cin, fen);
+
+        if (fen.empty())
+            continue;
+
+        // Parse the FEN string into a ChessPosition
+        std::cerr << fen << std::endl;
+        ChessPosition position = parseFEN(fen);
+        auto startTime = std::chrono::high_resolution_clock::now();
+
+        // Print the board in grid notation
+        printBoard(std::cerr, position.board);
+
+        // Compute the best move
+        EvaluatedMove bestMove;
+        printEvalRate([&]() {
+            bestMove = computeBestMove(position, depth);
+            // Print the best move and its evaluation
+            std::cout << static_cast<std::string>(bestMove) << std::endl;
+            std::cerr << "Solution: " << std::string(bestMove) << "\t";
+        });
+    }
+}
+
 
 int main(int argc, char* argv[]) {
     if (argc == 2) {
@@ -65,27 +101,11 @@ int main(int argc, char* argv[]) {
     printBoard(std::cout, position.board);
 
     // Evaluate the board
-    float evaluation = evaluateBoard(position.board);
-    std::cout << "Board Evaluation: " << evaluation << std::endl;
+    std::cout << "Board Evaluation: " << evaluateBoard(position.board) << std::endl;
 
-    {
-        MoveVector captures;
-        addAvailableCaptures(captures, position.board, position.activeColor);
-        std::cout << "Captures: " << captures << std::endl;
-    }
-
-    {
-        MoveVector moves;
-        addAvailableMoves(moves, position.board, position.activeColor);
-        std::cout << "Moves: " << moves << std::endl;
-    }
-
-    // Compute the best move
-    auto bestMove = computeBestMove(position, depth);
-
-    // Print the best moves and their evaluations
-    std::cout << "Best Move and Evaluation:" << std::endl;
-    std::cout << static_cast<std::string>(bestMove) << std::endl;
+    printAvailableCaptures(position);
+    printAvailableMoves(position);
+    printEvalRate([&]() { printBestMove(position, depth); });
 
     return 0;
 }

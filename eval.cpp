@@ -51,9 +51,11 @@ static std::array<int16_t, kNumPieces> pieceValues = {
     0,     // Not counting the black king
 };
 
+uint64_t evalCount = 0;
 float evaluateBoard(const ChessBoard& board) {
     int32_t value = 0;
 
+    ++evalCount;
     for (auto piece : board.squares())
         value += pieceValues[static_cast<uint8_t>(piece)];
 
@@ -80,7 +82,7 @@ void printBoard(std::ostream& os, const ChessBoard& board) {
     os << std::endl;
 }
 
-EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
+EvaluatedMove computeBestMove(const ChessPosition& position, int depth, bool top) {
     auto allMoves = computeAllLegalMoves(position);
 
     if (allMoves.empty()) {
@@ -119,12 +121,7 @@ EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
         auto opponentMove = -computeBestMove(newPosition, depth - 1);
 
         bool mate = !opponentMove.move;  // Either checkmate or stalemate
-        bool check = [&]() {
-            for (auto sq : opponentKing)
-                if (isAttacked(newPosition.board, sq))
-                    return true;
-            return false;
-        }();
+        bool check = isAttacked(newPosition.board, opponentKing);
 
         float evaluation = mate ? (check ? bestEval : drawEval) : opponentMove.evaluation;
         EvaluatedMove ourMove(move.first, check, mate, evaluation, opponentMove.depth + 1);
@@ -140,6 +137,9 @@ EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
             }
         }
     }
-
     return best;
+}
+
+EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
+    return computeBestMove(position, depth, true);
 }

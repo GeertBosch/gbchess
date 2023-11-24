@@ -391,6 +391,14 @@ bool isAttacked(const ChessBoard& board, Square square) {
     return false;  // The square is not attacked by any opponent piece.
 }
 
+bool isAttacked(const ChessBoard& board, SquareSet squares) {
+    for (auto square : squares) {
+        if (isAttacked(board, square))
+            return true;
+    }
+    return false;
+}
+
 /**
  * Computes all legal moves from a given chess position, mapping each move to the resulting
  * chess position after the move is applied. This function checks for moves that do not leave
@@ -425,14 +433,7 @@ std::map<Move, ChessPosition> computeAllLegalMoves(const ChessPosition& position
         applyMove(newPosition, move);
 
         // Check if the move would result in our king being in check.
-        bool inCheck = [&]() {
-            for (auto sq : newKing)
-                if (isAttacked(newPosition.board, sq))
-                    return true;
-            return false;
-        }();
-
-        if (!inCheck)
+        if (!isAttacked(newPosition.board, newKing))
             legalMoves[move] = newPosition;
     }
 

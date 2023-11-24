@@ -42,6 +42,8 @@ struct EvaluatedMove {
     }
 };
 
+extern uint64_t evalCount;
+
 /**
  * This function iterates over each square in the board, uses the pieceValues map to find
  * the value of the piece on that square, and adjusts the total value accordingly. White
