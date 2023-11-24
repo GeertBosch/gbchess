@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <iostream>
 #include <string>
 
@@ -82,7 +83,6 @@ void printBoard(std::ostream& os, const ChessBoard& board) {
     os << std::endl;
 }
 
-
 EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
     auto allMoves = computeAllLegalMoves(position);
 
@@ -94,7 +94,7 @@ EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
     }
 
     EvaluatedMove best;  // Default to the worst possible move
-    auto indent = std::string(std::max(0, 4 - depth) * 4, ' ');
+    auto indent = debug ? std::string(std::max(0, 4 - depth) * 4, ' ') : "";
 
     // Base case: if depth is zero, return the static evaluation of the position
     if (depth == 0) {
@@ -112,6 +112,8 @@ EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
     }
 
     // Recursive case: compute all legal moves and evaluate them
+    auto opponentKing =
+        SquareSet::findPieces(position.board, addColor(PieceType::KING, !position.activeColor));
     for (auto move : allMoves) {
         const ChessPosition& newPosition = move.second;
         D << indent << position.activeColor << " " << move.first << std::endl;
@@ -120,7 +122,13 @@ EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
         auto opponentMove = -computeBestMove(newPosition, depth - 1);
 
         bool mate = !opponentMove.move;  // Either checkmate or stalemate
-        bool check = isInCheck(newPosition.board, newPosition.activeColor);
+        bool check = [&]() {
+            for (auto sq : opponentKing)
+                if (isAttacked(newPosition.board, sq))
+                    return true;
+            return false;
+        }();
+
         float evaluation = mate ? (check ? bestEval : drawEval) : opponentMove.evaluation;
         EvaluatedMove ourMove(move.first, check, mate, evaluation, opponentMove.depth + 1);
         D << indent << best << " <  " << ourMove << " ? " << (best < ourMove) << std::endl;

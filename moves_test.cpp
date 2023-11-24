@@ -500,30 +500,33 @@ void testApplyMove() {
     std::cout << "All applyMove tests passed!" << std::endl;
 }
 
-void testIsInCheck() {
+void testIsAttacked() {
+    Square whiteKingSquare = Square(0, 0);
+    Square blackKingSquare = Square(5, 5);
+    ChessBoard base;
+    base[whiteKingSquare] = Piece::WHITE_KING;
+    base[blackKingSquare] = Piece::BLACK_KING;
+
     // Test that a king is in check
     {
-        ChessBoard board;
-        board[Square(0, 0)] = Piece::WHITE_KING;
+        ChessBoard board = base;
         board[Square(0, 1)] = Piece::BLACK_ROOK;
-        assert(isInCheck(board, Color::WHITE));
+        assert(isAttacked(board, whiteKingSquare));
+        assert(!isAttacked(board, blackKingSquare));
     }
 
     // Test that a king is not in check
     {
-        ChessBoard board;
-        board[Square(0, 0)] = Piece::WHITE_KING;
+        ChessBoard board = base;
         board[Square(0, 1)] = Piece::BLACK_ROOK;
-        assert(!isInCheck(board, Color::BLACK));
     }
 
     // Test that a king is in check after a move
     {
-        ChessBoard board;
-        board[Square(0, 0)] = Piece::WHITE_KING;
+        ChessBoard board = base;
         board[Square(1, 1)] = Piece::BLACK_ROOK;
         applyMove(board, Move(Square(0, 0), Square(1, 0)));
-        assert(isInCheck(board, Color::WHITE));
+        assert(isAttacked(board, Square(1, 0)));
     }
 
     // Test that a king is not in check after a move
@@ -532,10 +535,10 @@ void testIsInCheck() {
         board[Square(0, 0)] = Piece::WHITE_KING;
         board[Square(0, 1)] = Piece::BLACK_ROOK;
         applyMove(board, Move(Square(0, 0), Square(1, 0)));
-        assert(!isInCheck(board, Color::BLACK));
+        assert(!isAttacked(board, blackKingSquare));
     }
 
-    std::cout << "All isInCheck tests passed!" << std::endl;
+    std::cout << "All isAttacked tests passed!" << std::endl;
 }
 
 int main() {
@@ -549,7 +552,7 @@ int main() {
     testOccupancy();
     testAddAvailableMoves();
     testApplyMove();
-    testIsInCheck();
+    testIsAttacked();
     std::cout << "All move tests passed!" << std::endl;
     return 0;
 }

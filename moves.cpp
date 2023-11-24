@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <iomanip>
@@ -35,7 +36,7 @@ MovesTable::MovesTable() {
 }
 
 SquareSet SquareSet::occupancy(const ChessBoard& board) {
-    auto& squares = board.squares();
+    auto squares = board.squares();
     auto bitmask = [](uint64_t input) -> uint64_t {
         input += 0x7f3f1f0f'7f3f1f0full;  // Cause overflow in the right bits
         input &= 0x80402010'80402010ull;  // These are them, the 8 occupancy bits
@@ -56,6 +57,19 @@ SquareSet SquareSet::occupancy(const ChessBoard& board) {
     }
 
     return set;
+}
+
+SquareSet SquareSet::findPieces(const ChessBoard& board, Piece piece) {
+    SquareSet squares;
+    for (int rank = 0; rank < 8; ++rank) {
+        for (int file = 0; file < 8; ++file) {
+            Square sq{rank, file};
+            if (board[sq] == piece) {
+                squares.insert(sq);
+            }
+        }
+    }
+    return squares;
 }
 
 
@@ -327,7 +341,8 @@ void applyMove(ChessBoard& board, Move move) {
 void applyMove(ChessPosition& position, Move move) {
     // Check if the move is a capture or pawn move before applying it to the board
     bool capture = position.board[move.to] != Piece::NONE;
-    bool pawnMove = type(position.board[move.from]) == PieceType::PAWN;
+    auto piece = position.board[move.from];
+    bool pawnMove = type(piece) == PieceType::PAWN;
 
     // Apply the move to the board
     applyMove(position.board, move);
@@ -340,9 +355,8 @@ void applyMove(ChessPosition& position, Move move) {
 
     // Update fullMoveNumber
     // Increment after black's move
-    if (position.activeColor == Color::BLACK) {
+    if (position.activeColor == Color::BLACK)
         ++position.fullmoveNumber;
-    }
 
     // Update activeColor
     auto oldColor = position.activeColor;
@@ -361,7 +375,6 @@ void applyMove(ChessPosition& position, Move move) {
 
     // ... add logic for enPassantTarget here ...
 }
-
 bool isAttacked(const ChessBoard& board, Square square) {
     auto piece = board[square];
     if (piece == Piece::NONE)
@@ -376,30 +389,6 @@ bool isAttacked(const ChessBoard& board, Square square) {
             return true;  // The square is attacked by some opponent piece.
     }
     return false;  // The square is not attacked by any opponent piece.
-}
-
-SquareSet findPieces(const ChessBoard& board, Piece piece) {
-    SquareSet squares;
-    for (int rank = 0; rank < 8; ++rank) {
-        for (int file = 0; file < 8; ++file) {
-            Square sq{rank, file};
-            if (board[sq] == piece) {
-                squares.insert(sq);
-            }
-        }
-    }
-    return squares;
-}
-
-bool isInCheck(const ChessBoard& board, Color activeColor) {
-    auto king = addColor(PieceType::KING, activeColor);
-    auto kingSquares = findPieces(board, king);
-
-    if (kingSquares.empty())
-        return false;  // No king of the active color is present.
-
-    Square kingSquare = *kingSquares.begin();  // Get the square where the king is located.
-    return isAttacked(board, kingSquare);
 }
 
 /**
@@ -419,17 +408,32 @@ std::map<Move, ChessPosition> computeAllLegalMoves(const ChessPosition& position
     addAvailableCaptures(moves, position.board, position.activeColor);
     addAvailableMoves(moves, position.board, position.activeColor);
 
+    auto ourKing = addColor(PieceType::KING, position.activeColor);
+    auto oldKing = SquareSet::findPieces(position.board, ourKing);
+
     // Iterate over all moves and captures
     for (auto move : moves) {
+        // If we move the king, reflect that in the king squares
+        auto newKing = oldKing;
+        if (position.board[move.from] == ourKing) {
+            newKing.erase(move.from);
+            newKing.insert(move.to);
+        }
+
         // Make a copy of the position to apply the move
         ChessPosition newPosition = position;
         applyMove(newPosition, move);
 
-        // Check if the move would result in our king being in check
-        if (!isInCheck(newPosition.board, position.activeColor)) {
-            // If not in check, add the move to the map of legal moves
+        // Check if the move would result in our king being in check.
+        bool inCheck = [&]() {
+            for (auto sq : newKing)
+                if (isAttacked(newPosition.board, sq))
+                    return true;
+            return false;
+        }();
+
+        if (!inCheck)
             legalMoves[move] = newPosition;
-        }
     }
 
     return legalMoves;

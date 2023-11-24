@@ -1,4 +1,5 @@
 #include <cstring>
+#include <iterator>
 #include <map>
 #include <vector>
 
@@ -25,6 +26,11 @@ public:
      */
     static SquareSet occupancy(const ChessBoard& board);
 
+    static SquareSet findPieces(const ChessBoard& board, Piece piece);
+
+    void erase(Square square) {
+        _squares &= ~(1ull << square.index());
+    }
     void insert(Square square) {
         _squares |= (1ull << square.index());
     }
@@ -62,6 +68,7 @@ public:
         friend class SquareSet;
         uint64_t _squares;
         iterator(SquareSet squares) : _squares(squares._squares) {}
+        using iterator_category = std::forward_iterator_tag;
 
     public:
         iterator operator++() {
@@ -143,14 +150,7 @@ SquareSet possibleCaptures(Piece piece, Square from);
  */
 std::map<Move, ChessPosition> computeAllLegalMoves(const ChessPosition& position);
 
-/**
- * Checks if the specified color is in check on the given chess board.
- *
- * @param board The chess board to check.
- * @param activeColor The color to check for being in check.
- * @return True if the specified color is in check, false otherwise.
- */
-bool isInCheck(const ChessBoard& board, Color activeColor);
+bool isAttacked(const ChessBoard& board, Square square);
 
 /**
  * Updates the board with the given move, which may be a capture.
