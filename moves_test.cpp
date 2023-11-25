@@ -432,7 +432,7 @@ void testApplyMove() {
         position.board[Square(1, 0)] = Piece::WHITE_PAWN;
         position.activeColor = Color::WHITE;
         position.halfmoveClock = 1;
-        applyMove(position, Move(Square(1, 0), Square(2, 0)));
+        position = applyMove(position, Move(Square(1, 0), Square(2, 0)));
         assert(position.board[Square(2, 0)] == Piece::WHITE_PAWN);
         assert(position.board[Square(1, 0)] == Piece::NONE);
         assert(position.activeColor == Color::BLACK);
@@ -446,7 +446,7 @@ void testApplyMove() {
         position.board[Square(2, 1)] = Piece::BLACK_ROOK;  // White pawn captures black rook
         position.activeColor = Color::WHITE;
         position.halfmoveClock = 1;
-        applyMove(position, Move(Square(1, 0), Square(2, 1)));
+        position = applyMove(position, Move(Square(1, 0), Square(2, 1)));
         assert(position.board[Square(2, 1)] == Piece::WHITE_PAWN);
         assert(position.board[Square(1, 0)] == Piece::NONE);
         assert(position.activeColor == Color::BLACK);
@@ -460,7 +460,7 @@ void testApplyMove() {
         position.activeColor = Color::BLACK;
         position.halfmoveClock = 1;
         position.fullmoveNumber = 1;
-        applyMove(position, Move(Square(1, 0), Square(2, 0)));
+        position = applyMove(position, Move(Square(1, 0), Square(2, 0)));
         assert(position.board[Square(2, 0)] == Piece::BLACK_PAWN);
         assert(position.board[Square(1, 0)] == Piece::NONE);
         assert(position.activeColor == Color::WHITE);
@@ -476,7 +476,7 @@ void testApplyMove() {
         position.activeColor = Color::WHITE;
         position.fullmoveNumber = 1;
         position.halfmoveClock = 1;
-        applyMove(position, Move(Square(1, 0), Square(2, 1)));
+        position = applyMove(position, Move(Square(1, 0), Square(2, 1)));
         assert(position.board[Square(2, 1)] == Piece::WHITE_PAWN);
         assert(position.board[Square(1, 0)] == Piece::NONE);
         assert(position.activeColor == Color::BLACK);
@@ -490,7 +490,7 @@ void testApplyMove() {
         position.board[Square(0, 1)] = Piece::WHITE_KNIGHT;
         position.activeColor = Color::WHITE;
         position.halfmoveClock = 1;
-        applyMove(position, Move(Square(0, 1), Square(2, 2)));
+        position = applyMove(position, Move(Square(0, 1), Square(2, 2)));
         assert(position.board[Square(2, 2)] == Piece::WHITE_KNIGHT);
         assert(position.board[Square(0, 1)] == Piece::NONE);
         assert(position.activeColor == Color::BLACK);

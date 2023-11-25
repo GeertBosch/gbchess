@@ -123,6 +123,10 @@ enum class Piece : uint8_t {
 };
 static constexpr uint8_t kNumPieces = static_cast<uint8_t>(Piece::BLACK_KING) + 1;
 
+inline uint8_t index(Piece piece) {
+    return static_cast<uint8_t>(piece);
+}
+
 inline char to_char(Piece piece) {
     char pieceChars[] = {'.', 'P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k'};
     return pieceChars[static_cast<uint8_t>(piece)];

@@ -168,4 +168,4 @@ void applyMove(ChessBoard& board, Move move);
  * Like the above, but also updates per turn state (active color, castling availability,
  * en passant target, halfmove clock, and fullmove number).
  */
-void applyMove(ChessPosition& position, Move move);
+[[nodiscard]] ChessPosition applyMove(ChessPosition position, Move move);

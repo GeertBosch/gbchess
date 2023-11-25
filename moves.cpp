@@ -283,46 +283,55 @@ void addMove(MoveVector& moves, Piece piece, Square from, Square to) {
     }
 }
 
-void addAvailableMoves(MoveVector& moves, const ChessBoard& board, Color activeColor) {
+template <typename F>
+void findMoves(const ChessBoard& board, Color activeColor, const F& fun) {
     auto occupied = SquareSet::occupancy(board);
-    for (int rank = 0; rank < 8; ++rank) {
-        for (int file = 0; file < 8; ++file) {
-            Square sq{rank, file};
-            auto piece = board[sq];
+    for (auto from : occupied) {
+        auto piece = board[from];
 
-            // Skip if the square is empty or if the piece isn't the active color
-            if (piece == Piece::NONE || activeColor != color(piece))
-                continue;
+        // Skip if piece isn't the active color
+        if (color(piece) != activeColor)
+            continue;
 
-            auto pieceIndex = static_cast<uint8_t>(piece);
-            auto possibleSquares = movesTable.moves[pieceIndex][sq.index()];
-            for (auto dest : possibleSquares) {
-                // Check for occupied target square or moving through pieces
-                if (board[dest] == Piece::NONE && clearPath(occupied, sq, dest)) {
-                    addMove(moves, piece, sq, dest);
-                }
-            }
+        auto possibleSquares = movesTable.moves[index(piece)][from.index()] & !occupied;
+        for (auto to : possibleSquares) {
+            // Check for occupied target square or moving through pieces
+            if (clearPath(occupied, from, to))
+                fun(piece, from, to);
         }
     }
 }
 
-void addAvailableCaptures(MoveVector& captures, const ChessBoard& board, Color activeColor) {
-    auto occupancy = SquareSet::occupancy(board);
-    for (Square from : occupancy) {
+
+template <typename F>
+void findCaptures(const ChessBoard& board, Color activeColor, const F& fun) {
+    auto occupied = SquareSet::occupancy(board);
+    for (auto from : occupied) {
         auto piece = board[from];
+
         // Check if the piece is of the active color
         if (color(piece) != activeColor)
             continue;
 
-        auto pieceIndex = static_cast<uint8_t>(piece);
-        auto possibleCaptureSquares = movesTable.captures[pieceIndex][from.index()] & occupancy;
-
-        for (Square to : possibleCaptureSquares) {
+        auto possibleSquares = movesTable.captures[index(piece)][from.index()] & occupied;
+        for (auto to : possibleSquares) {
             // Exclude self-capture and moves that move through pieces
-            if (activeColor != color(board[to]) && clearPath(occupancy, from, to))
-                addMove(captures, piece, from, to);
+            if (color(board[to]) != activeColor && clearPath(occupied, from, to))
+                fun(piece, from, to);
         }
     }
+}
+
+void addAvailableMoves(MoveVector& moves, const ChessBoard& board, Color activeColor) {
+    findMoves(board, activeColor, [&moves](Piece piece, Square from, Square to) {
+        addMove(moves, piece, from, to);
+    });
+}
+
+void addAvailableCaptures(MoveVector& captures, const ChessBoard& board, Color activeColor) {
+    findCaptures(board, activeColor, [&captures](Piece piece, Square from, Square to) {
+        addMove(captures, piece, from, to);
+    });
 }
 
 void applyMove(ChessBoard& board, Move move) {
@@ -334,7 +343,7 @@ void applyMove(ChessBoard& board, Move move) {
     piece = Piece::NONE;  // Empty the source square
 }
 
-void applyMove(ChessPosition& position, Move move) {
+ChessPosition applyMove(ChessPosition position, Move move) {
     // Check if the move is a capture or pawn move before applying it to the board
     bool capture = position.board[move.to] != Piece::NONE;
     auto piece = position.board[move.from];
@@ -370,6 +379,7 @@ void applyMove(ChessPosition& position, Move move) {
     // This logic depends on whether a pawn has moved two squares from its original rank.
 
     // ... add logic for enPassantTarget here ...
+    return position;
 }
 
 bool isAttacked(const ChessBoard& board, Square square) {
@@ -415,30 +425,43 @@ ComputedMoveVector computeAllLegalMoves(const ChessPosition& position) {
     ComputedMoveVector legalMoves;
 
     // Gather all possible moves and captures
-    MoveVector moves;
-    addAvailableCaptures(moves, position.board, position.activeColor);
-    addAvailableMoves(moves, position.board, position.activeColor);
+    // MoveVector moves;
+    // addAvailableCaptures(moves, position.board, position.activeColor);
+    // addAvailableMoves(moves, position.board, position.activeColor);
 
     auto ourKing = addColor(PieceType::KING, position.activeColor);
     auto oldKing = SquareSet::findPieces(position.board, ourKing);
 
     // Iterate over all moves and captures
-    for (auto move : moves) {
+    auto addIfLegal = [&](Piece piece, Square from, Square to) {
         // If we move the king, reflect that in the king squares
         auto newKing = oldKing;
-        if (position.board[move.from] == ourKing) {
-            newKing.erase(move.from);
-            newKing.insert(move.to);
+        if (piece == ourKing) {
+            newKing.erase(from);
+            newKing.insert(to);
         }
 
         // Make a copy of the position to apply the move
-        ChessPosition newPosition = position;
-        applyMove(newPosition, move);
+        Move move = {from, to};  // For now assume no promotion applies
+        auto newPosition = applyMove(position, move);
 
         // Check if the move would result in our king being in check.
-        if (!isAttacked(newPosition.board, newKing))
-            legalMoves.emplace_back(ComputedMove{move, newPosition});
-    }
+        if (!isAttacked(newPosition.board, newKing)) {
+            // If promoted, add all possible promotions, legality is not affected
+            if (type(piece) == PieceType::PAWN && (to.rank() == 0 || to.rank() == 7)) {
+                for (auto promotion :
+                     {PieceType::KNIGHT, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN}) {
+                    newPosition.board[to] = addColor(promotion, position.activeColor);
+                    legalMoves.emplace_back(Move{from, to, promotion}, newPosition);
+                }
+            } else {
+                legalMoves.emplace_back(Move{from, to}, newPosition);
+            }
+        }
+    };
+
+    findCaptures(position.board, position.activeColor, addIfLegal);
+    findMoves(position.board, position.activeColor, addIfLegal);
 
     return legalMoves;
 }
