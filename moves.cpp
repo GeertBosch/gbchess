@@ -267,9 +267,9 @@ SquareSet SquareSet::path(Square from, Square to) {
     return path;
 }
 
-bool movesThroughPieces(SquareSet occupancy, Square from, Square to) {
+bool clearPath(SquareSet occupancy, Square from, Square to) {
     auto path = movesTable.paths[from.index()][to.index()];
-    return !(occupancy & path).empty();
+    return (occupancy & path).empty();
 }
 
 void addMove(MoveVector& moves, Piece piece, Square from, Square to) {
@@ -299,7 +299,7 @@ void addAvailableMoves(MoveVector& moves, const ChessBoard& board, Color activeC
             auto possibleSquares = movesTable.moves[pieceIndex][sq.index()];
             for (auto dest : possibleSquares) {
                 // Check for occupied target square or moving through pieces
-                if (board[dest] == Piece::NONE && !movesThroughPieces(occupied, sq, dest)) {
+                if (board[dest] == Piece::NONE && clearPath(occupied, sq, dest)) {
                     addMove(moves, piece, sq, dest);
                 }
             }
@@ -309,23 +309,18 @@ void addAvailableMoves(MoveVector& moves, const ChessBoard& board, Color activeC
 
 void addAvailableCaptures(MoveVector& captures, const ChessBoard& board, Color activeColor) {
     auto occupancy = SquareSet::occupancy(board);
-    for (Square from = 0; from != Square(kNumSquares); ++from) {
+    for (Square from : occupancy) {
         auto piece = board[from];
-
         // Check if the piece is of the active color
         if (color(piece) != activeColor)
             continue;
 
         auto pieceIndex = static_cast<uint8_t>(piece);
-        SquareSet possibleCaptureSquares = movesTable.captures[pieceIndex][from.index()];
+        auto possibleCaptureSquares = movesTable.captures[pieceIndex][from.index()] & occupancy;
+
         for (Square to : possibleCaptureSquares) {
-            auto targetPiece = board[to];
-
-            if (targetPiece == Piece::NONE)
-                continue;  // No piece to capture
-
             // Exclude self-capture and moves that move through pieces
-            if (color(piece) != color(targetPiece) && !movesThroughPieces(occupancy, from, to))
+            if (activeColor != color(board[to]) && clearPath(occupancy, from, to))
                 addMove(captures, piece, from, to);
         }
     }
@@ -394,7 +389,7 @@ bool isAttacked(const ChessBoard& board, Square square) {
 
         auto pieceIndex = static_cast<uint8_t>(piece);
         auto possibleCaptureSquares = movesTable.captures[pieceIndex][from.index()];
-        if (possibleCaptureSquares.contains(square) && !movesThroughPieces(occupancy, from, square))
+        if (possibleCaptureSquares.contains(square) && clearPath(occupancy, from, square))
             return true;
     }
     return false;
