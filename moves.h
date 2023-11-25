@@ -1,6 +1,5 @@
 #include <cstring>
 #include <iterator>
-#include <map>
 #include <vector>
 
 #include "common.h"
@@ -100,6 +99,8 @@ public:
 };
 
 using MoveVector = std::vector<Move>;
+using ComputedMove = std::pair<Move, ChessPosition>;
+using ComputedMoveVector = std::vector<ComputedMove>;
 
 /**
  * This availableMoves function iterates over each square on the board. If a piece of the active
@@ -152,7 +153,7 @@ SquareSet possibleCaptures(Piece piece, Square from);
  * @return A map where each key is a legal move and the corresponding value is the new chess
  *         position resulting from that move.
  */
-std::map<Move, ChessPosition> computeAllLegalMoves(const ChessPosition& position);
+ComputedMoveVector computeAllLegalMoves(const ChessPosition& position);
 
 bool isAttacked(const ChessBoard& board, Square square);
 bool isAttacked(const ChessBoard& board, SquareSet squares);

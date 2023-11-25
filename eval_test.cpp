@@ -1,7 +1,6 @@
 #include <chrono>
 #include <cstdlib>  // For std::exit
 #include <iostream>
-#include <map>
 #include <string>
 
 #include "eval.h"

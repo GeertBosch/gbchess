@@ -3,7 +3,6 @@
 #include <cmath>
 #include <iomanip>
 #include <iostream>
-#include <map>
 
 #include "moves.h"
 
@@ -412,8 +411,8 @@ bool isAttacked(const ChessBoard& board, SquareSet squares) {
  * @return A map where each key is a legal move and the corresponding value is the new chess
  *         position resulting from that move.
  */
-std::map<Move, ChessPosition> computeAllLegalMoves(const ChessPosition& position) {
-    std::map<Move, ChessPosition> legalMoves;
+ComputedMoveVector computeAllLegalMoves(const ChessPosition& position) {
+    ComputedMoveVector legalMoves;
 
     // Gather all possible moves and captures
     MoveVector moves;
@@ -438,7 +437,7 @@ std::map<Move, ChessPosition> computeAllLegalMoves(const ChessPosition& position
 
         // Check if the move would result in our king being in check.
         if (!isAttacked(newPosition.board, newKing))
-            legalMoves[move] = newPosition;
+            legalMoves.emplace_back(ComputedMove{move, newPosition});
     }
 
     return legalMoves;
