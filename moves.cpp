@@ -35,43 +35,45 @@ MovesTable::MovesTable() {
     }
 }
 
-SquareSet SquareSet::occupancy(const ChessBoard& board) {
-    auto squares = board.squares();
-    auto bitmask = [](uint64_t input) -> uint64_t {
-        input += 0x7f3f1f0f'7f3f1f0full;  // Cause overflow in the right bits
-        input &= 0x80402010'80402010ull;  // These are them, the 8 occupancy bits
-        input >>= 4;                      // The low nibbles is where the action is
-        input += input >> 16;
-        input += input >> 8;
-        input += (input >> 28);  // Merge in the high nibbel from the high word
-        input &= 0xffull;
-        return input;
-    };
+/**
+ * Returns the bits corresponding to the bytes in the input that contain the piece.
+ * Note: piece is assumed to be at most 4 bits.
+ */
+uint64_t occupancy(uint64_t input, uint8_t nibble) {
+    const uint64_t occupancyNibbles = 0x80402010'08040201ull;  // high nibbles to indicate occupancy
+    const uint64_t oneNibbles = 0x01010101'01010101ull;        // low nibbles set to one
+    input ^= 0x01010101'01010101ull * nibble;  // 0 nibbles in the input indicate the piece
+    input += 0x7f3f1f0f'7f3f1f0full;           // Cause overflow in the right bits
+    input &= 0x80402010'80402010ull;           // These are them, the 8 occupancy bits
+    input >>= 4;                               // The low nibbles is where the action is
+    input += input >> 16;
+    input += input >> 8;
+    input += (input >> 28);  // Merge in the high nibbel from the high word
+    input &= 0xffull;
+    input ^= 0xffull;
+    return input;
+}
+
+uint64_t occupancy(std::array<Piece, 64> squares, Piece piece, bool invert) {
+    static_assert(kNumPieces <= 16, "Piece must fit in 4 bits");
 
     uint64_t set = 0;
-    uint64_t input;
-
-    for (int j = 0; j < sizeof(squares); j += sizeof(input)) {
+    for (int j = 0; j < sizeof(squares); j += sizeof(uint64_t)) {
+        uint64_t input;
         memcpy(&input, &squares[j], sizeof(input));
-        set |= bitmask(input) << j;
+        set |= occupancy(input, static_cast<uint8_t>(piece)) << j;
     }
 
-    return set;
+    return invert ? ~set : set;
+}
+
+SquareSet SquareSet::occupancy(const ChessBoard& board) {
+    return ::occupancy(board.squares(), Piece::NONE, true);
 }
 
 SquareSet SquareSet::findPieces(const ChessBoard& board, Piece piece) {
-    SquareSet squares;
-    for (int rank = 0; rank < 8; ++rank) {
-        for (int file = 0; file < 8; ++file) {
-            Square sq{rank, file};
-            if (board[sq] == piece) {
-                squares.insert(sq);
-            }
-        }
-    }
-    return squares;
+    return ::occupancy(board.squares(), piece, false);
 }
-
 
 SquareSet rookMoves(Square from) {
     SquareSet moves;
@@ -375,20 +377,27 @@ void applyMove(ChessPosition& position, Move move) {
 
     // ... add logic for enPassantTarget here ...
 }
+
 bool isAttacked(const ChessBoard& board, Square square) {
     auto piece = board[square];
     if (piece == Piece::NONE)
         return false;  // The square is empty, so it is not attacked.
 
     Color opponentColor = !color(piece);
-    MoveVector captures;
-    addAvailableCaptures(captures, board, opponentColor);
+    auto occupancy = SquareSet::occupancy(board);
+    for (Square from : occupancy) {
+        auto piece = board[from];
 
-    for (auto move : captures) {
-        if (move.to == square)
-            return true;  // The square is attacked by some opponent piece.
+        // Check if the piece is of the opponent's color
+        if (color(piece) != opponentColor)
+            continue;
+
+        auto pieceIndex = static_cast<uint8_t>(piece);
+        auto possibleCaptureSquares = movesTable.captures[pieceIndex][from.index()];
+        if (possibleCaptureSquares.contains(square) && !movesThroughPieces(occupancy, from, square))
+            return true;
     }
-    return false;  // The square is not attacked by any opponent piece.
+    return false;
 }
 
 bool isAttacked(const ChessBoard& board, SquareSet squares) {

@@ -186,6 +186,14 @@ struct Move {
 class ChessBoard {
     std::array<Piece, 64> _squares;
 
+    // The minimal space required is 64 bits for occupied squares (8 bytes), plus 5 bits for white
+    // king pos, plus 5 bits for black king, plus 30 * log2(10) = 100 bits for identification of the
+    // pieces, which would be 21 bytes. For practical purposes, we can just use 4 bits per piece and
+    // avoid the special king encoding, so we'd end up with 8 bytes for the occupied squares and
+    // 32*4 = 128 bits for the pieces, which would be 24 bytes in total.
+    // The question is whether the advantage of having the occupancy bitset available outweighs the
+    // disadvantage of having to do the bit twiddling to get the piece type and color.
+
 public:
     ChessBoard() {
         _squares.fill(Piece::NONE);
@@ -213,9 +221,9 @@ enum CastlingAvailability : uint8_t {
 
 struct ChessPosition {
     ChessBoard board;
-    uint8_t castlingAvailability;
     Color activeColor;
+    uint8_t castlingAvailability;
+    Square enPassantTarget = 0;  // 0 indicates no en passant target
     uint8_t halfmoveClock; // If the clock is used, we'll draw before it overflows
-    uint16_t fullmoveNumber; // >65,535 moves is a lot of moves
-    Square enPassantTarget = 0; // 0 indicates no en passant target
+    uint16_t fullmoveNumber;  // >65,535 moves is a lot of moves
 };

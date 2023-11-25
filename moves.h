@@ -52,12 +52,16 @@ public:
         return __builtin_popcountll(_squares);
     }
 
-    size_t count(Square square) const {
+    size_t contains(Square square) const {
         return (_squares >> square.index()) & 1;
     }
 
     SquareSet operator&(SquareSet other) const {
         return _squares & other._squares;
+    }
+
+    SquareSet operator!(void) const {
+        return ~_squares;
     }
 
     bool operator==(SquareSet other) const {

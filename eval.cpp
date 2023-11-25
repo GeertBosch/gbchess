@@ -84,22 +84,13 @@ void printBoard(std::ostream& os, const ChessBoard& board) {
 
 EvaluatedMove computeBestMove(const ChessPosition& position, int depth, bool top) {
     auto allMoves = computeAllLegalMoves(position);
-
-    if (allMoves.empty()) {
-        D << "No moves available for " << position.activeColor << "!\n";
-        if (debug)
-            printBoard(std::cerr, position.board);
-        return {};
-    }
-
     EvaluatedMove best;  // Default to the worst possible move
     auto indent = debug ? std::string(std::max(0, 4 - depth) * 4, ' ') : "";
 
     // Base case: if depth is zero, return the static evaluation of the position
     if (depth == 0) {
-        for (auto move : allMoves) {
-            ChessPosition newPosition = move.second;
-            EvaluatedMove ours{move.first, false, false, evaluateBoard(newPosition.board), 0};
+        for (auto& [move, newPosition] : allMoves) {
+            EvaluatedMove ours{move, false, false, evaluateBoard(newPosition.board), 0};
             if (position.activeColor == Color::BLACK)
                 ours.evaluation = -ours.evaluation;
             if (best < ours) {
@@ -132,7 +123,6 @@ EvaluatedMove computeBestMove(const ChessPosition& position, int depth, bool top
             D << indent << best << " => " << ourMove << std::endl;
             best = ourMove;
             if (best.check && best.mate) {
-                D << indent << "Checkmate!\n";
                 break;
             }
         }
