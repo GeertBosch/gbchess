@@ -49,6 +49,25 @@ void printBestMove(const ChessPosition& position, int depth) {
     std::cout << "Best Move: " << static_cast<std::string>(bestMove) << std::endl;
 }
 
+/**
+ * Prints the chess board to the specified output stream in grid notation.
+ */
+void printBoard(std::ostream& os, const ChessBoard& board) {
+    for (int rank = 7; rank >= 0; --rank) {
+        os << rank + 1 << "  ";
+        for (int file = 0; file < 8; ++file) {
+            auto piece = board[Square(rank, file)];
+            os << ' ' << to_char(piece);
+        }
+        os << std::endl;
+    }
+    os << "   ";
+    for (char file = 'a'; file <= 'h'; ++file) {
+        os << ' ' << file;
+    }
+    os << std::endl;
+}
+
 
 void testFromStdIn(int depth) {
     // While there is input on stdin, read a line, parse it as a FEN string and print the best move.

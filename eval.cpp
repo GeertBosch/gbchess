@@ -62,27 +62,8 @@ float evaluateBoard(const ChessBoard& board) {
     return value / 100.0f;
 }
 
-void printBoard(std::ostream& os, const ChessBoard& board) {
-    for (int rank = 7; rank >= 0; --rank) {
-        os << rank + 1 << "  ";
-        for (int file = 0; file < 8; ++file) {
-            auto piece = board[Square(rank, file)];
-            if (piece == Piece::NONE) {
-                os << " .";
-            } else {
-                os << ' ' << to_char(piece);
-            }
-        }
-        os << std::endl;
-    }
-    os << "   ";
-    for (char file = 'a'; file <= 'h'; ++file) {
-        os << ' ' << file;
-    }
-    os << std::endl;
-}
 
-EvaluatedMove computeBestMove(const ChessPosition& position, int depth, bool top) {
+EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
     auto allMoves = computeAllLegalMoves(position);
     EvaluatedMove best;  // Default to the worst possible move
     auto indent = debug ? std::string(std::max(0, 4 - depth) * 4, ' ') : "";
@@ -104,9 +85,8 @@ EvaluatedMove computeBestMove(const ChessPosition& position, int depth, bool top
     // Recursive case: compute all legal moves and evaluate them
     auto opponentKing =
         SquareSet::findPieces(position.board, addColor(PieceType::KING, !position.activeColor));
-    for (auto move : allMoves) {
-        const ChessPosition& newPosition = move.second;
-        D << indent << position.activeColor << " " << move.first << std::endl;
+    for (auto [move, newPosition] : allMoves) {
+        D << indent << position.activeColor << " " << move << std::endl;
 
         // Recursively compute the best moves for the opponent, worst for us.
         auto opponentMove = -computeBestMove(newPosition, depth - 1);
@@ -115,7 +95,7 @@ EvaluatedMove computeBestMove(const ChessPosition& position, int depth, bool top
         bool check = isAttacked(newPosition.board, opponentKing);
 
         float evaluation = mate ? (check ? bestEval : drawEval) : opponentMove.evaluation;
-        EvaluatedMove ourMove(move.first, check, mate, evaluation, opponentMove.depth + 1);
+        EvaluatedMove ourMove(move, check, mate, evaluation, opponentMove.depth + 1);
         D << indent << best << " <  " << ourMove << " ? " << (best < ourMove) << std::endl;
 
         // Update the best move if the opponent's move is better than our current best.
@@ -128,8 +108,4 @@ EvaluatedMove computeBestMove(const ChessPosition& position, int depth, bool top
         }
     }
     return best;
-}
-
-EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
-    return computeBestMove(position, depth, true);
 }

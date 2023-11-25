@@ -54,14 +54,6 @@ extern uint64_t evalCount;
 float evaluateBoard(const ChessBoard& board);
 
 /**
- * Prints the chess board to the specified output stream in grid notation.
- *
- * @param os The output stream to print the board to.
- * @param board The chess board to be printed.
- */
-void printBoard(std::ostream& os, const ChessBoard& board);
-
-/**
  * Evaluates the best moves from a given chess position up to a certain depth.
  * Each move is evaluated based on the static evaluation of the board or by recursive calls
  * to this function, decreasing the depth until it reaches zero. It also accounts for checkmate

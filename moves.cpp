@@ -302,7 +302,6 @@ void findMoves(const ChessBoard& board, Color activeColor, const F& fun) {
     }
 }
 
-
 template <typename F>
 void findCaptures(const ChessBoard& board, Color activeColor, const F& fun) {
     auto occupied = SquareSet::occupancy(board);
@@ -424,11 +423,6 @@ bool isAttacked(const ChessBoard& board, SquareSet squares) {
 ComputedMoveVector computeAllLegalMoves(const ChessPosition& position) {
     ComputedMoveVector legalMoves;
 
-    // Gather all possible moves and captures
-    // MoveVector moves;
-    // addAvailableCaptures(moves, position.board, position.activeColor);
-    // addAvailableMoves(moves, position.board, position.activeColor);
-
     auto ourKing = addColor(PieceType::KING, position.activeColor);
     auto oldKing = SquareSet::findPieces(position.board, ourKing);
 
@@ -446,18 +440,20 @@ ComputedMoveVector computeAllLegalMoves(const ChessPosition& position) {
         auto newPosition = applyMove(position, move);
 
         // Check if the move would result in our king being in check.
-        if (!isAttacked(newPosition.board, newKing)) {
-            // If promoted, add all possible promotions, legality is not affected
-            if (type(piece) == PieceType::PAWN && (to.rank() == 0 || to.rank() == 7)) {
-                for (auto promotion :
-                     {PieceType::KNIGHT, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN}) {
-                    newPosition.board[to] = addColor(promotion, position.activeColor);
-                    legalMoves.emplace_back(Move{from, to, promotion}, newPosition);
-                }
-            } else {
-                legalMoves.emplace_back(Move{from, to}, newPosition);
+        if (isAttacked(newPosition.board, newKing))
+            return;
+
+        // If promoted, add all possible promotions, legality is not affected
+        if (type(piece) == PieceType::PAWN && (to.rank() == 0 || to.rank() == 7)) {
+            for (auto promotion :
+                 {PieceType::KNIGHT, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN}) {
+                newPosition.board[to] = addColor(promotion, position.activeColor);
+                legalMoves.emplace_back(Move{from, to, promotion}, newPosition);
             }
+        } else {
+            legalMoves.emplace_back(Move{from, to}, newPosition);
         }
+
     };
 
     findCaptures(position.board, position.activeColor, addIfLegal);
