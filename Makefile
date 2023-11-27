@@ -1,15 +1,18 @@
 all: test puzzles
 
-%-test: %_test.cpp %.cpp
-	g++ -g -O0 -o $@ $^
+%.h: common.h
+
+%-test: %_test.cpp %.cpp %.h common.h
+	echo deps: $^
+	g++ -g -O0 -o $@ $(filter-out %.h, $^)
 
 clean:
 	rm -f *.o *-debug *-test *.core puzzles.actual perf.data perf.data.old
 
-eval-test: eval_test.cpp eval.cpp fen.cpp moves.cpp 
-	g++ -O2 -g -o $@ $^
+eval-test: eval_test.cpp eval.cpp fen.cpp moves.cpp *.h
+	g++ -O2 -g -o $@ $(filter-out %.h,$^)
 eval-debug: eval_test.cpp eval.cpp fen.cpp moves.cpp 
-	clang++ -O0 -g -o $@ $^
+	clang++ -O0 -g -o $@ $(filter-out %h,$^)
 
 puzzles: eval-test puzzles.in puzzles.expected
 	./eval-test 4 < puzzles.in > puzzles.actual

@@ -288,7 +288,7 @@ void testSquareSet() {
 }
 void testOccupancy() {
     {
-        ChessBoard board;
+        Board board;
         board[Square(2, 0)] = Piece::WHITE_PAWN;
         board[Square(3, 1)] = Piece::WHITE_PAWN;
         board[Square(0, 0)] = Piece::WHITE_ROOK;
@@ -321,7 +321,7 @@ void testAddAvailableMoves() {
     };
     // Test pawn moves
     {
-        ChessBoard board;
+        Board board;
         board[Square(1, 0)] = Piece::WHITE_PAWN;
         board[Square(3, 0)] = Piece::WHITE_PAWN;  // Block the pawn, so there's no two-square move
         MoveVector moves;
@@ -337,7 +337,7 @@ void testAddAvailableMoves() {
 void testApplyMove() {
     // Test pawn move
     {
-        ChessBoard board;
+        Board board;
         board[Square(1, 0)] = Piece::WHITE_PAWN;
         applyMove(board, Move(Square(1, 0), Square(2, 0)));
         assert(board[Square(2, 0)] == Piece::WHITE_PAWN);
@@ -346,7 +346,7 @@ void testApplyMove() {
 
     // Test pawn capture
     {
-        ChessBoard board;
+        Board board;
         board[Square(1, 0)] = Piece::WHITE_PAWN;
         board[Square(2, 1)] = Piece::BLACK_ROOK;  // White pawn captures black rook
         applyMove(board, Move(Square(1, 0), Square(2, 1)));
@@ -357,7 +357,7 @@ void testApplyMove() {
     // Test pawn promotion move
     {
         // White pawn promotion
-        ChessBoard board;
+        Board board;
         board[Square(6, 0)] = Piece::WHITE_PAWN;
         applyMove(board, Move(Square(6, 0), Square(7, 0), PieceType::QUEEN));
         assert(board[Square(7, 0)] == Piece::WHITE_QUEEN);
@@ -373,7 +373,7 @@ void testApplyMove() {
     // Test pawn promotion capture
     {
         // White pawn promotion
-        ChessBoard board;
+        Board board;
         board[Square(6, 0)] = Piece::WHITE_PAWN;
         board[Square(7, 1)] = Piece::BLACK_ROOK;  // White pawn captures black rook
         applyMove(board, Move(Square(6, 0), Square(7, 1), PieceType::BISHOP));
@@ -390,7 +390,7 @@ void testApplyMove() {
 
     // Test rook move
     {
-        ChessBoard board;
+        Board board;
         board[Square(7, 0)] = Piece::WHITE_ROOK;
         applyMove(board, Move(Square(7, 0), Square(7, 7)));
         assert(board[Square(7, 7)] == Piece::WHITE_ROOK);
@@ -399,7 +399,7 @@ void testApplyMove() {
 
     // Test rook capture
     {
-        ChessBoard board;
+        Board board;
         board[Square(7, 0)] = Piece::BLACK_ROOK;
         board[Square(0, 0)] = Piece::WHITE_ROOK;  // Black rook captures white rook
         applyMove(board, Move(Square(7, 0), Square(0, 0)));
@@ -409,7 +409,7 @@ void testApplyMove() {
 
     // Test knight move
     {
-        ChessBoard board;
+        Board board;
         board[Square(0, 1)] = Piece::WHITE_KNIGHT;
         applyMove(board, Move(Square(0, 1), Square(2, 2)));
         assert(board[Square(2, 2)] == Piece::WHITE_KNIGHT);
@@ -418,7 +418,7 @@ void testApplyMove() {
 
     // Test knight capture
     {
-        ChessBoard board;
+        Board board;
         board[Square(0, 1)] = Piece::WHITE_KNIGHT;
         board[Square(2, 2)] = Piece::BLACK_ROOK;  // White knight captures black rook
         applyMove(board, Move(Square(0, 1), Square(2, 2)));
@@ -426,9 +426,9 @@ void testApplyMove() {
         assert(board[Square(0, 1)] == Piece::NONE);
     }
 
-    // Now test the ChessPosition applyMove function for a pawn move
+    // Now test the Position applyMove function for a pawn move
     {
-        ChessPosition position;
+        Position position;
         position.board[Square(1, 0)] = Piece::WHITE_PAWN;
         position.activeColor = Color::WHITE;
         position.halfmoveClock = 1;
@@ -441,7 +441,7 @@ void testApplyMove() {
 
     // Test pawn capture
     {
-        ChessPosition position;
+        Position position;
         position.board[Square(1, 0)] = Piece::WHITE_PAWN;
         position.board[Square(2, 1)] = Piece::BLACK_ROOK;  // White pawn captures black rook
         position.activeColor = Color::WHITE;
@@ -455,7 +455,7 @@ void testApplyMove() {
 
     // Test that the fullmove number is updated correctly on a black move
     {
-        ChessPosition position;
+        Position position;
         position.board[Square(1, 0)] = Piece::BLACK_PAWN;
         position.activeColor = Color::BLACK;
         position.halfmoveClock = 1;
@@ -470,7 +470,7 @@ void testApplyMove() {
 
     // Test that capture with a non-pawn piece also resets the halfmoveClock
     {
-        ChessPosition position;
+        Position position;
         position.board[Square(1, 0)] = Piece::WHITE_PAWN;
         position.board[Square(2, 1)] = Piece::BLACK_ROOK;  // White pawn captures black rook
         position.activeColor = Color::WHITE;
@@ -486,7 +486,7 @@ void testApplyMove() {
 
     // Test that a move with a non-pawn piece does not reset the halfmoveClock
     {
-        ChessPosition position;
+        Position position;
         position.board[Square(0, 1)] = Piece::WHITE_KNIGHT;
         position.activeColor = Color::WHITE;
         position.halfmoveClock = 1;
@@ -503,13 +503,13 @@ void testApplyMove() {
 void testIsAttacked() {
     Square whiteKingSquare = Square(0, 0);
     Square blackKingSquare = Square(5, 5);
-    ChessBoard base;
+    Board base;
     base[whiteKingSquare] = Piece::WHITE_KING;
     base[blackKingSquare] = Piece::BLACK_KING;
 
     // Test that a king is in check
     {
-        ChessBoard board = base;
+        Board board = base;
         board[Square(0, 1)] = Piece::BLACK_ROOK;
         assert(isAttacked(board, whiteKingSquare));
         assert(!isAttacked(board, blackKingSquare));
@@ -517,13 +517,13 @@ void testIsAttacked() {
 
     // Test that a king is not in check
     {
-        ChessBoard board = base;
+        Board board = base;
         board[Square(0, 1)] = Piece::BLACK_ROOK;
     }
 
     // Test that a king is in check after a move
     {
-        ChessBoard board = base;
+        Board board = base;
         board[Square(1, 1)] = Piece::BLACK_ROOK;
         applyMove(board, Move(Square(0, 0), Square(1, 0)));
         assert(isAttacked(board, Square(1, 0)));
@@ -531,7 +531,7 @@ void testIsAttacked() {
 
     // Test that a king is not in check after a move
     {
-        ChessBoard board;
+        Board board;
         board[Square(0, 0)] = Piece::WHITE_KING;
         board[Square(0, 1)] = Piece::BLACK_ROOK;
         applyMove(board, Move(Square(0, 0), Square(1, 0)));

@@ -4,7 +4,6 @@
 
 #include "common.h"
 
-
 /**
  * Represents a set of squares on a chess board. This class is like std::set<Square>, but
  * uses a bitset represented by a uint64_t to store the squares, which is more efficient.
@@ -23,49 +22,26 @@ public:
     /**
      * Returns the set of non-empty fields on the board.
      */
-    static SquareSet occupancy(const ChessBoard& board);
+    static SquareSet occupancy(const Board& board);
 
-    static SquareSet findPieces(const ChessBoard& board, Piece piece);
+    static SquareSet findPieces(const Board& board, Piece piece);
 
-    void erase(Square square) {
-        _squares &= ~(1ull << square.index());
-    }
-    void insert(Square square) {
-        _squares |= (1ull << square.index());
-    }
-    void insert(SquareSet other) {
-        _squares |= other._squares;
-    }
+    void erase(Square square) { _squares &= ~(1ull << square.index()); }
+    void insert(Square square) { _squares |= (1ull << square.index()); }
+    void insert(SquareSet other) { _squares |= other._squares; }
 
     void insert(iterator begin, iterator end) {
-        for (auto it = begin; it != end; ++it) {
-            insert(*it);
-        }
+        for (auto it = begin; it != end; ++it) insert(*it);
     }
 
-    bool empty() const {
-        return _squares == 0;
-    }
+    bool empty() const { return _squares == 0; }
+    size_t size() const { return __builtin_popcountll(_squares); }
+    size_t contains(Square square) const { return (_squares >> square.index()) & 1; }
 
-    size_t size() const {
-        return __builtin_popcountll(_squares);
-    }
+    SquareSet operator&(SquareSet other) const { return _squares & other._squares; }
+    SquareSet operator!(void) const { return ~_squares; }
 
-    size_t contains(Square square) const {
-        return (_squares >> square.index()) & 1;
-    }
-
-    SquareSet operator&(SquareSet other) const {
-        return _squares & other._squares;
-    }
-
-    SquareSet operator!(void) const {
-        return ~_squares;
-    }
-
-    bool operator==(SquareSet other) const {
-        return _squares == other._squares;
-    }
+    bool operator==(SquareSet other) const { return _squares == other._squares; }
 
     class iterator {
         friend class SquareSet;
@@ -81,11 +57,9 @@ public:
         Square operator*() {
             return Square(__builtin_ctzll(_squares));  // Count trailing zeros
         }
-        bool operator==(const iterator& other) {
-            return _squares == other._squares;
-        }
+        bool operator==(const iterator& other) { return _squares == other._squares; }
         bool operator!=(const iterator& other) {
-            return !(_squares == other._squares);
+                return !(_squares == other._squares);
         }
     };
 
@@ -99,7 +73,7 @@ public:
 };
 
 using MoveVector = std::vector<Move>;
-using ComputedMove = std::pair<Move, ChessPosition>;
+using ComputedMove = std::pair<Move, Position>;
 using ComputedMoveVector = std::vector<ComputedMove>;
 
 /**
@@ -108,7 +82,7 @@ using ComputedMoveVector = std::vector<ComputedMove>;
  * have. For each possible destination square, it checks if the move would target an occupied square
  * or move through other pieces. If neither condition is true, the move is added to the set.
  */
-void addAvailableMoves(MoveVector& moves, const ChessBoard& board, Color activeColor);
+void addAvailableMoves(MoveVector& moves, const Board& board, Color activeColor);
 
 /**
  * This function follows the same structure as availableMoves but focuses on captures. It
@@ -117,7 +91,7 @@ void addAvailableMoves(MoveVector& moves, const ChessBoard& board, Color activeC
  * captures, and those that move through other pieces, adding valid captures to the result
  * set.
  */
-void addAvailableCaptures(MoveVector& captures, const ChessBoard& board, Color activeColor);
+void addAvailableCaptures(MoveVector& captures, const Board& board, Color activeColor);
 
 /**
  * Calculates all possible moves for a given chess piece on the board.
@@ -153,19 +127,19 @@ SquareSet possibleCaptures(Piece piece, Square from);
  * @return A map where each key is a legal move and the corresponding value is the new chess
  *         position resulting from that move.
  */
-ComputedMoveVector computeAllLegalMoves(const ChessPosition& position);
+ComputedMoveVector computeAllLegalMoves(const Position& position);
 
-bool isAttacked(const ChessBoard& board, Square square);
-bool isAttacked(const ChessBoard& board, SquareSet squares);
+bool isAttacked(const Board& board, Square square);
+bool isAttacked(const Board& board, SquareSet squares);
 
 /**
  * Updates the board with the given move, which may be a capture.
  * Does not perform any legality checks.
  */
-void applyMove(ChessBoard& board, Move move);
+void applyMove(Board& board, Move move);
 
 /**
  * Like the above, but also updates per turn state (active color, castling availability,
  * en passant target, halfmove clock, and fullmove number).
  */
-[[nodiscard]] ChessPosition applyMove(ChessPosition position, Move move);
+[[nodiscard]] Position applyMove(Position position, Move move);

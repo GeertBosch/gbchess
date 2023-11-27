@@ -9,27 +9,30 @@
 struct MovesTable {
     // precomputed possible moves for each piece type on each square
     SquareSet moves[kNumPieces][kNumSquares];
+
     // precomputed possible captures for each piece type on each square
     SquareSet captures[kNumPieces][kNumSquares];
+
     // precomputed paths from each square to each other square
-    SquareSet paths[kNumSquares][kNumSquares];
+    SquareSet paths[kNumSquares][kNumSquares];  // from, to
+                                                //
+    // precomputed affected castling availability based on from and to squares
+    // CastlingMask castling[kNumSquares][kNumSquares];  // from, to
 
     MovesTable();
 } movesTable;
 
 MovesTable::MovesTable() {
-    for (int rank = 0; rank < 8; ++rank) {
-        for (int file = 0; file < 8; ++file) {
-            Square from{rank, file};
-            for (int piece = 0; piece < kNumPieces; ++piece) {
-                moves[piece][from.index()] = possibleMoves(Piece(piece), from);
-                captures[piece][from.index()] = possibleCaptures(Piece(piece), from);
-            }
+    for (Square from = 0; from != kNumSquares; ++from) {
+        for (int piece = 0; piece != kNumPieces; ++piece) {
+            moves[piece][from.index()] = possibleMoves(Piece(piece), from);
+            captures[piece][from.index()] = possibleCaptures(Piece(piece), from);
         }
     }
     for (int from = 0; from < kNumSquares; ++from) {
         for (int to = 0; to < kNumSquares; ++to) {
             paths[from][to] = SquareSet::path(Square(from), Square(to));
+            // castling[from][to] = castling(Square(from), Square(to));
         }
     }
 }
@@ -66,11 +69,11 @@ uint64_t occupancy(std::array<Piece, 64> squares, Piece piece, bool invert) {
     return invert ? ~set : set;
 }
 
-SquareSet SquareSet::occupancy(const ChessBoard& board) {
+SquareSet SquareSet::occupancy(const Board& board) {
     return ::occupancy(board.squares(), Piece::NONE, true);
 }
 
-SquareSet SquareSet::findPieces(const ChessBoard& board, Piece piece) {
+SquareSet SquareSet::findPieces(const Board& board, Piece piece) {
     return ::occupancy(board.squares(), piece, false);
 }
 
@@ -284,7 +287,7 @@ void addMove(MoveVector& moves, Piece piece, Square from, Square to) {
 }
 
 template <typename F>
-void findMoves(const ChessBoard& board, Color activeColor, const F& fun) {
+void findMoves(const Board& board, Color activeColor, const F& fun) {
     auto occupied = SquareSet::occupancy(board);
     for (auto from : occupied) {
         auto piece = board[from];
@@ -303,7 +306,7 @@ void findMoves(const ChessBoard& board, Color activeColor, const F& fun) {
 }
 
 template <typename F>
-void findCaptures(const ChessBoard& board, Color activeColor, const F& fun) {
+void findCaptures(const Board& board, Color activeColor, const F& fun) {
     auto occupied = SquareSet::occupancy(board);
     for (auto from : occupied) {
         auto piece = board[from];
@@ -321,19 +324,19 @@ void findCaptures(const ChessBoard& board, Color activeColor, const F& fun) {
     }
 }
 
-void addAvailableMoves(MoveVector& moves, const ChessBoard& board, Color activeColor) {
+void addAvailableMoves(MoveVector& moves, const Board& board, Color activeColor) {
     findMoves(board, activeColor, [&moves](Piece piece, Square from, Square to) {
         addMove(moves, piece, from, to);
     });
 }
 
-void addAvailableCaptures(MoveVector& captures, const ChessBoard& board, Color activeColor) {
+void addAvailableCaptures(MoveVector& captures, const Board& board, Color activeColor) {
     findCaptures(board, activeColor, [&captures](Piece piece, Square from, Square to) {
         addMove(captures, piece, from, to);
     });
 }
 
-void applyMove(ChessBoard& board, Move move) {
+void applyMove(Board& board, Move move) {
     auto& piece = board[move.from];
     auto& target = board[move.to];
 
@@ -342,7 +345,28 @@ void applyMove(ChessBoard& board, Move move) {
     piece = Piece::NONE;  // Empty the source square
 }
 
-ChessPosition applyMove(ChessPosition position, Move move) {
+
+CastlingMask castlingMask(Square from, Square to) {
+    // Remove castling availability if a rook moves or is captured
+    if (from == Position::whiteQueenSideRook || to == Position::whiteQueenSideRook)
+        return CastlingMask::WHITE_QUEENSIDE;
+    if (from == Square(0, 7) || to == Square(0, 7))
+        return CastlingMask::WHITE_KINGSIDE;
+    if (from == Square(7, 0) || to == Square(7, 0))
+        return CastlingMask::BLACK_QUEENSIDE;
+    if (from == Square(7, 7) || to == Square(7, 7))
+        return CastlingMask::BLACK_KINGSIDE;
+
+    // Remove castling availability if the king is moves
+    if (from == Position::whiteKing)
+        return CastlingMask::WHITE;
+    if (from == Position::blackKing)
+        return CastlingMask::BLACK;
+
+    return NONE;
+}
+
+Position applyMove(Position position, Move move) {
     // Check if the move is a capture or pawn move before applying it to the board
     bool capture = position.board[move.to] != Piece::NONE;
     auto piece = position.board[move.from];
@@ -351,9 +375,18 @@ ChessPosition applyMove(ChessPosition position, Move move) {
     // Apply the move to the board
     applyMove(position.board, move);
 
+    // Update enPassantTarget
+    // Set the en passant target if a pawn moves two squares forward, otherwise reset it.
+    position.enPassantTarget = 0;
+    if (pawnMove && abs(move.from.rank() - move.to.rank()) == 2)
+        position.enPassantTarget = move.to;
+
+    // Update castlingAvailability
+    position.castlingAvailability &= ~castlingMask(move.from, move.to);
+
     // Update halfMoveClock
-    ++position.halfmoveClock;
     // Reset on pawn advance or capture, else increment
+    ++position.halfmoveClock;
     if (pawnMove || capture)
         position.halfmoveClock = 0;
 
@@ -365,23 +398,11 @@ ChessPosition applyMove(ChessPosition position, Move move) {
     // Update activeColor
     auto oldColor = position.activeColor;
     position.activeColor = !position.activeColor;
-    assert(oldColor != position.activeColor);
 
-    // Update castlingAvailability
-    // Here, you should handle the logic to update the castling rights
-    // based on the move made. This includes disabling castling if a rook
-    // or king is moved, or if a rook is captured.
-
-    // Update enPassantTarget
-    // Set the en passant target if a pawn moves two squares forward,
-    // otherwise reset it.
-    // This logic depends on whether a pawn has moved two squares from its original rank.
-
-    // ... add logic for enPassantTarget here ...
     return position;
 }
 
-bool isAttacked(const ChessBoard& board, Square square) {
+bool isAttacked(const Board& board, Square square) {
     auto piece = board[square];
     if (piece == Piece::NONE)
         return false;  // The square is empty, so it is not attacked.
@@ -403,7 +424,7 @@ bool isAttacked(const ChessBoard& board, Square square) {
     return false;
 }
 
-bool isAttacked(const ChessBoard& board, SquareSet squares) {
+bool isAttacked(const Board& board, SquareSet squares) {
     for (auto square : squares) {
         if (isAttacked(board, square))
             return true;
@@ -420,7 +441,7 @@ bool isAttacked(const ChessBoard& board, SquareSet squares) {
  * @return A map where each key is a legal move and the corresponding value is the new chess
  *         position resulting from that move.
  */
-ComputedMoveVector computeAllLegalMoves(const ChessPosition& position) {
+ComputedMoveVector computeAllLegalMoves(const Position& position) {
     ComputedMoveVector legalMoves;
 
     auto ourKing = addColor(PieceType::KING, position.activeColor);

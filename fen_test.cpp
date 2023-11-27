@@ -7,7 +7,7 @@
 // Test
 int testparse() {
     const std::string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    ChessPosition position = parseFEN(fen);
+    Position position = parseFEN(fen);
 
     std::cout << "Piece Placement: " << position.board << "\n";
     std::cout << "Active Color: " << to_string(position.activeColor) << "\n";
@@ -32,7 +32,7 @@ void testFEN() {
     };
 
     for (const std::string& fen : testStrings) {
-        ChessBoard board = parsePiecePlacement(fen);
+        Board board = parsePiecePlacement(fen);
         std::string roundTripped = toString(board);
         assert(fen == roundTripped);
     }

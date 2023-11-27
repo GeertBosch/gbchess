@@ -7,41 +7,34 @@
 class Square {
     uint8_t _index;
 public:
-    Square(int rank, int file) : _index(rank * 8 + file) {}
-    Square(int index) : _index(index) {}
+    constexpr Square(int rank, int file) : _index(rank * 8 + file) {}
+    constexpr Square(int index) : _index(index) {}
 
-    int rank() const {
-        return _index / 8;
-    }
+    int rank() const { return _index / 8; }
+    int file() const { return _index % 8; }
+    int index() const { return _index; }
 
-    int file() const {
-        return _index % 8;
-    }
-    int index() const {
-        return _index;
-    }
 
-    Square operator++() {
-        ++_index;
-        return *this;
-    }
+    Square operator++() { return ++_index, *this; }
 
-    bool operator==(Square other) const {
-        return _index == other._index;
-    }
-    bool operator!=(Square other) const {
-        return _index != other._index;
-    }
+    bool operator==(Square other) const { return _index == other._index; }
+    bool operator!=(Square other) const { return _index != other._index; }
 
-    // Conversion to std::string
+    // Conversion to std::string: file to letter ('a' to 'h') and rank to digit ('1' to '8')
     operator std::string() const {
-        std::string squareStr;
-        squareStr += char('a' + file());  // Convert file to letter ('a' to 'h')
-        squareStr += char('1' + rank());  // Convert rank to digit ('1' to '8')
-        return squareStr;
+        std::string str = "";
+        str += 'a' + file();
+        str += '1' + rank();
+        return str;
     }
 };
 static constexpr uint8_t kNumSquares = 64;
+constexpr Square operator"" _sq(const char* str, size_t len) {
+    assert(len == 2);
+    assert(str[0] >= 'a' && str[0] <= 'h');
+    assert(str[1] >= '1' && str[1] <= '8');
+    return Square(str[1] - '1', str[0] - 'a');
+}
 
 enum class Color : uint8_t {
     WHITE,
@@ -62,47 +55,23 @@ inline Color color (char color) {
 }
 
 
-enum class PieceType : uint8_t {
-    PAWN,
-    KNIGHT,
-    BISHOP,
-    ROOK,
-    QUEEN,
-    KING
-};
-static constexpr uint8_t kNumPiecesTypes = static_cast<uint8_t>(PieceType::KING) + 1;
-
-
-inline char toChar(PieceType type, Color color) {
-    switch (type) {
-        case PieceType::PAWN:
-            return color == Color::WHITE ? 'P' : 'p';
-        case PieceType::KNIGHT:
-            return color == Color::WHITE ? 'N' : 'n';
-        case PieceType::BISHOP:
-            return color == Color::WHITE ? 'B' : 'b';
-        case PieceType::ROOK:
-            return color == Color::WHITE ? 'R' : 'r';
-        case PieceType::QUEEN:
-            return color == Color::WHITE ? 'Q' : 'q';
-        case PieceType::KING:
-            return color == Color::WHITE ? 'K' : 'k';
-        default:
-            assert(false);
-    }
+enum class PieceType : uint8_t { PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING };
+inline constexpr uint8_t index(PieceType type) {
+    return static_cast<uint8_t>(type);
 }
+static constexpr uint8_t kNumPiecesTypes = index(PieceType::KING) + 1;
 
 enum class Piece : uint8_t {
     NONE,
     WHITE_PAWN, WHITE_KNIGHT, WHITE_BISHOP, WHITE_ROOK, WHITE_QUEEN, WHITE_KING,
     BLACK_PAWN, BLACK_KNIGHT, BLACK_BISHOP, BLACK_ROOK, BLACK_QUEEN, BLACK_KING
 };
-static constexpr uint8_t kNumPieces = static_cast<uint8_t>(Piece::BLACK_KING) + 1;
-static const std::string pieceChars = ".PNBRQKpnbrqk";
-
-inline uint8_t index(Piece piece) {
+inline constexpr uint8_t index(Piece piece) {
     return static_cast<uint8_t>(piece);
 }
+static constexpr uint8_t kNumPieces = index(Piece::BLACK_KING) + 1;
+static const std::string pieceChars = ".PNBRQKpnbrqk";
+
 inline PieceType type(Piece piece) {
     return static_cast<PieceType>((index(piece) - 1) % kNumPiecesTypes);
 }
@@ -112,12 +81,16 @@ inline Piece addColor(PieceType type, Color color) {
                               (color == Color::WHITE ? 0 : kNumPiecesTypes) + 1);
 }
 
-inline char to_char(Piece piece) {
-    return pieceChars[static_cast<uint8_t>(piece)];
-}
-
 inline Color color(Piece piece) {
     return piece <= Piece::WHITE_KING ? Color::WHITE : Color::BLACK;
+}
+
+inline char to_char(Piece piece) {
+    return pieceChars[index(piece)];
+}
+
+inline char to_char(PieceType type, Color color) {
+    return to_char(addColor(type, color));
 }
 
 inline Piece toPiece(char piece) {
@@ -131,7 +104,7 @@ inline PieceType toPieceType(char piece) {
 struct Move {
     Square from;
     Square to;
-    PieceType promotion = PieceType::PAWN; // PAWN indicates no promotion (default)
+    PieceType promotion = PieceType::PAWN;  // PAWN indicates no promotion (default)
 
     Move() : from(Square(-1, -1)), to(Square(-1, -1)) {}
     Move(Square fromSquare, Square toSquare) : from(fromSquare), to(toSquare) {}
@@ -164,7 +137,7 @@ struct Move {
     }
 };
 
-class ChessBoard {
+class Board {
     std::array<Piece, 64> _squares;
 
     // The minimal space required is 64 bits for occupied squares (8 bytes), plus 5 bits for white
@@ -176,9 +149,7 @@ class ChessBoard {
     // disadvantage of having to do the bit twiddling to get the piece type and color.
 
 public:
-    ChessBoard() {
-        _squares.fill(Piece::NONE);
-    }
+    Board() { _squares.fill(Piece::NONE); }
 
     Piece& operator[](Square sq) {
         return _squares[sq.index()];
@@ -193,18 +164,46 @@ public:
     }
 };
 
-enum CastlingAvailability : uint8_t {
+enum CastlingMask : uint8_t {
+    NONE = 0,
     WHITE_KINGSIDE = 1,
     WHITE_QUEENSIDE = 2,
+    WHITE = WHITE_KINGSIDE | WHITE_QUEENSIDE,
     BLACK_KINGSIDE = 4,
-    BLACK_QUEENSIDE = 8
+    BLACK_QUEENSIDE = 8,
+    BLACK = BLACK_KINGSIDE | BLACK_QUEENSIDE,
+    ALL = WHITE | BLACK,
 };
+inline CastlingMask operator&=(CastlingMask& lhs, CastlingMask rhs) {
+    return lhs = static_cast<CastlingMask>(lhs & rhs);
+}
+inline CastlingMask operator~(CastlingMask lhs) {
+    return static_cast<CastlingMask>(~static_cast<uint8_t>(lhs));
+}
 
-struct ChessPosition {
-    ChessBoard board;
+struct Position {
+    // Base positions of pieces involved in castling
+    static constexpr auto whiteQueenSideRook = "a1"_sq;
+    static constexpr auto whiteKing = "d1"_sq;
+    static constexpr auto whiteKingSideRook = "h1"_sq;
+    static constexpr auto blackQueenSideRook = "a7"_sq;
+    static constexpr auto blackKing = "d7"_sq;
+    static constexpr auto blackKingSideRook = "h7"_sq;
+
+    // Positions of castled pieces
+    static constexpr auto whiteRookCastledQueenSide = "c1"_sq;
+    static constexpr auto whiteRookCastledKingSide = "f1"_sq;
+    static constexpr auto whiteKingCastledQueenSide = "b1"_sq;
+    static constexpr auto whiteKingCastledKingSide = "g1"_sq;
+    static constexpr auto blackQueenSideRookCastled = "c7"_sq;
+    static constexpr auto blackKingSideRookCastled = "f7"_sq;
+    static constexpr auto blackKingCastledQueenSide = "b7"_sq;
+    static constexpr auto blackKingCastledKingSide = "b7"_sq;
+
+    Board board;
     Color activeColor;
     uint8_t castlingAvailability;
     Square enPassantTarget = 0;  // 0 indicates no en passant target
-    uint8_t halfmoveClock; // If the clock is used, we'll draw before it overflows
+    uint8_t halfmoveClock;    // If the clock is used, we'll draw at 100, well before it overflows
     uint16_t fullmoveNumber;  // >65,535 moves is a lot of moves
 };

@@ -51,7 +51,7 @@ extern uint64_t evalCount;
  * represents the advantage to the white player: positive for white's advantage, negative
  * for black's advantage.
  */
-float evaluateBoard(const ChessBoard& board);
+float evaluateBoard(const Board& board);
 
 /**
  * Evaluates the best moves from a given chess position up to a certain depth.
@@ -63,4 +63,4 @@ float evaluateBoard(const ChessBoard& board);
  * @param depth The depth to which the evaluation should be performed.
  * @return A map of moves to their evaluation score.
  */
-EvaluatedMove computeBestMove(const ChessPosition& position, int depth);
+EvaluatedMove computeBestMove(const Position& position, int depth);

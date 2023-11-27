@@ -5,8 +5,8 @@
 
 #include "common.h"
 
-ChessBoard parsePiecePlacement(const std::string& piecePlacement) {
-    ChessBoard board;
+Board parsePiecePlacement(const std::string& piecePlacement) {
+    Board board;
 
     int rank = 0, file = 0;
 
@@ -17,8 +17,7 @@ ChessBoard parsePiecePlacement(const std::string& piecePlacement) {
         } else if (std::isdigit(ch)) {
             file += ch - '0';  // Move the file by the number of empty squares
         } else {
-            Square sq{7 - rank,
-                      file};  // Adjust the rank based on how it's stored in the ChessBoard
+            Square sq{7 - rank, file};  // Adjust the rank based on how it's stored in the Board
             board[sq] = toPiece(ch);
             file++;
         }
@@ -27,9 +26,9 @@ ChessBoard parsePiecePlacement(const std::string& piecePlacement) {
     return board;
 }
 
-ChessPosition parseFEN(const std::string& fen) {
+Position parseFEN(const std::string& fen) {
     std::stringstream ss(fen);
-    ChessPosition position;
+    Position position;
     std::string piecePlacementStr;
     std::string activeColorStr;
     std::string castlingAvailabilityStr;
@@ -49,16 +48,16 @@ ChessPosition parseFEN(const std::string& fen) {
     for (char ch : castlingAvailabilityStr) {
         switch (ch) {
             case 'K':
-                position.castlingAvailability |= CastlingAvailability::WHITE_KINGSIDE;
+                position.castlingAvailability |= CastlingMask::WHITE_KINGSIDE;
                 break;
             case 'Q':
-                position.castlingAvailability |= CastlingAvailability::WHITE_QUEENSIDE;
+                position.castlingAvailability |= CastlingMask::WHITE_QUEENSIDE;
                 break;
             case 'k':
-                position.castlingAvailability |= CastlingAvailability::BLACK_KINGSIDE;
+                position.castlingAvailability |= CastlingMask::BLACK_KINGSIDE;
                 break;
             case 'q':
-                position.castlingAvailability |= CastlingAvailability::BLACK_QUEENSIDE;
+                position.castlingAvailability |= CastlingMask::BLACK_QUEENSIDE;
                 break;
         }
     }
@@ -72,12 +71,12 @@ ChessPosition parseFEN(const std::string& fen) {
     return position;
 }
 
-std::string toString(const ChessBoard& board) {
+std::string toString(const Board& board) {
     std::stringstream fen;
     for (int rank = 7; rank >= 0; --rank) {  // Start from the 8th rank and go downwards
         int emptyCount = 0;                  // Count of consecutive empty squares
         for (int file = 0; file < 8; ++file) {
-            Square sq{rank, file};  // Adjust the rank based on how it's stored in the ChessBoard
+            Square sq{rank, file};  // Adjust the rank based on how it's stored in the Board
             auto piece = board[sq];
             if (piece == Piece::NONE) {  // Empty square
                 ++emptyCount;
@@ -97,7 +96,7 @@ std::string toString(const ChessBoard& board) {
     return fen.str();
 }
 
-std::ostream& operator<<(std::ostream& os, const ChessBoard& board) {
+std::ostream& operator<<(std::ostream& os, const Board& board) {
     os << toString(board);
     return os;
 }

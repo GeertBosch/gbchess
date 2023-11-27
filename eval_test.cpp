@@ -32,19 +32,19 @@ void printEvalRate(const F& fun) {
               << "K evals/sec" << std::endl;
 }
 
-void printAvailableMoves(const ChessPosition& position) {
+void printAvailableMoves(const Position& position) {
     MoveVector moves;
     addAvailableMoves(moves, position.board, position.activeColor);
     std::cout << "Moves: " << moves << std::endl;
 }
 
-void printAvailableCaptures(const ChessPosition& position) {
+void printAvailableCaptures(const Position& position) {
     MoveVector captures;
     addAvailableCaptures(captures, position.board, position.activeColor);
     std::cout << "Captures: " << captures << std::endl;
 }
 
-void printBestMove(const ChessPosition& position, int depth) {
+void printBestMove(const Position& position, int depth) {
     auto bestMove = computeBestMove(position, depth);
     std::cout << "Best Move: " << static_cast<std::string>(bestMove) << std::endl;
 }
@@ -52,7 +52,7 @@ void printBestMove(const ChessPosition& position, int depth) {
 /**
  * Prints the chess board to the specified output stream in grid notation.
  */
-void printBoard(std::ostream& os, const ChessBoard& board) {
+void printBoard(std::ostream& os, const Board& board) {
     for (int rank = 7; rank >= 0; --rank) {
         os << rank + 1 << "  ";
         for (int file = 0; file < 8; ++file) {
@@ -78,9 +78,9 @@ void testFromStdIn(int depth) {
         if (fen.empty())
             continue;
 
-        // Parse the FEN string into a ChessPosition
+        // Parse the FEN string into a Position
         std::cerr << fen << std::endl;
-        ChessPosition position = parseFEN(fen);
+        Position position = parseFEN(fen);
         auto startTime = std::chrono::high_resolution_clock::now();
 
         // Print the board in grid notation
@@ -112,8 +112,8 @@ int main(int argc, char* argv[]) {
     std::string fen(argv[1]);
     int depth = std::stoi(argv[2]);
 
-    // Parse the FEN string into a ChessPosition
-    ChessPosition position = parseFEN(fen);
+    // Parse the FEN string into a Position
+    Position position = parseFEN(fen);
 
     // Print the board in grid notation
     printBoard(std::cout, position.board);

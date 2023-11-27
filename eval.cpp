@@ -52,7 +52,7 @@ static std::array<int16_t, kNumPieces> pieceValues = {
 };
 
 uint64_t evalCount = 0;
-float evaluateBoard(const ChessBoard& board) {
+float evaluateBoard(const Board& board) {
     int32_t value = 0;
 
     ++evalCount;
@@ -63,7 +63,7 @@ float evaluateBoard(const ChessBoard& board) {
 }
 
 
-EvaluatedMove computeBestMove(const ChessPosition& position, int depth) {
+EvaluatedMove computeBestMove(const Position& position, int depth) {
     auto allMoves = computeAllLegalMoves(position);
     EvaluatedMove best;  // Default to the worst possible move
     auto indent = debug ? std::string(std::max(0, 4 - depth) * 4, ' ') : "";
