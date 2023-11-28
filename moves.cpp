@@ -350,11 +350,11 @@ CastlingMask castlingMask(Square from, Square to) {
     // Remove castling availability if a rook moves or is captured
     if (from == Position::whiteQueenSideRook || to == Position::whiteQueenSideRook)
         return CastlingMask::WHITE_QUEENSIDE;
-    if (from == Square(0, 7) || to == Square(0, 7))
+    if (from == "h1"_sq || to == "h1"_sq)
         return CastlingMask::WHITE_KINGSIDE;
-    if (from == Square(7, 0) || to == Square(7, 0))
+    if (from == "a8"_sq || to == "a8"_sq)
         return CastlingMask::BLACK_QUEENSIDE;
-    if (from == Square(7, 7) || to == Square(7, 7))
+    if (from == "h8"_sq || to == "h8"_sq)
         return CastlingMask::BLACK_KINGSIDE;
 
     // Remove castling availability if the king is moves

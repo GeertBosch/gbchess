@@ -98,53 +98,53 @@ void testColor() {
 void testPossibleMoves() {
     // Test rook moves
     {
-        auto moves = possibleMoves(Piece::WHITE_ROOK, Square(0, 0));
+        auto moves = possibleMoves(Piece::WHITE_ROOK, "a1"_sq);
         assert(moves.size() == 14);
-        assert(moves.contains(Square(0, 7)));
-        assert(moves.contains(Square(7, 0)));
+        assert(moves.contains("h1"_sq));
+        assert(moves.contains("a8"_sq));
     }
 
     // Test bishop moves
     {
-        auto moves = possibleMoves(Piece::BLACK_BISHOP, Square(0, 0));
+        auto moves = possibleMoves(Piece::BLACK_BISHOP, "a1"_sq);
         assert(moves.size() == 7);
-        assert(moves.contains(Square(7, 7)));
+        assert(moves.contains("h8"_sq));
     }
 
     // Test knight moves
     {
-        auto moves = possibleMoves(Piece::WHITE_KNIGHT, Square(0, 0));
+        auto moves = possibleMoves(Piece::WHITE_KNIGHT, "a1"_sq);
         assert(moves.size() == 2);
-        assert(moves.contains(Square(1, 2)));
-        assert(moves.contains(Square(2, 1)));
+        assert(moves.contains("c2"_sq));
+        assert(moves.contains("b3"_sq));
     }
 
     // Test king moves
     {
-        auto moves = possibleMoves(Piece::BLACK_KING, Square(0, 0));
+        auto moves = possibleMoves(Piece::BLACK_KING, "a1"_sq);
         assert(moves.size() == 3);
     }
 
     // Test queen moves
     {
-        auto moves = possibleMoves(Piece::WHITE_QUEEN, Square(0, 0));
+        auto moves = possibleMoves(Piece::WHITE_QUEEN, "a1"_sq);
         assert(moves.size() == 21);
     }
 
     // Test white pawn moves
     {
-        auto moves = possibleMoves(Piece::WHITE_PAWN, Square(1, 0));
+        auto moves = possibleMoves(Piece::WHITE_PAWN, "a2"_sq);
         assert(moves.size() == 2);
-        assert(moves.contains(Square(2, 0)));
-        assert(moves.contains(Square(3, 0)));
+        assert(moves.contains("a3"_sq));
+        assert(moves.contains("a4"_sq));
     }
 
     // Test black pawn moves
     {
-        auto moves = possibleMoves(Piece::BLACK_PAWN, Square(6, 0));
+        auto moves = possibleMoves(Piece::BLACK_PAWN, "a7"_sq);
         assert(moves.size() == 2);
-        assert(moves.contains(Square(5, 0)));
-        assert(moves.contains(Square(4, 0)));
+        assert(moves.contains("a6"_sq));
+        assert(moves.contains("a5"_sq));
     }
 
     std::cout << "All possibleMoves tests passed!" << std::endl;
@@ -289,26 +289,26 @@ void testSquareSet() {
 void testOccupancy() {
     {
         Board board;
-        board[Square(2, 0)] = Piece::WHITE_PAWN;
-        board[Square(3, 1)] = Piece::WHITE_PAWN;
-        board[Square(0, 0)] = Piece::WHITE_ROOK;
-        board[Square(1, 3)] = Piece::WHITE_KNIGHT;
-        board[Square(1, 2)] = Piece::WHITE_BISHOP;
-        board[Square(0, 3)] = Piece::WHITE_QUEEN;
-        board[Square(0, 4)] = Piece::WHITE_KING;
-        board[Square(1, 5)] = Piece::WHITE_BISHOP;
-        board[Square(1, 6)] = Piece::WHITE_KNIGHT;
-        board[Square(4, 7)] = Piece::WHITE_ROOK;
-        board[Square(6, 3)] = Piece::BLACK_PAWN;
-        board[Square(4, 4)] = Piece::BLACK_PAWN;
-        board[Square(6, 5)] = Piece::BLACK_PAWN;
-        board[Square(6, 6)] = Piece::BLACK_PAWN;
-        board[Square(6, 7)] = Piece::BLACK_PAWN;
-        board[Square(7, 0)] = Piece::BLACK_ROOK;
-        board[Square(7, 1)] = Piece::BLACK_KNIGHT;
-        board[Square(7, 2)] = Piece::BLACK_BISHOP;
-        board[Square(7, 3)] = Piece::BLACK_QUEEN;
-        board[Square(7, 4)] = Piece::BLACK_KING;
+        board["a3"_sq] = Piece::WHITE_PAWN;
+        board["b4"_sq] = Piece::WHITE_PAWN;
+        board["a1"_sq] = Piece::WHITE_ROOK;
+        board["d2"_sq] = Piece::WHITE_KNIGHT;
+        board["c2"_sq] = Piece::WHITE_BISHOP;
+        board["d1"_sq] = Piece::WHITE_QUEEN;
+        board["e1"_sq] = Piece::WHITE_KING;
+        board["f2"_sq] = Piece::WHITE_BISHOP;
+        board["g2"_sq] = Piece::WHITE_KNIGHT;
+        board["h5"_sq] = Piece::WHITE_ROOK;
+        board["d7"_sq] = Piece::BLACK_PAWN;
+        board["e5"_sq] = Piece::BLACK_PAWN;
+        board["f7"_sq] = Piece::BLACK_PAWN;
+        board["g7"_sq] = Piece::BLACK_PAWN;
+        board["h7"_sq] = Piece::BLACK_PAWN;
+        board["a8"_sq] = Piece::BLACK_ROOK;
+        board["b8"_sq] = Piece::BLACK_KNIGHT;
+        board["c8"_sq] = Piece::BLACK_BISHOP;
+        board["d8"_sq] = Piece::BLACK_QUEEN;
+        board["e8"_sq] = Piece::BLACK_KING;
         auto squares = SquareSet::occupancy(board);
         assert(squares.size() == 20);
     }
@@ -322,13 +322,13 @@ void testAddAvailableMoves() {
     // Test pawn moves
     {
         Board board;
-        board[Square(1, 0)] = Piece::WHITE_PAWN;
-        board[Square(3, 0)] = Piece::WHITE_PAWN;  // Block the pawn, so there's no two-square move
+        board["a2"_sq] = Piece::WHITE_PAWN;
+        board["a4"_sq] = Piece::WHITE_PAWN;  // Block the pawn, so there's no two-square move
         MoveVector moves;
         addAvailableMoves(moves, board, Color::WHITE);
         assert(moves.size() == 2);
-        assert(find(moves, Move(Square(1, 0), Square(2, 0))));
-        assert(find(moves, Move(Square(3, 0), Square(4, 0))));
+        assert(find(moves, Move("a2"_sq, "a3"_sq)));
+        assert(find(moves, Move("a4"_sq, "a5"_sq)));
     }
 
     std::cout << "All addAvailableMoves tests passed!" << std::endl;
@@ -338,103 +338,103 @@ void testApplyMove() {
     // Test pawn move
     {
         Board board;
-        board[Square(1, 0)] = Piece::WHITE_PAWN;
-        applyMove(board, Move(Square(1, 0), Square(2, 0)));
-        assert(board[Square(2, 0)] == Piece::WHITE_PAWN);
-        assert(board[Square(1, 0)] == Piece::NONE);
+        board["a2"_sq] = Piece::WHITE_PAWN;
+        applyMove(board, Move("a2"_sq, "a3"_sq));
+        assert(board["a3"_sq] == Piece::WHITE_PAWN);
+        assert(board["a2"_sq] == Piece::NONE);
     }
 
     // Test pawn capture
     {
         Board board;
-        board[Square(1, 0)] = Piece::WHITE_PAWN;
-        board[Square(2, 1)] = Piece::BLACK_ROOK;  // White pawn captures black rook
-        applyMove(board, Move(Square(1, 0), Square(2, 1)));
-        assert(board[Square(2, 1)] == Piece::WHITE_PAWN);
-        assert(board[Square(1, 0)] == Piece::NONE);
+        board["a2"_sq] = Piece::WHITE_PAWN;
+        board["b3"_sq] = Piece::BLACK_ROOK;  // White pawn captures black rook
+        applyMove(board, Move("a2"_sq, "b3"_sq));
+        assert(board["b3"_sq] == Piece::WHITE_PAWN);
+        assert(board["a2"_sq] == Piece::NONE);
     }
 
     // Test pawn promotion move
     {
         // White pawn promotion
         Board board;
-        board[Square(6, 0)] = Piece::WHITE_PAWN;
-        applyMove(board, Move(Square(6, 0), Square(7, 0), PieceType::QUEEN));
-        assert(board[Square(7, 0)] == Piece::WHITE_QUEEN);
-        assert(board[Square(6, 0)] == Piece::NONE);
+        board["a7"_sq] = Piece::WHITE_PAWN;
+        applyMove(board, Move("a7"_sq, "a8"_sq, PieceType::QUEEN));
+        assert(board["a8"_sq] == Piece::WHITE_QUEEN);
+        assert(board["a7"_sq] == Piece::NONE);
 
         // Black pawn promotion
-        board[Square(1, 0)] = Piece::BLACK_PAWN;
-        applyMove(board, Move(Square(1, 0), Square(0, 0), PieceType::ROOK));
-        assert(board[Square(0, 0)] == Piece::BLACK_ROOK);
-        assert(board[Square(1, 0)] == Piece::NONE);
+        board["a2"_sq] = Piece::BLACK_PAWN;
+        applyMove(board, Move("a2"_sq, "a1"_sq, PieceType::ROOK));
+        assert(board["a1"_sq] == Piece::BLACK_ROOK);
+        assert(board["a2"_sq] == Piece::NONE);
     }
 
     // Test pawn promotion capture
     {
         // White pawn promotion
         Board board;
-        board[Square(6, 0)] = Piece::WHITE_PAWN;
-        board[Square(7, 1)] = Piece::BLACK_ROOK;  // White pawn captures black rook
-        applyMove(board, Move(Square(6, 0), Square(7, 1), PieceType::BISHOP));
-        assert(board[Square(7, 1)] == Piece::WHITE_BISHOP);
-        assert(board[Square(6, 0)] == Piece::NONE);
+        board["a7"_sq] = Piece::WHITE_PAWN;
+        board["b8"_sq] = Piece::BLACK_ROOK;  // White pawn captures black rook
+        applyMove(board, Move("a7"_sq, "b8"_sq, PieceType::BISHOP));
+        assert(board["b8"_sq] == Piece::WHITE_BISHOP);
+        assert(board["a7"_sq] == Piece::NONE);
 
         // Black pawn promotion
-        board[Square(1, 0)] = Piece::BLACK_PAWN;
-        board[Square(0, 1)] = Piece::WHITE_ROOK;  // Black pawn captures white rook
-        applyMove(board, Move(Square(1, 0), Square(0, 1), PieceType::KNIGHT));
-        assert(board[Square(0, 1)] == Piece::BLACK_KNIGHT);
-        assert(board[Square(1, 0)] == Piece::NONE);
+        board["a2"_sq] = Piece::BLACK_PAWN;
+        board["b1"_sq] = Piece::WHITE_ROOK;  // Black pawn captures white rook
+        applyMove(board, Move("a2"_sq, "b1"_sq, PieceType::KNIGHT));
+        assert(board["b1"_sq] == Piece::BLACK_KNIGHT);
+        assert(board["a2"_sq] == Piece::NONE);
     }
 
     // Test rook move
     {
         Board board;
-        board[Square(7, 0)] = Piece::WHITE_ROOK;
-        applyMove(board, Move(Square(7, 0), Square(7, 7)));
-        assert(board[Square(7, 7)] == Piece::WHITE_ROOK);
-        assert(board[Square(7, 0)] == Piece::NONE);
+        board["a8"_sq] = Piece::WHITE_ROOK;
+        applyMove(board, Move("a8"_sq, "h8"_sq));
+        assert(board["h8"_sq] == Piece::WHITE_ROOK);
+        assert(board["a8"_sq] == Piece::NONE);
     }
 
     // Test rook capture
     {
         Board board;
-        board[Square(7, 0)] = Piece::BLACK_ROOK;
-        board[Square(0, 0)] = Piece::WHITE_ROOK;  // Black rook captures white rook
-        applyMove(board, Move(Square(7, 0), Square(0, 0)));
-        assert(board[Square(0, 0)] == Piece::BLACK_ROOK);
-        assert(board[Square(7, 0)] == Piece::NONE);
+        board["a8"_sq] = Piece::BLACK_ROOK;
+        board["a1"_sq] = Piece::WHITE_ROOK;  // Black rook captures white rook
+        applyMove(board, Move("a8"_sq, "a1"_sq));
+        assert(board["a1"_sq] == Piece::BLACK_ROOK);
+        assert(board["a8"_sq] == Piece::NONE);
     }
 
     // Test knight move
     {
         Board board;
-        board[Square(0, 1)] = Piece::WHITE_KNIGHT;
-        applyMove(board, Move(Square(0, 1), Square(2, 2)));
-        assert(board[Square(2, 2)] == Piece::WHITE_KNIGHT);
-        assert(board[Square(0, 1)] == Piece::NONE);
+        board["b1"_sq] = Piece::WHITE_KNIGHT;
+        applyMove(board, Move("b1"_sq, "c3"_sq));
+        assert(board["c3"_sq] == Piece::WHITE_KNIGHT);
+        assert(board["b1"_sq] == Piece::NONE);
     }
 
     // Test knight capture
     {
         Board board;
-        board[Square(0, 1)] = Piece::WHITE_KNIGHT;
-        board[Square(2, 2)] = Piece::BLACK_ROOK;  // White knight captures black rook
-        applyMove(board, Move(Square(0, 1), Square(2, 2)));
-        assert(board[Square(2, 2)] == Piece::WHITE_KNIGHT);
-        assert(board[Square(0, 1)] == Piece::NONE);
+        board["b1"_sq] = Piece::WHITE_KNIGHT;
+        board["c3"_sq] = Piece::BLACK_ROOK;  // White knight captures black rook
+        applyMove(board, Move("b1"_sq, "c3"_sq));
+        assert(board["c3"_sq] == Piece::WHITE_KNIGHT);
+        assert(board["b1"_sq] == Piece::NONE);
     }
 
     // Now test the Position applyMove function for a pawn move
     {
         Position position;
-        position.board[Square(1, 0)] = Piece::WHITE_PAWN;
+        position.board["a2"_sq] = Piece::WHITE_PAWN;
         position.activeColor = Color::WHITE;
         position.halfmoveClock = 1;
-        position = applyMove(position, Move(Square(1, 0), Square(2, 0)));
-        assert(position.board[Square(2, 0)] == Piece::WHITE_PAWN);
-        assert(position.board[Square(1, 0)] == Piece::NONE);
+        position = applyMove(position, Move("a2"_sq, "a3"_sq));
+        assert(position.board["a3"_sq] == Piece::WHITE_PAWN);
+        assert(position.board["a2"_sq] == Piece::NONE);
         assert(position.activeColor == Color::BLACK);
         assert(position.halfmoveClock == 0);
     }
@@ -442,13 +442,13 @@ void testApplyMove() {
     // Test pawn capture
     {
         Position position;
-        position.board[Square(1, 0)] = Piece::WHITE_PAWN;
-        position.board[Square(2, 1)] = Piece::BLACK_ROOK;  // White pawn captures black rook
+        position.board["a2"_sq] = Piece::WHITE_PAWN;
+        position.board["b3"_sq] = Piece::BLACK_ROOK;  // White pawn captures black rook
         position.activeColor = Color::WHITE;
         position.halfmoveClock = 1;
-        position = applyMove(position, Move(Square(1, 0), Square(2, 1)));
-        assert(position.board[Square(2, 1)] == Piece::WHITE_PAWN);
-        assert(position.board[Square(1, 0)] == Piece::NONE);
+        position = applyMove(position, Move("a2"_sq, "b3"_sq));
+        assert(position.board["b3"_sq] == Piece::WHITE_PAWN);
+        assert(position.board["a2"_sq] == Piece::NONE);
         assert(position.activeColor == Color::BLACK);
         assert(position.halfmoveClock == 0);
     }
@@ -456,13 +456,13 @@ void testApplyMove() {
     // Test that the fullmove number is updated correctly on a black move
     {
         Position position;
-        position.board[Square(1, 0)] = Piece::BLACK_PAWN;
+        position.board["a2"_sq] = Piece::BLACK_PAWN;
         position.activeColor = Color::BLACK;
         position.halfmoveClock = 1;
         position.fullmoveNumber = 1;
-        position = applyMove(position, Move(Square(1, 0), Square(2, 0)));
-        assert(position.board[Square(2, 0)] == Piece::BLACK_PAWN);
-        assert(position.board[Square(1, 0)] == Piece::NONE);
+        position = applyMove(position, Move("a2"_sq, "a3"_sq));
+        assert(position.board["a3"_sq] == Piece::BLACK_PAWN);
+        assert(position.board["a2"_sq] == Piece::NONE);
         assert(position.activeColor == Color::WHITE);
         assert(position.halfmoveClock == 0);
         assert(position.fullmoveNumber == 2);
@@ -471,14 +471,14 @@ void testApplyMove() {
     // Test that capture with a non-pawn piece also resets the halfmoveClock
     {
         Position position;
-        position.board[Square(1, 0)] = Piece::WHITE_PAWN;
-        position.board[Square(2, 1)] = Piece::BLACK_ROOK;  // White pawn captures black rook
+        position.board["a2"_sq] = Piece::WHITE_PAWN;
+        position.board["b3"_sq] = Piece::BLACK_ROOK;  // White pawn captures black rook
         position.activeColor = Color::WHITE;
         position.fullmoveNumber = 1;
         position.halfmoveClock = 1;
-        position = applyMove(position, Move(Square(1, 0), Square(2, 1)));
-        assert(position.board[Square(2, 1)] == Piece::WHITE_PAWN);
-        assert(position.board[Square(1, 0)] == Piece::NONE);
+        position = applyMove(position, Move("a2"_sq, "b3"_sq));
+        assert(position.board["b3"_sq] == Piece::WHITE_PAWN);
+        assert(position.board["a2"_sq] == Piece::NONE);
         assert(position.activeColor == Color::BLACK);
         assert(position.halfmoveClock == 0);   // reset due to capture
         assert(position.fullmoveNumber == 1);  // not updated on white move
@@ -487,12 +487,12 @@ void testApplyMove() {
     // Test that a move with a non-pawn piece does not reset the halfmoveClock
     {
         Position position;
-        position.board[Square(0, 1)] = Piece::WHITE_KNIGHT;
+        position.board["b1"_sq] = Piece::WHITE_KNIGHT;
         position.activeColor = Color::WHITE;
         position.halfmoveClock = 1;
-        position = applyMove(position, Move(Square(0, 1), Square(2, 2)));
-        assert(position.board[Square(2, 2)] == Piece::WHITE_KNIGHT);
-        assert(position.board[Square(0, 1)] == Piece::NONE);
+        position = applyMove(position, Move("b1"_sq, "c3"_sq));
+        assert(position.board["c3"_sq] == Piece::WHITE_KNIGHT);
+        assert(position.board["b1"_sq] == Piece::NONE);
         assert(position.activeColor == Color::BLACK);
         assert(position.halfmoveClock == 2);
     }
@@ -501,8 +501,8 @@ void testApplyMove() {
 }
 
 void testIsAttacked() {
-    Square whiteKingSquare = Square(0, 0);
-    Square blackKingSquare = Square(5, 5);
+    Square whiteKingSquare = "a1"_sq;
+    Square blackKingSquare = "f6"_sq;
     Board base;
     base[whiteKingSquare] = Piece::WHITE_KING;
     base[blackKingSquare] = Piece::BLACK_KING;
@@ -510,7 +510,7 @@ void testIsAttacked() {
     // Test that a king is in check
     {
         Board board = base;
-        board[Square(0, 1)] = Piece::BLACK_ROOK;
+        board["b1"_sq] = Piece::BLACK_ROOK;
         assert(isAttacked(board, whiteKingSquare));
         assert(!isAttacked(board, blackKingSquare));
     }
@@ -518,23 +518,23 @@ void testIsAttacked() {
     // Test that a king is not in check
     {
         Board board = base;
-        board[Square(0, 1)] = Piece::BLACK_ROOK;
+        board["b1"_sq] = Piece::BLACK_ROOK;
     }
 
     // Test that a king is in check after a move
     {
         Board board = base;
-        board[Square(1, 1)] = Piece::BLACK_ROOK;
-        applyMove(board, Move(Square(0, 0), Square(1, 0)));
-        assert(isAttacked(board, Square(1, 0)));
+        board["b2"_sq] = Piece::BLACK_ROOK;
+        applyMove(board, Move("a1"_sq, "a2"_sq));
+        assert(isAttacked(board, "a2"_sq));
     }
 
     // Test that a king is not in check after a move
     {
         Board board;
-        board[Square(0, 0)] = Piece::WHITE_KING;
-        board[Square(0, 1)] = Piece::BLACK_ROOK;
-        applyMove(board, Move(Square(0, 0), Square(1, 0)));
+        board["a1"_sq] = Piece::WHITE_KING;
+        board["b1"_sq] = Piece::BLACK_ROOK;
+        applyMove(board, Move("a1"_sq, "a2"_sq));
         assert(!isAttacked(board, blackKingSquare));
     }
 

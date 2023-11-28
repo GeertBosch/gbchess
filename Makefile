@@ -3,7 +3,6 @@ all: test puzzles
 %.h: common.h
 
 %-test: %_test.cpp %.cpp %.h common.h
-	echo deps: $^
 	g++ -g -O0 -o $@ $(filter-out %.h, $^)
 
 clean:
