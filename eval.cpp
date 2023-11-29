@@ -84,7 +84,7 @@ EvaluatedMove computeBestMove(const Position& position, int depth) {
 
     // Recursive case: compute all legal moves and evaluate them
     auto opponentKing =
-        SquareSet::findPieces(position.board, addColor(PieceType::KING, !position.activeColor));
+        SquareSet::find(position.board, addColor(PieceType::KING, !position.activeColor));
     for (auto [move, newPosition] : allMoves) {
         D << indent << position.activeColor << " " << move << std::endl;
 
@@ -102,9 +102,8 @@ EvaluatedMove computeBestMove(const Position& position, int depth) {
         if (best < ourMove) {
             D << indent << best << " => " << ourMove << std::endl;
             best = ourMove;
-            if (best.check && best.mate) {
+            if (best.check && best.mate)
                 break;
-            }
         }
     }
     return best;

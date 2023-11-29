@@ -16,9 +16,6 @@ struct MovesTable {
     // precomputed paths from each square to each other square
     SquareSet paths[kNumSquares][kNumSquares];  // from, to
                                                 //
-    // precomputed affected castling availability based on from and to squares
-    // CastlingMask castling[kNumSquares][kNumSquares];  // from, to
-
     MovesTable();
 } movesTable;
 
@@ -32,16 +29,15 @@ MovesTable::MovesTable() {
     for (int from = 0; from < kNumSquares; ++from) {
         for (int to = 0; to < kNumSquares; ++to) {
             paths[from][to] = SquareSet::path(Square(from), Square(to));
-            // castling[from][to] = castling(Square(from), Square(to));
         }
     }
 }
 
 /**
- * Returns the bits corresponding to the bytes in the input that contain the piece.
- * Note: piece is assumed to be at most 4 bits.
+ * Returns the bits corresponding to the bytes in the input that contain the nibble.
+ * Note: nibble is assumed to be at most 4 bits.
  */
-uint64_t occupancy(uint64_t input, uint8_t nibble) {
+uint64_t equalSet(uint64_t input, uint8_t nibble) {
     const uint64_t occupancyNibbles = 0x80402010'08040201ull;  // high nibbles to indicate occupancy
     const uint64_t oneNibbles = 0x01010101'01010101ull;        // low nibbles set to one
     input ^= 0x01010101'01010101ull * nibble;  // 0 nibbles in the input indicate the piece
@@ -56,190 +52,126 @@ uint64_t occupancy(uint64_t input, uint8_t nibble) {
     return input;
 }
 
-uint64_t occupancy(std::array<Piece, 64> squares, Piece piece, bool invert) {
+uint64_t equalSet(std::array<Piece, 64> squares, Piece piece, bool invert) {
     static_assert(kNumPieces <= 16, "Piece must fit in 4 bits");
 
     uint64_t set = 0;
     for (int j = 0; j < sizeof(squares); j += sizeof(uint64_t)) {
         uint64_t input;
         memcpy(&input, &squares[j], sizeof(input));
-        set |= occupancy(input, static_cast<uint8_t>(piece)) << j;
+        set |= equalSet(input, static_cast<uint8_t>(piece)) << j;
     }
 
     return invert ? ~set : set;
 }
 
 SquareSet SquareSet::occupancy(const Board& board) {
-    return ::occupancy(board.squares(), Piece::NONE, true);
+    return equalSet(board.squares(), Piece::NONE, true);
 }
 
-SquareSet SquareSet::findPieces(const Board& board, Piece piece) {
-    return ::occupancy(board.squares(), piece, false);
+SquareSet SquareSet::find(const Board& board, Piece piece) {
+    return equalSet(board.squares(), piece, false);
 }
 
 SquareSet rookMoves(Square from) {
     SquareSet moves;
-    for (int i = 0; i < 8; ++i) {
-        if (i != from.rank()) {
-            moves.insert(Square(i, from.file()));
-        }
-        if (i != from.file()) {
-            moves.insert(Square(from.rank(), i));
-        }
-    }
+    for (int rank = 0; rank < kNumRanks; ++rank)
+        if (rank != from.rank())
+            moves.insert(Square(rank, from.file()));
+
+    for (int file = 0; file < kNumFiles; ++file)
+        if (file != from.file())
+            moves.insert(Square(from.rank(), file));
+
     return moves;
 }
 
 SquareSet bishopMoves(Square from) {
     SquareSet moves;
-    for (int i = 1; i < 8; ++i) {
-        if (from.rank() + i < 8 && from.file() + i < 8) {
-            moves.insert(Square(from.rank() + i, from.file() + i));
-        }
-        if (from.rank() - i >= 0 && from.file() - i >= 0) {
-            moves.insert(Square(from.rank() - i, from.file() - i));
-        }
-        if (from.rank() + i < 8 && from.file() - i >= 0) {
-            moves.insert(Square(from.rank() + i, from.file() - i));
-        }
-        if (from.rank() - i >= 0 && from.file() + i < 8) {
-            moves.insert(Square(from.rank() - i, from.file() + i));
-        }
+    for (int i = 1; i < std::min(kNumRanks, kNumFiles); ++i) {
+        moves.insert(SquareSet::valid(from.rank() + i, from.file() + i));
+        moves.insert(SquareSet::valid(from.rank() - i, from.file() - i));
+        moves.insert(SquareSet::valid(from.rank() + i, from.file() - i));
+        moves.insert(SquareSet::valid(from.rank() - i, from.file() + i));
     }
     return moves;
 }
 
 SquareSet queenMoves(Square from) {
-    SquareSet moves;
-
     // Combine the moves of a rook and a bishop
-    auto rookMvs = rookMoves(from);
-    auto bishopMvs = bishopMoves(from);
-
-    moves.insert(rookMvs.begin(), rookMvs.end());
-    moves.insert(bishopMvs.begin(), bishopMvs.end());
-
-    return moves;
+    return rookMoves(from) | bishopMoves(from);
 }
 
 SquareSet knightMoves(Square from) {
+    int vectors[8][2] = {{-2, -1}, {-1, -2}, {1, -2}, {2, -1}, {2, 1}, {1, 2}, {-1, 2}, {-2, 1}};
+
     SquareSet moves;
-    int knight_moves[8][2] = {
-        {-2, -1}, {-1, -2}, {1, -2}, {2, -1}, {2, 1}, {1, 2}, {-1, 2}, {-2, 1}};
-    for (int i = 0; i < 8; ++i) {
-        int new_rank = from.rank() + knight_moves[i][0];
-        int new_file = from.file() + knight_moves[i][1];
-        if (new_rank >= 0 && new_rank < 8 && new_file >= 0 && new_file < 8) {
-            moves.insert(Square(new_rank, new_file));
-        }
-    }
+    for (auto [rank, file] : vectors)
+        moves.insert(SquareSet::valid(from.rank() + rank, from.file() + file));
     return moves;
 }
 
 SquareSet kingMoves(Square from) {
+    int vectors[8][2] = {{-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1}, {1, -1}, {1, 0}, {1, 1}};
+
     SquareSet moves;
-    for (int i = -1; i <= 1; ++i) {
-        for (int j = -1; j <= 1; ++j) {
-            if (i != 0 || j != 0) {
-                int new_rank = from.rank() + i;
-                int new_file = from.file() + j;
-                if (new_rank >= 0 && new_rank < 8 && new_file >= 0 && new_file < 8) {
-                    moves.insert(Square(new_rank, new_file));
-                }
-            }
-        }
-    }
+    for (auto [rank, file] : vectors)
+        moves.insert(SquareSet::valid(from.rank() + rank, from.file() + file));
     return moves;
 }
 
 SquareSet whitePawnMoves(Square from) {
-    SquareSet moves;
-    if (from.rank() == 1 && from.rank() + 2 < 8) {
-        moves.insert(Square(from.rank() + 2, from.file()));
-    }
-    if (from.rank() + 1 < 8) {
-        moves.insert(Square(from.rank() + 1, from.file()));
-    }
+    SquareSet moves = SquareSet::valid(from.rank() + 1, from.file());
+    if (from.rank() == 1)
+        moves.insert(SquareSet::valid(from.rank() + 2, from.file()));
     return moves;
 }
 
 SquareSet blackPawnMoves(Square from) {
-    SquareSet moves;
-    if (from.rank() == 6 && from.rank() - 2 >= 0) {
-        moves.insert(Square(from.rank() - 2, from.file()));
-    }
-    if (from.rank() - 1 >= 0) {
-        moves.insert(Square(from.rank() - 1, from.file()));
-    }
+    SquareSet moves = SquareSet::valid(from.rank() - 1, from.file());
+    if (from.rank() == kNumRanks - 2)
+        moves.insert(SquareSet::valid(from.rank() - 2, from.file()));
     return moves;
 }
 
 SquareSet possibleMoves(Piece piece, Square from) {
     switch (piece) {
-        case Piece::NONE:
-            break;
-        case Piece::WHITE_PAWN:
-            return whitePawnMoves(from);
-        case Piece::BLACK_PAWN:
-            return blackPawnMoves(from);
-        case Piece::WHITE_KNIGHT:
-        case Piece::BLACK_KNIGHT:
-            return knightMoves(from);
-        case Piece::WHITE_BISHOP:
-        case Piece::BLACK_BISHOP:
-            return bishopMoves(from);
-        case Piece::WHITE_ROOK:
-        case Piece::BLACK_ROOK:
-            return rookMoves(from);
-        case Piece::WHITE_QUEEN:
-        case Piece::BLACK_QUEEN:
-            return queenMoves(from);
-        case Piece::WHITE_KING:
-        case Piece::BLACK_KING:
-            return kingMoves(from);
+    case Piece::NONE: break;
+    case Piece::WHITE_PAWN: return whitePawnMoves(from);
+    case Piece::BLACK_PAWN: return blackPawnMoves(from);
+    case Piece::WHITE_KNIGHT:
+    case Piece::BLACK_KNIGHT: return knightMoves(from);
+    case Piece::WHITE_BISHOP:
+    case Piece::BLACK_BISHOP: return bishopMoves(from);
+    case Piece::WHITE_ROOK:
+    case Piece::BLACK_ROOK: return rookMoves(from);
+    case Piece::WHITE_QUEEN:
+    case Piece::BLACK_QUEEN: return queenMoves(from);
+    case Piece::WHITE_KING:
+    case Piece::BLACK_KING: return kingMoves(from);
     }
     return {};
 }
 
-void addCaptureIfOnBoard(SquareSet& captures, int rank, int file) {
-    if (rank >= 0 && rank < 8 && file >= 0 && file < 8) {
-        captures.insert(Square{rank, file});
-    }
-}
-
 SquareSet possibleCaptures(Piece piece, Square from) {
     switch (piece) {
-        case Piece::NONE:
-            break;
-        case Piece::WHITE_PAWN:  // White Pawn
-        {
-            SquareSet captures;
-            addCaptureIfOnBoard(captures, from.rank() - 1, from.file() - 1);  // Diagonal left
-            addCaptureIfOnBoard(captures, from.rank() - 1, from.file() + 1);  // Diagonal right
-            return captures;
-        }
-        case Piece::BLACK_PAWN:  // Black Pawn
-        {
-            SquareSet captures;
-            addCaptureIfOnBoard(captures, from.rank() + 1, from.file() - 1);  // Diagonal left
-            addCaptureIfOnBoard(captures, from.rank() + 1, from.file() + 1);  // Diagonal right
-            return captures;
-        }
-        case Piece::WHITE_KNIGHT:
-        case Piece::BLACK_KNIGHT:
-            return knightMoves(from);
-        case Piece::WHITE_BISHOP:
-        case Piece::BLACK_BISHOP:
-            return bishopMoves(from);
-        case Piece::WHITE_ROOK:
-        case Piece::BLACK_ROOK:
-            return rookMoves(from);
-        case Piece::WHITE_QUEEN:
-        case Piece::BLACK_QUEEN:
-            return queenMoves(from);
-        case Piece::WHITE_KING:
-        case Piece::BLACK_KING:
-            return kingMoves(from);
+    case Piece::NONE: break;
+    case Piece::WHITE_PAWN:                                        // White Pawn
+        return SquareSet::valid(from.rank() - 1, from.file() - 1)  // Diagonal left
+            | SquareSet::valid(from.rank() - 1, from.file() + 1);  // Diagonal right
+    case Piece::BLACK_PAWN:                                        // Black Pawn
+        return SquareSet::valid(from.rank() + 1, from.file() - 1)  // Diagonal left
+            | SquareSet::valid(from.rank() + 1, from.file() + 1);  // Diagonal right
+    case Piece::WHITE_KNIGHT:
+    case Piece::BLACK_KNIGHT: return knightMoves(from);
+    case Piece::WHITE_BISHOP:
+    case Piece::BLACK_BISHOP: return bishopMoves(from);
+    case Piece::WHITE_ROOK:
+    case Piece::BLACK_ROOK: return rookMoves(from);
+    case Piece::WHITE_QUEEN:
+    case Piece::BLACK_QUEEN: return queenMoves(from);
+    case Piece::WHITE_KING:
+    case Piece::BLACK_KING: return kingMoves(from);
     }
     return {};
 }
@@ -416,8 +348,7 @@ bool isAttacked(const Board& board, Square square) {
         if (color(piece) != opponentColor)
             continue;
 
-        auto pieceIndex = static_cast<uint8_t>(piece);
-        auto possibleCaptureSquares = movesTable.captures[pieceIndex][from.index()];
+        auto possibleCaptureSquares = movesTable.captures[index(piece)][from.index()];
         if (possibleCaptureSquares.contains(square) && clearPath(occupancy, from, square))
             return true;
     }
@@ -445,7 +376,7 @@ ComputedMoveVector computeAllLegalMoves(const Position& position) {
     ComputedMoveVector legalMoves;
 
     auto ourKing = addColor(PieceType::KING, position.activeColor);
-    auto oldKing = SquareSet::findPieces(position.board, ourKing);
+    auto oldKing = SquareSet::find(position.board, ourKing);
 
     // Iterate over all moves and captures
     auto addIfLegal = [&](Piece piece, Square from, Square to) {
@@ -465,7 +396,7 @@ ComputedMoveVector computeAllLegalMoves(const Position& position) {
             return;
 
         // If promoted, add all possible promotions, legality is not affected
-        if (type(piece) == PieceType::PAWN && (to.rank() == 0 || to.rank() == 7)) {
+        if (type(piece) == PieceType::PAWN && (to.rank() == 0 || to.rank() == kNumRanks - 1)) {
             for (auto promotion :
                  {PieceType::KNIGHT, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN}) {
                 newPosition.board[to] = addColor(promotion, position.activeColor);

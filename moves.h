@@ -1,3 +1,4 @@
+#include <climits>
 #include <cstring>
 #include <iterator>
 #include <vector>
@@ -10,9 +11,11 @@
  */
 class SquareSet {
     uint64_t _squares = 0;
+    static_assert(kNumSquares <= sizeof(uint64_t) * CHAR_BIT);
 
 public:
     SquareSet(uint64_t squares) : _squares(squares) {}
+    SquareSet(Square square) : _squares(1ull << square.index()) {}
     class iterator;
 
     SquareSet() = default;
@@ -24,7 +27,13 @@ public:
      */
     static SquareSet occupancy(const Board& board);
 
-    static SquareSet findPieces(const Board& board, Piece piece);
+    static SquareSet find(const Board& board, Piece piece);
+
+    static SquareSet valid(int rank, int file) {
+        return rank >= 0 && rank < kNumRanks && file >= 0 && file < kNumFiles
+            ? SquareSet(Square(rank, file))
+            : SquareSet();
+    }
 
     void erase(Square square) { _squares &= ~(1ull << square.index()); }
     void insert(Square square) { _squares |= (1ull << square.index()); }
@@ -39,6 +48,7 @@ public:
     size_t contains(Square square) const { return (_squares >> square.index()) & 1; }
 
     SquareSet operator&(SquareSet other) const { return _squares & other._squares; }
+    SquareSet operator|(SquareSet other) const { return _squares | other._squares; }
     SquareSet operator!(void) const { return ~_squares; }
 
     bool operator==(SquareSet other) const { return _squares == other._squares; }

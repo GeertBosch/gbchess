@@ -4,14 +4,18 @@
 
 #pragma once
 
+static constexpr uint8_t kNumFiles = 8;
+static constexpr uint8_t kNumRanks = 8;
+static constexpr uint8_t kNumSquares = kNumFiles * kNumRanks;
+
 class Square {
     uint8_t _index;
 public:
-    constexpr Square(int rank, int file) : _index(rank * 8 + file) {}
+    constexpr Square(int rank, int file) : _index(rank * kNumFiles + file) {}
     constexpr Square(int index) : _index(index) {}
 
-    int rank() const { return _index / 8; }
-    int file() const { return _index % 8; }
+    int rank() const { return _index / kNumFiles; }
+    int file() const { return _index % kNumRanks; }
     int index() const { return _index; }
 
 
@@ -28,11 +32,10 @@ public:
         return str;
     }
 };
-static constexpr uint8_t kNumSquares = 64;
 constexpr Square operator"" _sq(const char* str, size_t len) {
     assert(len == 2);
-    assert(str[0] >= 'a' && str[0] <= 'h');
-    assert(str[1] >= '1' && str[1] <= '8');
+    assert(str[0] >= 'a' && str[0] - 'a' < kNumFiles);
+    assert(str[1] >= '1' && str[1] - '1' < kNumRanks);
     return Square(str[1] - '1', str[0] - 'a');
 }
 
