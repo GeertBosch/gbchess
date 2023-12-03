@@ -10,7 +10,7 @@
 std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     os << "[";
     for (const auto& move : moves) {
-        os << std::string(move) << ", ";
+        if (move) os << std::string(move) << ", ";
     }
     os << "]";
     return os;
@@ -44,8 +44,10 @@ void printAvailableCaptures(const Position& position) {
     std::cout << "Captures: " << captures << std::endl;
 }
 
-void printBestMove(const Position& position, int depth) {
-    auto bestMove = computeBestMove(position, depth);
+void printBestMove(const Position& position, int maxdepth) {
+    ComputedMoveVector moves;
+    moves.push_back({Move(), position});
+    auto bestMove = computeBestMove(moves, maxdepth);
     std::cout << "Best Move: " << static_cast<std::string>(bestMove) << std::endl;
 }
 
@@ -89,12 +91,31 @@ void testFromStdIn(int depth) {
         // Compute the best move
         EvaluatedMove bestMove;
         printEvalRate([&]() {
-            bestMove = computeBestMove(position, depth);
+            ComputedMoveVector moves;
+            moves.push_back({Move(), position});
+            bestMove = computeBestMove(moves, depth);
             // Print the best move and its evaluation
             std::cout << static_cast<std::string>(bestMove) << std::endl;
             std::cerr << "Solution: " << std::string(bestMove) << "\t";
         });
     }
+}
+
+void testEvaluatedMove() {
+    {
+        EvaluatedMove none;
+        EvaluatedMove mateIn3 = {Move("f6"_sq, "e5"_sq), false, false, 999, 5};
+        EvaluatedMove mateIn1 = {Move("e7"_sq, "g7"_sq), true, true, 999, 1};
+        assert(none < mateIn3);
+        assert(mateIn3 < mateIn1);
+        assert(none < mateIn1);
+    }
+    {
+        EvaluatedMove stalemate = {Move("f6"_sq, "e5"_sq), false, true, 0, 3};
+        EvaluatedMove upQueen = {Move("f7"_sq, "a2"_sq), false, false, 9, 6};
+        assert(stalemate < upQueen);
+    }
+    std::cout << "EvaluatedMove tests passed" << std::endl;
 }
 
 
@@ -108,6 +129,8 @@ int main(int argc, char* argv[]) {
         std::cerr << "Usage: " << argv[0] << " [FEN-string] <search-depth>" << std::endl;
         std::exit(1);
     }
+
+    testEvaluatedMove();
 
     std::string fen(argv[1]);
     int depth = std::stoi(argv[2]);

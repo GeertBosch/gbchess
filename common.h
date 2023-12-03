@@ -1,11 +1,13 @@
 #include <array>
 #include <cassert>
+#include <cstdint>
 #include <string>
+#include <utility>
+#include <vector>
 
 #pragma once
 
-static constexpr uint8_t kNumFiles = 8;
-static constexpr uint8_t kNumRanks = 8;
+static constexpr uint8_t kNumFiles = 8, kNumRanks = 8;
 static constexpr uint8_t kNumSquares = kNumFiles * kNumRanks;
 
 class Square {
@@ -17,7 +19,6 @@ public:
     int rank() const { return _index / kNumFiles; }
     int file() const { return _index % kNumRanks; }
     int index() const { return _index; }
-
 
     Square operator++() { return ++_index, *this; }
 
@@ -39,10 +40,7 @@ constexpr Square operator"" _sq(const char* str, size_t len) {
     return Square(str[1] - '1', str[0] - 'a');
 }
 
-enum class Color : uint8_t {
-    WHITE,
-    BLACK
-};
+enum class Color : uint8_t { WHITE, BLACK };
 
 inline std::string to_string(Color color) {
     return color == Color::WHITE ? "w" : "b";
@@ -91,7 +89,6 @@ inline Color color(Piece piece) {
 inline char to_char(Piece piece) {
     return pieceChars[index(piece)];
 }
-
 inline char to_char(PieceType type, Color color) {
     return to_char(addColor(type, color));
 }
@@ -141,7 +138,7 @@ struct Move {
 };
 
 class Board {
-    std::array<Piece, 64> _squares;
+    std::array<Piece, kNumSquares> _squares;
 
     // The minimal space required is 64 bits for occupied squares (8 bytes), plus 5 bits for white
     // king pos, plus 5 bits for black king, plus 30 * log2(10) = 100 bits for identification of the
@@ -154,17 +151,9 @@ class Board {
 public:
     Board() { _squares.fill(Piece::NONE); }
 
-    Piece& operator[](Square sq) {
-        return _squares[sq.index()];
-    }
-
-    const Piece operator[](Square sq) const {
-        return _squares[sq.index()];
-    }
-
-    const auto& squares() const {
-        return _squares;
-    }
+    Piece& operator[](Square sq) { return _squares[sq.index()]; }
+    const Piece operator[](Square sq) const { return _squares[sq.index()]; }
+    const auto& squares() const { return _squares; }
 };
 
 enum CastlingMask : uint8_t {
@@ -210,3 +199,6 @@ struct Position {
     uint8_t halfmoveClock;    // If the clock is used, we'll draw at 100, well before it overflows
     uint16_t fullmoveNumber;  // >65,535 moves is a lot of moves
 };
+
+using ComputedMove = std::pair<Move, Position>;
+using ComputedMoveVector = std::vector<ComputedMove>;

@@ -23,6 +23,15 @@ std::ostream& operator<<(std::ostream& os, Color color) {
     return os << (color == Color::BLACK ? 'b' : 'w');
 }
 
+std::ostream& operator<<(std::ostream& os, const ComputedMoveVector& moves) {
+    os << "[";
+    for (const auto& [move, position] : moves) {
+        os << std::string(move) << ", ";
+    }
+    os << "]";
+    return os;
+}
+
 EvaluatedMove::operator std::string() const {
     if (!move)
         return "none";
@@ -63,48 +72,64 @@ float evaluateBoard(const Board& board) {
 }
 
 
-EvaluatedMove computeBestMove(const Position& position, int depth) {
+EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
+    auto position = moves.back().second;
     auto allMoves = computeAllLegalMoves(position);
     EvaluatedMove best;  // Default to the worst possible move
-    auto indent = debug ? std::string(std::max(0, 4 - depth) * 4, ' ') : "";
+    int depth = moves.size();
+    auto indent = debug ? std::string(depth * 4 - 4, ' ') : "";
 
     // Base case: if depth is zero, return the static evaluation of the position
-    if (depth == 0) {
+    if (depth > maxdepth) {
         for (auto& [move, newPosition] : allMoves) {
-            EvaluatedMove ours{move, false, false, evaluateBoard(newPosition.board), 0};
-            if (position.activeColor == Color::BLACK)
-                ours.evaluation = -ours.evaluation;
-            if (best < ours) {
-                best = ours;
+            EvaluatedMove ourMove{move, false, false, evaluateBoard(newPosition.board), depth};
+            if (position.activeColor == Color::BLACK) ourMove.evaluation = -ourMove.evaluation;
+            D << indent << best << " <  " << ourMove << " @ " << ourMove.depth << " ? "
+              << (best < ourMove) << std::endl;
+            if (best < ourMove) {
+                D << indent << best << " => " << ourMove << std::endl;
+
+                best = ourMove;
             }
         }
         D << indent << position.activeColor << " " << best << std::endl;
         return best;
     }
 
+    // TODO: Sort moves by MVV/LVA
+
     // Recursive case: compute all legal moves and evaluate them
     auto opponentKing =
         SquareSet::find(position.board, addColor(PieceType::KING, !position.activeColor));
-    for (auto [move, newPosition] : allMoves) {
-        D << indent << position.activeColor << " " << move << std::endl;
+    for (auto& computedMove : allMoves) {
 
         // Recursively compute the best moves for the opponent, worst for us.
-        auto opponentMove = -computeBestMove(newPosition, depth - 1);
+        moves.push_back(computedMove);
+        auto move = computedMove.first;
+        auto& newPosition = computedMove.second;
+        auto opponentMove = -computeBestMove(moves, maxdepth);
 
         bool mate = !opponentMove.move;  // Either checkmate or stalemate
         bool check = isAttacked(newPosition.board, opponentKing);
 
+        char kind[2][2] = {{' ', '='}, {'+', '#'}};  // {{check, mate}, {check, mate}}
+
         float evaluation = mate ? (check ? bestEval : drawEval) : opponentMove.evaluation;
-        EvaluatedMove ourMove(move, check, mate, evaluation, opponentMove.depth + 1);
-        D << indent << best << " <  " << ourMove << " ? " << (best < ourMove) << std::endl;
+        EvaluatedMove ourMove(
+            move, check, mate, evaluation, mate ? moves.size() - 1 : opponentMove.depth);
+        D << indent << best << " <  " << ourMove << kind[check][mate] << " ? " << (best < ourMove)
+          << std::endl;
 
         // Update the best move if the opponent's move is better than our current best.
         if (best < ourMove) {
             D << indent << best << " => " << ourMove << std::endl;
             best = ourMove;
-            if (best.check && best.mate)
-                break;
+            if (best.check && best.mate) {
+                moves.pop_back();
+                return best;
+            }
         }
+        moves.pop_back();
     }
     return best;
 }
