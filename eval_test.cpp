@@ -104,20 +104,19 @@ void testFromStdIn(int depth) {
 void testEvaluatedMove() {
     {
         EvaluatedMove none;
-        EvaluatedMove mateIn3 = {Move("f6"_sq, "e5"_sq), false, false, 999, 5};
-        EvaluatedMove mateIn1 = {Move("e7"_sq, "g7"_sq), true, true, 999, 1};
+        EvaluatedMove mateIn3 = {Move("f6"_sq, "e5"_sq, Move::QUIET), false, false, 999, 5};
+        EvaluatedMove mateIn1 = {Move("e7"_sq, "g7"_sq, Move::QUIET), true, true, 999, 1};
         assert(none < mateIn3);
         assert(mateIn3 < mateIn1);
         assert(none < mateIn1);
     }
     {
-        EvaluatedMove stalemate = {Move("f6"_sq, "e5"_sq), false, true, 0, 3};
-        EvaluatedMove upQueen = {Move("f7"_sq, "a2"_sq), false, false, 9, 6};
+        EvaluatedMove stalemate = {Move("f6"_sq, "e5"_sq, Move::QUIET), false, true, 0, 3};
+        EvaluatedMove upQueen = {Move("f7"_sq, "a2"_sq, Move::CAPTURE), false, false, 9, 6};
         assert(stalemate < upQueen);
     }
     std::cout << "EvaluatedMove tests passed" << std::endl;
 }
-
 
 int main(int argc, char* argv[]) {
     if (argc == 2) {

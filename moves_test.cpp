@@ -315,6 +315,16 @@ void testOccupancy() {
     std::cout << "All occupancy tests passed!" << std::endl;
 }
 
+void testPromotionKind() {
+    {
+        Square from = "a7"_sq;
+        Square to = "a8"_sq;
+        Move move(from, to, MoveKind::QUEEN_PROMOTION);
+        assert(move.isPromotion());
+        assert(promotionType(move.kind) == PieceType::QUEEN);
+    }
+}
+
 void testAddAvailableMoves() {
     auto find = [](MoveVector& moves, Move move) -> bool {
         return std::find(moves.begin(), moves.end(), move) != moves.end();
@@ -327,8 +337,8 @@ void testAddAvailableMoves() {
         MoveVector moves;
         addAvailableMoves(moves, board, Color::WHITE);
         assert(moves.size() == 2);
-        assert(find(moves, Move("a2"_sq, "a3"_sq)));
-        assert(find(moves, Move("a4"_sq, "a5"_sq)));
+        assert(find(moves, Move("a2"_sq, "a3"_sq, Move::QUIET)));
+        assert(find(moves, Move("a4"_sq, "a5"_sq, Move::QUIET)));
     }
 
     std::cout << "All addAvailableMoves tests passed!" << std::endl;
@@ -339,7 +349,7 @@ void testApplyMove() {
     {
         Board board;
         board["a2"_sq] = Piece::WHITE_PAWN;
-        applyMove(board, Move("a2"_sq, "a3"_sq));
+        applyMove(board, Move("a2"_sq, "a3"_sq, Move::QUIET));
         assert(board["a3"_sq] == Piece::WHITE_PAWN);
         assert(board["a2"_sq] == Piece::NONE);
     }
@@ -349,7 +359,7 @@ void testApplyMove() {
         Board board;
         board["a2"_sq] = Piece::WHITE_PAWN;
         board["b3"_sq] = Piece::BLACK_ROOK;  // White pawn captures black rook
-        applyMove(board, Move("a2"_sq, "b3"_sq));
+        applyMove(board, Move("a2"_sq, "b3"_sq, Move::CAPTURE));
         assert(board["b3"_sq] == Piece::WHITE_PAWN);
         assert(board["a2"_sq] == Piece::NONE);
     }
@@ -359,13 +369,14 @@ void testApplyMove() {
         // White pawn promotion
         Board board;
         board["a7"_sq] = Piece::WHITE_PAWN;
-        applyMove(board, Move("a7"_sq, "a8"_sq, PieceType::QUEEN));
+        auto move = Move("a7"_sq, "a8"_sq, MoveKind::QUEEN_PROMOTION);
+        applyMove(board, move);
         assert(board["a8"_sq] == Piece::WHITE_QUEEN);
         assert(board["a7"_sq] == Piece::NONE);
 
         // Black pawn promotion
         board["a2"_sq] = Piece::BLACK_PAWN;
-        applyMove(board, Move("a2"_sq, "a1"_sq, PieceType::ROOK));
+        applyMove(board, Move("a2"_sq, "a1"_sq, MoveKind::ROOK_PROMOTION));
         assert(board["a1"_sq] == Piece::BLACK_ROOK);
         assert(board["a2"_sq] == Piece::NONE);
     }
@@ -376,14 +387,14 @@ void testApplyMove() {
         Board board;
         board["a7"_sq] = Piece::WHITE_PAWN;
         board["b8"_sq] = Piece::BLACK_ROOK;  // White pawn captures black rook
-        applyMove(board, Move("a7"_sq, "b8"_sq, PieceType::BISHOP));
+        applyMove(board, Move("a7"_sq, "b8"_sq, MoveKind::BISHOP_PROMOTION_CAPTURE));
         assert(board["b8"_sq] == Piece::WHITE_BISHOP);
         assert(board["a7"_sq] == Piece::NONE);
 
         // Black pawn promotion
         board["a2"_sq] = Piece::BLACK_PAWN;
         board["b1"_sq] = Piece::WHITE_ROOK;  // Black pawn captures white rook
-        applyMove(board, Move("a2"_sq, "b1"_sq, PieceType::KNIGHT));
+        applyMove(board, Move("a2"_sq, "b1"_sq, MoveKind::KNIGHT_PROMOTION_CAPTURE));
         assert(board["b1"_sq] == Piece::BLACK_KNIGHT);
         assert(board["a2"_sq] == Piece::NONE);
     }
@@ -392,7 +403,7 @@ void testApplyMove() {
     {
         Board board;
         board["a8"_sq] = Piece::WHITE_ROOK;
-        applyMove(board, Move("a8"_sq, "h8"_sq));
+        applyMove(board, Move("a8"_sq, "h8"_sq, Move::QUIET));
         assert(board["h8"_sq] == Piece::WHITE_ROOK);
         assert(board["a8"_sq] == Piece::NONE);
     }
@@ -402,7 +413,7 @@ void testApplyMove() {
         Board board;
         board["a8"_sq] = Piece::BLACK_ROOK;
         board["a1"_sq] = Piece::WHITE_ROOK;  // Black rook captures white rook
-        applyMove(board, Move("a8"_sq, "a1"_sq));
+        applyMove(board, Move("a8"_sq, "a1"_sq, Move::CAPTURE));
         assert(board["a1"_sq] == Piece::BLACK_ROOK);
         assert(board["a8"_sq] == Piece::NONE);
     }
@@ -411,7 +422,7 @@ void testApplyMove() {
     {
         Board board;
         board["b1"_sq] = Piece::WHITE_KNIGHT;
-        applyMove(board, Move("b1"_sq, "c3"_sq));
+        applyMove(board, Move("b1"_sq, "c3"_sq, Move::QUIET));
         assert(board["c3"_sq] == Piece::WHITE_KNIGHT);
         assert(board["b1"_sq] == Piece::NONE);
     }
@@ -421,7 +432,7 @@ void testApplyMove() {
         Board board;
         board["b1"_sq] = Piece::WHITE_KNIGHT;
         board["c3"_sq] = Piece::BLACK_ROOK;  // White knight captures black rook
-        applyMove(board, Move("b1"_sq, "c3"_sq));
+        applyMove(board, Move("b1"_sq, "c3"_sq, Move::CAPTURE));
         assert(board["c3"_sq] == Piece::WHITE_KNIGHT);
         assert(board["b1"_sq] == Piece::NONE);
     }
@@ -432,7 +443,7 @@ void testApplyMove() {
         position.board["a2"_sq] = Piece::WHITE_PAWN;
         position.activeColor = Color::WHITE;
         position.halfmoveClock = 1;
-        position = applyMove(position, Move("a2"_sq, "a3"_sq));
+        position = applyMove(position, Move("a2"_sq, "a3"_sq, Move::QUIET));
         assert(position.board["a3"_sq] == Piece::WHITE_PAWN);
         assert(position.board["a2"_sq] == Piece::NONE);
         assert(position.activeColor == Color::BLACK);
@@ -446,7 +457,7 @@ void testApplyMove() {
         position.board["b3"_sq] = Piece::BLACK_ROOK;  // White pawn captures black rook
         position.activeColor = Color::WHITE;
         position.halfmoveClock = 1;
-        position = applyMove(position, Move("a2"_sq, "b3"_sq));
+        position = applyMove(position, Move("a2"_sq, "b3"_sq, Move::CAPTURE));
         assert(position.board["b3"_sq] == Piece::WHITE_PAWN);
         assert(position.board["a2"_sq] == Piece::NONE);
         assert(position.activeColor == Color::BLACK);
@@ -460,7 +471,7 @@ void testApplyMove() {
         position.activeColor = Color::BLACK;
         position.halfmoveClock = 1;
         position.fullmoveNumber = 1;
-        position = applyMove(position, Move("a2"_sq, "a3"_sq));
+        position = applyMove(position, Move("a2"_sq, "a3"_sq, Move::QUIET));
         assert(position.board["a3"_sq] == Piece::BLACK_PAWN);
         assert(position.board["a2"_sq] == Piece::NONE);
         assert(position.activeColor == Color::WHITE);
@@ -476,7 +487,7 @@ void testApplyMove() {
         position.activeColor = Color::WHITE;
         position.fullmoveNumber = 1;
         position.halfmoveClock = 1;
-        position = applyMove(position, Move("a2"_sq, "b3"_sq));
+        position = applyMove(position, Move("a2"_sq, "b3"_sq, Move::CAPTURE));
         assert(position.board["b3"_sq] == Piece::WHITE_PAWN);
         assert(position.board["a2"_sq] == Piece::NONE);
         assert(position.activeColor == Color::BLACK);
@@ -490,7 +501,7 @@ void testApplyMove() {
         position.board["b1"_sq] = Piece::WHITE_KNIGHT;
         position.activeColor = Color::WHITE;
         position.halfmoveClock = 1;
-        position = applyMove(position, Move("b1"_sq, "c3"_sq));
+        position = applyMove(position, Move("b1"_sq, "c3"_sq, Move::QUIET));
         assert(position.board["c3"_sq] == Piece::WHITE_KNIGHT);
         assert(position.board["b1"_sq] == Piece::NONE);
         assert(position.activeColor == Color::BLACK);
@@ -525,7 +536,7 @@ void testIsAttacked() {
     {
         Board board = base;
         board["b2"_sq] = Piece::BLACK_ROOK;
-        applyMove(board, Move("a1"_sq, "a2"_sq));
+        applyMove(board, Move("a1"_sq, "a2"_sq, Move::QUIET));
         assert(isAttacked(board, "a2"_sq));
     }
 
@@ -534,7 +545,7 @@ void testIsAttacked() {
         Board board;
         board["a1"_sq] = Piece::WHITE_KING;
         board["b1"_sq] = Piece::BLACK_ROOK;
-        applyMove(board, Move("a1"_sq, "a2"_sq));
+        applyMove(board, Move("a1"_sq, "a2"_sq, Move::QUIET));
         assert(!isAttacked(board, blackKingSquare));
     }
 
@@ -547,6 +558,7 @@ int main() {
     testPiece();
     testPieceType();
     testColor();
+    testPromotionKind();
     testPossibleMoves();
     testPossibleCaptures();
     testOccupancy();

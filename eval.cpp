@@ -81,6 +81,7 @@ EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
 
     // Base case: if depth is zero, return the static evaluation of the position
     if (depth > maxdepth) {
+        auto currentEval = evaluateBoard(position.board);
         for (auto& [move, newPosition] : allMoves) {
             EvaluatedMove ourMove{move, false, false, evaluateBoard(newPosition.board), depth};
             if (position.activeColor == Color::BLACK) ourMove.evaluation = -ourMove.evaluation;

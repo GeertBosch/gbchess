@@ -12,6 +12,7 @@ static constexpr uint8_t kNumSquares = kNumFiles * kNumRanks;
 
 class Square {
     uint8_t _index;
+
 public:
     constexpr Square(int rank, int file) : _index(rank * kNumFiles + file) {}
     constexpr Square(int index) : _index(index) {}
@@ -50,11 +51,10 @@ inline Color operator!(Color color) {
     return color == Color::WHITE ? Color::BLACK : Color::WHITE;
 }
 
-inline Color color (char color) {
+inline Color color(char color) {
     assert(color == 'w' || color == 'b');
     return color == 'b' ? Color::BLACK : Color::WHITE;
 }
-
 
 enum class PieceType : uint8_t { PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING };
 inline constexpr uint8_t index(PieceType type) {
@@ -64,8 +64,18 @@ static constexpr uint8_t kNumPiecesTypes = index(PieceType::KING) + 1;
 
 enum class Piece : uint8_t {
     NONE,
-    WHITE_PAWN, WHITE_KNIGHT, WHITE_BISHOP, WHITE_ROOK, WHITE_QUEEN, WHITE_KING,
-    BLACK_PAWN, BLACK_KNIGHT, BLACK_BISHOP, BLACK_ROOK, BLACK_QUEEN, BLACK_KING
+    WHITE_PAWN,
+    WHITE_KNIGHT,
+    WHITE_BISHOP,
+    WHITE_ROOK,
+    WHITE_QUEEN,
+    WHITE_KING,
+    BLACK_PAWN,
+    BLACK_KNIGHT,
+    BLACK_BISHOP,
+    BLACK_ROOK,
+    BLACK_QUEEN,
+    BLACK_KING
 };
 inline constexpr uint8_t index(Piece piece) {
     return static_cast<uint8_t>(piece);
@@ -101,15 +111,47 @@ inline PieceType toPieceType(char piece) {
     return type(toPiece(piece));
 }
 
+enum class MoveKind : uint8_t {
+    // Moves that don't capture or promote
+    QUIET_MOVE = 0,
+    DOUBLE_PAWN_PUSH = 1,
+    KING_CASTLE = 2,
+    QUEEN_CASTLE = 3,
+
+    // Captures that don't promote
+    CAPTURE_MASK = 4,
+    CAPTURE = 4,
+    EN_PASSANT = 5,
+
+    // Promotions that don't capture
+    PROMOTION_MASK = 8,
+    KNIGHT_PROMOTION = 8,
+    BISHOP_PROMOTION = 9,
+    ROOK_PROMOTION = 10,
+    QUEEN_PROMOTION = 11,
+
+    // Promotions that capture
+    KNIGHT_PROMOTION_CAPTURE = 12,
+    BISHOP_PROMOTION_CAPTURE = 13,
+    ROOK_PROMOTION_CAPTURE = 14,
+    QUEEN_PROMOTION_CAPTURE = 15,
+};
+
+inline PieceType promotionType(MoveKind kind) {
+    return static_cast<PieceType>((static_cast<uint8_t>(kind) & 3) + 1);
+}
+inline MoveKind operator|(MoveKind lhs, MoveKind rhs) {
+    return static_cast<MoveKind>(static_cast<uint8_t>(lhs) | static_cast<uint8_t>(rhs));
+}
+
 struct Move {
+    static constexpr MoveKind QUIET = MoveKind::QUIET_MOVE;
+    static constexpr MoveKind CAPTURE = MoveKind::CAPTURE;
     Square from;
     Square to;
-    PieceType promotion = PieceType::PAWN;  // PAWN indicates no promotion (default)
-
-    Move() : from(Square(-1, -1)), to(Square(-1, -1)) {}
-    Move(Square fromSquare, Square toSquare) : from(fromSquare), to(toSquare) {}
-    Move(Square fromSquare, Square toSquare, PieceType promotion)
-        : from(fromSquare), to(toSquare), promotion(promotion) {}
+    MoveKind kind;
+    Move() : from(Square(-1, -1)), to(Square(-1, -1)), kind(MoveKind::QUIET_MOVE) {}
+    Move(Square from, Square to, MoveKind kind) : from(from), to(to), kind(kind) {}
 
     // String conversion operator
     operator std::string() const {
@@ -117,6 +159,8 @@ struct Move {
     }
 
     operator bool() const { return from.index() != to.index(); }
+
+    bool isPromotion() const { return kind >= MoveKind::PROMOTION_MASK; }
 };
 
 class Board {

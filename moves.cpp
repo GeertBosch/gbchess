@@ -76,12 +76,10 @@ SquareSet SquareSet::find(const Board& board, Piece piece) {
 SquareSet rookMoves(Square from) {
     SquareSet moves;
     for (int rank = 0; rank < kNumRanks; ++rank)
-        if (rank != from.rank())
-            moves.insert(Square(rank, from.file()));
+        if (rank != from.rank()) moves.insert(Square(rank, from.file()));
 
     for (int file = 0; file < kNumFiles; ++file)
-        if (file != from.file())
-            moves.insert(Square(from.rank(), file));
+        if (file != from.file()) moves.insert(Square(from.rank(), file));
 
     return moves;
 }
@@ -122,15 +120,13 @@ SquareSet kingMoves(Square from) {
 
 SquareSet whitePawnMoves(Square from) {
     SquareSet moves = SquareSet::valid(from.rank() + 1, from.file());
-    if (from.rank() == 1)
-        moves.insert(SquareSet::valid(from.rank() + 2, from.file()));
+    if (from.rank() == 1) moves.insert(SquareSet::valid(from.rank() + 2, from.file()));
     return moves;
 }
 
 SquareSet blackPawnMoves(Square from) {
     SquareSet moves = SquareSet::valid(from.rank() - 1, from.file());
-    if (from.rank() == kNumRanks - 2)
-        moves.insert(SquareSet::valid(from.rank() - 2, from.file()));
+    if (from.rank() == kNumRanks - 2) moves.insert(SquareSet::valid(from.rank() - 2, from.file()));
     return moves;
 }
 
@@ -206,15 +202,17 @@ bool clearPath(SquareSet occupancy, Square from, Square to) {
     return (occupancy & path).empty();
 }
 
-void addMove(MoveVector& moves, Piece piece, Square from, Square to) {
+void addMove(MoveVector& moves, Piece piece, Square from, Square to, MoveKind kind) {
     // If promoted, add all possible promotions
     if (type(piece) == PieceType::PAWN && (to.rank() == 0 || to.rank() == 7)) {
-        for (auto promotion :
-             {PieceType::KNIGHT, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN}) {
-            moves.emplace_back(Move{from, to, promotion});
+        for (auto promotion : {MoveKind::KNIGHT_PROMOTION,
+                               MoveKind::BISHOP_PROMOTION,
+                               MoveKind::ROOK_PROMOTION,
+                               MoveKind::QUEEN_PROMOTION}) {
+            moves.emplace_back(Move{from, to, promotion | kind});
         }
     } else {
-        moves.emplace_back(Move{from, to});
+        moves.emplace_back(Move{from, to, kind});
     }
 }
 
@@ -225,14 +223,12 @@ void findMoves(const Board& board, Color activeColor, const F& fun) {
         auto piece = board[from];
 
         // Skip if piece isn't the active color
-        if (color(piece) != activeColor)
-            continue;
+        if (color(piece) != activeColor) continue;
 
         auto possibleSquares = movesTable.moves[index(piece)][from.index()] & !occupied;
         for (auto to : possibleSquares) {
             // Check for occupied target square or moving through pieces
-            if (clearPath(occupied, from, to))
-                fun(piece, from, to);
+            if (clearPath(occupied, from, to)) fun(piece, from, to);
         }
     }
 }
@@ -244,8 +240,7 @@ void findCaptures(const Board& board, Color activeColor, const F& fun) {
         auto piece = board[from];
 
         // Check if the piece is of the active color
-        if (color(piece) != activeColor)
-            continue;
+        if (color(piece) != activeColor) continue;
 
         auto possibleSquares = movesTable.captures[index(piece)][from.index()] & occupied;
         for (auto to : possibleSquares) {
@@ -258,13 +253,13 @@ void findCaptures(const Board& board, Color activeColor, const F& fun) {
 
 void addAvailableMoves(MoveVector& moves, const Board& board, Color activeColor) {
     findMoves(board, activeColor, [&moves](Piece piece, Square from, Square to) {
-        addMove(moves, piece, from, to);
+        addMove(moves, piece, from, to, MoveKind::QUIET_MOVE);
     });
 }
 
 void addAvailableCaptures(MoveVector& captures, const Board& board, Color activeColor) {
     findCaptures(board, activeColor, [&captures](Piece piece, Square from, Square to) {
-        addMove(captures, piece, from, to);
+        addMove(captures, piece, from, to, MoveKind::CAPTURE);
     });
 }
 
@@ -273,27 +268,21 @@ void applyMove(Board& board, Move move) {
     auto& target = board[move.to];
 
     // Update the target, including promotion if applicable
-    target = move.promotion == PieceType::PAWN ? piece : addColor(move.promotion, color(piece));
+    target = move.isPromotion() ? addColor(promotionType(move.kind), color(piece)) : piece;
     piece = Piece::NONE;  // Empty the source square
 }
-
 
 CastlingMask castlingMask(Square from, Square to) {
     // Remove castling availability if a rook moves or is captured
     if (from == Position::whiteQueenSideRook || to == Position::whiteQueenSideRook)
         return CastlingMask::WHITE_QUEENSIDE;
-    if (from == "h1"_sq || to == "h1"_sq)
-        return CastlingMask::WHITE_KINGSIDE;
-    if (from == "a8"_sq || to == "a8"_sq)
-        return CastlingMask::BLACK_QUEENSIDE;
-    if (from == "h8"_sq || to == "h8"_sq)
-        return CastlingMask::BLACK_KINGSIDE;
+    if (from == "h1"_sq || to == "h1"_sq) return CastlingMask::WHITE_KINGSIDE;
+    if (from == "a8"_sq || to == "a8"_sq) return CastlingMask::BLACK_QUEENSIDE;
+    if (from == "h8"_sq || to == "h8"_sq) return CastlingMask::BLACK_KINGSIDE;
 
     // Remove castling availability if the king is moves
-    if (from == Position::whiteKing)
-        return CastlingMask::WHITE;
-    if (from == Position::blackKing)
-        return CastlingMask::BLACK;
+    if (from == Position::whiteKing) return CastlingMask::WHITE;
+    if (from == Position::blackKing) return CastlingMask::BLACK;
 
     return NONE;
 }
@@ -310,8 +299,7 @@ Position applyMove(Position position, Move move) {
     // Update enPassantTarget
     // Set the en passant target if a pawn moves two squares forward, otherwise reset it.
     position.enPassantTarget = 0;
-    if (pawnMove && abs(move.from.rank() - move.to.rank()) == 2)
-        position.enPassantTarget = move.to;
+    if (pawnMove && abs(move.from.rank() - move.to.rank()) == 2) position.enPassantTarget = move.to;
 
     // Update castlingAvailability
     position.castlingAvailability &= ~castlingMask(move.from, move.to);
@@ -319,13 +307,11 @@ Position applyMove(Position position, Move move) {
     // Update halfMoveClock
     // Reset on pawn advance or capture, else increment
     ++position.halfmoveClock;
-    if (pawnMove || capture)
-        position.halfmoveClock = 0;
+    if (pawnMove || capture) position.halfmoveClock = 0;
 
     // Update fullMoveNumber
     // Increment after black's move
-    if (position.activeColor == Color::BLACK)
-        ++position.fullmoveNumber;
+    if (position.activeColor == Color::BLACK) ++position.fullmoveNumber;
 
     // Update activeColor
     auto oldColor = position.activeColor;
@@ -336,8 +322,7 @@ Position applyMove(Position position, Move move) {
 
 bool isAttacked(const Board& board, Square square) {
     auto piece = board[square];
-    if (piece == Piece::NONE)
-        return false;  // The square is empty, so it is not attacked.
+    if (piece == Piece::NONE) return false;  // The square is empty, so it is not attacked.
 
     Color opponentColor = !color(piece);
     auto occupancy = SquareSet::occupancy(board);
@@ -345,8 +330,7 @@ bool isAttacked(const Board& board, Square square) {
         auto piece = board[from];
 
         // Check if the piece is of the opponent's color
-        if (color(piece) != opponentColor)
-            continue;
+        if (color(piece) != opponentColor) continue;
 
         auto possibleCaptureSquares = movesTable.captures[index(piece)][from.index()];
         if (possibleCaptureSquares.contains(square) && clearPath(occupancy, from, square))
@@ -357,8 +341,7 @@ bool isAttacked(const Board& board, Square square) {
 
 bool isAttacked(const Board& board, SquareSet squares) {
     for (auto square : squares) {
-        if (isAttacked(board, square))
-            return true;
+        if (isAttacked(board, square)) return true;
     }
     return false;
 }
@@ -387,25 +370,27 @@ ComputedMoveVector computeAllLegalMoves(const Position& position) {
             newKing.insert(to);
         }
 
+        auto kind = position.board[to] == Piece::NONE ? MoveKind::QUIET_MOVE : MoveKind::CAPTURE;
+        Move move = {from, to, kind};  // For now assume no promotion applies
+
         // Make a copy of the position to apply the move
-        Move move = {from, to};  // For now assume no promotion applies
         auto newPosition = applyMove(position, move);
 
         // Check if the move would result in our king being in check.
-        if (isAttacked(newPosition.board, newKing))
-            return;
+        if (isAttacked(newPosition.board, newKing)) return;
 
         // If promoted, add all possible promotions, legality is not affected
         if (type(piece) == PieceType::PAWN && (to.rank() == 0 || to.rank() == kNumRanks - 1)) {
-            for (auto promotion :
-                 {PieceType::KNIGHT, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN}) {
-                newPosition.board[to] = addColor(promotion, position.activeColor);
+            for (auto promotion : {MoveKind::KNIGHT_PROMOTION,
+                                   MoveKind::BISHOP_PROMOTION,
+                                   MoveKind::ROOK_PROMOTION,
+                                   MoveKind::QUEEN_PROMOTION}) {
+                newPosition.board[to] = addColor(promotionType(promotion), position.activeColor);
                 legalMoves.emplace_back(Move{from, to, promotion}, newPosition);
             }
         } else {
-            legalMoves.emplace_back(Move{from, to}, newPosition);
+            legalMoves.emplace_back(Move{from, to, kind}, newPosition);
         }
-
     };
 
     findCaptures(position.board, position.activeColor, addIfLegal);
