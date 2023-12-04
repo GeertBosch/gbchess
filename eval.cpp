@@ -102,12 +102,12 @@ EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
     auto opponentKing =
         SquareSet::find(position.board, addColor(PieceType::KING, !position.activeColor));
     for (auto& computedMove : allMoves) {
-
         // Recursively compute the best moves for the opponent, worst for us.
-        moves.push_back(computedMove);
         auto move = computedMove.first;
         auto& newPosition = computedMove.second;
+        moves.push_back(computedMove);
         auto opponentMove = -computeBestMove(moves, maxdepth);
+        moves.pop_back();
 
         bool mate = !opponentMove.move;  // Either checkmate or stalemate
         bool check = isAttacked(newPosition.board, opponentKing);
@@ -116,7 +116,7 @@ EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
 
         float evaluation = mate ? (check ? bestEval : drawEval) : opponentMove.evaluation;
         EvaluatedMove ourMove(
-            move, check, mate, evaluation, mate ? moves.size() - 1 : opponentMove.depth);
+            move, check, mate, evaluation, mate ? moves.size() : opponentMove.depth);
         D << indent << best << " <  " << ourMove << kind[check][mate] << " ? " << (best < ourMove)
           << std::endl;
 
@@ -125,11 +125,9 @@ EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
             D << indent << best << " => " << ourMove << std::endl;
             best = ourMove;
             if (best.check && best.mate) {
-                moves.pop_back();
-                return best;
+                break;
             }
         }
-        moves.pop_back();
     }
     return best;
 }
