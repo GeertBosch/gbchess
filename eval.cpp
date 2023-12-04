@@ -96,7 +96,7 @@ EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
         return best;
     }
 
-    // TODO: Sort moves by MVV/LVA
+    // TODO: Sort moves by Most Valuable Victim (MVV) / Least Valuable Attacker (LVA)
 
     // Recursive case: compute all legal moves and evaluate them
     auto opponentKing =

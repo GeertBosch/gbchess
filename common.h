@@ -116,25 +116,7 @@ struct Move {
         return static_cast<std::string>(from) + " " + static_cast<std::string>(to);
     }
 
-    operator bool() const {
-        return from.index() != to.index();
-    }
-
-    bool operator<(Move other) const {
-        if (from.index() < other.from.index()) {
-            return true;
-        } else if (from.index() == other.from.index()) {
-            if (to.index() < other.to.index()) {
-                return true;
-            } else if (to.index() == other.to.index()) {
-                return promotion < other.promotion;
-            } else {
-                return false;
-            }
-        } else {
-            return false;
-        }
-    }
+    operator bool() const { return from.index() != to.index(); }
 };
 
 class Board {
