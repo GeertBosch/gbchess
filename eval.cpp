@@ -88,6 +88,17 @@ float evaluateBoard(const Board& board) {
     return value / 100.0f;
 }
 
+bool improveMove(EvaluatedMove& best, const EvaluatedMove& ourMove) {
+    auto indent = debug ? std::string(ourMove.depth * 4 - 4, ' ') : "";
+    bool improved = best < ourMove;
+    D << indent << best << " <  " << ourMove << " @ " << ourMove.depth << " ? " << improved << "\n";
+
+    if (!improved) return false;
+
+    D << indent << best << " => " << ourMove << std::endl;
+    best = ourMove;
+    return ourMove.mate && ourMove.check;
+}
 
 EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
     auto position = moves.back().second;
@@ -107,15 +118,8 @@ EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
             if (position.activeColor == Color::BLACK) newEval = -newEval;
             newEval += moveValues[index(move.kind)];
             EvaluatedMove ourMove{move, false, false, newEval, depth};
-            D << indent << best << " <  " << ourMove << " @ " << ourMove.depth << " ? "
-              << (best < ourMove) << std::endl;
-            if (best < ourMove) {
-                D << indent << best << " => " << ourMove << std::endl;
-
-                best = ourMove;
-            }
+            improveMove(best, ourMove);
         }
-        D << indent << position.activeColor << " " << best << std::endl;
         return best;
     }
 
@@ -140,17 +144,8 @@ EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
         float evaluation = mate ? (check ? bestEval : drawEval) : opponentMove.evaluation;
         EvaluatedMove ourMove(
             move, check, mate, evaluation, mate ? moves.size() : opponentMove.depth);
-        D << indent << best << " <  " << ourMove << kind[check][mate] << " ? " << (best < ourMove)
-          << std::endl;
-
-        // Update the best move if the opponent's move is better than our current best.
-        if (best < ourMove) {
-            D << indent << best << " => " << ourMove << std::endl;
-            best = ourMove;
-            if (best.check && best.mate) {
-                break;
-            }
-        }
+        if (improveMove(best, ourMove))
+            break;
     }
     return best;
 }
