@@ -136,6 +136,10 @@ enum class MoveKind : uint8_t {
     ROOK_PROMOTION_CAPTURE = 14,
     QUEEN_PROMOTION_CAPTURE = 15,
 };
+inline constexpr uint8_t index(MoveKind kind) {
+    return static_cast<uint8_t>(kind);
+}
+static constexpr uint8_t kNumMoveKinds = index(MoveKind::QUEEN_PROMOTION_CAPTURE) + 1;
 
 inline PieceType promotionType(MoveKind kind) {
     return static_cast<PieceType>((static_cast<uint8_t>(kind) & 3) + 1);

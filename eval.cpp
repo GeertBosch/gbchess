@@ -59,14 +59,31 @@ static std::array<int16_t, kNumPieces> pieceValues = {
     -900,  // Black queen
     0,     // Not counting the black king
 };
+// Values of moves, in addition to the value of the piece captured, in centipawns
+static std::array<int16_t, kNumMoveKinds> moveValues = {
+    0,    //  0 Quiet move
+    0,    //  1 Double pawn push
+    0,    //  2 King castle
+    0,    //  3 Queen castle
+    0,    //  4 Capture
+    0,    //  5 En passant
+    0,    //  6 (unused)
+    0,    //  7 (unused)
+    300,  //  8 Knight promotion
+    300,  //  9 Bishop promotion
+    500,  // 10 Rook promotion
+    900,  // 11 Queen promotion
+    300,  // 12 Knight promotion capture
+    300,  // 13 Bishop promotion capture
+    500,  // 14 Rook promotion capture
+    900,  // 15 Queen promotion capture
+};
 
 uint64_t evalCount = 0;
 float evaluateBoard(const Board& board) {
     int32_t value = 0;
 
-    ++evalCount;
-    for (auto piece : board.squares())
-        value += pieceValues[static_cast<uint8_t>(piece)];
+    for (auto piece : board.squares()) value += pieceValues[index(piece)];
 
     return value / 100.0f;
 }
@@ -83,8 +100,13 @@ EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
     if (depth > maxdepth) {
         auto currentEval = evaluateBoard(position.board);
         for (auto& [move, newPosition] : allMoves) {
-            EvaluatedMove ourMove{move, false, false, evaluateBoard(newPosition.board), depth};
-            if (position.activeColor == Color::BLACK) ourMove.evaluation = -ourMove.evaluation;
+            ++evalCount;
+            auto newEval = currentEval;
+            if (move.kind >= MoveKind::CAPTURE)
+                newEval -= pieceValues[index(newPosition.board[move.to])];
+            if (position.activeColor == Color::BLACK) newEval = -newEval;
+            newEval += moveValues[index(move.kind)];
+            EvaluatedMove ourMove{move, false, false, newEval, depth};
             D << indent << best << " <  " << ourMove << " @ " << ourMove.depth << " ? "
               << (best < ourMove) << std::endl;
             if (best < ourMove) {
