@@ -168,7 +168,8 @@ struct Move {
 };
 
 class Board {
-    std::array<Piece, kNumSquares> _squares;
+    using Squares = std::array<Piece, kNumSquares>;
+    Squares _squares;
 
     // The minimal space required is 64 bits for occupied squares (8 bytes), plus 5 bits for white
     // king pos, plus 5 bits for black king, plus 30 * log2(10) = 100 bits for identification of the
@@ -184,6 +185,10 @@ public:
     Piece& operator[](Square sq) { return _squares[sq.index()]; }
     const Piece operator[](Square sq) const { return _squares[sq.index()]; }
     const auto& squares() const { return _squares; }
+
+    using iterator = Squares::iterator;
+    iterator begin() { return _squares.begin(); }
+    iterator end() { return _squares.end(); }
 };
 
 enum CastlingMask : uint8_t {
@@ -224,7 +229,7 @@ struct Position {
 
     Board board;
     Color activeColor;
-    uint8_t castlingAvailability;
+    uint8_t castlingAvailability; // Bitmask of CastlingMask
     Square enPassantTarget = 0;  // 0 indicates no en passant target
     uint8_t halfmoveClock;    // If the clock is used, we'll draw at 100, well before it overflows
     uint16_t fullmoveNumber;  // >65,535 moves is a lot of moves

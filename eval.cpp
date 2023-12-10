@@ -1,14 +1,14 @@
 #include <algorithm>
 #include <iostream>
+#include <random>
 #include <string>
 
 #include "eval.h"
 #include "moves.h"
 
 constexpr bool debug = 0;
-#define D      \
-    if (debug) \
-    std::cerr
+#define D \
+    if (debug) std::cerr
 
 std::ostream& operator<<(std::ostream& os, Move mv) {
     return os << std::string(mv);
@@ -33,8 +33,7 @@ std::ostream& operator<<(std::ostream& os, const ComputedMoveVector& moves) {
 }
 
 EvaluatedMove::operator std::string() const {
-    if (!move)
-        return "none";
+    if (!move) return "none";
     std::stringstream ss;
     const char* kind[2][2] = {{"", "="}, {"+", "#"}};  // {{check, mate}, {check, mate}}
     ss << move;
@@ -42,6 +41,95 @@ EvaluatedMove::operator std::string() const {
     ss << " " << evaluation << " @ " << depth;
     return ss.str();
 }
+
+// Implement a hashing method for chess positions using Zobrist hashing
+// https://en.wikipedia.org/wiki/Zobrist_hashing This relies just on the number of locations
+// ("squares") and number of pieces, where we assume piece 0 to be "no piece". The hash allows for
+// efficient incremental updating of the hash value when a move is made.
+
+// 1 for black to move, 1 for each castling right, 8 for en passant file
+static constexpr int kNumExtraVectors = 24;
+static constexpr int kNumBoardVectors = kNumPieces * kNumSquares;
+static constexpr int kNumHashVectors = kNumBoardVectors + kNumExtraVectors;
+
+// A random 64-bit integer for each piece on each square, as well as the extra vectors. The first
+// piece is None, but it is not omitted here, as it allows removing a hard-to-predict branch in the
+// hash function.
+static std::array<uint64_t, kNumHashVectors> hashVectors = []() {
+    std::array<uint64_t, kNumHashVectors> vectors;
+    std::ranlux48 gen(0xbad5eed5'bad5eed5);
+    for (auto& v : vectors) v = gen();
+    return vectors;
+}();
+
+// A Hash is a 64-bit integer that represents a position. It is the XOR of the hash vectors for
+// each piece on each square, as well as the applicable extra vectors.
+class Hash {
+    uint64_t hash = 0;
+
+public:
+    enum ExtraVectors {
+        BLACK_TO_MOVE = kNumBoardVectors + 0,
+        CASTLING_1 = kNumBoardVectors + 1,
+        CASTLING_15 = kNumBoardVectors + 15,
+        EN_PASSANT_A = kNumBoardVectors + 16,
+        EN_PASSANT_H = kNumBoardVectors + 23,
+    };
+
+    Hash() = default;
+    Hash(Position position) {
+        int location = 0;
+        for (auto square : SquareSet::occupancy(position.board))
+            toggle(position.board[square], square.index());
+        if (position.activeColor == Color::BLACK) toggle(BLACK_TO_MOVE);
+        if (position.castlingAvailability)
+            toggle(ExtraVectors(CASTLING_1 - 1 + position.castlingAvailability));
+        if (position.enPassantTarget.index())
+            toggle(ExtraVectors(position.enPassantTarget.file() + EN_PASSANT_A));
+    }
+
+    uint64_t operator()() { return hash; }
+
+    void move(Piece piece, int from, int to) {
+        toggle(piece, from);
+        toggle(piece, to);
+    }
+    void capture(Piece piece, Piece target, int from, int to) {
+        toggle(piece, from);
+        toggle(target, to);
+        toggle(piece, to);
+    }
+
+    // Use toggle to add/remove a piece or non piece/location vector.
+    void toggle(Piece piece, int location) { toggle(index(piece) * kNumSquares + location); }
+    void toggle(int vector) { hash ^= hashVectors[vector]; }
+    void toggle(ExtraVectors extra) { toggle(kNumBoardVectors + int(extra)); }
+};
+
+struct HashTable {
+    static constexpr int kNumEntries = 1 << 20;
+    static constexpr int kNumBits = 20;
+    static constexpr int kNumMask = kNumEntries - 1;
+
+    struct Entry {
+        Hash hash;
+        EvaluatedMove move;
+    };
+
+    std::array<Entry, kNumEntries> entries;
+
+    EvaluatedMove* find(Hash hash) {
+        auto& entry = entries[hash() & kNumMask];
+        if (entry.hash() == hash()) return &entry.move;
+        return nullptr;
+    }
+
+    void insert(Hash hash, EvaluatedMove move) {
+        auto& entry = entries[hash() & kNumMask];
+        entry.hash = hash;
+        entry.move = move;
+    }
+} hashTable;
 
 // Values of pieces, in centipawns
 static std::array<int16_t, kNumPieces> pieceValues = {
@@ -80,6 +168,7 @@ static std::array<int16_t, kNumMoveKinds> moveValues = {
 };
 
 uint64_t evalCount = 0;
+uint64_t cacheCount = 0;
 float evaluateBoard(const Board& board) {
     int32_t value = 0;
 
@@ -123,6 +212,14 @@ EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
         return best;
     }
 
+    Hash hash(position);
+    auto cachedMove = hashTable.find(hash);
+    if (cachedMove) {
+        ++cacheCount;
+        D << indent << "cached " << *cachedMove << std::endl;
+        return *cachedMove;
+    }
+
     // TODO: Sort moves by Most Valuable Victim (MVV) / Least Valuable Attacker (LVA)
 
     // Recursive case: compute all legal moves and evaluate them
@@ -144,8 +241,9 @@ EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
         float evaluation = mate ? (check ? bestEval : drawEval) : opponentMove.evaluation;
         EvaluatedMove ourMove(
             move, check, mate, evaluation, mate ? moves.size() : opponentMove.depth);
-        if (improveMove(best, ourMove))
-            break;
+        if (improveMove(best, ourMove)) break;
     }
+    // Cache the best move for this position
+    hashTable.insert(hash, best);
     return best;
 }

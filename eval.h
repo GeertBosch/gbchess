@@ -43,6 +43,7 @@ struct EvaluatedMove {
 };
 
 extern uint64_t evalCount;
+extern uint64_t cacheCount;
 
 /**
  * This function iterates over each square in the board, uses the pieceValues map to find

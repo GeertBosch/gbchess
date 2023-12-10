@@ -20,16 +20,19 @@ template <typename F>
 void printEvalRate(const F& fun) {
     auto startTime = std::chrono::high_resolution_clock::now();
     auto startEvals = evalCount;
+    auto startCache = cacheCount;
     fun();
     auto endTime = std::chrono::high_resolution_clock::now();
     auto endEvals = evalCount;
+    auto endCache = cacheCount;
 
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
     auto evals = endEvals - startEvals;
+    auto cached = endCache - startCache;
     auto evalRate = evals / (duration.count() / 1000'000.0);  // evals per second
 
-    std::cerr << evals << " evals in " << duration.count() / 1000 << " ms @ " << evalRate / 1000.0
-              << "K evals/sec" << std::endl;
+    std::cerr << evals << " evals, " << cached << " cached in " << duration.count() / 1000
+              << " ms @ " << evalRate / 1000.0 << "K evals/sec" << std::endl;
 }
 
 void printAvailableMoves(const Position& position) {
