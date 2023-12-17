@@ -171,13 +171,13 @@ class Board {
     using Squares = std::array<Piece, kNumSquares>;
     Squares _squares;
 
-    // The minimal space required is 64 bits for occupied squares (8 bytes), plus 5 bits for white
-    // king pos, plus 5 bits for black king, plus 30 * log2(10) = 100 bits for identification of the
+    // The minimal space required is 64 bits for occupied squares (8 bytes), plus 6 bits for white
+    // king pos, plus 6 bits for black king, plus 30 * log2(10) = 102 bits for identification of the
     // pieces, which would be 21 bytes. For practical purposes, we can just use 4 bits per piece and
     // avoid the special king encoding, so we'd end up with 8 bytes for the occupied squares and
-    // 32*4 = 128 bits for the pieces, which would be 24 bytes in total.
-    // The question is whether the advantage of having the occupancy bitset available outweighs the
-    // disadvantage of having to do the bit twiddling to get the piece type and color.
+    // 32*4 = 128 bits for the pieces, which would be 24 bytes in total. The question is whether the
+    // advantage of having the occupancy bitset available outweighs the disadvantage of having to do
+    // the bit twiddling to get the piece type and color.
 
 public:
     Board() { _squares.fill(Piece::NONE); }
@@ -185,6 +185,7 @@ public:
     Piece& operator[](Square sq) { return _squares[sq.index()]; }
     const Piece operator[](Square sq) const { return _squares[sq.index()]; }
     const auto& squares() const { return _squares; }
+    bool operator==(const Board& other) const { return _squares == other._squares; }
 
     using iterator = Squares::iterator;
     iterator begin() { return _squares.begin(); }
@@ -211,21 +212,21 @@ inline CastlingMask operator~(CastlingMask lhs) {
 struct Position {
     // Base positions of pieces involved in castling
     static constexpr auto whiteQueenSideRook = "a1"_sq;
-    static constexpr auto whiteKing = "d1"_sq;
+    static constexpr auto whiteKing = "e1"_sq;
     static constexpr auto whiteKingSideRook = "h1"_sq;
-    static constexpr auto blackQueenSideRook = "a7"_sq;
-    static constexpr auto blackKing = "d7"_sq;
-    static constexpr auto blackKingSideRook = "h7"_sq;
+    static constexpr auto blackQueenSideRook = "a8"_sq;
+    static constexpr auto blackKing = "e8"_sq;
+    static constexpr auto blackKingSideRook = "h8"_sq;
 
     // Positions of castled pieces
     static constexpr auto whiteRookCastledQueenSide = "c1"_sq;
     static constexpr auto whiteRookCastledKingSide = "f1"_sq;
     static constexpr auto whiteKingCastledQueenSide = "b1"_sq;
     static constexpr auto whiteKingCastledKingSide = "g1"_sq;
-    static constexpr auto blackQueenSideRookCastled = "c7"_sq;
-    static constexpr auto blackKingSideRookCastled = "f7"_sq;
-    static constexpr auto blackKingCastledQueenSide = "b7"_sq;
-    static constexpr auto blackKingCastledKingSide = "b7"_sq;
+    static constexpr auto blackRookCastledQueenSide = "c8"_sq;
+    static constexpr auto blackRookCastledKingSide = "f8"_sq;
+    static constexpr auto blackKingCastledQueenSide = "b8"_sq;
+    static constexpr auto blackKingCastledKingSide = "b8"_sq;
 
     Board board;
     Color activeColor;

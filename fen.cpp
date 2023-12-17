@@ -26,7 +26,8 @@ Board parsePiecePlacement(const std::string& piecePlacement) {
     return board;
 }
 
-Position parseFEN(const std::string& fen) {
+namespace fen {
+Position parsePosition(const std::string& fen) {
     std::stringstream ss(fen);
     Position position;
     std::string piecePlacementStr;
@@ -34,31 +35,24 @@ Position parseFEN(const std::string& fen) {
     std::string castlingAvailabilityStr;
     std::string enPassantTargetStr;
     std::string halfmoveClockStr;
+    std::string fullmoveNumberStr;
 
     // Read piece placement from the FEN string
     std::getline(ss, piecePlacementStr, ' ');
     position.board = parsePiecePlacement(piecePlacementStr);
 
     // Read other components of the FEN string
-    ss >> activeColorStr >> castlingAvailabilityStr >> enPassantTargetStr >>
-        position.halfmoveClock >> position.fullmoveNumber;
+    ss >> activeColorStr >> castlingAvailabilityStr >> enPassantTargetStr >> halfmoveClockStr >>
+        fullmoveNumberStr;
 
     position.activeColor = activeColorStr == "b" ? Color::BLACK : Color::WHITE;
-
+    position.castlingAvailability = CastlingMask::NONE;
     for (char ch : castlingAvailabilityStr) {
         switch (ch) {
-            case 'K':
-                position.castlingAvailability |= CastlingMask::WHITE_KINGSIDE;
-                break;
-            case 'Q':
-                position.castlingAvailability |= CastlingMask::WHITE_QUEENSIDE;
-                break;
-            case 'k':
-                position.castlingAvailability |= CastlingMask::BLACK_KINGSIDE;
-                break;
-            case 'q':
-                position.castlingAvailability |= CastlingMask::BLACK_QUEENSIDE;
-                break;
+        case 'K': position.castlingAvailability |= CastlingMask::WHITE_KINGSIDE; break;
+        case 'Q': position.castlingAvailability |= CastlingMask::WHITE_QUEENSIDE; break;
+        case 'k': position.castlingAvailability |= CastlingMask::BLACK_KINGSIDE; break;
+        case 'q': position.castlingAvailability |= CastlingMask::BLACK_QUEENSIDE; break;
         }
     }
 
@@ -68,8 +62,12 @@ Position parseFEN(const std::string& fen) {
         position.enPassantTarget = Square{rank, file};
     }
 
+    position.halfmoveClock = std::stoi(halfmoveClockStr);
+    position.fullmoveNumber = std::stoi(fullmoveNumberStr);
+
     return position;
 }
+}  // namespace fen
 
 std::string toString(const Board& board) {
     std::stringstream fen;

@@ -3,13 +3,10 @@
 std::string toString(const Board& board);
 std::ostream& operator<<(std::ostream& os, const Board& board);
 
-/**
- * @brief Parses the piece placement string of a FEN notation and returns a Board object.
- *
- * @param piecePlacement The piece placement string of a FEN notation.
- * @return Board The Board object representing the parsed FEN notation.
- */
-Board parsePiecePlacement(const std::string& piecePlacement);
+namespace fen {
+static constexpr auto emptyPiecePlacement = "8/8/8/8/8/8/8/8";
+static constexpr auto initialPiecePlacement = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
+static constexpr auto initialPosition = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 /**
  * Parses a FEN string and returns the corresponding Position object.
@@ -17,4 +14,14 @@ Board parsePiecePlacement(const std::string& piecePlacement);
  * @param fen The FEN string to parse.
  * @return The Position object corresponding to the given FEN string.
  */
-Position parseFEN(const std::string& fen);
+Position parsePosition(const std::string& fen);
+
+}  // namespace fen
+
+/**
+ * @brief Parses the piece placement string of a FEN notation and returns a Board object.
+ *
+ * @param piecePlacement The piece placement string of a FEN notation.
+ * @return Board The Board object representing the parsed FEN notation.
+ */
+Board parsePiecePlacement(const std::string& piecePlacement);

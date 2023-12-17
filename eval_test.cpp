@@ -85,7 +85,7 @@ void testFromStdIn(int depth) {
 
         // Parse the FEN string into a Position
         std::cerr << fen << std::endl;
-        Position position = parseFEN(fen);
+        Position position = fen::parsePosition(fen);
         auto startTime = std::chrono::high_resolution_clock::now();
 
         // Print the board in grid notation
@@ -138,7 +138,7 @@ int main(int argc, char* argv[]) {
     int depth = std::stoi(argv[2]);
 
     // Parse the FEN string into a Position
-    Position position = parseFEN(fen);
+    Position position = fen::parsePosition(fen);
 
     // Print the board in grid notation
     printBoard(std::cout, position.board);
