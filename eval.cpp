@@ -82,8 +82,8 @@ public:
         for (auto square : SquareSet::occupancy(position.board))
             toggle(position.board[square], square.index());
         if (position.activeColor == Color::BLACK) toggle(BLACK_TO_MOVE);
-        if (position.castlingAvailability)
-            toggle(ExtraVectors(CASTLING_1 - 1 + position.castlingAvailability));
+        if (position.castlingAvailability != CastlingMask::NONE)
+            toggle(ExtraVectors(CASTLING_1 - 1 + uint8_t(position.castlingAvailability)));
         if (position.enPassantTarget.index())
             toggle(ExtraVectors(position.enPassantTarget.file() + EN_PASSANT_A));
     }

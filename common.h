@@ -192,7 +192,7 @@ public:
     iterator end() { return _squares.end(); }
 };
 
-enum CastlingMask : uint8_t {
+enum class CastlingMask : uint8_t {
     NONE = 0,
     WHITE_KINGSIDE = 1,
     WHITE_QUEENSIDE = 2,
@@ -203,7 +203,10 @@ enum CastlingMask : uint8_t {
     ALL = WHITE | BLACK,
 };
 inline CastlingMask operator&=(CastlingMask& lhs, CastlingMask rhs) {
-    return lhs = static_cast<CastlingMask>(lhs & rhs);
+    return lhs = CastlingMask(uint8_t(lhs) & uint8_t(rhs));
+}
+inline CastlingMask operator|=(CastlingMask& lhs, CastlingMask rhs) {
+    return lhs = CastlingMask(uint8_t(lhs) | uint8_t(rhs));
 }
 inline CastlingMask operator~(CastlingMask lhs) {
     return static_cast<CastlingMask>(~static_cast<uint8_t>(lhs));
@@ -230,7 +233,7 @@ struct Position {
 
     Board board;
     Color activeColor;
-    uint8_t castlingAvailability; // Bitmask of CastlingMask
+    CastlingMask castlingAvailability;  // Bitmask of CastlingMask
     Square enPassantTarget = 0;  // 0 indicates no en passant target
     uint8_t halfmoveClock;    // If the clock is used, we'll draw at 100, well before it overflows
     uint16_t fullmoveNumber;  // >65,535 moves is a lot of moves

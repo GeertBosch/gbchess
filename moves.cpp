@@ -15,7 +15,7 @@ struct MovesTable {
 
     // precomputed paths from each square to each other square
     SquareSet paths[kNumSquares][kNumSquares];  // from, to
-                                                //
+
     MovesTable();
 } movesTable;
 
@@ -273,18 +273,20 @@ void applyMove(Board& board, Move move) {
 }
 
 CastlingMask castlingMask(Square from, Square to) {
+    using P = Position;
+    using CM = CastlingMask;
+
     // Remove castling availability if a rook moves or is captured
-    if (from == Position::whiteQueenSideRook || to == Position::whiteQueenSideRook)
-        return CastlingMask::WHITE_QUEENSIDE;
-    if (from == "h1"_sq || to == "h1"_sq) return CastlingMask::WHITE_KINGSIDE;
-    if (from == "a8"_sq || to == "a8"_sq) return CastlingMask::BLACK_QUEENSIDE;
-    if (from == "h8"_sq || to == "h8"_sq) return CastlingMask::BLACK_KINGSIDE;
+    if (from == P::whiteQueenSideRook || to == P::whiteQueenSideRook) return CM::WHITE_QUEENSIDE;
+    if (from == P::whiteKingSideRook || to == P::whiteKingSideRook) return CM::WHITE_KINGSIDE;
+    if (from == P::blackQueenSideRook || to == P::blackQueenSideRook) return CM::BLACK_QUEENSIDE;
+    if (from == P::blackKingSideRook || to == P::blackKingSideRook) return CM::BLACK_KINGSIDE;
 
     // Remove castling availability if the king is moves
-    if (from == Position::whiteKing) return CastlingMask::WHITE;
-    if (from == Position::blackKing) return CastlingMask::BLACK;
+    if (from == P::whiteKing) return CM::WHITE;
+    if (from == P::blackKing) return CM::BLACK;
 
-    return NONE;
+    return CM::NONE;
 }
 
 Position applyMove(Position position, Move move) {
