@@ -159,7 +159,7 @@ struct Move {
 
     // String conversion operator
     operator std::string() const {
-        return static_cast<std::string>(from) + " " + static_cast<std::string>(to);
+        return static_cast<std::string>(from) + static_cast<std::string>(to);
     }
 
     operator bool() const { return from.index() != to.index(); }
@@ -229,7 +229,7 @@ struct Position {
     static constexpr auto blackRookCastledQueenSide = "c8"_sq;
     static constexpr auto blackRookCastledKingSide = "f8"_sq;
     static constexpr auto blackKingCastledQueenSide = "b8"_sq;
-    static constexpr auto blackKingCastledKingSide = "b8"_sq;
+    static constexpr auto blackKingCastledKingSide = "g8"_sq;
 
     Board board;
     Color activeColor;
