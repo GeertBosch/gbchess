@@ -164,6 +164,10 @@ struct Move {
 
     operator bool() const { return from.index() != to.index(); }
 
+    bool operator==(Move other) {
+        return (from == other.from) && (to == other.to) && (kind == other.kind);
+    }
+
     bool isPromotion() const { return kind >= MoveKind::PROMOTION_MASK; }
 };
 
@@ -234,7 +238,7 @@ struct Position {
     Board board;
     Color activeColor;
     CastlingMask castlingAvailability;  // Bitmask of CastlingMask
-    Square enPassantTarget = 0;  // 0 indicates no en passant target
+    Square enPassantTarget = 0;         // 0 indicates no en passant target
     uint8_t halfmoveClock;    // If the clock is used, we'll draw at 100, well before it overflows
     uint16_t fullmoveNumber;  // >65,535 moves is a lot of moves
 };

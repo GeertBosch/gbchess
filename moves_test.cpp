@@ -2,6 +2,7 @@
 #include <cassert>
 #include <iostream>
 
+#include "fen.h"
 #include "moves.h"
 
 std::string toString(SquareSet squares) {
@@ -195,13 +196,13 @@ void testPossibleCaptures() {
 
     // Pawn tests (White Pawn)
     moves = possibleCaptures(Piece::WHITE_PAWN, {4, 4});
-    assert(moves.contains({3, 3}));
-    assert(moves.contains({3, 5}));
+    assert(moves.contains({5, 3}));
+    assert(moves.contains({5, 5}));
 
     // Pawn tests (Black Pawn)
     moves = possibleCaptures(Piece::BLACK_PAWN, {4, 4});
-    assert(moves.contains({5, 3}));
-    assert(moves.contains({5, 5}));
+    assert(moves.contains({3, 3}));
+    assert(moves.contains({3, 5}));
 
     std::cout << "All possibleCaptures tests passed!" << std::endl;
 }
@@ -342,6 +343,10 @@ void testAddAvailableMoves() {
     }
 
     std::cout << "All addAvailableMoves tests passed!" << std::endl;
+}
+
+void testAddAvailableCaptures() {
+    // TODO: Add test cases, including en passant
 }
 
 void testApplyMove() {
@@ -552,6 +557,34 @@ void testIsAttacked() {
     std::cout << "All isAttacked tests passed!" << std::endl;
 }
 
+MoveVector justMoves(const ComputedMoveVector& computed) {
+    MoveVector result;
+    for (auto& [move, position] : computed) {
+        result.push_back(move);
+    }
+    return result;
+}
+
+std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
+    os << "[";
+    for (const auto& move : moves) {
+        if (move) os << std::string(move) << ", ";
+    }
+    os << "]";
+    return os;
+}
+
+void testAllLegalMoves() {
+    {
+        auto position =
+            fen::parsePosition("rnbqkbnr/pppppp1p/8/6p1/7P/8/PPPPPPP1/RNBQKBNR w KQkq - 0 2");
+        auto legalMoves = allLegalMoves(position);
+        assert(legalMoves.size() == 22);
+    }
+
+    std::cout << "All allLegalMoves tests passed!" << std::endl;
+}
+
 int main() {
     testSquare();
     testSquareSet();
@@ -563,8 +596,10 @@ int main() {
     testPossibleCaptures();
     testOccupancy();
     testAddAvailableMoves();
+    testAddAvailableCaptures();
     testApplyMove();
     testIsAttacked();
+    testAllLegalMoves();
     std::cout << "All move tests passed!" << std::endl;
     return 0;
 }

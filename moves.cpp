@@ -153,11 +153,11 @@ SquareSet possibleCaptures(Piece piece, Square from) {
     switch (piece) {
     case Piece::NONE: break;
     case Piece::WHITE_PAWN:                                        // White Pawn
-        return SquareSet::valid(from.rank() - 1, from.file() - 1)  // Diagonal left
-            | SquareSet::valid(from.rank() - 1, from.file() + 1);  // Diagonal right
-    case Piece::BLACK_PAWN:                                        // Black Pawn
         return SquareSet::valid(from.rank() + 1, from.file() - 1)  // Diagonal left
             | SquareSet::valid(from.rank() + 1, from.file() + 1);  // Diagonal right
+    case Piece::BLACK_PAWN:                                        // Black Pawn
+        return SquareSet::valid(from.rank() - 1, from.file() - 1)  // Diagonal left
+            | SquareSet::valid(from.rank() - 1, from.file() + 1);  // Diagonal right
     case Piece::WHITE_KNIGHT:
     case Piece::BLACK_KNIGHT: return knightMoves(from);
     case Piece::WHITE_BISHOP:
@@ -233,7 +233,7 @@ void findMoves(const Board& board, Color activeColor, const F& fun) {
     }
 }
 
-template <typename F>
+template <typename F, bool debug = false>
 void findCaptures(const Board& board, Color activeColor, const F& fun) {
     auto occupied = SquareSet::occupancy(board);
     for (auto from : occupied) {
@@ -357,7 +357,7 @@ bool isAttacked(const Board& board, SquareSet squares) {
  * @return A map where each key is a legal move and the corresponding value is the new chess
  *         position resulting from that move.
  */
-ComputedMoveVector computeAllLegalMoves(const Position& position) {
+ComputedMoveVector allLegalMoves(const Position& position) {
     ComputedMoveVector legalMoves;
 
     auto ourKing = addColor(PieceType::KING, position.activeColor);

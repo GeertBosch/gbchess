@@ -65,3 +65,10 @@ float evaluateBoard(const Board& board);
  * @return A map of moves to their evaluation score.
  */
 EvaluatedMove computeBestMove(ComputedMoveVector& moves, int depth);
+
+/**
+ *  a debugging function to walk the move generation tree of strictly legal moves to count all the
+ *  leaf nodes of a certain depth, which can be compared to predetermined values and used to isolate
+ *  bugs. (See https://www.chessprogramming.org/Perft)
+ */
+uint64_t perft(Position position, int depth);

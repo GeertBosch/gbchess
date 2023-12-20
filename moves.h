@@ -68,18 +68,12 @@ public:
             return Square(__builtin_ctzll(_squares));  // Count trailing zeros
         }
         bool operator==(const iterator& other) { return _squares == other._squares; }
-        bool operator!=(const iterator& other) {
-                return !(_squares == other._squares);
-        }
+        bool operator!=(const iterator& other) { return !(_squares == other._squares); }
     };
 
-    iterator begin() {
-        return {*this};
-    }
+    iterator begin() { return {*this}; }
 
-    iterator end() {
-        return SquareSet();
-    }
+    iterator end() { return SquareSet(); }
 };
 
 using MoveVector = std::vector<Move>;
@@ -137,7 +131,7 @@ SquareSet possibleCaptures(Piece piece, Square from);
  * @return A map where each key is a legal move and the corresponding value is the new chess
  *         position resulting from that move.
  */
-ComputedMoveVector computeAllLegalMoves(const Position& position);
+ComputedMoveVector allLegalMoves(const Position& position);
 
 bool isAttacked(const Board& board, Square square);
 bool isAttacked(const Board& board, SquareSet squares);
@@ -153,3 +147,8 @@ void applyMove(Board& board, Move move);
  * en passant target, halfmove clock, and fullmove number).
  */
 [[nodiscard]] Position applyMove(Position position, Move move);
+
+/**
+ *  Returns the castling mask for the castling rights cancelled by the given move.
+ */
+CastlingMask castlingMask(Square from, Square to);
