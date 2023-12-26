@@ -355,9 +355,6 @@ void testAddAvailableEnPassant() {
         MoveVector moves;
         addAvailableEnPassant(moves, board, Color::BLACK, "b3"_sq);
         assert(moves.size() == 1);
-        for (auto& move : moves) {
-            std::cout << move << std::endl;
-        }
         assert(moves[0] == Move("a4"_sq, "b3"_sq, MoveKind::EN_PASSANT));
     }
     std::cout << "All addAvailableEnPassant tests passed!" << std::endl;
@@ -525,6 +522,21 @@ void testApplyMove() {
         assert(position.board["b1"_sq] == Piece::NONE);
         assert(position.activeColor == Color::BLACK);
         assert(position.halfmoveClock == 2);
+    }
+
+    // Test en passant capture
+    {
+        Position position;
+        position.board["a5"_sq] = Piece::WHITE_PAWN;
+        position.board["b5"_sq] = Piece::BLACK_PAWN;
+        position.activeColor = Color::WHITE;
+        position.enPassantTarget = "b6"_sq;
+        position.halfmoveClock = 1;
+        position = applyMove(position, Move("a5"_sq, "b6"_sq, MoveKind::EN_PASSANT));
+        assert(position.board["b6"_sq] == Piece::WHITE_PAWN);
+        assert(position.board["b5"_sq] == Piece::NONE);
+        assert(position.activeColor == Color::BLACK);
+        assert(position.halfmoveClock == 0);
     }
 
     std::cout << "All applyMove tests passed!" << std::endl;

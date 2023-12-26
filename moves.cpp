@@ -371,6 +371,11 @@ void addAvailableEnPassant(MoveVector& captures,
 void applyMove(Board& board, Move move) {
     auto& piece = board[move.from];
     auto& target = board[move.to];
+    if (type(piece) == PieceType::PAWN && target == Piece::NONE &&
+        move.from.file() != move.to.file()) {
+        // En passant capture
+        board[Square{move.from.rank(), move.to.file()}] = Piece::NONE;
+    }
 
     // Update the target, including promotion if applicable
     target = move.isPromotion() ? addColor(promotionType(move.kind), color(piece)) : piece;
