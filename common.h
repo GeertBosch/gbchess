@@ -206,6 +206,12 @@ enum class CastlingMask : uint8_t {
     BLACK = BLACK_KINGSIDE | BLACK_QUEENSIDE,
     ALL = WHITE | BLACK,
 };
+inline CastlingMask operator&(CastlingMask lhs, CastlingMask rhs) {
+    return CastlingMask(uint8_t(lhs) & uint8_t(rhs));
+}
+inline CastlingMask operator|(CastlingMask lhs, CastlingMask rhs) {
+    return CastlingMask(uint8_t(lhs) | uint8_t(rhs));
+}
 inline CastlingMask operator&=(CastlingMask& lhs, CastlingMask rhs) {
     return lhs = CastlingMask(uint8_t(lhs) & uint8_t(rhs));
 }
@@ -217,6 +223,16 @@ inline CastlingMask operator~(CastlingMask lhs) {
 }
 
 struct Position {
+    // File indices for standard castling, not chess960
+    static const int kQueenSideRookFile = 0;
+    static const int kKingSideRookFile = kNumFiles - 1;
+    static const int kKingFile = kNumFiles / 2;
+
+    static const int kRookCastledQueenSideFile = 3;
+    static const int kKingCastledQueenSideFile = 2;
+    static const int kRookCastledKingSideFile = kNumFiles - 3;
+    static const int kKingCastledKingSideFile = kNumFiles - 2;
+
     // Base positions of pieces involved in castling
     static constexpr auto whiteQueenSideRook = "a1"_sq;
     static constexpr auto whiteKing = "e1"_sq;
@@ -235,10 +251,13 @@ struct Position {
     static constexpr auto blackKingCastledQueenSide = "b8"_sq;
     static constexpr auto blackKingCastledKingSide = "g8"_sq;
 
+    // Square to indicate no enpassant target
+    static constexpr auto noEnPassantTarget = Square(0);
+
     Board board;
     Color activeColor;
     CastlingMask castlingAvailability;  // Bitmask of CastlingMask
-    Square enPassantTarget = 0;         // 0 indicates no en passant target
+    Square enPassantTarget = noEnPassantTarget;
     uint8_t halfmoveClock;    // If the clock is used, we'll draw at 100, well before it overflows
     uint16_t fullmoveNumber;  // >65,535 moves is a lot of moves
 };

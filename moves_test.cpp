@@ -349,6 +349,20 @@ void testAddAvailableCaptures() {
     // TODO: Add test cases, including en passant
 }
 
+void testAddAvailableEnPassant() {
+    {
+        Board board = parsePiecePlacement("rnbqkbnr/1ppppppp/8/8/pP6/P1P5/3PPPPP/RNBQKBNR");
+        MoveVector moves;
+        addAvailableEnPassant(moves, board, Color::BLACK, "b3"_sq);
+        assert(moves.size() == 1);
+        for (auto& move : moves) {
+            std::cout << move << std::endl;
+        }
+        assert(moves[0] == Move("a4"_sq, "b3"_sq, MoveKind::EN_PASSANT));
+    }
+    std::cout << "All addAvailableEnPassant tests passed!" << std::endl;
+}
+
 void testApplyMove() {
     // Test pawn move
     {
@@ -597,6 +611,7 @@ int main() {
     testOccupancy();
     testAddAvailableMoves();
     testAddAvailableCaptures();
+    testAddAvailableEnPassant();
     testApplyMove();
     testIsAttacked();
     testAllLegalMoves();

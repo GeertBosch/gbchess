@@ -20,6 +20,9 @@ public:
 
     SquareSet() = default;
 
+    /**
+     * Returns the set of squares between two squares, exclusive of the `to` square.
+     */
     static SquareSet path(Square from, Square to);
 
     /**
@@ -45,11 +48,14 @@ public:
 
     bool empty() const { return _squares == 0; }
     size_t size() const { return __builtin_popcountll(_squares); }
-    size_t contains(Square square) const { return (_squares >> square.index()) & 1; }
+    bool contains(Square square) const { return (_squares >> square.index()) & 1; }
 
     SquareSet operator&(SquareSet other) const { return _squares & other._squares; }
     SquareSet operator|(SquareSet other) const { return _squares | other._squares; }
     SquareSet operator!(void) const { return ~_squares; }
+
+    SquareSet operator|=(SquareSet other) { return _squares |= other._squares; }
+    SquareSet operator&=(SquareSet other) { return _squares &= other._squares; }
 
     bool operator==(SquareSet other) const { return _squares == other._squares; }
 
@@ -81,6 +87,11 @@ using ComputedMove = std::pair<Move, Position>;
 using ComputedMoveVector = std::vector<ComputedMove>;
 
 /**
+ * Returns the set of squares that needs to be empty for castling to be legal.
+ */
+SquareSet castlingPath(Color color, MoveKind side);
+
+/**
  * This availableMoves function iterates over each square on the board. If a piece of the active
  * color is found, it calculates its possible moves using the possibleMoves function you already
  * have. For each possible destination square, it checks if the move would target an occupied square
@@ -96,6 +107,11 @@ void addAvailableMoves(MoveVector& moves, const Board& board, Color activeColor)
  * set.
  */
 void addAvailableCaptures(MoveVector& captures, const Board& board, Color activeColor);
+
+void addAvailableEnPassant(MoveVector& captures,
+                           const Board& board,
+                           Color activeColor,
+                           Square enPassantTarget);
 
 /**
  * Calculates all possible moves for a given chess piece on the board.

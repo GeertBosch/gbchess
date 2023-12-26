@@ -25,5 +25,5 @@ puzzles: eval-test puzzles.in puzzles.expected
 test: fen-test moves-test eval-test perft
 	./fen-test
 	./moves-test
-	./perft 4 197281
+	./perft 5 4865609
 	./eval-test "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 5

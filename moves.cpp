@@ -16,6 +16,12 @@ struct MovesTable {
     // precomputed paths from each square to each other square
     SquareSet paths[kNumSquares][kNumSquares];  // from, to
 
+    // precomputed squares required to be clear for castling
+    SquareSet castlingClear[2][index(MoveKind::QUEEN_CASTLE) + 1];  // color, moveKind
+
+    // precomputed from squares for en passant targets
+    SquareSet enPassantFrom[2][kNumFiles];  // color, file
+
     MovesTable();
 } movesTable;
 
@@ -30,6 +36,17 @@ MovesTable::MovesTable() {
         for (int to = 0; to < kNumSquares; ++to) {
             paths[from][to] = SquareSet::path(Square(from), Square(to));
         }
+    }
+    for (int color = 0; color < 2; ++color) {
+        int fromRank = color == 0 ? kNumRanks - 4 : 3;  // skipping 3 ranks from either side
+        for (int fromFile = 0; fromFile < kNumFiles; ++fromFile) {
+            enPassantFrom[color][fromFile] = {SquareSet::valid(fromRank, fromFile - 1) |
+                                              SquareSet::valid(fromRank, fromFile + 1)};
+        }
+        castlingClear[color][index(MoveKind::QUEEN_CASTLE)] =
+            castlingPath(Color(color), MoveKind::QUEEN_CASTLE);
+        castlingClear[color][index(MoveKind::KING_CASTLE)] =
+            castlingPath(Color(color), MoveKind::KING_CASTLE);
     }
 }
 
@@ -197,6 +214,31 @@ SquareSet SquareSet::path(Square from, Square to) {
     return path;
 }
 
+SquareSet castlingPath(Color color, MoveKind side) {
+    SquareSet path;
+    int rank = color == Color::WHITE ? 0 : kNumRanks - 1;
+
+    if (side == MoveKind::QUEEN_CASTLE) {
+        // Note the paths are reversed, so the start point is excluded and the endpoint included.
+        path |= SquareSet::path(Square(rank, Position::kKingCastledQueenSideFile),
+                                Square(rank, Position::kKingFile));
+        path |= SquareSet::path(Square(rank, Position::kRookCastledQueenSideFile),
+                                Square(rank, Position::kQueenSideRookFile));
+    } else {
+        assert(side == MoveKind::KING_CASTLE);
+        // Note the paths are reversed, so the start point is excluded and the endpoint included.
+        path |= SquareSet::path(Square(rank, Position::kKingCastledKingSideFile),
+                                Square(rank, Position::kKingFile));
+        path |= SquareSet::path(Square(rank, Position::kRookCastledKingSideFile),
+                                Square(rank, Position::kKingSideRookFile));
+    }
+
+    // Explicitly exclude the king's and rook's starting square for chess960
+    path.erase(Square(rank, Position::kKingFile));
+    path.erase(Square(rank, Position::kKingSideRookFile));
+    return path;
+}
+
 bool clearPath(SquareSet occupancy, Square from, Square to) {
     auto path = movesTable.paths[from.index()][to.index()];
     return (occupancy & path).empty();
@@ -233,7 +275,36 @@ void findMoves(const Board& board, Color activeColor, const F& fun) {
     }
 }
 
-template <typename F, bool debug = false>
+template <typename F>
+void findCastles(const Board& board, Color activeColor, CastlingMask mask, const F& fun) {
+    auto occupied = SquareSet::occupancy(board);
+    if (activeColor == Color::WHITE) {
+        if ((mask & CastlingMask::WHITE_KINGSIDE) != CastlingMask::NONE) {
+            auto path = movesTable.castlingClear[0][index(MoveKind::KING_CASTLE)];
+            if ((occupied & path).empty())
+                fun(Piece::WHITE_KING, Position::whiteKing, Position::whiteKingSideRook);
+        }
+        if ((mask & CastlingMask::WHITE_QUEENSIDE) != CastlingMask::NONE) {
+            auto path = movesTable.castlingClear[0][index(MoveKind::QUEEN_CASTLE)];
+            if ((occupied & path).empty())
+                fun(Piece::WHITE_KING, Position::whiteKing, Position::whiteQueenSideRook);
+        }
+    } else {
+        assert(activeColor == Color::BLACK);
+        if ((mask & CastlingMask::BLACK_KINGSIDE) != CastlingMask::NONE) {
+            auto path = movesTable.castlingClear[1][index(MoveKind::KING_CASTLE)];
+            if ((occupied & path).empty())
+                fun(Piece::BLACK_KING, Position::blackKing, Position::blackKingSideRook);
+        }
+        if ((mask & CastlingMask::BLACK_QUEENSIDE) != CastlingMask::NONE) {
+            auto path = movesTable.castlingClear[1][index(MoveKind::QUEEN_CASTLE)];
+            if ((occupied & path).empty())
+                fun(Piece::BLACK_KING, Position::blackKing, Position::blackQueenSideRook);
+        }
+    }
+}
+
+template <typename F>
 void findCaptures(const Board& board, Color activeColor, const F& fun) {
     auto occupied = SquareSet::occupancy(board);
     for (auto from : occupied) {
@@ -251,6 +322,30 @@ void findCaptures(const Board& board, Color activeColor, const F& fun) {
     }
 }
 
+template <typename F>
+void findEnPassant(const Board& board, Color activeColor, Square enPassantTarget, const F& fun) {
+    if (enPassantTarget != Position::noEnPassantTarget) {
+        if (false)
+            std::cout << "En passant target: " << std::string(enPassantTarget) << " (rank "
+                      << enPassantTarget.rank() << ")" << std::endl;
+        assert((activeColor == Color::WHITE && enPassantTarget.rank() == 5) ||
+               (activeColor == Color::BLACK && enPassantTarget.rank() == 2));
+        // For a given en passant target, there are two potential from squares. If either or
+        // both have a pawn of the active color, then capture is possible.
+        auto pawn = activeColor == Color::WHITE ? Piece::WHITE_PAWN : Piece::BLACK_PAWN;
+        for (auto from : movesTable.enPassantFrom[int(activeColor)][enPassantTarget.file()]) {
+            // std::cout << "trying from square " << std::string(from) << std::endl;
+            if (board[from] == pawn) {
+                if (false)
+                    std::cout << "En passant from " << std::string(from) << " to "
+                              << std::string(enPassantTarget) << " (" << to_string(activeColor)
+                              << ")" << std::endl;
+                fun(pawn, from, enPassantTarget);
+            }
+        }
+    }
+}
+
 void addAvailableMoves(MoveVector& moves, const Board& board, Color activeColor) {
     findMoves(board, activeColor, [&moves](Piece piece, Square from, Square to) {
         addMove(moves, piece, from, to, MoveKind::QUIET_MOVE);
@@ -261,6 +356,16 @@ void addAvailableCaptures(MoveVector& captures, const Board& board, Color active
     findCaptures(board, activeColor, [&captures](Piece piece, Square from, Square to) {
         addMove(captures, piece, from, to, MoveKind::CAPTURE);
     });
+}
+
+void addAvailableEnPassant(MoveVector& captures,
+                           const Board& board,
+                           Color activeColor,
+                           Square enPassantTarget) {
+    findEnPassant(
+        board, activeColor, enPassantTarget, [&captures](Piece piece, Square from, Square to) {
+            addMove(captures, piece, from, to, MoveKind::EN_PASSANT);
+        });
 }
 
 void applyMove(Board& board, Move move) {
@@ -300,9 +405,13 @@ Position applyMove(Position position, Move move) {
 
     // Update enPassantTarget
     // Set the en passant target if a pawn moves two squares forward, otherwise reset it.
-    position.enPassantTarget = 0;
-    if (pawnMove && abs(move.from.rank() - move.to.rank()) == 2) position.enPassantTarget = move.to;
-
+    position.enPassantTarget = Position::noEnPassantTarget;
+    if (pawnMove && abs(move.from.rank() - move.to.rank()) == 2) {
+        position.enPassantTarget = {(move.from.rank() + move.to.rank()) / 2, move.from.file()};
+        if (false)
+            std::cout << "Setting en passant target: " << std::string(position.enPassantTarget)
+                      << std::endl;
+    }
     // Update castlingAvailability
     position.castlingAvailability &= ~castlingMask(move.from, move.to);
 
@@ -396,6 +505,7 @@ ComputedMoveVector allLegalMoves(const Position& position) {
     };
 
     findCaptures(position.board, position.activeColor, addIfLegal);
+    findEnPassant(position.board, position.activeColor, position.enPassantTarget, addIfLegal);
     findMoves(position.board, position.activeColor, addIfLegal);
 
     return legalMoves;
