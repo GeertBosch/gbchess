@@ -5,6 +5,7 @@
 
 #include "common.h"
 
+namespace fen {
 Board parsePiecePlacement(const std::string& piecePlacement) {
     Board board;
 
@@ -26,7 +27,6 @@ Board parsePiecePlacement(const std::string& piecePlacement) {
     return board;
 }
 
-namespace fen {
 Position parsePosition(const std::string& fen) {
     std::stringstream ss(fen);
     Position position;
@@ -67,9 +67,8 @@ Position parsePosition(const std::string& fen) {
 
     return position;
 }
-}  // namespace fen
 
-std::string toString(const Board& board) {
+std::string to_string(const Board& board) {
     std::stringstream fen;
     for (int rank = 7; rank >= 0; --rank) {  // Start from the 8th rank and go downwards
         int emptyCount = 0;                  // Count of consecutive empty squares
@@ -94,7 +93,15 @@ std::string toString(const Board& board) {
     return fen.str();
 }
 
-std::ostream& operator<<(std::ostream& os, const Board& board) {
-    os << toString(board);
-    return os;
+std::string to_string(const Position& position) {
+    std::stringstream fen;
+    fen << to_string(position.board) << " ";
+    fen << to_string(position.activeColor) << " ";
+    fen << to_string(position.castlingAvailability) << " ";
+    fen << (position.enPassantTarget.index() ? std::string(position.enPassantTarget) : "-") << " ";
+    fen << (int)position.halfmoveClock << " ";
+    fen << position.fullmoveNumber;
+    return fen.str();
 }
+
+}  // namespace fen

@@ -221,6 +221,14 @@ inline CastlingMask operator|=(CastlingMask& lhs, CastlingMask rhs) {
 inline CastlingMask operator~(CastlingMask lhs) {
     return static_cast<CastlingMask>(~static_cast<uint8_t>(lhs));
 }
+inline std::string to_string(CastlingMask mask) {
+    std::string str = "";
+    if ((mask & CastlingMask::WHITE_KINGSIDE) != CastlingMask::NONE) str += "K";
+    if ((mask & CastlingMask::WHITE_QUEENSIDE) != CastlingMask::NONE) str += "Q";
+    if ((mask & CastlingMask::BLACK_KINGSIDE) != CastlingMask::NONE) str += "k";
+    if ((mask & CastlingMask::BLACK_QUEENSIDE) != CastlingMask::NONE) str += "q";
+    return str;
+}
 
 struct Position {
     // File indices for standard castling, not chess960
