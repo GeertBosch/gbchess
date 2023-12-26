@@ -13,6 +13,7 @@ void perftWithDivide(Position position, int depth, int expectedCount) {
         uint64_t count;
     };
     std::vector<Division> divisions;
+    std::cout << "Fen: " << fen::to_string(position) << std::endl;
 
     auto startTime = std::chrono::high_resolution_clock::now();
     for (auto& [move, newPosition] : allLegalMoves(position)) {
@@ -43,6 +44,16 @@ bool maybeFEN(const std::string& str) {
     return str.find('/') != std::string::npos;
 }
 
+bool maybeMove(const std::string& str) {
+    return !maybeFEN(str) && str[0] >= 'a' && str[0] <= 'h' && str[1] >= '1' && str[1] <= '8' &&
+        str[2] >= 'a' && str[2] <= 'h' && str[3] >= '1' && str[3] <= '8';
+}
+
+Move parseMove(const std::string& str) {
+    return Move(
+        Square(str[1] - '1', str[0] - 'a'), Square(str[3] - '1', str[2] - 'a'), Move::QUIET);
+}
+
 int main(int argc, char** argv) {
 
     std::vector<Position> positions;
@@ -51,6 +62,19 @@ int main(int argc, char** argv) {
         positions.push_back(fen::parsePosition(argv[1]));
         argv++;
         argc--;
+        if (argc > 2 && std::string(argv[1]) == "moves") {
+            argv++;
+            argc--;
+        }
+        while (argc >= 2 && maybeMove(argv[1])) {
+            Move move = parseMove(argv[1]);
+            auto pos = applyMove(positions.back(), move);
+            std::cout << "applied move " << static_cast<std::string>(move) << std::endl;
+            positions.pop_back();
+            positions.push_back(pos);
+            argv++;
+            argc--;
+        }
     }
 
     if (positions.empty()) {
