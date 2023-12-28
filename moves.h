@@ -56,6 +56,7 @@ public:
 
     SquareSet operator|=(SquareSet other) { return _squares |= other._squares; }
     SquareSet operator&=(SquareSet other) { return _squares &= other._squares; }
+    SquareSet operator^=(SquareSet other) { return _squares ^= other._squares; }
 
     bool operator==(SquareSet other) const { return _squares == other._squares; }
 
@@ -114,6 +115,16 @@ void addAvailableEnPassant(MoveVector& captures,
                            Square enPassantTarget);
 
 /**
+ * This function adds castling moves to the result set. It checks if the active color has
+ * castling rights, and if so, whether the path for castling is unobstructed. It does not check
+ * for legality in terms of check conditions.
+ */
+void addAvailableCastling(MoveVector& moves,
+                          const Board& board,
+                          Color activeColor,
+                          CastlingMask castlingAvailability);
+
+/**
  * Calculates all possible moves for a given chess piece on the board.
  * This function does not account for the legality of the move in terms of check conditions,
  * but merely provides possible moves based on the movement rules for each piece type.
@@ -149,8 +160,12 @@ SquareSet possibleCaptures(Piece piece, Square from);
  */
 ComputedMoveVector allLegalMoves(const Position& position);
 
-bool isAttacked(const Board& board, Square square);
-bool isAttacked(const Board& board, SquareSet squares);
+/**
+ * Returns true if the given square is attacked by a piece of the given opponent color.
+ */
+
+bool isAttacked(const Board& board, Square square, Color opponentColor);
+bool isAttacked(const Board& board, SquareSet squares, Color opponentColor);
 
 /**
  * Updates the board with the given move, which may be a capture.

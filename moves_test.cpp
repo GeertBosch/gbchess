@@ -360,6 +360,25 @@ void testAddAvailableEnPassant() {
     std::cout << "All addAvailableEnPassant tests passed!" << std::endl;
 }
 
+void testAddAvailableCastling() {
+    {
+        Board board = fen::parsePiecePlacement("r3k2r/8/8/8/8/8/8/R3K2R");
+        MoveVector moves;
+        addAvailableCastling(moves, board, Color::WHITE, CastlingMask::ALL);
+        assert(moves.size() == 2);
+        assert(moves[0] == Move("e1"_sq, "g1"_sq, MoveKind::KING_CASTLE));
+        assert(moves[1] == Move("e1"_sq, "c1"_sq, MoveKind::QUEEN_CASTLE));
+    }
+    {
+        Board board = fen::parsePiecePlacement("rn1qkbnr/2pppppp/bp6/p7/4P3/5N2/PPPP1PPP/RNBQK2R");
+        MoveVector moves;
+        addAvailableCastling(moves, board, Color::WHITE, CastlingMask::ALL);
+        assert(moves.size() == 1);  // We'll still find the castling move, even though it's illegal
+        assert(moves[0] == Move("e1"_sq, "g1"_sq, MoveKind::KING_CASTLE));
+    }
+    std::cout << "All addAvailableCastling tests passed!" << std::endl;
+}
+
 void testApplyMove() {
     // Test pawn move
     {
@@ -553,8 +572,8 @@ void testIsAttacked() {
     {
         Board board = base;
         board["b1"_sq] = Piece::BLACK_ROOK;
-        assert(isAttacked(board, whiteKingSquare));
-        assert(!isAttacked(board, blackKingSquare));
+        assert(isAttacked(board, whiteKingSquare, Color::BLACK));
+        assert(!isAttacked(board, blackKingSquare, Color::BLACK));
     }
 
     // Test that a king is not in check
@@ -568,7 +587,7 @@ void testIsAttacked() {
         Board board = base;
         board["b2"_sq] = Piece::BLACK_ROOK;
         applyMove(board, Move("a1"_sq, "a2"_sq, Move::QUIET));
-        assert(isAttacked(board, "a2"_sq));
+        assert(isAttacked(board, "a2"_sq, Color::BLACK));
     }
 
     // Test that a king is not in check after a move
@@ -577,7 +596,15 @@ void testIsAttacked() {
         board["a1"_sq] = Piece::WHITE_KING;
         board["b1"_sq] = Piece::BLACK_ROOK;
         applyMove(board, Move("a1"_sq, "a2"_sq, Move::QUIET));
-        assert(!isAttacked(board, blackKingSquare));
+        assert(!isAttacked(board, blackKingSquare, Color::BLACK));
+    }
+
+    // Test that this method also works for an empty square
+    {
+        Board board;
+        board["e1"_sq] = Piece::WHITE_KING;
+        board["f2"_sq] = Piece::BLACK_ROOK;
+        assert(isAttacked(board, "f1"_sq, Color::BLACK));
     }
 
     std::cout << "All isAttacked tests passed!" << std::endl;
@@ -607,6 +634,12 @@ void testAllLegalMoves() {
         auto legalMoves = allLegalMoves(position);
         assert(legalMoves.size() == 22);
     }
+    {
+        auto position =
+            fen::parsePosition("rn1qkbnr/2pppppp/bp6/p7/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4");
+        auto legalMoves = allLegalMoves(position);
+        assert(legalMoves.size() == 23);
+    }
 
     std::cout << "All allLegalMoves tests passed!" << std::endl;
 }
@@ -624,6 +657,7 @@ int main() {
     testAddAvailableMoves();
     testAddAvailableCaptures();
     testAddAvailableEnPassant();
+    testAddAvailableCastling();
     testApplyMove();
     testIsAttacked();
     testAllLegalMoves();

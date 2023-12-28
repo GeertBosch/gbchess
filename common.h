@@ -47,13 +47,17 @@ inline std::string to_string(Color color) {
     return color == Color::WHITE ? "w" : "b";
 }
 
-inline Color operator!(Color color) {
+constexpr Color operator!(Color color) {
     return color == Color::WHITE ? Color::BLACK : Color::WHITE;
 }
 
-inline Color color(char color) {
+constexpr Color color(char color) {
     assert(color == 'w' || color == 'b');
     return color == 'b' ? Color::BLACK : Color::WHITE;
+}
+
+constexpr uint8_t baseRank(Color color) {
+    return color == Color::WHITE ? 0 : kNumRanks - 1;
 }
 
 enum class PieceType : uint8_t { PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING };
@@ -83,16 +87,16 @@ inline constexpr uint8_t index(Piece piece) {
 static constexpr uint8_t kNumPieces = index(Piece::BLACK_KING) + 1;
 static const std::string pieceChars = ".PNBRQKpnbrqk";
 
-inline PieceType type(Piece piece) {
+constexpr PieceType type(Piece piece) {
     return static_cast<PieceType>((index(piece) - 1) % kNumPiecesTypes);
 }
 
-inline Piece addColor(PieceType type, Color color) {
+constexpr Piece addColor(PieceType type, Color color) {
     return static_cast<Piece>(static_cast<uint8_t>(type) +
                               (color == Color::WHITE ? 0 : kNumPiecesTypes) + 1);
 }
 
-inline Color color(Piece piece) {
+constexpr Color color(Piece piece) {
     return piece <= Piece::WHITE_KING ? Color::WHITE : Color::BLACK;
 }
 
@@ -229,6 +233,39 @@ inline std::string to_string(CastlingMask mask) {
     if ((mask & CastlingMask::BLACK_QUEENSIDE) != CastlingMask::NONE) str += "q";
     return str;
 }
+
+struct CastlingInfo {
+    const Piece rook;
+    const Piece king;
+    const CastlingMask kingSideMask;
+    const CastlingMask queenSideMask;
+    const Square rookFromKingSide;
+    const Square rookToKingSide;
+    const Square rookFromQueenSide;
+    const Square rookToQueenSide;
+    const Square kingFrom;
+    const Square kingToKingSide;
+    const Square kingToQueenSide;
+
+    constexpr CastlingInfo(Color color)
+        : rook(addColor(PieceType::ROOK, color)),
+          king(addColor(PieceType::KING, color)),
+          kingSideMask(color == Color::WHITE ? CastlingMask::WHITE_KINGSIDE
+                                             : CastlingMask::BLACK_KINGSIDE),
+          queenSideMask(color == Color::WHITE ? CastlingMask::WHITE_QUEENSIDE
+                                              : CastlingMask::BLACK_QUEENSIDE),
+          rookFromKingSide(Square(baseRank(color), kNumFiles - 1)),
+          rookToKingSide(Square(baseRank(color), kNumFiles - 3)),
+          rookFromQueenSide(Square(baseRank(color), 0)),
+          rookToQueenSide(Square(baseRank(color), 3)),
+          kingFrom(Square(baseRank(color), kNumFiles / 2)),
+          kingToKingSide(Square(baseRank(color), kNumFiles - 2)),
+          kingToQueenSide(Square(baseRank(color), 2)){};
+};
+
+static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::WHITE),
+                                                 CastlingInfo(Color::BLACK)};
+
 
 struct Position {
     // File indices for standard castling, not chess960

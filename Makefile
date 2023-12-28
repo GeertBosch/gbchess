@@ -27,3 +27,5 @@ test: fen-test moves-test eval-test perft
 	./moves-test
 	./perft 5 4865609
 	./eval-test "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 5
+	@echo Final perft test
+	./perft "rnbqkbnr/1ppppppp/B7/p7/4P3/8/PPPP1PPP/RNBQK1NR b KQkq - 1 2" 4 509448

@@ -36,6 +36,10 @@ perftdiff() {
 		fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 	fi
 	moves=""
+	if [ "$1" == "moves" ] ; then
+		echo "skipping $1."
+		shift
+	fi
 	if (($# > 1)) ; then
 		moves="moves"
 		while (($# > 1)) ; do
