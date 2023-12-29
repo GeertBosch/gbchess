@@ -49,9 +49,29 @@ bool maybeMove(const std::string& str) {
         str[2] >= 'a' && str[2] <= 'h' && str[3] >= '1' && str[3] <= '8';
 }
 
-Move parseMove(const std::string& str) {
-    return Move(
-        Square(str[1] - '1', str[0] - 'a'), Square(str[3] - '1', str[2] - 'a'), Move::QUIET);
+Move parseMove(const Board& board, const std::string& str) {
+    assert(str.length() >= 4);
+    auto from = Square(str[1] - '1', str[0] - 'a');
+    auto to = Square(str[3] - '1', str[2] - 'a');
+    auto piece = board[from];
+    auto kind = MoveKind::QUIET_MOVE;
+
+    if (board[to] != Piece::NONE) {
+        kind = MoveKind::CAPTURE;
+    }
+
+    if (piece == Piece::WHITE_PAWN || piece == Piece::BLACK_PAWN) {
+        if (std::abs(to.rank() - from.rank()) == 2) kind = MoveKind::DOUBLE_PAWN_PUSH;
+        if (to.file() != from.file() && board[to] == Piece::NONE) kind = MoveKind::EN_PASSANT;
+    }
+    if (piece == Piece::WHITE_KING || piece == Piece::BLACK_KING) {
+        if (to.file() - from.file() == 2)
+            kind = MoveKind::KING_CASTLE;
+        else if (from.file() - to.file() == 2)
+            kind = MoveKind::QUEEN_CASTLE;
+    }
+
+    return Move(Square(str[1] - '1', str[0] - 'a'), Square(str[3] - '1', str[2] - 'a'), kind);
 }
 
 int main(int argc, char** argv) {
@@ -67,7 +87,7 @@ int main(int argc, char** argv) {
             argc--;
         }
         while (argc >= 2 && maybeMove(argv[1])) {
-            Move move = parseMove(argv[1]);
+            Move move = parseMove(positions.back().board, argv[1]);
             auto pos = applyMove(positions.back(), move);
             std::cout << "applied move " << static_cast<std::string>(move) << std::endl;
             positions.pop_back();

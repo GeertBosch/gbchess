@@ -376,6 +376,15 @@ void testAddAvailableCastling() {
         assert(moves.size() == 1);  // We'll still find the castling move, even though it's illegal
         assert(moves[0] == Move("e1"_sq, "g1"_sq, MoveKind::KING_CASTLE));
     }
+    {
+        Board board = fen::parsePiecePlacement(
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/1R2K2R b Kkq - 1 1");
+        MoveVector moves;
+        addAvailableCastling(
+            moves, board, Color::BLACK, CastlingMask::WHITE | CastlingMask::BLACK_QUEENSIDE);
+        assert(moves.size() == 1);
+        assert(moves[0] == Move("e8"_sq, "c8"_sq, MoveKind::QUEEN_CASTLE));
+    }
     std::cout << "All addAvailableCastling tests passed!" << std::endl;
 }
 
@@ -635,11 +644,32 @@ void testAllLegalMoves() {
         assert(legalMoves.size() == 22);
     }
     {
+        // Can't castle the king through check
         auto position =
             fen::parsePosition("rn1qkbnr/2pppppp/bp6/p7/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4");
         auto legalMoves = allLegalMoves(position);
         assert(legalMoves.size() == 23);
     }
+    {
+        // Can't castle a king that is in check
+        auto position =
+            fen::parsePosition("r1bqkbnr/pppppppp/8/1B6/4P3/8/PPnPNPPP/RNBQK2R w KQkq - 0 4");
+        auto legalMoves = allLegalMoves(position);
+        assert(std::count_if(legalMoves.begin(), legalMoves.end(), [](auto item) {
+                   return item.first == Move{"e1"_sq, "g1"_sq, MoveKind::KING_CASTLE};
+               }) == 0);
+        assert(legalMoves.size() == 2);
+    }
+    {
+        // This king can castle queen side
+        auto position = fen::parsePosition(
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/1R2K2R b Kkq - 1 1");
+        auto legalMoves = allLegalMoves(position);
+        assert(std::count_if(legalMoves.begin(), legalMoves.end(), [](auto item) {
+                   return item.first == Move{"e8"_sq, "c8"_sq, MoveKind::QUEEN_CASTLE};
+               }) == 1);
+    }
+
 
     std::cout << "All allLegalMoves tests passed!" << std::endl;
 }

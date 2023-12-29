@@ -9,6 +9,9 @@ apply() {
 	if [ "$fen" == "startpos" ] ; then
 		fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 	fi
+	if [ "$1" == "moves" ] ; then
+		shift;
+	fi
 	moves="moves"
 	while (($#)) ; do
 		moves="$moves $1"

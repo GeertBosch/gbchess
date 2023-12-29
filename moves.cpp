@@ -286,7 +286,7 @@ void findCastles(const Board& board, Color activeColor, CastlingMask mask, const
             fun(info.king, info.kingFrom, info.kingToKingSide, MoveKind::KING_CASTLE);
     }
     if ((mask & info.queenSideMask) != CastlingMask::NONE) {
-        auto path = movesTable.castlingClear[0][index(MoveKind::QUEEN_CASTLE)];
+        auto path = movesTable.castlingClear[color][index(MoveKind::QUEEN_CASTLE)];
         if ((occupied & path).empty())
             fun(info.king, info.kingFrom, info.kingToQueenSide, MoveKind::QUEEN_CASTLE);
     }
@@ -541,11 +541,12 @@ ComputedMoveVector allLegalMoves(const Position& position) {
         // If we move the king, reflect that in the king squares
         auto newKing = oldKing;
         if (piece == ourKing) {
-            newKing.erase(from);
-            newKing.insert(to);
 
             if (kind == MoveKind::KING_CASTLE || kind == MoveKind::QUEEN_CASTLE)
                 newKing |= movesTable.paths[from.index()][to.index()];
+            else
+                newKing.erase(from);
+            newKing.insert(to);
         }
 
         Move move = {from, to, kind};  // For now assume no promotion applies
@@ -554,11 +555,13 @@ ComputedMoveVector allLegalMoves(const Position& position) {
         auto newPosition = applyMove(position, move);
 
         // Check if the move would result in our king being in check.
-        if (isAttacked(newPosition.board, newKing, newPosition.activeColor)) return;
-        if (0 && piece == ourKing && kind == MoveKind::KING_CASTLE) {
-            std::cout << "King castle: " << std::string(from) << " to " << std::string(to)
-                      << " is not attacked on " << toString(newKing) << std::endl;
+        bool attacked = isAttacked(newPosition.board, newKing, newPosition.activeColor);
+        if (piece == ourKing && kind == MoveKind::QUEEN_CASTLE) {
+            std::cout << "Queen castle: " << std::string(from) << " to " << std::string(to)
+                      << " is " << (attacked ? "" : "not ") << "attacked on " << toString(newKing)
+                      << std::endl;
         }
+        if (attacked) return;
 
         // If promoted, add all possible promotions, legality is not affected
         if (type(piece) == PieceType::PAWN && (to.rank() == 0 || to.rank() == kNumRanks - 1)) {
