@@ -53,6 +53,7 @@ MovesTable::MovesTable() {
 /**
  * Returns the bits corresponding to the bytes in the input that contain the nibble.
  * Note: nibble is assumed to be at most 4 bits.
+ * The implementation really finds everything unequal and then inverts the result.
  */
 uint64_t equalSet(uint64_t input, uint8_t nibble) {
     const uint64_t occupancyNibbles = 0x80402010'08040201ull;  // high nibbles to indicate occupancy
@@ -65,7 +66,7 @@ uint64_t equalSet(uint64_t input, uint8_t nibble) {
     input += input >> 8;
     input += (input >> 28);  // Merge in the high nibbel from the high word
     input &= 0xffull;
-    input ^= 0xffull;
+    input ^= 0xffull;  // Invert to get the bits that are equal
     return input;
 }
 
@@ -82,8 +83,49 @@ uint64_t equalSet(std::array<Piece, 64> squares, Piece piece, bool invert) {
     return invert ? ~set : set;
 }
 
+/**
+ * Returns the bits corresponding to the bytes in the input that are less than the nibble.
+ * Note: nibble is assumed to be at most 4 bits and not zero.
+ * The implementation really finds everything greater than or equal and then inverts the result.
+ */
+uint64_t lessSet(uint64_t input, uint8_t nibble) {
+    nibble = 0x10 - nibble;  // The amount to add to overflow into the high nibble for >=
+    input += 0x01010101'01010101ull * nibble;  // broadcast to all bytes
+    input += 0x70301000'70301000ull;           // Cause overflow in the right bits
+    input &= 0x80402010'80402010ull;           // These are them, the 8 occupancy bits
+    input >>= 4;                               // The low nibbles is where the action is
+    input += input >> 16;
+    input += input >> 8;
+    input += (input >> 28);  // Merge in the high nibbel from the high word
+    input &= 0xffull;
+    input ^= 0xffull;  // Invert to get the bits that are less
+    return input;
+}
+
+/**
+ *  Returns the bits corresponding to the bytes in the input that are less than the piece.
+ */
+uint64_t lessSet(std::array<Piece, 64> squares, Piece piece, bool invert) {
+    static_assert(kNumPieces <= 16, "Piece must fit in 4 bits");
+    if (!int(piece)) return invert ? 0xffffffffffffffffull : 0;  // Special case for empty squares
+
+    uint64_t set = 0;
+    for (int j = 0; j < sizeof(squares); j += sizeof(uint64_t)) {
+        uint64_t input;
+        memcpy(&input, &squares[j], sizeof(input));
+        set |= lessSet(input, static_cast<uint8_t>(piece)) << j;
+    }
+
+    return invert ? ~set : set;
+}
+
 SquareSet SquareSet::occupancy(const Board& board) {
     return equalSet(board.squares(), Piece::NONE, true);
+}
+
+SquareSet SquareSet::occupancy(const Board& board, Color color) {
+    bool black = color == Color::BLACK;
+    return lessSet(board.squares(), black ? Piece::BLACK_PAWN : Piece::NONE, black);
 }
 
 SquareSet SquareSet::find(const Board& board, Piece piece) {
@@ -485,16 +527,12 @@ Position applyMove(Position position, Move move) {
     return position;
 }
 
-bool isAttacked(const Board& board, Square square, Color opponentColor) {
+bool isAttacked(const Board& board, Square square, SquareSet opponentSquares) {
     // We're using this function to find out if empty squares are attacked for determining
     // legality of castling, so the code below is incorrect.
     auto occupancy = SquareSet::occupancy(board);
-    for (Square from : occupancy) {
+    for (Square from : opponentSquares) {
         auto piece = board[from];
-
-        // Check if the piece is of the opponent's color
-        if (color(piece) != opponentColor) continue;
-
         auto possibleCaptureSquares = movesTable.captures[index(piece)][from.index()];
         if (possibleCaptureSquares.contains(square) && clearPath(occupancy, from, square))
             return true;
@@ -502,9 +540,9 @@ bool isAttacked(const Board& board, Square square, Color opponentColor) {
     return false;
 }
 
-bool isAttacked(const Board& board, SquareSet squares, Color opponentColor) {
+bool isAttacked(const Board& board, SquareSet squares, SquareSet opponentSquares) {
     for (auto square : squares) {
-        if (isAttacked(board, square, opponentColor)) return true;
+        if (isAttacked(board, square, opponentSquares)) return true;
     }
     return false;
 }
@@ -535,13 +573,13 @@ ComputedMoveVector allLegalMoves(const Position& position) {
 
     auto ourKing = addColor(PieceType::KING, position.activeColor);
     auto oldKing = SquareSet::find(position.board, ourKing);
+    // Opponent's occupied squares remain constaint, so we can use them here
 
     // Iterate over all moves and captures
     auto addIfLegal = [&](Piece piece, Square from, Square to, MoveKind kind) {
         // If we move the king, reflect that in the king squares
         auto newKing = oldKing;
         if (piece == ourKing) {
-
             if (kind == MoveKind::KING_CASTLE || kind == MoveKind::QUEEN_CASTLE)
                 newKing |= movesTable.paths[from.index()][to.index()];
             else
@@ -555,7 +593,8 @@ ComputedMoveVector allLegalMoves(const Position& position) {
         auto newPosition = applyMove(position, move);
 
         // Check if the move would result in our king being in check.
-        bool attacked = isAttacked(newPosition.board, newKing, newPosition.activeColor);
+        auto opponentSquares = SquareSet::occupancy(newPosition.board, !position.activeColor);
+        bool attacked = isAttacked(newPosition.board, newKing, opponentSquares);
         if (attacked) return;
 
         // If promoted, add all possible promotions, legality is not affected

@@ -299,7 +299,7 @@ void testOccupancy() {
         board["e1"_sq] = Piece::WHITE_KING;
         board["f2"_sq] = Piece::WHITE_BISHOP;
         board["g2"_sq] = Piece::WHITE_KNIGHT;
-        board["h5"_sq] = Piece::WHITE_ROOK;
+        board["h5"_sq] = Piece::BLACK_ROOK;
         board["d7"_sq] = Piece::BLACK_PAWN;
         board["e5"_sq] = Piece::BLACK_PAWN;
         board["f7"_sq] = Piece::BLACK_PAWN;
@@ -312,6 +312,10 @@ void testOccupancy() {
         board["e8"_sq] = Piece::BLACK_KING;
         auto squares = SquareSet::occupancy(board);
         assert(squares.size() == 20);
+        squares = SquareSet::occupancy(board, Color::WHITE);
+        assert(squares.size() == 9);
+        squares = SquareSet::occupancy(board, Color::BLACK);
+        assert(squares.size() == 11);
     }
     std::cout << "All occupancy tests passed!" << std::endl;
 }
@@ -581,8 +585,9 @@ void testIsAttacked() {
     {
         Board board = base;
         board["b1"_sq] = Piece::BLACK_ROOK;
-        assert(isAttacked(board, whiteKingSquare, Color::BLACK));
-        assert(!isAttacked(board, blackKingSquare, Color::BLACK));
+        auto opponentSquares = SquareSet::occupancy(board, Color::BLACK);
+        assert(isAttacked(board, whiteKingSquare, opponentSquares));
+        assert(!isAttacked(board, blackKingSquare, opponentSquares));
     }
 
     // Test that a king is not in check
@@ -596,7 +601,8 @@ void testIsAttacked() {
         Board board = base;
         board["b2"_sq] = Piece::BLACK_ROOK;
         applyMove(board, Move("a1"_sq, "a2"_sq, Move::QUIET));
-        assert(isAttacked(board, "a2"_sq, Color::BLACK));
+        auto opponentSquares = SquareSet::occupancy(board, Color::BLACK);
+        assert(isAttacked(board, "a2"_sq, opponentSquares));
     }
 
     // Test that a king is not in check after a move
@@ -605,7 +611,9 @@ void testIsAttacked() {
         board["a1"_sq] = Piece::WHITE_KING;
         board["b1"_sq] = Piece::BLACK_ROOK;
         applyMove(board, Move("a1"_sq, "a2"_sq, Move::QUIET));
-        assert(!isAttacked(board, blackKingSquare, Color::BLACK));
+        auto opponentSquares = SquareSet::occupancy(board, Color::BLACK);
+
+        assert(!isAttacked(board, blackKingSquare, opponentSquares));
     }
 
     // Test that this method also works for an empty square
@@ -613,7 +621,9 @@ void testIsAttacked() {
         Board board;
         board["e1"_sq] = Piece::WHITE_KING;
         board["f2"_sq] = Piece::BLACK_ROOK;
-        assert(isAttacked(board, "f1"_sq, Color::BLACK));
+        auto opponentSquares = SquareSet::occupancy(board, Color::BLACK);
+
+        assert(isAttacked(board, "f1"_sq, opponentSquares));
     }
 
     std::cout << "All isAttacked tests passed!" << std::endl;

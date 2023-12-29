@@ -29,6 +29,7 @@ public:
      * Returns the set of non-empty fields on the board.
      */
     static SquareSet occupancy(const Board& board);
+    static SquareSet occupancy(const Board& board, Color color);
 
     static SquareSet find(const Board& board, Piece piece);
 
@@ -164,7 +165,8 @@ ComputedMoveVector allLegalMoves(const Position& position);
  * Returns true if the given square is attacked by a piece of the given opponent color.
  */
 
-bool isAttacked(const Board& board, Square square, Color opponentColor);
+bool isAttacked(const Board& board, Square square, SquareSet opponentSquares);
+bool isAttacked(const Board& board, SquareSet squares, SquareSet opponentSquares);
 bool isAttacked(const Board& board, SquareSet squares, Color opponentColor);
 
 /**

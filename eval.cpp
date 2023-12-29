@@ -286,7 +286,9 @@ EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
         moves.pop_back();
 
         bool mate = !opponentMove.move;  // Either checkmate or stalemate
-        bool check = isAttacked(newPosition.board, opponentKing, position.activeColor);
+        bool check = isAttacked(newPosition.board,
+                                opponentKing,
+                                SquareSet::occupancy(newPosition.board, position.activeColor));
 
         char kind[2][2] = {{' ', '='}, {'+', '#'}};  // {{check, mate}, {check, mate}}
 
