@@ -376,7 +376,7 @@ void applyMove(Board& board, Move move) {
     // En passant capture
     switch (move.kind) {
     case MoveKind::KING_CASTLE: {
-        auto rank = move.from.file();
+        auto rank = move.from.rank();
         auto rook = board[Square(rank, Position::kKingSideRookFile)];
         auto king = board[Square(rank, Position::kKingFile)];
 
@@ -391,7 +391,7 @@ void applyMove(Board& board, Move move) {
     }
 
     case MoveKind::QUEEN_CASTLE: {
-        auto rank = move.from.file();
+        auto rank = move.from.rank();
         auto rook = board[Square(rank, Position::kQueenSideRookFile)];
         auto king = board[Square(rank, Position::kKingFile)];
 
@@ -556,11 +556,6 @@ ComputedMoveVector allLegalMoves(const Position& position) {
 
         // Check if the move would result in our king being in check.
         bool attacked = isAttacked(newPosition.board, newKing, newPosition.activeColor);
-        if (piece == ourKing && kind == MoveKind::QUEEN_CASTLE) {
-            std::cout << "Queen castle: " << std::string(from) << " to " << std::string(to)
-                      << " is " << (attacked ? "" : "not ") << "attacked on " << toString(newKing)
-                      << std::endl;
-        }
         if (attacked) return;
 
         // If promoted, add all possible promotions, legality is not affected
