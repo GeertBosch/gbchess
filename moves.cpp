@@ -286,17 +286,18 @@ bool clearPath(SquareSet occupancy, Square from, Square to) {
     return (occupancy & path).empty();
 }
 
-void addMove(MoveVector& moves, Piece piece, Square from, Square to, MoveKind kind) {
+void addMove(MoveVector& moves, Piece piece, Move move) {
     // If promoted, add all possible promotions
-    if (type(piece) == PieceType::PAWN && (to.rank() == 0 || to.rank() == 7)) {
+    if (type(piece) == PieceType::PAWN && (move.to.rank() == 0 || move.to.rank() == 7)) {
         for (auto promotion : {MoveKind::KNIGHT_PROMOTION,
                                MoveKind::BISHOP_PROMOTION,
                                MoveKind::ROOK_PROMOTION,
                                MoveKind::QUEEN_PROMOTION}) {
-            moves.emplace_back(Move{from, to, promotion | kind});
+            move.kind = promotion;
+            moves.emplace_back(move);
         }
     } else {
-        moves.emplace_back(Move{from, to, kind});
+        moves.emplace_back(move);
     }
 }
 
@@ -312,7 +313,7 @@ void findMoves(const Board& board, Color activeColor, const F& fun) {
         auto possibleSquares = movesTable.moves[index(piece)][from.index()] & !occupied;
         for (auto to : possibleSquares) {
             // Check for occupied target square or moving through pieces
-            if (clearPath(occupied, from, to)) fun(piece, from, to, MoveKind::QUIET_MOVE);
+            if (clearPath(occupied, from, to)) fun(piece, Move{from, to, MoveKind::QUIET_MOVE});
         }
     }
 }
@@ -325,12 +326,12 @@ void findCastles(const Board& board, Color activeColor, CastlingMask mask, const
     if ((mask & info.kingSideMask) != CastlingMask::NONE) {
         auto path = movesTable.castlingClear[color][index(MoveKind::KING_CASTLE)];
         if ((occupied & path).empty())
-            fun(info.king, info.kingFrom, info.kingToKingSide, MoveKind::KING_CASTLE);
+            fun(info.king, {info.kingFrom, info.kingToKingSide, MoveKind::KING_CASTLE});
     }
     if ((mask & info.queenSideMask) != CastlingMask::NONE) {
         auto path = movesTable.castlingClear[color][index(MoveKind::QUEEN_CASTLE)];
         if ((occupied & path).empty())
-            fun(info.king, info.kingFrom, info.kingToQueenSide, MoveKind::QUEEN_CASTLE);
+            fun(info.king, Move{info.kingFrom, info.kingToQueenSide, MoveKind::QUEEN_CASTLE});
     }
 }
 
@@ -347,58 +348,38 @@ void findCaptures(const Board& board, Color activeColor, const F& fun) {
         for (auto to : possibleSquares) {
             // Exclude self-capture and moves that move through pieces
             if (color(board[to]) != activeColor && clearPath(occupied, from, to))
-                fun(piece, from, to, MoveKind::CAPTURE);
+                fun(piece, Move{from, to, MoveKind::CAPTURE});
         }
     }
 }
 
 template <typename F>
 void findEnPassant(const Board& board, Color activeColor, Square enPassantTarget, const F& fun) {
-    if (enPassantTarget != Position::noEnPassantTarget) {
-        if (false)
-            std::cout << "En passant target: " << std::string(enPassantTarget) << " (rank "
-                      << enPassantTarget.rank() << ")" << std::endl;
-        assert((activeColor == Color::WHITE && enPassantTarget.rank() == 5) ||
-               (activeColor == Color::BLACK && enPassantTarget.rank() == 2));
-        // For a given en passant target, there are two potential from squares. If either or
-        // both have a pawn of the active color, then capture is possible.
-        auto pawn = activeColor == Color::WHITE ? Piece::WHITE_PAWN : Piece::BLACK_PAWN;
-        for (auto from : movesTable.enPassantFrom[int(activeColor)][enPassantTarget.file()]) {
-            // std::cout << "trying from square " << std::string(from) << std::endl;
-            if (board[from] == pawn) {
-                if (false)
-                    std::cout << "En passant from " << std::string(from) << " to "
-                              << std::string(enPassantTarget) << " (" << to_string(activeColor)
-                              << ")" << std::endl;
-                fun(pawn, from, enPassantTarget, MoveKind::EN_PASSANT);
-            }
-        }
-    }
+    if (enPassantTarget == Position::noEnPassantTarget) return;
+
+    // For a given en passant target, there are two potential from squares. If either or
+    // both have a pawn of the active color, then capture is possible.
+    auto pawn = addColor(PieceType::PAWN, activeColor);
+    for (auto from : movesTable.enPassantFrom[int(activeColor)][enPassantTarget.file()])
+        if (board[from] == pawn) fun(pawn, {from, enPassantTarget, MoveKind::EN_PASSANT});
 }
 
 void addAvailableMoves(MoveVector& moves, const Board& board, Color activeColor) {
-    findMoves(board, activeColor, [&moves](Piece piece, Square from, Square to, MoveKind kind) {
-        addMove(moves, piece, from, to, kind);
-    });
+    findMoves(board, activeColor, [&](Piece piece, Move move) { addMove(moves, piece, move); });
 }
 
 void addAvailableCaptures(MoveVector& captures, const Board& board, Color activeColor) {
     findCaptures(
-        board, activeColor, [&captures](Piece piece, Square from, Square to, MoveKind kind) {
-            addMove(captures, piece, from, to, kind);
-        });
+        board, activeColor, [&](Piece piece, Move move) { addMove(captures, piece, move); });
 }
 
 void addAvailableEnPassant(MoveVector& captures,
                            const Board& board,
                            Color activeColor,
                            Square enPassantTarget) {
-    findEnPassant(board,
-                  activeColor,
-                  enPassantTarget,
-                  [&captures](Piece piece, Square from, Square to, MoveKind kind) {
-                      addMove(captures, piece, from, to, kind);
-                  });
+    findEnPassant(board, activeColor, enPassantTarget, [&](Piece piece, Move move) {
+        addMove(captures, piece, move);
+    });
 }
 
 void addAvailableCastling(MoveVector& captures,
@@ -406,9 +387,7 @@ void addAvailableCastling(MoveVector& captures,
                           Color activeColor,
                           CastlingMask mask) {
     findCastles(
-        board, activeColor, mask, [&captures](Piece piece, Square from, Square to, MoveKind kind) {
-            addMove(captures, piece, from, to, kind);
-        });
+        board, activeColor, mask, [&](Piece piece, Move move) { addMove(captures, piece, move); });
 }
 
 void applyMove(Board& board, Move move) {
@@ -448,8 +427,7 @@ void applyMove(Board& board, Move move) {
     }
 
     case MoveKind::EN_PASSANT:
-        // Remove the captured pawn
-        board[Square{move.from.rank(), move.to.file()}] = Piece::NONE;
+        board[Square{move.from.rank(), move.to.file()}] = Piece::NONE;  // Remove the captured pawn
         break;
 
     case MoveKind::KNIGHT_PROMOTION:
@@ -460,8 +438,7 @@ void applyMove(Board& board, Move move) {
     case MoveKind::BISHOP_PROMOTION_CAPTURE:
     case MoveKind::ROOK_PROMOTION_CAPTURE:
     case MoveKind::QUEEN_PROMOTION_CAPTURE:
-        // Promote the pawn
-        piece = addColor(promotionType(move.kind), color(piece));
+        piece = addColor(promotionType(move.kind), color(piece));  // Promote the pawn
         [[fallthrough]];
     case MoveKind::QUIET_MOVE:
     case MoveKind::DOUBLE_PAWN_PUSH:
@@ -504,24 +481,18 @@ Position applyMove(Position position, Move move) {
     position.enPassantTarget = Position::noEnPassantTarget;
     if (pawnMove && abs(move.from.rank() - move.to.rank()) == 2) {
         position.enPassantTarget = {(move.from.rank() + move.to.rank()) / 2, move.from.file()};
-        if (false)
-            std::cout << "Setting en passant target: " << std::string(position.enPassantTarget)
-                      << std::endl;
     }
     // Update castlingAvailability
     position.castlingAvailability &= ~castlingMask(move.from, move.to);
 
-    // Update halfMoveClock
-    // Reset on pawn advance or capture, else increment
+    // Update halfMoveClock: reset on pawn advance or capture, else increment
     ++position.halfmoveClock;
     if (pawnMove || capture) position.halfmoveClock = 0;
 
-    // Update fullMoveNumber
-    // Increment after black's move
+    // Update fullMoveNumber: increment after black's move
     if (position.activeColor == Color::BLACK) ++position.fullmoveNumber;
 
     // Update activeColor
-    auto oldColor = position.activeColor;
     position.activeColor = !position.activeColor;
 
     return position;
@@ -576,7 +547,8 @@ ComputedMoveVector allLegalMoves(const Position& position) {
     // Opponent's occupied squares remain constaint, so we can use them here
 
     // Iterate over all moves and captures
-    auto addIfLegal = [&](Piece piece, Square from, Square to, MoveKind kind) {
+    auto addIfLegal = [&](Piece piece, Move move) {
+        auto [from, to, kind] = move;
         // If we move the king, reflect that in the king squares
         auto newKing = oldKing;
         if (piece == ourKing) {
@@ -586,8 +558,6 @@ ComputedMoveVector allLegalMoves(const Position& position) {
                 newKing.erase(from);
             newKing.insert(to);
         }
-
-        Move move = {from, to, kind};  // For now assume no promotion applies
 
         // Make a copy of the position to apply the move
         auto newPosition = applyMove(position, move);

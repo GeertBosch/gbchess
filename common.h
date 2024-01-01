@@ -266,7 +266,6 @@ struct CastlingInfo {
 static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::WHITE),
                                                  CastlingInfo(Color::BLACK)};
 
-
 struct Position {
     // File indices for standard castling, not chess960
     static const int kQueenSideRookFile = 0;
