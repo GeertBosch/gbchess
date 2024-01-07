@@ -143,6 +143,12 @@ enum class MoveKind : uint8_t {
 inline constexpr uint8_t index(MoveKind kind) {
     return static_cast<uint8_t>(kind);
 }
+inline constexpr bool isCapture(MoveKind kind) {
+    return (static_cast<uint8_t>(kind) & static_cast<uint8_t>(MoveKind::CAPTURE_MASK)) != 0;
+}
+inline constexpr bool isPromotion(MoveKind kind) {
+    return (static_cast<uint8_t>(kind) & static_cast<uint8_t>(MoveKind::PROMOTION_MASK)) != 0;
+}
 static constexpr uint8_t kNumMoveKinds = index(MoveKind::QUEEN_PROMOTION_CAPTURE) + 1;
 
 inline PieceType promotionType(MoveKind kind) {
@@ -266,6 +272,17 @@ struct CastlingInfo {
 static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::WHITE),
                                                  CastlingInfo(Color::BLACK)};
 
+// Square to indicate no enpassant target
+static constexpr auto noEnPassantTarget = Square(0);
+
+struct Turn {
+    Color activeColor;
+    CastlingMask castlingAvailability;  // Bitmask of CastlingMask
+    Square enPassantTarget = noEnPassantTarget;
+    uint8_t halfmoveClock;  // If the clock is used, we'll draw at 100, well before it overflows
+    int fullmoveNumber;     // >65,535 moves is a lot of moves
+};
+
 struct Position {
     // File indices for standard castling, not chess960
     static const int kQueenSideRookFile = 0;
@@ -295,15 +312,9 @@ struct Position {
     static constexpr auto blackKingCastledQueenSide = "b8"_sq;
     static constexpr auto blackKingCastledKingSide = "g8"_sq;
 
-    // Square to indicate no enpassant target
-    static constexpr auto noEnPassantTarget = Square(0);
-
     Board board;
-    Color activeColor;
-    CastlingMask castlingAvailability;  // Bitmask of CastlingMask
-    Square enPassantTarget = noEnPassantTarget;
-    uint8_t halfmoveClock;    // If the clock is used, we'll draw at 100, well before it overflows
-    uint16_t fullmoveNumber;  // >65,535 moves is a lot of moves
+    Turn turn;
+    Color activeColor() const { return turn.activeColor; }
 };
 
 using ComputedMove = std::pair<Move, Position>;

@@ -81,11 +81,11 @@ public:
         int location = 0;
         for (auto square : SquareSet::occupancy(position.board))
             toggle(position.board[square], square.index());
-        if (position.activeColor == Color::BLACK) toggle(BLACK_TO_MOVE);
-        if (position.castlingAvailability != CastlingMask::NONE)
-            toggle(ExtraVectors(CASTLING_1 - 1 + uint8_t(position.castlingAvailability)));
-        if (position.enPassantTarget.index())
-            toggle(ExtraVectors(position.enPassantTarget.file() + EN_PASSANT_A));
+        if (position.activeColor() == Color::BLACK) toggle(BLACK_TO_MOVE);
+        if (position.turn.castlingAvailability != CastlingMask::NONE)
+            toggle(ExtraVectors(CASTLING_1 - 1 + uint8_t(position.turn.castlingAvailability)));
+        if (position.turn.enPassantTarget.index())
+            toggle(ExtraVectors(position.turn.enPassantTarget.file() + EN_PASSANT_A));
     }
 
     uint64_t operator()() { return hash; }
@@ -256,7 +256,7 @@ EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
             auto newEval = currentEval;
             if (move.kind >= MoveKind::CAPTURE)
                 newEval -= pieceValues[index(newPosition.board[move.to])];
-            if (position.activeColor == Color::BLACK) newEval = -newEval;
+            if (position.activeColor() == Color::BLACK) newEval = -newEval;
             newEval += moveValues[index(move.kind)];
             EvaluatedMove ourMove{move, false, false, newEval, depth};
             improveMove(best, ourMove);
@@ -276,7 +276,7 @@ EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
 
     // Recursive case: compute all legal moves and evaluate them
     auto opponentKing =
-        SquareSet::find(position.board, addColor(PieceType::KING, !position.activeColor));
+        SquareSet::find(position.board, addColor(PieceType::KING, !position.activeColor()));
     for (auto& computedMove : allMoves) {
         // Recursively compute the best moves for the opponent, worst for us.
         auto move = computedMove.first;
@@ -288,7 +288,7 @@ EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
         bool mate = !opponentMove.move;  // Either checkmate or stalemate
         bool check = isAttacked(newPosition.board,
                                 opponentKing,
-                                SquareSet::occupancy(newPosition.board, position.activeColor));
+                                SquareSet::occupancy(newPosition.board, position.activeColor()));
 
         char kind[2][2] = {{' ', '='}, {'+', '#'}};  // {{check, mate}, {check, mate}}
 

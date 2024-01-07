@@ -304,6 +304,7 @@ void addMove(MoveVector& moves, Piece piece, Move move) {
 template <typename F>
 void findMoves(const Board& board, Color activeColor, const F& fun) {
     auto occupied = SquareSet::occupancy(board);
+    auto myPawn = addColor(PieceType::PAWN, activeColor);
     for (auto from : occupied) {
         auto piece = board[from];
 
@@ -312,8 +313,11 @@ void findMoves(const Board& board, Color activeColor, const F& fun) {
 
         auto possibleSquares = movesTable.moves[index(piece)][from.index()] & !occupied;
         for (auto to : possibleSquares) {
+            auto kind = piece == myPawn && std::abs(from.rank() - to.rank()) == 2
+                ? MoveKind::DOUBLE_PAWN_PUSH
+                : MoveKind::QUIET_MOVE;
             // Check for occupied target square or moving through pieces
-            if (clearPath(occupied, from, to)) fun(piece, Move{from, to, MoveKind::QUIET_MOVE});
+            if (clearPath(occupied, from, to)) fun(piece, Move{from, to, kind});
         }
     }
 }
@@ -355,7 +359,7 @@ void findCaptures(const Board& board, Color activeColor, const F& fun) {
 
 template <typename F>
 void findEnPassant(const Board& board, Color activeColor, Square enPassantTarget, const F& fun) {
-    if (enPassantTarget == Position::noEnPassantTarget) return;
+    if (enPassantTarget == noEnPassantTarget) return;
 
     // For a given en passant target, there are two potential from squares. If either or
     // both have a pawn of the active color, then capture is possible.
@@ -467,33 +471,36 @@ CastlingMask castlingMask(Square from, Square to) {
     return CM::NONE;
 }
 
-Position applyMove(Position position, Move move) {
-    // Check if the move is a capture or pawn move before applying it to the board
-    bool capture = position.board[move.to] != Piece::NONE;
-    auto piece = position.board[move.from];
-    bool pawnMove = type(piece) == PieceType::PAWN;
-
-    // Apply the move to the board
-    applyMove(position.board, move);
+Turn applyMove(Turn turn, Piece piece, Move move) {
 
     // Update enPassantTarget
     // Set the en passant target if a pawn moves two squares forward, otherwise reset it.
-    position.enPassantTarget = Position::noEnPassantTarget;
-    if (pawnMove && abs(move.from.rank() - move.to.rank()) == 2) {
-        position.enPassantTarget = {(move.from.rank() + move.to.rank()) / 2, move.from.file()};
+    turn.enPassantTarget = noEnPassantTarget;
+    if (move.kind == MoveKind::DOUBLE_PAWN_PUSH) {
+        turn.enPassantTarget = {(move.from.rank() + move.to.rank()) / 2, move.from.file()};
     }
     // Update castlingAvailability
-    position.castlingAvailability &= ~castlingMask(move.from, move.to);
+    turn.castlingAvailability &= ~castlingMask(move.from, move.to);
 
     // Update halfMoveClock: reset on pawn advance or capture, else increment
-    ++position.halfmoveClock;
-    if (pawnMove || capture) position.halfmoveClock = 0;
+    ++turn.halfmoveClock;
+    if (type(piece) == PieceType::PAWN || isCapture(move.kind)) turn.halfmoveClock = 0;
 
     // Update fullMoveNumber: increment after black's move
-    if (position.activeColor == Color::BLACK) ++position.fullmoveNumber;
+    if (turn.activeColor == Color::BLACK) ++turn.fullmoveNumber;
 
     // Update activeColor
-    position.activeColor = !position.activeColor;
+    turn.activeColor = !turn.activeColor;
+    return turn;
+}
+
+Position applyMove(Position position, Move move) {
+    // Check if the move is a capture or pawn move before applying it to the board
+    auto piece = position.board[move.from];
+
+    // Apply the move to the board
+    applyMove(position.board, move);
+    position.turn = applyMove(position.turn, piece, move);
 
     return position;
 }
@@ -541,8 +548,9 @@ std::string toString(SquareSet squares) {
  */
 ComputedMoveVector allLegalMoves(const Position& position) {
     ComputedMoveVector legalMoves;
+    auto turn = position.turn;
 
-    auto ourKing = addColor(PieceType::KING, position.activeColor);
+    auto ourKing = addColor(PieceType::KING, turn.activeColor);
     auto oldKing = SquareSet::find(position.board, ourKing);
     // Opponent's occupied squares remain constaint, so we can use them here
 
@@ -563,7 +571,7 @@ ComputedMoveVector allLegalMoves(const Position& position) {
         auto newPosition = applyMove(position, move);
 
         // Check if the move would result in our king being in check.
-        auto opponentSquares = SquareSet::occupancy(newPosition.board, !position.activeColor);
+        auto opponentSquares = SquareSet::occupancy(newPosition.board, !turn.activeColor);
         bool attacked = isAttacked(newPosition.board, newKing, opponentSquares);
         if (attacked) return;
 
@@ -573,7 +581,7 @@ ComputedMoveVector allLegalMoves(const Position& position) {
                                    MoveKind::BISHOP_PROMOTION,
                                    MoveKind::ROOK_PROMOTION,
                                    MoveKind::QUEEN_PROMOTION}) {
-                newPosition.board[to] = addColor(promotionType(promotion), position.activeColor);
+                newPosition.board[to] = addColor(promotionType(promotion), turn.activeColor);
                 legalMoves.emplace_back(Move{from, to, promotion}, newPosition);
             }
         } else {
@@ -581,10 +589,10 @@ ComputedMoveVector allLegalMoves(const Position& position) {
         }
     };
 
-    findCaptures(position.board, position.activeColor, addIfLegal);
-    findEnPassant(position.board, position.activeColor, position.enPassantTarget, addIfLegal);
-    findMoves(position.board, position.activeColor, addIfLegal);
-    findCastles(position.board, position.activeColor, position.castlingAvailability, addIfLegal);
+    findCaptures(position.board, turn.activeColor, addIfLegal);
+    findEnPassant(position.board, turn.activeColor, turn.enPassantTarget, addIfLegal);
+    findMoves(position.board, turn.activeColor, addIfLegal);
+    findCastles(position.board, turn.activeColor, turn.castlingAvailability, addIfLegal);
 
     return legalMoves;
 }

@@ -489,13 +489,13 @@ void testApplyMove() {
     {
         Position position;
         position.board["a2"_sq] = Piece::WHITE_PAWN;
-        position.activeColor = Color::WHITE;
-        position.halfmoveClock = 1;
+        position.turn.activeColor = Color::WHITE;
+        position.turn.halfmoveClock = 1;
         position = applyMove(position, Move("a2"_sq, "a3"_sq, Move::QUIET));
         assert(position.board["a3"_sq] == Piece::WHITE_PAWN);
         assert(position.board["a2"_sq] == Piece::NONE);
-        assert(position.activeColor == Color::BLACK);
-        assert(position.halfmoveClock == 0);
+        assert(position.turn.activeColor == Color::BLACK);
+        assert(position.turn.halfmoveClock == 0);
     }
 
     // Test pawn capture
@@ -503,28 +503,28 @@ void testApplyMove() {
         Position position;
         position.board["a2"_sq] = Piece::WHITE_PAWN;
         position.board["b3"_sq] = Piece::BLACK_ROOK;  // White pawn captures black rook
-        position.activeColor = Color::WHITE;
-        position.halfmoveClock = 1;
+        position.turn.activeColor = Color::WHITE;
+        position.turn.halfmoveClock = 1;
         position = applyMove(position, Move("a2"_sq, "b3"_sq, Move::CAPTURE));
         assert(position.board["b3"_sq] == Piece::WHITE_PAWN);
         assert(position.board["a2"_sq] == Piece::NONE);
-        assert(position.activeColor == Color::BLACK);
-        assert(position.halfmoveClock == 0);
+        assert(position.turn.activeColor == Color::BLACK);
+        assert(position.turn.halfmoveClock == 0);
     }
 
     // Test that the fullmove number is updated correctly on a black move
     {
         Position position;
         position.board["a2"_sq] = Piece::BLACK_PAWN;
-        position.activeColor = Color::BLACK;
-        position.halfmoveClock = 1;
-        position.fullmoveNumber = 1;
+        position.turn.activeColor = Color::BLACK;
+        position.turn.halfmoveClock = 1;
+        position.turn.fullmoveNumber = 1;
         position = applyMove(position, Move("a2"_sq, "a3"_sq, Move::QUIET));
         assert(position.board["a3"_sq] == Piece::BLACK_PAWN);
         assert(position.board["a2"_sq] == Piece::NONE);
-        assert(position.activeColor == Color::WHITE);
-        assert(position.halfmoveClock == 0);
-        assert(position.fullmoveNumber == 2);
+        assert(position.turn.activeColor == Color::WHITE);
+        assert(position.turn.halfmoveClock == 0);
+        assert(position.turn.fullmoveNumber == 2);
     }
 
     // Test that capture with a non-pawn piece also resets the halfmoveClock
@@ -532,28 +532,28 @@ void testApplyMove() {
         Position position;
         position.board["a2"_sq] = Piece::WHITE_PAWN;
         position.board["b3"_sq] = Piece::BLACK_ROOK;  // White pawn captures black rook
-        position.activeColor = Color::WHITE;
-        position.fullmoveNumber = 1;
-        position.halfmoveClock = 1;
+        position.turn.activeColor = Color::WHITE;
+        position.turn.fullmoveNumber = 1;
+        position.turn.halfmoveClock = 1;
         position = applyMove(position, Move("a2"_sq, "b3"_sq, Move::CAPTURE));
         assert(position.board["b3"_sq] == Piece::WHITE_PAWN);
         assert(position.board["a2"_sq] == Piece::NONE);
-        assert(position.activeColor == Color::BLACK);
-        assert(position.halfmoveClock == 0);   // reset due to capture
-        assert(position.fullmoveNumber == 1);  // not updated on white move
+        assert(position.turn.activeColor == Color::BLACK);
+        assert(position.turn.halfmoveClock == 0);   // reset due to capture
+        assert(position.turn.fullmoveNumber == 1);  // not updated on white move
     }
 
     // Test that a move with a non-pawn piece does not reset the halfmoveClock
     {
         Position position;
         position.board["b1"_sq] = Piece::WHITE_KNIGHT;
-        position.activeColor = Color::WHITE;
-        position.halfmoveClock = 1;
+        position.turn.activeColor = Color::WHITE;
+        position.turn.halfmoveClock = 1;
         position = applyMove(position, Move("b1"_sq, "c3"_sq, Move::QUIET));
         assert(position.board["c3"_sq] == Piece::WHITE_KNIGHT);
         assert(position.board["b1"_sq] == Piece::NONE);
-        assert(position.activeColor == Color::BLACK);
-        assert(position.halfmoveClock == 2);
+        assert(position.turn.activeColor == Color::BLACK);
+        assert(position.turn.halfmoveClock == 2);
     }
 
     // Test en passant capture
@@ -561,14 +561,14 @@ void testApplyMove() {
         Position position;
         position.board["a5"_sq] = Piece::WHITE_PAWN;
         position.board["b5"_sq] = Piece::BLACK_PAWN;
-        position.activeColor = Color::WHITE;
-        position.enPassantTarget = "b6"_sq;
-        position.halfmoveClock = 1;
+        position.turn.activeColor = Color::WHITE;
+        position.turn.enPassantTarget = "b6"_sq;
+        position.turn.halfmoveClock = 1;
         position = applyMove(position, Move("a5"_sq, "b6"_sq, MoveKind::EN_PASSANT));
         assert(position.board["b6"_sq] == Piece::WHITE_PAWN);
         assert(position.board["b5"_sq] == Piece::NONE);
-        assert(position.activeColor == Color::BLACK);
-        assert(position.halfmoveClock == 0);
+        assert(position.turn.activeColor == Color::BLACK);
+        assert(position.turn.halfmoveClock == 0);
     }
 
     std::cout << "All applyMove tests passed!" << std::endl;

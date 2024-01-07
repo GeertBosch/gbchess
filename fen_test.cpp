@@ -8,15 +8,15 @@
 int testparse() {
     const std::string fen = fen::initialPosition;
     Position position = fen::parsePosition(fen);
+    Turn turn = position.turn;
 
     std::cout << "Piece Placement: " << fen::to_string(position.board) << "\n";
-    std::cout << "Active Color: " << to_string(position.activeColor) << "\n";
-    std::cout << "Castling Availability: " << (int)position.castlingAvailability << "\n";
+    std::cout << "Active Color: " << to_string(turn.activeColor) << "\n";
+    std::cout << "Castling Availability: " << (int)turn.castlingAvailability << "\n";
     std::cout << "En Passant Target: "
-              << (position.enPassantTarget.index() ? std::string(position.enPassantTarget) : "-")
-              << "\n";
-    std::cout << "Halfmove Clock: " << (int)position.halfmoveClock << "\n";
-    std::cout << "Fullmove Number: " << position.fullmoveNumber << "\n";
+              << (turn.enPassantTarget.index() ? std::string(turn.enPassantTarget) : "-") << "\n";
+    std::cout << "Halfmove Clock: " << (int)turn.halfmoveClock << "\n";
+    std::cout << "Fullmove Number: " << turn.fullmoveNumber << "\n";
 
     return 0;
 }
@@ -32,11 +32,12 @@ void testInitialPosition() {
 
     Position position = fen::parsePosition(fen::initialPosition);
     assert(position.board == board);
-    assert(position.activeColor == Color::WHITE);
-    assert(position.castlingAvailability == CastlingMask::ALL);
-    assert(position.enPassantTarget == Square(0));
-    assert(position.halfmoveClock == 0);
-    assert(position.fullmoveNumber == 1);
+    Turn turn = position.turn;
+    assert(turn.activeColor == Color::WHITE);
+    assert(turn.castlingAvailability == CastlingMask::ALL);
+    assert(turn.enPassantTarget == Square(0));
+    assert(turn.halfmoveClock == 0);
+    assert(turn.fullmoveNumber == 1);
 }
 
 void testFENPiecePlacement() {
