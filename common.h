@@ -200,6 +200,7 @@ public:
     const Piece operator[](Square sq) const { return _squares[sq.index()]; }
     const auto& squares() const { return _squares; }
     bool operator==(const Board& other) const { return _squares == other._squares; }
+    bool operator!=(const Board& other) const { return _squares != other._squares; }
 
     using iterator = Squares::iterator;
     iterator begin() { return _squares.begin(); }

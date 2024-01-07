@@ -394,7 +394,7 @@ void addAvailableCastling(MoveVector& captures,
         board, activeColor, mask, [&](Piece piece, Move move) { addMove(captures, piece, move); });
 }
 
-void applyMove(Board& board, Move move) {
+Piece makeMove(Board& board, Move move) {
     auto& piece = board[move.from];
     auto& target = board[move.to];
 
@@ -412,7 +412,7 @@ void applyMove(Board& board, Move move) {
         // Place king and rook on their new squares
         board[Square(rank, Position::kKingCastledKingSideFile)] = king;
         board[Square(rank, Position::kRookCastledKingSideFile)] = rook;
-        return;
+        return Piece::NONE;
     }
 
     case MoveKind::QUEEN_CASTLE: {
@@ -427,11 +427,12 @@ void applyMove(Board& board, Move move) {
         // Place king and rook on their new squares
         board[Square(rank, Position::kKingCastledQueenSideFile)] = king;
         board[Square(rank, Position::kRookCastledQueenSideFile)] = rook;
-        return;
+        return Piece::NONE;
     }
 
     case MoveKind::EN_PASSANT:
-        board[Square{move.from.rank(), move.to.file()}] = Piece::NONE;  // Remove the captured pawn
+        // The pawns target is empty, so move the piece to capture en passant there.
+        std::swap(board[Square{move.from.rank(), move.to.file()}], target);
         break;
 
     case MoveKind::KNIGHT_PROMOTION:
@@ -450,8 +451,65 @@ void applyMove(Board& board, Move move) {
     }
 
     // Update the target, and empty the source square
+    auto captured = target;
     target = piece;
     piece = Piece::NONE;
+    return captured;
+}
+
+void unmakeMove(Board& board, Move move, Piece captured) {
+    switch (move.kind) {
+    case MoveKind::KING_CASTLE: {
+        auto rank = move.from.rank();
+        auto rook = board[Square(rank, Position::kRookCastledKingSideFile)];
+        auto king = board[Square(rank, Position::kKingCastledKingSideFile)];
+
+        // Remove king and rook from their original squares
+        board[Square(rank, Position::kKingCastledKingSideFile)] = Piece::NONE;
+        board[Square(rank, Position::kRookCastledKingSideFile)] = Piece::NONE;
+
+        // Place king and rook on their new squares
+        board[Square(rank, Position::kKingFile)] = king;
+        board[Square(rank, Position::kKingSideRookFile)] = rook;
+        break;
+    }
+    case MoveKind::QUEEN_CASTLE: {
+        auto rank = move.from.rank();
+        auto rook = board[Square(rank, Position::kRookCastledQueenSideFile)];
+        auto king = board[Square(rank, Position::kKingCastledQueenSideFile)];
+
+        // Remove king and rook from their original squares
+        board[Square(rank, Position::kKingCastledQueenSideFile)] = Piece::NONE;
+        board[Square(rank, Position::kRookCastledQueenSideFile)] = Piece::NONE;
+
+        // Place king and rook on their new squares
+        board[Square(rank, Position::kKingFile)] = king;
+        board[Square(rank, Position::kQueenSideRookFile)] = rook;
+        break;
+    }
+    case MoveKind::EN_PASSANT:
+        // The pawns target is empty, so move the piece to capture en passant there.
+        std::swap(board[Square{move.from.rank(), move.to.file()}], captured);
+        board[move.from] = board[move.to];
+        board[move.to] = captured;
+        break;
+    case MoveKind::KNIGHT_PROMOTION:
+    case MoveKind::BISHOP_PROMOTION:
+    case MoveKind::ROOK_PROMOTION:
+    case MoveKind::QUEEN_PROMOTION:
+    case MoveKind::KNIGHT_PROMOTION_CAPTURE:
+    case MoveKind::BISHOP_PROMOTION_CAPTURE:
+    case MoveKind::ROOK_PROMOTION_CAPTURE:
+    case MoveKind::QUEEN_PROMOTION_CAPTURE:
+        board[move.to] = addColor(PieceType::PAWN, color(board[move.to]));  // Demote the piece
+        [[fallthrough]];
+    case MoveKind::QUIET_MOVE:
+    case MoveKind::DOUBLE_PAWN_PUSH:
+    case MoveKind::CAPTURE:
+        board[move.from] = board[move.to];
+        board[move.to] = captured;
+        break;
+    }
 }
 
 CastlingMask castlingMask(Square from, Square to) {
@@ -499,7 +557,7 @@ Position applyMove(Position position, Move move) {
     auto piece = position.board[move.from];
 
     // Apply the move to the board
-    applyMove(position.board, move);
+    makeMove(position.board, move);
     position.turn = applyMove(position.turn, piece, move);
 
     return position;

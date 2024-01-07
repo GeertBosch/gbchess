@@ -392,12 +392,56 @@ void testAddAvailableCastling() {
     std::cout << "All addAvailableCastling tests passed!" << std::endl;
 }
 
-void testApplyMove() {
+void printBoard(std::ostream& os, const Board& board) {
+    for (int rank = 7; rank >= 0; --rank) {
+        os << rank + 1 << "  ";
+        for (int file = 0; file < 8; ++file) {
+            auto piece = board[Square(rank, file)];
+            os << ' ' << to_char(piece);
+        }
+        os << std::endl;
+    }
+    os << "   ";
+    for (char file = 'a'; file <= 'h'; ++file) {
+        os << ' ' << file;
+    }
+    os << std::endl;
+}
+
+
+void testMakeAndUnmakeMove(Board& board, Move move) {
+    auto originalBoard = board;
+    auto captured = makeMove(board, move);
+    unmakeMove(board, move, captured);
+    if (board != originalBoard) {
+        std::cout << "Original board:" << std::endl;
+        std::cout << fen::to_string(originalBoard) << std::endl;
+        printBoard(std::cout, originalBoard);
+        std::cout << "Move: " << static_cast<std::string>(move) << std::endl;
+        std::cout << "Kind: " << static_cast<int>(move.kind) << std::endl;
+        std::cout << "Captured: " << to_char(captured) << std::endl;
+        {
+            auto newBoard = originalBoard;
+            makeMove(newBoard, move);
+            std::cout << "Board after makeMove:" << std::endl;
+            std::cout << fen::to_string(newBoard) << std::endl;
+            printBoard(std::cout, newBoard);
+        }
+        std::cout << "Board after makeMove and unmakeMove:" << std::endl;
+        std::cout << fen::to_string(board) << std::endl;
+        printBoard(std::cout, board);
+    }
+    assert(board == originalBoard);
+    makeMove(board, move);
+}
+
+
+void testMakeAndUnmakeMove() {
     // Test pawn move
     {
         Board board;
         board["a2"_sq] = Piece::WHITE_PAWN;
-        applyMove(board, Move("a2"_sq, "a3"_sq, Move::QUIET));
+        testMakeAndUnmakeMove(board, Move("a2"_sq, "a3"_sq, Move::QUIET));
         assert(board["a3"_sq] == Piece::WHITE_PAWN);
         assert(board["a2"_sq] == Piece::NONE);
     }
@@ -407,7 +451,7 @@ void testApplyMove() {
         Board board;
         board["a2"_sq] = Piece::WHITE_PAWN;
         board["b3"_sq] = Piece::BLACK_ROOK;  // White pawn captures black rook
-        applyMove(board, Move("a2"_sq, "b3"_sq, Move::CAPTURE));
+        testMakeAndUnmakeMove(board, Move("a2"_sq, "b3"_sq, Move::CAPTURE));
         assert(board["b3"_sq] == Piece::WHITE_PAWN);
         assert(board["a2"_sq] == Piece::NONE);
     }
@@ -418,13 +462,13 @@ void testApplyMove() {
         Board board;
         board["a7"_sq] = Piece::WHITE_PAWN;
         auto move = Move("a7"_sq, "a8"_sq, MoveKind::QUEEN_PROMOTION);
-        applyMove(board, move);
+        testMakeAndUnmakeMove(board, move);
         assert(board["a8"_sq] == Piece::WHITE_QUEEN);
         assert(board["a7"_sq] == Piece::NONE);
 
         // Black pawn promotion
         board["a2"_sq] = Piece::BLACK_PAWN;
-        applyMove(board, Move("a2"_sq, "a1"_sq, MoveKind::ROOK_PROMOTION));
+        testMakeAndUnmakeMove(board, Move("a2"_sq, "a1"_sq, MoveKind::ROOK_PROMOTION));
         assert(board["a1"_sq] == Piece::BLACK_ROOK);
         assert(board["a2"_sq] == Piece::NONE);
     }
@@ -435,14 +479,14 @@ void testApplyMove() {
         Board board;
         board["a7"_sq] = Piece::WHITE_PAWN;
         board["b8"_sq] = Piece::BLACK_ROOK;  // White pawn captures black rook
-        applyMove(board, Move("a7"_sq, "b8"_sq, MoveKind::BISHOP_PROMOTION_CAPTURE));
+        testMakeAndUnmakeMove(board, Move("a7"_sq, "b8"_sq, MoveKind::BISHOP_PROMOTION_CAPTURE));
         assert(board["b8"_sq] == Piece::WHITE_BISHOP);
         assert(board["a7"_sq] == Piece::NONE);
 
         // Black pawn promotion
         board["a2"_sq] = Piece::BLACK_PAWN;
         board["b1"_sq] = Piece::WHITE_ROOK;  // Black pawn captures white rook
-        applyMove(board, Move("a2"_sq, "b1"_sq, MoveKind::KNIGHT_PROMOTION_CAPTURE));
+        testMakeAndUnmakeMove(board, Move("a2"_sq, "b1"_sq, MoveKind::KNIGHT_PROMOTION_CAPTURE));
         assert(board["b1"_sq] == Piece::BLACK_KNIGHT);
         assert(board["a2"_sq] == Piece::NONE);
     }
@@ -451,7 +495,7 @@ void testApplyMove() {
     {
         Board board;
         board["a8"_sq] = Piece::WHITE_ROOK;
-        applyMove(board, Move("a8"_sq, "h8"_sq, Move::QUIET));
+        testMakeAndUnmakeMove(board, Move("a8"_sq, "h8"_sq, Move::QUIET));
         assert(board["h8"_sq] == Piece::WHITE_ROOK);
         assert(board["a8"_sq] == Piece::NONE);
     }
@@ -461,7 +505,7 @@ void testApplyMove() {
         Board board;
         board["a8"_sq] = Piece::BLACK_ROOK;
         board["a1"_sq] = Piece::WHITE_ROOK;  // Black rook captures white rook
-        applyMove(board, Move("a8"_sq, "a1"_sq, Move::CAPTURE));
+        testMakeAndUnmakeMove(board, Move("a8"_sq, "a1"_sq, Move::CAPTURE));
         assert(board["a1"_sq] == Piece::BLACK_ROOK);
         assert(board["a8"_sq] == Piece::NONE);
     }
@@ -470,7 +514,7 @@ void testApplyMove() {
     {
         Board board;
         board["b1"_sq] = Piece::WHITE_KNIGHT;
-        applyMove(board, Move("b1"_sq, "c3"_sq, Move::QUIET));
+        testMakeAndUnmakeMove(board, Move("b1"_sq, "c3"_sq, Move::QUIET));
         assert(board["c3"_sq] == Piece::WHITE_KNIGHT);
         assert(board["b1"_sq] == Piece::NONE);
     }
@@ -480,11 +524,27 @@ void testApplyMove() {
         Board board;
         board["b1"_sq] = Piece::WHITE_KNIGHT;
         board["c3"_sq] = Piece::BLACK_ROOK;  // White knight captures black rook
-        applyMove(board, Move("b1"_sq, "c3"_sq, Move::CAPTURE));
+        testMakeAndUnmakeMove(board, Move("b1"_sq, "c3"_sq, Move::CAPTURE));
         assert(board["c3"_sq] == Piece::WHITE_KNIGHT);
         assert(board["b1"_sq] == Piece::NONE);
     }
 
+    // Test en passant capture
+    {
+        Board board;
+        board["a5"_sq] = Piece::WHITE_PAWN;
+        board["b5"_sq] = Piece::BLACK_PAWN;  // Black pawn moved two squares
+        board["a6"_sq] = Piece::BLACK_PAWN;
+        Move move("a5"_sq, "b6"_sq, MoveKind::EN_PASSANT);
+        testMakeAndUnmakeMove(board, move);
+        assert(board["b6"_sq] == Piece::WHITE_PAWN);
+        assert(board["b5"_sq] == Piece::NONE);
+        assert(board["a5"_sq] == Piece::NONE);
+    }
+    std::cout << "All makeMove and unmakeMove tests passed!" << std::endl;
+}
+
+void testApplyMove() {
     // Now test the Position applyMove function for a pawn move
     {
         Position position;
@@ -600,7 +660,7 @@ void testIsAttacked() {
     {
         Board board = base;
         board["b2"_sq] = Piece::BLACK_ROOK;
-        applyMove(board, Move("a1"_sq, "a2"_sq, Move::QUIET));
+        testMakeAndUnmakeMove(board, Move("a1"_sq, "a2"_sq, Move::QUIET));
         auto opponentSquares = SquareSet::occupancy(board, Color::BLACK);
         assert(isAttacked(board, "a2"_sq, opponentSquares));
     }
@@ -610,7 +670,7 @@ void testIsAttacked() {
         Board board;
         board["a1"_sq] = Piece::WHITE_KING;
         board["b1"_sq] = Piece::BLACK_ROOK;
-        applyMove(board, Move("a1"_sq, "a2"_sq, Move::QUIET));
+        testMakeAndUnmakeMove(board, Move("a1"_sq, "a2"_sq, Move::QUIET));
         auto opponentSquares = SquareSet::occupancy(board, Color::BLACK);
 
         assert(!isAttacked(board, blackKingSquare, opponentSquares));
@@ -698,6 +758,7 @@ int main() {
     testAddAvailableCaptures();
     testAddAvailableEnPassant();
     testAddAvailableCastling();
+    testMakeAndUnmakeMove();
     testApplyMove();
     testIsAttacked();
     testAllLegalMoves();

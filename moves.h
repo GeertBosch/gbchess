@@ -171,9 +171,14 @@ bool isAttacked(const Board& board, SquareSet squares, Color opponentColor);
 
 /**
  * Updates the board with the given move, which may be a capture.
- * Does not perform any legality checks.
+ * Does not perform any legality checks. Any captured piece is returned.
  */
-void applyMove(Board& board, Move move);
+Piece makeMove(Board& board, Move move);
+
+/**
+ * Undoes the given move, restoring the captured piece to the captured square.
+ */
+void unmakeMove(Board& board, Move move, Piece captured);
 
 /**
  * Like the above, but also updates per turn state (active color, castling availability,
