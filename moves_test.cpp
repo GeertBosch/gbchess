@@ -630,8 +630,9 @@ void testIsAttacked() {
         Board board = base;
         board["b1"_sq] = Piece::BLACK_ROOK;
         auto opponentSquares = SquareSet::occupancy(board, Color::BLACK);
-        assert(isAttacked(board, whiteKingSquare, opponentSquares));
-        assert(!isAttacked(board, blackKingSquare, opponentSquares));
+        auto occupancy = Occupancy(board, Color::WHITE);
+        assert(isAttacked(board, whiteKingSquare, occupancy));
+        assert(!isAttacked(board, blackKingSquare, occupancy));
     }
 
     // Test that a king is not in check
@@ -655,9 +656,9 @@ void testIsAttacked() {
         board["a1"_sq] = Piece::WHITE_KING;
         board["b1"_sq] = Piece::BLACK_ROOK;
         testMakeAndUnmakeMove(board, Move("a1"_sq, "a2"_sq, Move::QUIET));
-        auto opponentSquares = SquareSet::occupancy(board, Color::BLACK);
+        auto occupancy = Occupancy(board, Color::BLACK);
 
-        assert(!isAttacked(board, blackKingSquare, opponentSquares));
+        assert(!isAttacked(board, blackKingSquare, occupancy));
     }
 
     // Test that this method also works for an empty square

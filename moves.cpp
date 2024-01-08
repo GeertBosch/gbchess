@@ -50,16 +50,6 @@ MovesTable::MovesTable() {
     }
 }
 
-struct Occupancy {
-    SquareSet theirs;
-    SquareSet ours;
-    Occupancy(const Board& board, Color activeColor) {
-        theirs = SquareSet::occupancy(board, !activeColor);
-        ours = SquareSet::occupancy(board, activeColor);
-    }
-    SquareSet operator()(void) const { return theirs | ours; }
-};
-
 /**
  * Returns the bits corresponding to the bytes in the input that contain the nibble.
  * Note: nibble is assumed to be at most 4 bits.
@@ -331,11 +321,13 @@ template <typename F>
 void findCastles(const Board& board, Occupancy occupied, Turn turn, const F& fun) {
     auto color = int(turn.activeColor);
     auto& info = castlingInfo[color];
+    // Check for king side castling
     if ((turn.castlingAvailability & info.kingSideMask) != CastlingMask::NONE) {
         auto path = movesTable.castlingClear[color][index(MoveKind::KING_CASTLE)];
         if ((occupied() & path).empty())
             fun(info.king, {info.kingFrom, info.kingToKingSide, MoveKind::KING_CASTLE});
     }
+    // Check for queen side castling
     if ((turn.castlingAvailability & info.queenSideMask) != CastlingMask::NONE) {
         auto path = movesTable.castlingClear[color][index(MoveKind::QUEEN_CASTLE)];
         if ((occupied() & path).empty())
@@ -571,7 +563,7 @@ Position applyMove(Position position, Move move) {
 
 bool isAttacked(const Board& board, Square square, SquareSet opponentSquares) {
     // We're using this function to find out if empty squares are attacked for determining
-    // legality of castling, so the code below is incorrect.
+    // legality of castling, so we ca't assume that the capture square is occupied.
     auto occupancy = SquareSet::occupancy(board);
     for (Square from : opponentSquares) {
         auto piece = board[from];
@@ -582,10 +574,30 @@ bool isAttacked(const Board& board, Square square, SquareSet opponentSquares) {
     return false;
 }
 
+bool isAttacked(const Board& board, Square square, Occupancy occupancy) {
+    // We're using this function to find out if empty squares are attacked for determining
+    // legality of castling, so we ca't assume that the capture square is occupied.
+    for (Square from : occupancy.theirs) {
+        auto piece = board[from];
+        auto possibleCaptureSquares = movesTable.captures[index(piece)][from.index()];
+        if (possibleCaptureSquares.contains(square) &&
+            clearPath(SquareSet::occupancy(board), from, square))
+            return true;
+    }
+    return false;
+}
+
 bool isAttacked(const Board& board, SquareSet squares, SquareSet opponentSquares) {
     for (auto square : squares) {
         if (isAttacked(board, square, opponentSquares)) return true;
     }
+    return false;
+}
+
+bool isAttacked(const Board& board, SquareSet squares, Occupancy occupancy) {
+    for (auto square : squares)
+        if (isAttacked(board, square, occupancy)) return true;
+
     return false;
 }
 
@@ -637,11 +649,24 @@ ComputedMoveVector allLegalMoves(Position position) {
 
         // Check if the move would result in our king being in check.
         auto newTurn = applyMove(turn, piece, move);
-        auto newOpponentSquares = occupancy.theirs & !SquareSet(to);
-        // Adjust the opponent squares for the en passant case.
-        if (move.kind == MoveKind::EN_PASSANT) newOpponentSquares.erase(turn.enPassantTarget);
+        auto newOccupancy =
+            Occupancy{occupancy.theirs & !SquareSet(to), (occupancy.ours & !SquareSet(from)) | to};
 
-        if (isAttacked(board, newKing, newOpponentSquares))
+        // Adjust the opponent squares for the en passant and castling cases.
+        switch (move.kind) {
+        case MoveKind::KING_CASTLE:
+            newOccupancy.ours.erase(Square(from.rank(), Position::kKingSideRookFile));
+            newOccupancy.ours.insert(Square(from.rank(), Position::kRookCastledKingSideFile));
+            break;
+        case MoveKind::QUEEN_CASTLE:
+            newOccupancy.ours.erase(Square(from.rank(), Position::kQueenSideRookFile));
+            newOccupancy.ours.insert(Square(from.rank(), Position::kRookCastledQueenSideFile));
+            break;
+        case MoveKind::EN_PASSANT: newOccupancy = Occupancy(board, turn.activeColor); break;
+        default: break;
+        }
+
+        if (isAttacked(board, newKing, newOccupancy))
             ;  // Ignore the move
         else if (type(piece) == PieceType::PAWN && (to.rank() == 0 || to.rank() == kNumRanks - 1)) {
             // If promoted, add all possible promotions, legality is not affected

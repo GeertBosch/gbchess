@@ -86,6 +86,18 @@ public:
     iterator end() { return SquareSet(); }
 };
 
+struct Occupancy {
+    SquareSet theirs;
+    SquareSet ours;
+    constexpr Occupancy(const Board& board, Color activeColor) {
+        theirs = SquareSet::occupancy(board, !activeColor);
+        ours = SquareSet::occupancy(board, activeColor);
+    }
+    constexpr Occupancy(SquareSet theirs, SquareSet ours) : theirs(theirs), ours(ours) {}
+    SquareSet operator()(void) const { return SquareSet{theirs | ours}; }
+    Occupancy operator!() const { return {ours, theirs}; }
+};
+
 using MoveVector = std::vector<Move>;
 using ComputedMove = std::pair<Move, Position>;
 using ComputedMoveVector = std::vector<ComputedMove>;
@@ -152,6 +164,7 @@ SquareSet possibleMoves(Piece piece, Square from);
  */
 
 SquareSet possibleCaptures(Piece piece, Square from);
+
 /**
  * Computes all legal moves from a given chess position, mapping each move to the resulting
  * chess position after the move is applied. This function checks for moves that do not leave
@@ -166,6 +179,9 @@ ComputedMoveVector allLegalMoves(Position position);
 /**
  * Returns true if the given square is attacked by a piece of the given opponent color.
  */
+
+bool isAttacked(const Board& board, Square square, Occupancy occupancy);
+bool isAttacked(const Board& board, SquareSet squares, Occupancy occupancy);
 
 bool isAttacked(const Board& board, Square square, SquareSet opponentSquares);
 bool isAttacked(const Board& board, SquareSet squares, SquareSet opponentSquares);
