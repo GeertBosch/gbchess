@@ -5,6 +5,8 @@
 
 #include "common.h"
 
+#pragma once
+
 /**
  * Represents a set of squares on a chess board. This class is like std::set<Square>, but
  * uses a bitset represented by a uint64_t to store the squares, which is more efficient.
@@ -26,7 +28,7 @@ public:
     static SquareSet path(Square from, Square to);
 
     /**
-     * Returns the set of non-empty fields on the board.
+     * Returns the set of non-empty fields on the board, possibly limited to one color.
      */
     static SquareSet occupancy(const Board& board);
     static SquareSet occupancy(const Board& board, Color color);
@@ -159,7 +161,7 @@ SquareSet possibleCaptures(Piece piece, Square from);
  * @return A map where each key is a legal move and the corresponding value is the new chess
  *         position resulting from that move.
  */
-ComputedMoveVector allLegalMoves(const Position& position);
+ComputedMoveVector allLegalMoves(Position position);
 
 /**
  * Returns true if the given square is attacked by a piece of the given opponent color.

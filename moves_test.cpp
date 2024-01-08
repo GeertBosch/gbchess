@@ -4,6 +4,7 @@
 
 #include "fen.h"
 #include "moves.h"
+#include "debug.h"
 
 std::string toString(SquareSet squares) {
     std::string str;
@@ -391,23 +392,6 @@ void testAddAvailableCastling() {
     }
     std::cout << "All addAvailableCastling tests passed!" << std::endl;
 }
-
-void printBoard(std::ostream& os, const Board& board) {
-    for (int rank = 7; rank >= 0; --rank) {
-        os << rank + 1 << "  ";
-        for (int file = 0; file < 8; ++file) {
-            auto piece = board[Square(rank, file)];
-            os << ' ' << to_char(piece);
-        }
-        os << std::endl;
-    }
-    os << "   ";
-    for (char file = 'a'; file <= 'h'; ++file) {
-        os << ' ' << file;
-    }
-    os << std::endl;
-}
-
 
 void testMakeAndUnmakeMove(Board& board, Move move) {
     auto originalBoard = board;
