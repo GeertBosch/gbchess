@@ -57,6 +57,7 @@ struct Occupancy {
         theirs = SquareSet::occupancy(board, !activeColor);
         ours = SquareSet::occupancy(board, activeColor);
     }
+    SquareSet operator()(void) const { return theirs | ours; }
 };
 
 /**
@@ -311,95 +312,93 @@ void addMove(MoveVector& moves, Piece piece, Move move) {
 }
 
 template <typename F>
-void findMoves(const Board& board, Color activeColor, const F& fun) {
-    auto occupied = SquareSet::occupancy(board);
-    for (auto from : occupied) {
+void findMoves(const Board& board, Occupancy occupied, const F& fun) {
+    for (auto from : occupied.ours) {
         auto piece = board[from];
 
-        // Skip if piece isn't the active color
-        if (color(piece) != activeColor) continue;
-
-        auto possibleSquares = movesTable.moves[index(piece)][from.index()] & !occupied;
+        auto possibleSquares = movesTable.moves[index(piece)][from.index()] & !occupied();
         for (auto to : possibleSquares) {
             auto kind = type(piece) == PieceType::PAWN && std::abs(from.rank() - to.rank()) == 2
                 ? MoveKind::DOUBLE_PAWN_PUSH
                 : MoveKind::QUIET_MOVE;
-            // Check for occupied target square or moving through pieces
-            if (clearPath(occupied, from, to)) fun(piece, Move{from, to, kind});
+            // Check for moving through pieces
+            if (clearPath(occupied(), from, to)) fun(piece, Move{from, to, kind});
         }
     }
 }
 
 template <typename F>
-void findCastles(const Board& board, Color activeColor, CastlingMask mask, const F& fun) {
-    auto occupied = SquareSet::occupancy(board);
-    auto color = int(activeColor);
+void findCastles(const Board& board, Occupancy occupied, Turn turn, const F& fun) {
+    auto color = int(turn.activeColor);
     auto& info = castlingInfo[color];
-    if ((mask & info.kingSideMask) != CastlingMask::NONE) {
+    if ((turn.castlingAvailability & info.kingSideMask) != CastlingMask::NONE) {
         auto path = movesTable.castlingClear[color][index(MoveKind::KING_CASTLE)];
-        if ((occupied & path).empty())
+        if ((occupied() & path).empty())
             fun(info.king, {info.kingFrom, info.kingToKingSide, MoveKind::KING_CASTLE});
     }
-    if ((mask & info.queenSideMask) != CastlingMask::NONE) {
+    if ((turn.castlingAvailability & info.queenSideMask) != CastlingMask::NONE) {
         auto path = movesTable.castlingClear[color][index(MoveKind::QUEEN_CASTLE)];
-        if ((occupied & path).empty())
+        if ((occupied() & path).empty())
             fun(info.king, Move{info.kingFrom, info.kingToQueenSide, MoveKind::QUEEN_CASTLE});
     }
 }
 
 template <typename F>
-void findCaptures(const Board& board, Color activeColor, const F& fun) {
-    auto occupied = SquareSet::occupancy(board);
-    for (auto from : occupied) {
+void findCaptures(const Board& board, Occupancy occupied, const F& fun) {
+    for (auto from : occupied.ours) {
         auto piece = board[from];
 
-        // Check if the piece is of the active color
-        if (color(piece) != activeColor) continue;
-
-        auto possibleSquares = movesTable.captures[index(piece)][from.index()] & occupied;
+        auto possibleSquares = movesTable.captures[index(piece)][from.index()] & occupied.theirs;
         for (auto to : possibleSquares) {
-            // Exclude self-capture and moves that move through pieces
-            if (color(board[to]) != activeColor && clearPath(occupied, from, to))
-                fun(piece, Move{from, to, MoveKind::CAPTURE});
+            // Exclude captures that move through pieces
+            if (clearPath(occupied(), from, to)) fun(piece, Move{from, to, MoveKind::CAPTURE});
         }
     }
 }
 
 template <typename F>
-void findEnPassant(const Board& board, Color activeColor, Square enPassantTarget, const F& fun) {
-    if (enPassantTarget == noEnPassantTarget) return;
+void findEnPassant(const Board& board, Turn turn, const F& fun) {
+    auto enPassantTarget = turn.enPassantTarget;
+    if (turn.enPassantTarget == noEnPassantTarget) return;
 
     // For a given en passant target, there are two potential from squares. If either or
     // both have a pawn of the active color, then capture is possible.
+    auto activeColor = turn.activeColor;
     auto pawn = addColor(PieceType::PAWN, activeColor);
     for (auto from : movesTable.enPassantFrom[int(activeColor)][enPassantTarget.file()])
         if (board[from] == pawn) fun(pawn, {from, enPassantTarget, MoveKind::EN_PASSANT});
 }
 
 void addAvailableMoves(MoveVector& moves, const Board& board, Color activeColor) {
-    findMoves(board, activeColor, [&](Piece piece, Move move) { addMove(moves, piece, move); });
+    auto occupancy = Occupancy(board, activeColor);
+    findMoves(board, occupancy, [&](Piece piece, Move move) { addMove(moves, piece, move); });
 }
 
 void addAvailableCaptures(MoveVector& captures, const Board& board, Color activeColor) {
-    findCaptures(
-        board, activeColor, [&](Piece piece, Move move) { addMove(captures, piece, move); });
+    auto occupancy = Occupancy(board, activeColor);
+    findCaptures(board, occupancy, [&](Piece piece, Move move) { addMove(captures, piece, move); });
 }
 
 void addAvailableEnPassant(MoveVector& captures,
                            const Board& board,
                            Color activeColor,
                            Square enPassantTarget) {
-    findEnPassant(board, activeColor, enPassantTarget, [&](Piece piece, Move move) {
-        addMove(captures, piece, move);
-    });
+    Turn turn;
+    turn.activeColor = activeColor;
+    turn.enPassantTarget = enPassantTarget;
+    findEnPassant(board, turn, [&](Piece piece, Move move) { addMove(captures, piece, move); });
 }
 
 void addAvailableCastling(MoveVector& captures,
                           const Board& board,
                           Color activeColor,
                           CastlingMask mask) {
+    Turn turn;
+    turn.activeColor = activeColor;
+    turn.castlingAvailability = mask;
+    auto occupancy = Occupancy(board, activeColor);
     findCastles(
-        board, activeColor, mask, [&](Piece piece, Move move) { addMove(captures, piece, move); });
+        board, occupancy, turn, [&](Piece piece, Move move) { addMove(captures, piece, move); });
 }
 
 Piece makeMove(Board& board, Move move) {
@@ -660,10 +659,10 @@ ComputedMoveVector allLegalMoves(Position position) {
         unmakeMove(board, move, captured);
     };
 
-    findCaptures(board, turn.activeColor, addIfLegal);
-    findEnPassant(board, turn.activeColor, turn.enPassantTarget, addIfLegal);
-    findMoves(board, turn.activeColor, addIfLegal);
-    findCastles(board, turn.activeColor, turn.castlingAvailability, addIfLegal);
+    findCaptures(board, occupancy, addIfLegal);
+    findEnPassant(board, turn, addIfLegal);
+    findMoves(board, occupancy, addIfLegal);
+    findCastles(board, occupancy, turn, addIfLegal);
 
     return legalMoves;
 }
