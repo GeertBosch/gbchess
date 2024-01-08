@@ -182,9 +182,6 @@ ComputedMoveVector allLegalMoves(Position position);
 
 bool isAttacked(const Board& board, Square square, Occupancy occupancy);
 bool isAttacked(const Board& board, SquareSet squares, Occupancy occupancy);
-
-bool isAttacked(const Board& board, Square square, SquareSet opponentSquares);
-bool isAttacked(const Board& board, SquareSet squares, SquareSet opponentSquares);
 bool isAttacked(const Board& board, SquareSet squares, Color opponentColor);
 
 /**

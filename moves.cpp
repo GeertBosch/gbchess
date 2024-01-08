@@ -561,19 +561,6 @@ Position applyMove(Position position, Move move) {
     return position;
 }
 
-bool isAttacked(const Board& board, Square square, SquareSet opponentSquares) {
-    // We're using this function to find out if empty squares are attacked for determining
-    // legality of castling, so we ca't assume that the capture square is occupied.
-    auto occupancy = SquareSet::occupancy(board);
-    for (Square from : opponentSquares) {
-        auto piece = board[from];
-        auto possibleCaptureSquares = movesTable.captures[index(piece)][from.index()];
-        if (possibleCaptureSquares.contains(square) && clearPath(occupancy, from, square))
-            return true;
-    }
-    return false;
-}
-
 bool isAttacked(const Board& board, Square square, Occupancy occupancy) {
     // We're using this function to find out if empty squares are attacked for determining
     // legality of castling, so we ca't assume that the capture square is occupied.
@@ -583,13 +570,6 @@ bool isAttacked(const Board& board, Square square, Occupancy occupancy) {
         if (possibleCaptureSquares.contains(square) &&
             clearPath(SquareSet::occupancy(board), from, square))
             return true;
-    }
-    return false;
-}
-
-bool isAttacked(const Board& board, SquareSet squares, SquareSet opponentSquares) {
-    for (auto square : squares) {
-        if (isAttacked(board, square, opponentSquares)) return true;
     }
     return false;
 }

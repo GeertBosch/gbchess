@@ -2,9 +2,9 @@
 #include <cassert>
 #include <iostream>
 
+#include "debug.h"
 #include "fen.h"
 #include "moves.h"
-#include "debug.h"
 
 std::string toString(SquareSet squares) {
     std::string str;
@@ -646,8 +646,8 @@ void testIsAttacked() {
         Board board = base;
         board["b2"_sq] = Piece::BLACK_ROOK;
         testMakeAndUnmakeMove(board, Move("a1"_sq, "a2"_sq, Move::QUIET));
-        auto opponentSquares = SquareSet::occupancy(board, Color::BLACK);
-        assert(isAttacked(board, "a2"_sq, opponentSquares));
+        auto occupancy = Occupancy(board, Color::WHITE);
+        assert(isAttacked(board, "a2"_sq, occupancy));
     }
 
     // Test that a king is not in check after a move
@@ -666,9 +666,9 @@ void testIsAttacked() {
         Board board;
         board["e1"_sq] = Piece::WHITE_KING;
         board["f2"_sq] = Piece::BLACK_ROOK;
-        auto opponentSquares = SquareSet::occupancy(board, Color::BLACK);
+        auto occupancy = Occupancy(board, Color::WHITE);
 
-        assert(isAttacked(board, "f1"_sq, opponentSquares));
+        assert(isAttacked(board, "f1"_sq, occupancy));
     }
 
     std::cout << "All isAttacked tests passed!" << std::endl;
