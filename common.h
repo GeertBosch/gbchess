@@ -64,6 +64,9 @@ enum class PieceType : uint8_t { PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING };
 inline constexpr uint8_t index(PieceType type) {
     return static_cast<uint8_t>(type);
 }
+inline constexpr char to_char(PieceType type) {
+    return "pnbrqk"[index(type)];
+}
 static constexpr uint8_t kNumPiecesTypes = index(PieceType::KING) + 1;
 
 enum class Piece : uint8_t {
@@ -172,7 +175,9 @@ struct Move {
 
     // String conversion operator
     operator std::string() const {
-        return static_cast<std::string>(from) + static_cast<std::string>(to);
+        auto str = static_cast<std::string>(from) + static_cast<std::string>(to);
+        if (isPromotion()) str += to_char(promotionType(kind));
+        return str;
     }
 
     operator bool() const { return from.index() != to.index(); }

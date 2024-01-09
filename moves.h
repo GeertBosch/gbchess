@@ -166,20 +166,14 @@ SquareSet possibleMoves(Piece piece, Square from);
 SquareSet possibleCaptures(Piece piece, Square from);
 
 /**
- * Computes all legal moves from a given chess position, mapping each move to the resulting
- * chess position after the move is applied. This function checks for moves that do not leave
- * or place the king of the active color in check.
- *
- * @param position The starting chess position.
- * @return A map where each key is a legal move and the corresponding value is the new chess
- *         position resulting from that move.
+ * Computes all legal moves from a given chess position. This function checks for moves
+ * that do not leave or place the king of the active color in check.
  */
 ComputedMoveVector allLegalMoves(Position position);
 
 /**
  * Returns true if the given square is attacked by a piece of the given opponent color.
  */
-
 bool isAttacked(const Board& board, Square square, Occupancy occupancy);
 bool isAttacked(const Board& board, SquareSet squares, Occupancy occupancy);
 bool isAttacked(const Board& board, SquareSet squares, Color opponentColor);

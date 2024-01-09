@@ -88,6 +88,8 @@ public:
             toggle(ExtraVectors(position.turn.enPassantTarget.file() + EN_PASSANT_A));
     }
 
+
+
     uint64_t operator()() { return hash; }
 
     void move(Piece piece, int from, int to) {

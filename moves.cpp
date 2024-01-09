@@ -13,6 +13,14 @@ struct MovesTable {
     // precomputed possible captures for each piece type on each square
     SquareSet captures[kNumPieces][kNumSquares];
 
+    // precomputed move kinds to deal with double pawn push and pawn queen promotion,
+    // under promotions are expanded separately
+    MoveKind moveKinds[kNumPieces][kNumRanks][kNumRanks];  // piece, from rank, to rank
+
+    // precomputed capture kinds to deal with pawn queen promotion captures, under promotions are
+    // expanded separately
+    MoveKind captureKinds[kNumPieces][kNumRanks][kNumRanks];  // piece, from rank, to rank
+
     // precomputed paths from each square to each other square
     SquareSet paths[kNumSquares][kNumSquares];  // from, to
 
@@ -26,17 +34,49 @@ struct MovesTable {
 } movesTable;
 
 MovesTable::MovesTable() {
-    for (Square from = 0; from != kNumSquares; ++from) {
-        for (int piece = 0; piece != kNumPieces; ++piece) {
+    // Initialize piece specific move and capture tables
+    for (int piece = 0; piece != kNumPieces; ++piece) {
+        // Initialize moves and captures
+        for (Square from = 0; from != kNumSquares; ++from) {
             moves[piece][from.index()] = possibleMoves(Piece(piece), from);
             captures[piece][from.index()] = possibleCaptures(Piece(piece), from);
         }
+        // Initialie move kinds and capture kinds
+        for (int fromRank = 0; fromRank != kNumRanks; ++fromRank) {
+            for (int toRank = 0; toRank != kNumRanks; ++toRank) {
+                MoveKind moveKind = MoveKind::QUIET_MOVE;
+                MoveKind captureKind = MoveKind::CAPTURE;
+                switch (Piece(piece)) {
+                case Piece::WHITE_PAWN:
+                    if (fromRank == 1 && toRank == 3) moveKind = MoveKind::DOUBLE_PAWN_PUSH;
+                    if (toRank == kNumRanks - 1) {
+                        moveKind = MoveKind::QUEEN_PROMOTION;
+                        captureKind = MoveKind::QUEEN_PROMOTION_CAPTURE;
+                    }
+                    break;
+                case Piece::BLACK_PAWN:
+                    if (fromRank == kNumRanks - 2 && toRank == kNumRanks - 4)
+                        moveKind = MoveKind::DOUBLE_PAWN_PUSH;
+                    if (toRank == 0) {
+                        moveKind = MoveKind::QUEEN_PROMOTION;
+                        captureKind = MoveKind::QUEEN_PROMOTION_CAPTURE;
+                    }
+                    break;
+                default: break;
+                }
+                moveKinds[piece][fromRank][toRank] = moveKind;
+                captureKinds[piece][fromRank][toRank] = captureKind;
+            }
+        }
     }
+
+    // Initialize paths
     for (int from = 0; from < kNumSquares; ++from) {
         for (int to = 0; to < kNumSquares; ++to) {
             paths[from][to] = SquareSet::path(Square(from), Square(to));
         }
     }
+    // Initialize castling masks and en passant from squares
     for (int color = 0; color < 2; ++color) {
         int fromRank = color == 0 ? kNumRanks - 4 : 3;  // skipping 3 ranks from either side
         for (int fromFile = 0; fromFile < kNumFiles; ++fromFile) {
@@ -287,32 +327,40 @@ bool clearPath(SquareSet occupancy, Square from, Square to) {
 }
 
 void addMove(MoveVector& moves, Piece piece, Move move) {
-    // If promoted, add all possible promotions
-    if (type(piece) == PieceType::PAWN && (move.to.rank() == 0 || move.to.rank() == 7)) {
-        for (auto promotion : {MoveKind::KNIGHT_PROMOTION,
-                               MoveKind::BISHOP_PROMOTION,
-                               MoveKind::ROOK_PROMOTION,
-                               MoveKind::QUEEN_PROMOTION}) {
-            move.kind = promotion;
-            moves.emplace_back(move);
-        }
-    } else {
-        moves.emplace_back(move);
-    }
+    moves.emplace_back(move);
 }
+
+template <typename F>
+void expandMovePromotions(Piece piece, Move move, const F& fun) {
+    fun(piece, move);
+
+    // If promoted as queen, add all possible under promotions
+    for (auto kind = int(move.kind); --kind >= int(MoveKind::KNIGHT_PROMOTION);)
+        fun(piece, Move{move.from, move.to, MoveKind(kind)});
+}
+
+template <typename F>
+void expandCapturePromotions(Piece piece, Move move, const F& fun) {
+    fun(piece, move);
+
+
+    // If promoted as queen, add all possible under promotions
+    for (auto kind = int(move.kind); --kind >= int(MoveKind::KNIGHT_PROMOTION_CAPTURE);)
+        fun(piece, Move{move.from, move.to, MoveKind(kind)});
+}
+
 
 template <typename F>
 void findMoves(const Board& board, Occupancy occupied, const F& fun) {
     for (auto from : occupied.ours) {
         auto piece = board[from];
-
         auto possibleSquares = movesTable.moves[index(piece)][from.index()] & !occupied();
         for (auto to : possibleSquares) {
-            auto kind = type(piece) == PieceType::PAWN && std::abs(from.rank() - to.rank()) == 2
-                ? MoveKind::DOUBLE_PAWN_PUSH
-                : MoveKind::QUIET_MOVE;
             // Check for moving through pieces
-            if (clearPath(occupied(), from, to)) fun(piece, Move{from, to, kind});
+            if (clearPath(occupied(), from, to)) {
+                auto kind = movesTable.moveKinds[index(piece)][from.rank()][to.rank()];
+                expandMovePromotions(piece, Move{from, to, kind}, fun);
+            }
         }
     }
 }
@@ -343,7 +391,10 @@ void findCaptures(const Board& board, Occupancy occupied, const F& fun) {
         auto possibleSquares = movesTable.captures[index(piece)][from.index()] & occupied.theirs;
         for (auto to : possibleSquares) {
             // Exclude captures that move through pieces
-            if (clearPath(occupied(), from, to)) fun(piece, Move{from, to, MoveKind::CAPTURE});
+            if (clearPath(occupied(), from, to)) {
+                auto kind = movesTable.captureKinds[index(piece)][from.rank()][to.rank()];
+                expandCapturePromotions(piece, Move{from, to, kind}, fun);
+            }
         }
     }
 }
@@ -646,21 +697,9 @@ ComputedMoveVector allLegalMoves(Position position) {
         default: break;
         }
 
-        if (isAttacked(board, newKing, newOccupancy))
-            ;  // Ignore the move
-        else if (type(piece) == PieceType::PAWN && (to.rank() == 0 || to.rank() == kNumRanks - 1)) {
-            // If promoted, add all possible promotions, legality is not affected
-            for (auto promotion : {MoveKind::KNIGHT_PROMOTION,
-                                   MoveKind::BISHOP_PROMOTION,
-                                   MoveKind::ROOK_PROMOTION,
-                                   MoveKind::QUEEN_PROMOTION}) {
-                board[to] = addColor(promotionType(promotion), turn.activeColor);
-                legalMoves.emplace_back(Move{from, to, promotion}, Position{board, newTurn});
-                board[to] = piece;  // undo the promotion
-            }
-        } else {
+        if (!isAttacked(board, newKing, newOccupancy))
             legalMoves.emplace_back(Move{from, to, kind}, Position{board, newTurn});
-        }
+
         unmakeMove(board, move, captured);
     };
 
