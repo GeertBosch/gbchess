@@ -57,6 +57,26 @@ perftdiff() {
 echo "\
 position fen \"$fen\" $moves
 d
-perft $depth" | stockfish 2>&1 | egrep "^....:|Fen" | sort) <(
-./perft "$fen" $moves $depth | egrep "^....:|Fen" | sort)
+perft $depth" | stockfish 2>&1 | egrep "^....(.)?:|Fen" | sort) <(
+./perft "$fen" $moves $depth | egrep "^....(.)?:|Fen" | sort)
+}
+
+perftnext() {
+	fen="$1"
+	depth="$2"
+	next=$(perftdiff "$fen" $2 | egrep "^[-+][a-h][1-8][a-h][1-8]([qrbn])?:|^[+-]Fen" | head -1 | cut -c2-)
+	echo "next: $next, result $?"
+	if [ $? != 0 ] ; then
+		echo "error $?, result $next"
+		exit 1
+	fi
+	move=$(echo "$next" | cut -d: -f1)
+	if [ "$move" == "Fen" ] ; then
+		echo "Incorrect Fen: $next"
+		exit 2
+	fi
+	echo "Move: $move"
+	nextfen=$(apply "$fen" "$move"| egrep "Fen:" | cut -d" " -f2-)
+	echo "perftnext \"$nextfen\"" $((depth - 1))
+
 }
