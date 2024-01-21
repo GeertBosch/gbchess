@@ -167,9 +167,10 @@ SquareSet possibleCaptures(Piece piece, Square from);
 
 /**
  * Computes all legal moves from a given chess position. This function checks for moves
- * that do not leave or place the king of the active color in check.
+ * that do not leave or place the king of the active color in check, including the special
+ * case of castling.
  */
-ComputedMoveVector allLegalMoves(Position position);
+ComputedMoveVector allLegalMoves(Turn turn, Board& board);
 
 /**
  * Returns true if the given square is attacked by a piece of the given opponent color.

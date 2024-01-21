@@ -244,8 +244,8 @@ bool improveMove(EvaluatedMove& best, const EvaluatedMove& ourMove) {
 }
 
 EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
-    auto position = moves.back().second;
-    auto allMoves = allLegalMoves(position);
+    auto& position = moves.back().second;
+    auto allMoves = allLegalMoves(position.turn, position.board);
     EvaluatedMove best;  // Default to the worst possible move
     int depth = moves.size();
     auto indent = debug ? std::string(depth * 4 - 4, ' ') : "";
@@ -303,12 +303,12 @@ EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
     return best;
 }
 
-uint64_t perft(Position position, int depth) {
+uint64_t perft(Turn turn, Board& board, int depth) {
     if (depth <= 0) return 1;
     uint64_t nodes = 0;
-    auto moves = allLegalMoves(position);
+    auto moves = allLegalMoves(turn, board);
     for (auto& [move, newPosition] : moves) {
-        nodes += perft(newPosition, depth - 1);
+        nodes += perft(newPosition.turn, newPosition.board, depth - 1);
     }
     return nodes;
 }

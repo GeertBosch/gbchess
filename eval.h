@@ -71,4 +71,4 @@ EvaluatedMove computeBestMove(ComputedMoveVector& moves, int depth);
  *  leaf nodes of a certain depth, which can be compared to predetermined values and used to isolate
  *  bugs. (See https://www.chessprogramming.org/Perft)
  */
-uint64_t perft(Position position, int depth);
+uint64_t perft(Turn turn, Board& board, int depth);

@@ -695,21 +695,21 @@ void testAllLegalMoves() {
     {
         auto position =
             fen::parsePosition("rnbqkbnr/pppppp1p/8/6p1/7P/8/PPPPPPP1/RNBQKBNR w KQkq - 0 2");
-        auto legalMoves = allLegalMoves(position);
+        auto legalMoves = allLegalMoves(position.turn, position.board);
         assert(legalMoves.size() == 22);
     }
     {
         // Can't castle the king through check
         auto position =
             fen::parsePosition("rn1qkbnr/2pppppp/bp6/p7/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4");
-        auto legalMoves = allLegalMoves(position);
+        auto legalMoves = allLegalMoves(position.turn, position.board);
         assert(legalMoves.size() == 23);
     }
     {
         // Can't castle a king that is in check
         auto position =
             fen::parsePosition("r1bqkbnr/pppppppp/8/1B6/4P3/8/PPnPNPPP/RNBQK2R w KQkq - 0 4");
-        auto legalMoves = allLegalMoves(position);
+        auto legalMoves = allLegalMoves(position.turn, position.board);
         assert(std::count_if(legalMoves.begin(), legalMoves.end(), [](auto item) {
                    return item.first == Move{"e1"_sq, "g1"_sq, MoveKind::KING_CASTLE};
                }) == 0);
@@ -719,7 +719,7 @@ void testAllLegalMoves() {
         // This king can castle queen side
         auto position = fen::parsePosition(
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/1R2K2R b Kkq - 1 1");
-        auto legalMoves = allLegalMoves(position);
+        auto legalMoves = allLegalMoves(position.turn, position.board);
         assert(std::count_if(legalMoves.begin(), legalMoves.end(), [](auto item) {
                    return item.first == Move{"e8"_sq, "c8"_sq, MoveKind::QUEEN_CASTLE};
                }) == 1);

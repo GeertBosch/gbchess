@@ -653,10 +653,8 @@ std::string toString(SquareSet squares) {
  * @return A map where each key is a legal move and the corresponding value is the new chess
  *         position resulting from that move.
  */
-ComputedMoveVector allLegalMoves(Position position) {
+ComputedMoveVector allLegalMoves(Turn turn, Board& board) {
     ComputedMoveVector legalMoves;
-    auto turn = position.turn;
-    auto& board = position.board;
 
     auto ourKing = addColor(PieceType::KING, turn.activeColor);
     auto oldKing = SquareSet::find(board, ourKing);
@@ -675,7 +673,7 @@ ComputedMoveVector allLegalMoves(Position position) {
             newKing.insert(to);
         }
 
-        // Make a copy of the position to apply the move
+        // Apply the move to the board
         auto captured = makeMove(board, move);
 
         // Check if the move would result in our king being in check.
