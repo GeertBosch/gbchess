@@ -22,6 +22,11 @@ puzzles: eval-test puzzles.in puzzles.expected
 	./eval-test 4 < puzzles.in > puzzles.actual
 	@diff -uaB puzzles.expected puzzles.actual && echo "All puzzles solved correctly!"
 	
+cloc:
+	@echo Excluding Tests
+	cloc --by-percent cmb `find . -name \*.cpp -o -name \*.h | grep -v '_test[.]'`
+	@echo Just Tests
+	cloc --by-percent cmb `find . -name \*.cpp -o -name \*.h | grep '_test[.]'`
 
 # The following are well known perft positions, see https://www.chessprogramming.org/Perft_Results
 kiwipete="r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
