@@ -343,12 +343,10 @@ template <typename F>
 void expandCapturePromotions(Piece piece, Move move, const F& fun) {
     fun(piece, move);
 
-
     // If promoted as queen, add all possible under promotions
     for (auto kind = int(move.kind); --kind >= int(MoveKind::KNIGHT_PROMOTION_CAPTURE);)
         fun(piece, Move{move.from, move.to, MoveKind(kind)});
 }
-
 
 template <typename F>
 void findMoves(const Board& board, Occupancy occupied, const F& fun) {
@@ -602,7 +600,7 @@ Turn applyMove(Turn turn, Piece piece, Move move) {
 }
 
 Position applyMove(Position position, Move move) {
-    // Check if the move is a capture or pawn move before applying it to the board
+    // Remember the piece being moved, before applying the move to the board
     auto piece = position.board[move.from];
 
     // Apply the move to the board
@@ -653,8 +651,8 @@ std::string toString(SquareSet squares) {
  * @return A map where each key is a legal move and the corresponding value is the new chess
  *         position resulting from that move.
  */
-ComputedMoveVector allLegalMoves(Turn turn, Board& board) {
-    ComputedMoveVector legalMoves;
+MoveVector allLegalMoves(Turn turn, Board& board) {
+    MoveVector legalMoves;
 
     auto ourKing = addColor(PieceType::KING, turn.activeColor);
     auto oldKing = SquareSet::find(board, ourKing);
@@ -696,7 +694,7 @@ ComputedMoveVector allLegalMoves(Turn turn, Board& board) {
         }
 
         if (!isAttacked(board, newKing, newOccupancy))
-            legalMoves.emplace_back(Move{from, to, kind}, Position{board, newTurn});
+            legalMoves.emplace_back(Move{from, to, kind});
 
         unmakeMove(board, move, captured);
     };

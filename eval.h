@@ -64,7 +64,7 @@ float evaluateBoard(const Board& board);
  * @param depth The depth to which the evaluation should be performed.
  * @return A map of moves to their evaluation score.
  */
-EvaluatedMove computeBestMove(ComputedMoveVector& moves, int depth);
+EvaluatedMove computeBestMove(MoveVector& moves, Position& position, int depth);
 
 /**
  *  a debugging function to walk the move generation tree of strictly legal moves to count all the

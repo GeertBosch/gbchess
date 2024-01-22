@@ -47,10 +47,9 @@ void printAvailableCaptures(const Position& position) {
     std::cout << "Captures: " << captures << std::endl;
 }
 
-void printBestMove(const Position& position, int maxdepth) {
-    ComputedMoveVector moves;
-    moves.push_back({Move(), position});
-    auto bestMove = computeBestMove(moves, maxdepth);
+void printBestMove(Position position, int maxdepth) {
+    MoveVector moves;
+    auto bestMove = computeBestMove(moves, position, maxdepth);
     std::cout << "Best Move: " << static_cast<std::string>(bestMove) << std::endl;
 }
 
@@ -94,9 +93,8 @@ void testFromStdIn(int depth) {
         // Compute the best move
         EvaluatedMove bestMove;
         printEvalRate([&]() {
-            ComputedMoveVector moves;
-            moves.push_back({Move(), position});
-            bestMove = computeBestMove(moves, depth);
+            MoveVector moves;
+            bestMove = computeBestMove(moves, position, depth);
             // Print the best move and its evaluation
             std::cout << static_cast<std::string>(bestMove) << std::endl;
             std::cerr << "Solution: " << std::string(bestMove) << "\t";

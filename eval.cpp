@@ -23,15 +23,6 @@ std::ostream& operator<<(std::ostream& os, Color color) {
     return os << (color == Color::BLACK ? 'b' : 'w');
 }
 
-std::ostream& operator<<(std::ostream& os, const ComputedMoveVector& moves) {
-    os << "[";
-    for (const auto& [move, position] : moves) {
-        os << std::string(move) << ", ";
-    }
-    os << "]";
-    return os;
-}
-
 EvaluatedMove::operator std::string() const {
     if (!move) return "none";
     std::stringstream ss;
@@ -243,21 +234,20 @@ bool improveMove(EvaluatedMove& best, const EvaluatedMove& ourMove) {
     return ourMove.mate && ourMove.check;
 }
 
-EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
-    auto& position = moves.back().second;
+EvaluatedMove computeBestMove(MoveVector& moves, Position& position, int maxdepth) {
     auto allMoves = allLegalMoves(position.turn, position.board);
     EvaluatedMove best;  // Default to the worst possible move
-    int depth = moves.size();
+    int depth = moves.size() + 1;
     auto indent = debug ? std::string(depth * 4 - 4, ' ') : "";
 
     // Base case: if depth is zero, return the static evaluation of the position
     if (depth > maxdepth) {
         auto currentEval = evaluateBoard(position.board);
-        for (auto& [move, newPosition] : allMoves) {
+        for (auto move : allMoves) {
             ++evalCount;
             auto newEval = currentEval;
             if (move.kind >= MoveKind::CAPTURE)
-                newEval -= pieceValues[index(newPosition.board[move.to])];
+                newEval -= pieceValues[index(position.board[move.to])];
             if (position.activeColor() == Color::BLACK) newEval = -newEval;
             newEval += moveValues[index(move.kind)];
             EvaluatedMove ourMove{move, false, false, newEval, depth};
@@ -279,23 +269,23 @@ EvaluatedMove computeBestMove(ComputedMoveVector& moves, int maxdepth) {
     // Recursive case: compute all legal moves and evaluate them
     auto opponentKing =
         SquareSet::find(position.board, addColor(PieceType::KING, !position.activeColor()));
-    for (auto& computedMove : allMoves) {
+    for (auto move : allMoves) {
         // Recursively compute the best moves for the opponent, worst for us.
-        auto move = computedMove.first;
-        auto& newPosition = computedMove.second;
-        moves.push_back(computedMove);
-        auto opponentMove = -computeBestMove(moves, maxdepth);
+        auto newPosition = applyMove(position, move);
+        moves.push_back(move);
+        auto opponentMove = -computeBestMove(moves, newPosition, maxdepth);
         moves.pop_back();
 
         bool mate = !opponentMove.move;  // Either checkmate or stalemate
-        bool check = isAttacked(
-            newPosition.board, opponentKing, Occupancy(newPosition.board, !position.activeColor()));
+        bool check = isAttacked(newPosition.board,
+                                opponentKing,
+                                Occupancy(newPosition.board, newPosition.activeColor()));
 
         char kind[2][2] = {{' ', '='}, {'+', '#'}};  // {{check, mate}, {check, mate}}
 
         float evaluation = mate ? (check ? bestEval : drawEval) : opponentMove.evaluation;
         EvaluatedMove ourMove(
-            move, check, mate, evaluation, mate ? moves.size() : opponentMove.depth);
+            move, check, mate, evaluation, mate ? moves.size() + 1 : opponentMove.depth);
         if (improveMove(best, ourMove)) break;
     }
     // Cache the best move for this position
@@ -307,8 +297,16 @@ uint64_t perft(Turn turn, Board& board, int depth) {
     if (depth <= 0) return 1;
     uint64_t nodes = 0;
     auto moves = allLegalMoves(turn, board);
-    for (auto& [move, newPosition] : moves) {
-        nodes += perft(newPosition.turn, newPosition.board, depth - 1);
+    for (auto move : moves) {
+        // Remember the piece being moved, before applying the move to the board
+        auto piece = board[move.from];
+
+        // Apply the move to the board
+        auto captured = makeMove(board, move);
+        auto nextTurn = applyMove(turn, piece, move);
+
+        nodes += perft(nextTurn, board, depth - 1);
+        unmakeMove(board, move, captured);
     }
     return nodes;
 }

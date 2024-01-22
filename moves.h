@@ -98,10 +98,6 @@ struct Occupancy {
     Occupancy operator!() const { return {ours, theirs}; }
 };
 
-using MoveVector = std::vector<Move>;
-using ComputedMove = std::pair<Move, Position>;
-using ComputedMoveVector = std::vector<ComputedMove>;
-
 /**
  * Returns the set of squares that needs to be empty for castling to be legal.
  */
@@ -170,7 +166,7 @@ SquareSet possibleCaptures(Piece piece, Square from);
  * that do not leave or place the king of the active color in check, including the special
  * case of castling.
  */
-ComputedMoveVector allLegalMoves(Turn turn, Board& board);
+MoveVector allLegalMoves(Turn turn, Board& board);
 
 /**
  * Returns true if the given square is attacked by a piece of the given opponent color.
@@ -195,6 +191,8 @@ void unmakeMove(Board& board, Move move, Piece captured);
  * en passant target, halfmove clock, and fullmove number).
  */
 [[nodiscard]] Position applyMove(Position position, Move move);
+
+Turn applyMove(Turn turn, Piece piece, Move move);
 
 /**
  *  Returns the castling mask for the castling rights cancelled by the given move.

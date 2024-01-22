@@ -188,6 +188,7 @@ struct Move {
 
     bool isPromotion() const { return kind >= MoveKind::PROMOTION_MASK; }
 };
+using MoveVector = std::vector<Move>;
 
 class Board {
     using Squares = std::array<Piece, kNumSquares>;
@@ -325,6 +326,3 @@ struct Position {
     Turn turn;
     Color activeColor() const { return turn.activeColor; }
 };
-
-using ComputedMove = std::pair<Move, Position>;
-using ComputedMoveVector = std::vector<ComputedMove>;
