@@ -1,14 +1,19 @@
-#include <algorithm>
-#include <iostream>
 #include <random>
 #include <string>
+#include <iostream>
 
 #include "eval.h"
 #include "moves.h"
 
+#ifdef DEBUG
+constexpr bool debug = 1;
+#include "debug.h"
+#else
 constexpr bool debug = 0;
+#endif
+
 #define D \
-    if (debug) std::cerr
+    if constexpr (debug) std::cerr
 
 std::ostream& operator<<(std::ostream& os, Move mv) {
     return os << std::string(mv);

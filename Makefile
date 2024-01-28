@@ -3,7 +3,7 @@ all: test perft-test puzzles
 %.h: common.h
 
 %-test: %_test.cpp %.cpp %.h common.h
-	clang++ -fsanitize=address -std=c++17 -g -O0 -o $@ $(filter-out %.h, $^)
+	clang++ -fsanitize=address -std=c++17 -DDEBUG -g -O0 -o $@ $(filter-out %.h, $^)
 
 clean:
 	rm -f *.o *-debug *-test perft *.core puzzles.actual perf.data perf.data.old
@@ -13,7 +13,7 @@ moves-test: moves_test.cpp moves.cpp moves.h common.h fen.h fen.cpp
 eval-test: eval_test.cpp eval.cpp fen.cpp moves.cpp *.h
 	g++ -O2 -g -o $@ $(filter-out %.h,$^)
 eval-debug: eval_test.cpp eval.cpp fen.cpp moves.cpp *.h
-	clang++ -fsanitize=address -std=c++17 -O0 -g -o $@ $(filter-out %h,$^)
+	clang++ -fsanitize=address -std=c++17 -DDEBUG -O0 -g -o $@ $(filter-out %h,$^)
 
 perft: perft.cpp eval.cpp moves.cpp fen.cpp *.h
 	g++ -O2 -g -o $@ $(filter-out %.h,$^)
@@ -24,9 +24,9 @@ puzzles: eval-test puzzles.in puzzles.expected
 	
 cloc:
 	@echo Excluding Tests
-	cloc --by-percent cmb `find . -name \*.cpp -o -name \*.h | grep -v '_test[.]'`
+	cloc --by-percent cmb `find . -name \*.cpp -o -name \*.h | egrep -v '_test[.]|debug'`
 	@echo Just Tests
-	cloc --by-percent cmb `find . -name \*.cpp -o -name \*.h | grep '_test[.]'`
+	cloc --by-percent cmb `find . -name \*.cpp -o -name \*.h | egrep '_test[.]|debug'`
 
 # The following are well known perft positions, see https://www.chessprogramming.org/Perft_Results
 kiwipete="r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"
@@ -47,7 +47,7 @@ perft-test: perft
 	./perft ${position5} 4 2103487
 	./perft ${position6} 4 3894594
 
-test: fen-test moves-test eval-test perft
+test: fen-test moves-test eval-test eval-debug perft
 	./fen-test
 	./moves-test
 	./eval-test "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 5

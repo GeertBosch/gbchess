@@ -1,8 +1,4 @@
-#include <algorithm>
 #include <cassert>
-#include <cmath>
-#include <iomanip>
-#include <iostream>
 
 #include "moves.h"
 
@@ -12,6 +8,9 @@ struct MovesTable {
 
     // precomputed possible captures for each piece type on each square
     SquareSet captures[kNumPieces][kNumSquares];
+
+    // precomputed possible squares that each square can be attacked from
+    SquareSet attackers[kNumSquares];
 
     // precomputed move kinds to deal with double pawn push and pawn queen promotion,
     // under promotions are expanded separately
@@ -41,7 +40,7 @@ MovesTable::MovesTable() {
             moves[piece][from.index()] = possibleMoves(Piece(piece), from);
             captures[piece][from.index()] = possibleCaptures(Piece(piece), from);
         }
-        // Initialie move kinds and capture kinds
+        // Initialize move kinds and capture kinds
         for (int fromRank = 0; fromRank != kNumRanks; ++fromRank) {
             for (int toRank = 0; toRank != kNumRanks; ++toRank) {
                 MoveKind moveKind = MoveKind::QUIET_MOVE;
@@ -68,6 +67,16 @@ MovesTable::MovesTable() {
                 captureKinds[piece][fromRank][toRank] = captureKind;
             }
         }
+    }
+
+    // Initialize attackers
+    for (Square from = 0; from != kNumSquares; ++from) {
+        SquareSet toSquares;
+        // Gather all possible squares that can be attacked by any piece
+        for (int piece = 0; piece != kNumPieces; ++piece)
+            toSquares |= captures[piece][from.index()];
+        // Distribute attackers over the target squares
+        for (auto to : toSquares) attackers[to.index()].insert(from);
     }
 
     // Initialize paths
@@ -613,7 +622,7 @@ Position applyMove(Position position, Move move) {
 bool isAttacked(const Board& board, Square square, Occupancy occupancy) {
     // We're using this function to find out if empty squares are attacked for determining
     // legality of castling, so we ca't assume that the capture square is occupied.
-    for (Square from : occupancy.theirs) {
+    for (Square from : occupancy.theirs& movesTable.attackers[square.index()]) {
         auto piece = board[from];
         auto possibleCaptureSquares = movesTable.captures[index(piece)][from.index()];
         if (possibleCaptureSquares.contains(square) &&
@@ -642,15 +651,6 @@ std::string toString(SquareSet squares) {
 }
 }  // namespace
 
-/**
- * Computes all legal moves from a given chess position, mapping each move to the resulting
- * chess position after the move is applied. This function checks for moves that do not leave
- * or place the king of the active color in check.
- *
- * @param position The starting chess position.
- * @return A map where each key is a legal move and the corresponding value is the new chess
- *         position resulting from that move.
- */
 MoveVector allLegalMoves(Turn turn, Board& board) {
     MoveVector legalMoves;
 
@@ -674,8 +674,6 @@ MoveVector allLegalMoves(Turn turn, Board& board) {
         // Apply the move to the board
         auto captured = makeMove(board, move);
 
-        // Check if the move would result in our king being in check.
-        auto newTurn = applyMove(turn, piece, move);
         auto newOccupancy =
             Occupancy{occupancy.theirs & !SquareSet(to), (occupancy.ours & !SquareSet(from)) | to};
 
@@ -693,6 +691,7 @@ MoveVector allLegalMoves(Turn turn, Board& board) {
         default: break;
         }
 
+        // Check if the move would result in our king being in check.
         if (!isAttacked(board, newKing, newOccupancy))
             legalMoves.emplace_back(Move{from, to, kind});
 
