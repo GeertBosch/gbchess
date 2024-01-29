@@ -1,5 +1,6 @@
 #include <climits>
 #include <cstring>
+#include <functional>
 #include <iterator>
 #include <vector>
 
@@ -167,6 +168,14 @@ SquareSet possibleCaptures(Piece piece, Square from);
  * case of castling.
  */
 MoveVector allLegalMoves(Turn turn, Board& board);
+
+struct MoveWithPieces {
+    Move move;
+    Piece piece;
+    Piece captured;
+};
+
+void forAllLegalMoves(Turn turn, Board& board, std::function<void(Board&, MoveWithPieces)> action);
 
 /**
  * Returns true if the given square is attacked by a piece of the given opponent color.

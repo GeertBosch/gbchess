@@ -1,4 +1,5 @@
 #include <cassert>
+#include <functional>
 
 #include "moves.h"
 
@@ -651,8 +652,7 @@ std::string toString(SquareSet squares) {
 }
 }  // namespace
 
-MoveVector allLegalMoves(Turn turn, Board& board) {
-    MoveVector legalMoves;
+void forAllLegalMoves(Turn turn, Board& board, std::function<void(Board&, MoveWithPieces)> action) {
 
     auto ourKing = addColor(PieceType::KING, turn.activeColor);
     auto oldKing = SquareSet::find(board, ourKing);
@@ -693,7 +693,7 @@ MoveVector allLegalMoves(Turn turn, Board& board) {
 
         // Check if the move would result in our king being in check.
         if (!isAttacked(board, newKing, newOccupancy))
-            legalMoves.emplace_back(Move{from, to, kind});
+            action(board, MoveWithPieces{Move{from, to, kind}, piece, captured});
 
         unmakeMove(board, move, captured);
     };
@@ -702,6 +702,11 @@ MoveVector allLegalMoves(Turn turn, Board& board) {
     findEnPassant(board, turn, addIfLegal);
     findMoves(board, occupancy, addIfLegal);
     findCastles(board, occupancy, turn, addIfLegal);
+}
 
+MoveVector allLegalMoves(Turn turn, Board& board) {
+    MoveVector legalMoves;
+    forAllLegalMoves(
+        turn, board, [&](Board&, MoveWithPieces move) { legalMoves.emplace_back(move.move); });
     return legalMoves;
 }

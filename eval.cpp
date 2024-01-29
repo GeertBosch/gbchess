@@ -240,7 +240,6 @@ bool improveMove(EvaluatedMove& best, const EvaluatedMove& ourMove) {
 }
 
 EvaluatedMove computeBestMove(MoveVector& moves, Position& position, int maxdepth) {
-    auto allMoves = allLegalMoves(position.turn, position.board);
     EvaluatedMove best;  // Default to the worst possible move
     int depth = moves.size() + 1;
     auto indent = debug ? std::string(depth * 4 - 4, ' ') : "";
@@ -248,16 +247,16 @@ EvaluatedMove computeBestMove(MoveVector& moves, Position& position, int maxdept
     // Base case: if depth is zero, return the static evaluation of the position
     if (depth > maxdepth) {
         auto currentEval = evaluateBoard(position.board);
-        for (auto move : allMoves) {
+        forAllLegalMoves(position.turn, position.board, [&](Board& board, MoveWithPieces mwp) {
+            auto [move, piece, captured] = mwp;
             ++evalCount;
             auto newEval = currentEval;
-            if (move.kind >= MoveKind::CAPTURE)
-                newEval -= pieceValues[index(position.board[move.to])];
+            if (move.kind >= MoveKind::CAPTURE) newEval -= pieceValues[index(captured)];
             if (position.activeColor() == Color::BLACK) newEval = -newEval;
             newEval += moveValues[index(move.kind)];
             EvaluatedMove ourMove{move, false, false, newEval, depth};
             improveMove(best, ourMove);
-        }
+        });
         return best;
     }
 
@@ -268,6 +267,8 @@ EvaluatedMove computeBestMove(MoveVector& moves, Position& position, int maxdept
         D << indent << "cached " << *cachedMove << std::endl;
         return *cachedMove;
     }
+
+    auto allMoves = allLegalMoves(position.turn, position.board);
 
     // TODO: Sort moves by Most Valuable Victim (MVV) / Least Valuable Attacker (LVA)
 
@@ -301,17 +302,9 @@ EvaluatedMove computeBestMove(MoveVector& moves, Position& position, int maxdept
 uint64_t perft(Turn turn, Board& board, int depth) {
     if (depth <= 0) return 1;
     uint64_t nodes = 0;
-    auto moves = allLegalMoves(turn, board);
-    for (auto move : moves) {
-        // Remember the piece being moved, before applying the move to the board
-        auto piece = board[move.from];
-
-        // Apply the move to the board
-        auto captured = makeMove(board, move);
-        auto nextTurn = applyMove(turn, piece, move);
-
-        nodes += perft(nextTurn, board, depth - 1);
-        unmakeMove(board, move, captured);
-    }
+    forAllLegalMoves(turn, board, [&](Board& board, MoveWithPieces mwp) {
+        auto newTurn = applyMove(turn, mwp.piece, mwp.move);
+        nodes += perft(newTurn, board, depth - 1);
+    });
     return nodes;
 }
