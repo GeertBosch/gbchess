@@ -1,7 +1,9 @@
 #include <array>
 #include <cassert>
+#include <climits>
 #include <cstdint>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -11,20 +13,20 @@ static constexpr uint8_t kNumFiles = 8, kNumRanks = 8;
 static constexpr uint8_t kNumSquares = kNumFiles * kNumRanks;
 
 class Square {
-    uint8_t _index;
+    uint8_t square = 0;
 
 public:
-    constexpr Square(int rank, int file) : _index(rank * kNumFiles + file) {}
-    constexpr Square(int index) : _index(index) {}
+    constexpr Square(int rank, int file) : square(rank * kNumFiles + file) {}
+    constexpr Square(int index) : square(index) {}
 
-    int rank() const { return _index / kNumFiles; }
-    int file() const { return _index % kNumRanks; }
-    int index() const { return _index; }
+    int rank() const { return square / kNumFiles; }
+    int file() const { return square % kNumRanks; }
+    int index() const { return square; }
 
-    Square operator++() { return ++_index, *this; }
+    Square operator++() { return ++square, *this; }
 
-    bool operator==(Square other) const { return _index == other._index; }
-    bool operator!=(Square other) const { return _index != other._index; }
+    bool operator==(Square other) const { return square == other.square; }
+    bool operator!=(Square other) const { return square != other.square; }
 
     // Conversion to std::string: file to letter ('a' to 'h') and rank to digit ('1' to '8')
     operator std::string() const {
@@ -164,29 +166,36 @@ inline MoveKind operator|(MoveKind lhs, MoveKind rhs) {
     return static_cast<MoveKind>(static_cast<uint8_t>(lhs) | static_cast<uint8_t>(rhs));
 }
 
-struct Move {
+class Move {
+    uint16_t move = 0;
+    static_assert(kNumSquares * kNumSquares * kNumMoveKinds <= (1u << 16));
+
+public:
     static constexpr MoveKind QUIET = MoveKind::QUIET_MOVE;
     static constexpr MoveKind CAPTURE = MoveKind::CAPTURE;
-    Square from;
-    Square to;
-    MoveKind kind;
-    Move() : from(Square(-1, -1)), to(Square(-1, -1)), kind(MoveKind::QUIET_MOVE) {}
-    Move(Square from, Square to, MoveKind kind) : from(from), to(to), kind(kind) {}
+    Move() = default;
+    Move(Square from, Square to, MoveKind kind)
+        : move(from.index() + to.index() * kNumSquares + index(kind) * kNumSquares * kNumSquares) {}
 
     // String conversion operator
     operator std::string() const {
-        auto str = static_cast<std::string>(from) + static_cast<std::string>(to);
-        if (isPromotion()) str += to_char(promotionType(kind));
+        auto str = static_cast<std::string>(from()) + static_cast<std::string>(to());
+        if (isPromotion()) str += to_char(promotionType(kind()));
         return str;
     }
 
-    operator bool() const { return from.index() != to.index(); }
+    using Tuple = std::tuple<Square, Square, MoveKind>;
+    operator Tuple() const { return {from(), to(), kind()}; }
 
-    bool operator==(Move other) {
-        return (from == other.from) && (to == other.to) && (kind == other.kind);
-    }
+    Square from() const { return move % kNumSquares; }
+    Square to() const { return (move / kNumSquares) % kNumSquares; }
+    MoveKind kind() const { return MoveKind(move / (kNumSquares * kNumSquares)); }
 
-    bool isPromotion() const { return kind >= MoveKind::PROMOTION_MASK; }
+    operator bool() const { return from().index() != to().index(); }
+
+    bool operator==(Move other) { return move == other.move; }
+
+    bool isPromotion() const { return kind() >= MoveKind::PROMOTION_MASK; }
 };
 using MoveVector = std::vector<Move>;
 

@@ -327,7 +327,7 @@ void testPromotionKind() {
         Square to = "a8"_sq;
         Move move(from, to, MoveKind::QUEEN_PROMOTION);
         assert(move.isPromotion());
-        assert(promotionType(move.kind) == PieceType::QUEEN);
+        assert(promotionType((move.kind())) == PieceType::QUEEN);
     }
 }
 
@@ -402,7 +402,7 @@ void testMakeAndUnmakeMove(Board& board, Move move) {
         std::cout << fen::to_string(originalBoard) << std::endl;
         printBoard(std::cout, originalBoard);
         std::cout << "Move: " << static_cast<std::string>(move) << std::endl;
-        std::cout << "Kind: " << static_cast<int>(move.kind) << std::endl;
+        std::cout << "Kind: " << static_cast<int>(move.kind()) << std::endl;
         std::cout << "Captured: " << to_char(captured) << std::endl;
         {
             auto newBoard = originalBoard;

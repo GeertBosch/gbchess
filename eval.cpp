@@ -101,12 +101,12 @@ public:
     // Does not cancel out castling rights or en passant targets.
     // Assumes that passed in board is the same as the board used to construct this hash.
     void applyMove(const Board& board, Move mv) {
-        auto piece = board[mv.from];
-        auto target = board[mv.to];
-        move(piece, mv.from.index(), mv.to.index());
-        switch (mv.kind) {
+        auto piece = board[mv.from()];
+        auto target = board[mv.to()];
+        move(piece, mv.from().index(), mv.to().index());
+        switch (mv.kind()) {
         case MoveKind::QUIET_MOVE: break;
-        case MoveKind::DOUBLE_PAWN_PUSH: toggle(ExtraVectors(mv.to.file() + EN_PASSANT_A)); break;
+        case MoveKind::DOUBLE_PAWN_PUSH: toggle(ExtraVectors(mv.to().file() + EN_PASSANT_A)); break;
         case MoveKind::KING_CASTLE:  // Assume the move has the king move, so adjust the rook here.
             move(addColor(PieceType::ROOK, color(piece)),
                  (color(piece) == Color::WHITE ? Position::whiteKingSideRook
@@ -126,26 +126,27 @@ public:
                      .index());
             break;
 
-        case MoveKind::CAPTURE: toggle(target, mv.to.index()); break;
+        case MoveKind::CAPTURE: toggle(target, mv.to().index()); break;
         case MoveKind::EN_PASSANT:
             // Depending of the color of our piece, the captured pawn is either above or below the
             // destination square.
-            toggle(target, mv.to.index() + (color(piece) == Color::WHITE ? -kNumFiles : kNumFiles));
+            toggle(target,
+                   mv.to().index() + (color(piece) == Color::WHITE ? -kNumFiles : kNumFiles));
             break;
         case MoveKind::KNIGHT_PROMOTION:
         case MoveKind::BISHOP_PROMOTION:
         case MoveKind::ROOK_PROMOTION:
         case MoveKind::QUEEN_PROMOTION:
-            toggle(piece, mv.to.index());  // Remove the pawn, add the promoted piece
-            toggle(addColor(promotionType(mv.kind), color(piece)), mv.to.index());
+            toggle(piece, mv.to().index());  // Remove the pawn, add the promoted piece
+            toggle(addColor(promotionType(mv.kind()), color(piece)), mv.to().index());
             break;
         case MoveKind::KNIGHT_PROMOTION_CAPTURE:
         case MoveKind::BISHOP_PROMOTION_CAPTURE:
         case MoveKind::ROOK_PROMOTION_CAPTURE:
         case MoveKind::QUEEN_PROMOTION_CAPTURE:
-            toggle(target, mv.to.index());  // Remove the captured piece
-            toggle(piece, mv.to.index());   // Remove the pawn, add the promoted piece
-            toggle(addColor(promotionType(mv.kind), color(piece)), mv.to.index());
+            toggle(target, mv.to().index());  // Remove the captured piece
+            toggle(piece, mv.to().index());   // Remove the pawn, add the promoted piece
+            toggle(addColor(promotionType(mv.kind()), color(piece)), mv.to().index());
             break;
         }
     }
@@ -251,9 +252,9 @@ EvaluatedMove computeBestMove(MoveVector& moves, Position& position, int maxdept
             auto [move, piece, captured] = mwp;
             ++evalCount;
             auto newEval = currentEval;
-            if (move.kind >= MoveKind::CAPTURE) newEval -= pieceValues[index(captured)];
+            if (move.kind() >= MoveKind::CAPTURE) newEval -= pieceValues[index(captured)];
             if (position.activeColor() == Color::BLACK) newEval = -newEval;
-            newEval += moveValues[index(move.kind)];
+            newEval += moveValues[index(move.kind())];
             EvaluatedMove ourMove{move, false, false, newEval, depth};
             improveMove(best, ourMove);
         });

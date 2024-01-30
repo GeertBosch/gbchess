@@ -345,8 +345,8 @@ void expandMovePromotions(Piece piece, Move move, const F& fun) {
     fun(piece, move);
 
     // If promoted as queen, add all possible under promotions
-    for (auto kind = int(move.kind); --kind >= int(MoveKind::KNIGHT_PROMOTION);)
-        fun(piece, Move{move.from, move.to, MoveKind(kind)});
+    for (auto kind = int(move.kind()); --kind >= int(MoveKind::KNIGHT_PROMOTION);)
+        fun(piece, Move{move.from(), move.to(), MoveKind(kind)});
 }
 
 template <typename F>
@@ -354,8 +354,8 @@ void expandCapturePromotions(Piece piece, Move move, const F& fun) {
     fun(piece, move);
 
     // If promoted as queen, add all possible under promotions
-    for (auto kind = int(move.kind); --kind >= int(MoveKind::KNIGHT_PROMOTION_CAPTURE);)
-        fun(piece, Move{move.from, move.to, MoveKind(kind)});
+    for (auto kind = int(move.kind()); --kind >= int(MoveKind::KNIGHT_PROMOTION_CAPTURE);)
+        fun(piece, Move{move.from(), move.to(), MoveKind(kind)});
 }
 
 template <typename F>
@@ -453,13 +453,13 @@ void addAvailableCastling(MoveVector& captures,
 }
 
 Piece makeMove(Board& board, Move move) {
-    auto& piece = board[move.from];
-    auto& target = board[move.to];
+    auto& piece = board[move.from()];
+    auto& target = board[move.to()];
 
     // En passant capture
-    switch (move.kind) {
+    switch (move.kind()) {
     case MoveKind::KING_CASTLE: {
-        auto rank = move.from.rank();
+        auto rank = move.from().rank();
         auto rook = board[Square(rank, Position::kKingSideRookFile)];
         auto king = board[Square(rank, Position::kKingFile)];
 
@@ -474,7 +474,7 @@ Piece makeMove(Board& board, Move move) {
     }
 
     case MoveKind::QUEEN_CASTLE: {
-        auto rank = move.from.rank();
+        auto rank = move.from().rank();
         auto rook = board[Square(rank, Position::kQueenSideRookFile)];
         auto king = board[Square(rank, Position::kKingFile)];
 
@@ -490,7 +490,7 @@ Piece makeMove(Board& board, Move move) {
 
     case MoveKind::EN_PASSANT:
         // The pawns target is empty, so move the piece to capture en passant there.
-        std::swap(board[Square{move.from.rank(), move.to.file()}], target);
+        std::swap(board[Square{move.from().rank(), move.to().file()}], target);
         break;
 
     case MoveKind::KNIGHT_PROMOTION:
@@ -501,7 +501,7 @@ Piece makeMove(Board& board, Move move) {
     case MoveKind::BISHOP_PROMOTION_CAPTURE:
     case MoveKind::ROOK_PROMOTION_CAPTURE:
     case MoveKind::QUEEN_PROMOTION_CAPTURE:
-        piece = addColor(promotionType(move.kind), color(piece));  // Promote the pawn
+        piece = addColor(promotionType(move.kind()), color(piece));  // Promote the pawn
         [[fallthrough]];
     case MoveKind::QUIET_MOVE:
     case MoveKind::DOUBLE_PAWN_PUSH:
@@ -516,9 +516,9 @@ Piece makeMove(Board& board, Move move) {
 }
 
 void unmakeMove(Board& board, Move move, Piece captured) {
-    switch (move.kind) {
+    switch (move.kind()) {
     case MoveKind::KING_CASTLE: {
-        auto rank = move.from.rank();
+        auto rank = move.from().rank();
         auto rook = board[Square(rank, Position::kRookCastledKingSideFile)];
         auto king = board[Square(rank, Position::kKingCastledKingSideFile)];
 
@@ -532,7 +532,7 @@ void unmakeMove(Board& board, Move move, Piece captured) {
         break;
     }
     case MoveKind::QUEEN_CASTLE: {
-        auto rank = move.from.rank();
+        auto rank = move.from().rank();
         auto rook = board[Square(rank, Position::kRookCastledQueenSideFile)];
         auto king = board[Square(rank, Position::kKingCastledQueenSideFile)];
 
@@ -547,9 +547,9 @@ void unmakeMove(Board& board, Move move, Piece captured) {
     }
     case MoveKind::EN_PASSANT:
         // The pawns target is empty, so move the piece to capture en passant there.
-        std::swap(board[Square{move.from.rank(), move.to.file()}], captured);
-        board[move.from] = board[move.to];
-        board[move.to] = captured;
+        std::swap(board[Square{move.from().rank(), move.to().file()}], captured);
+        board[move.from()] = board[move.to()];
+        board[move.to()] = captured;
         break;
     case MoveKind::KNIGHT_PROMOTION:
     case MoveKind::BISHOP_PROMOTION:
@@ -559,13 +559,13 @@ void unmakeMove(Board& board, Move move, Piece captured) {
     case MoveKind::BISHOP_PROMOTION_CAPTURE:
     case MoveKind::ROOK_PROMOTION_CAPTURE:
     case MoveKind::QUEEN_PROMOTION_CAPTURE:
-        board[move.to] = addColor(PieceType::PAWN, color(board[move.to]));  // Demote the piece
+        board[move.to()] = addColor(PieceType::PAWN, color(board[move.to()]));  // Demote the piece
         [[fallthrough]];
     case MoveKind::QUIET_MOVE:
     case MoveKind::DOUBLE_PAWN_PUSH:
     case MoveKind::CAPTURE:
-        board[move.from] = board[move.to];
-        board[move.to] = captured;
+        board[move.from()] = board[move.to()];
+        board[move.to()] = captured;
         break;
     }
 }
@@ -591,15 +591,15 @@ Turn applyMove(Turn turn, Piece piece, Move move) {
     // Update enPassantTarget
     // Set the en passant target if a pawn moves two squares forward, otherwise reset it.
     turn.enPassantTarget = noEnPassantTarget;
-    if (move.kind == MoveKind::DOUBLE_PAWN_PUSH) {
-        turn.enPassantTarget = {(move.from.rank() + move.to.rank()) / 2, move.from.file()};
+    if (move.kind() == MoveKind::DOUBLE_PAWN_PUSH) {
+        turn.enPassantTarget = {(move.from().rank() + move.to().rank()) / 2, move.from().file()};
     }
     // Update castlingAvailability
-    turn.castlingAvailability &= ~castlingMask(move.from, move.to);
+    turn.castlingAvailability &= ~castlingMask(move.from(), move.to());
 
     // Update halfMoveClock: reset on pawn advance or capture, else increment
     ++turn.halfmoveClock;
-    if (type(piece) == PieceType::PAWN || isCapture(move.kind)) turn.halfmoveClock = 0;
+    if (type(piece) == PieceType::PAWN || isCapture(move.kind())) turn.halfmoveClock = 0;
 
     // Update fullMoveNumber: increment after black's move
     if (turn.activeColor == Color::BLACK) ++turn.fullmoveNumber;
@@ -611,7 +611,7 @@ Turn applyMove(Turn turn, Piece piece, Move move) {
 
 Position applyMove(Position position, Move move) {
     // Remember the piece being moved, before applying the move to the board
-    auto piece = position.board[move.from];
+    auto piece = position.board[move.from()];
 
     // Apply the move to the board
     makeMove(position.board, move);
@@ -660,7 +660,7 @@ void forAllLegalMoves(Turn turn, Board& board, std::function<void(Board&, MoveWi
 
     // Iterate over all moves and captures
     auto addIfLegal = [&](Piece piece, Move move) {
-        auto [from, to, kind] = move;
+        auto [from, to, kind] = Move::Tuple(move);
         // If we move the king, reflect that in the king squares
         auto newKing = oldKing;
         if (piece == ourKing) {
@@ -678,7 +678,7 @@ void forAllLegalMoves(Turn turn, Board& board, std::function<void(Board&, MoveWi
             Occupancy{occupancy.theirs & !SquareSet(to), (occupancy.ours & !SquareSet(from)) | to};
 
         // Adjust the opponent squares for the en passant and castling cases.
-        switch (move.kind) {
+        switch (kind) {
         case MoveKind::KING_CASTLE:
             newOccupancy.ours.erase(Square(from.rank(), Position::kKingSideRookFile));
             newOccupancy.ours.insert(Square(from.rank(), Position::kRookCastledKingSideFile));
