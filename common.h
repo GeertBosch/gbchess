@@ -9,6 +9,12 @@
 
 #pragma once
 
+#ifdef DEBUG
+constexpr bool debug = 1;
+#else
+constexpr bool debug = 0;
+#endif
+
 static constexpr uint8_t kNumFiles = 8, kNumRanks = 8;
 static constexpr uint8_t kNumSquares = kNumFiles * kNumRanks;
 
@@ -86,10 +92,11 @@ enum class Piece : uint8_t {
     BLACK_QUEEN,
     BLACK_KING
 };
+static constexpr uint8_t kNumPieces = static_cast<uint8_t>(Piece::BLACK_KING) + 1;
+
 inline constexpr uint8_t index(Piece piece) {
     return static_cast<uint8_t>(piece);
 }
-static constexpr uint8_t kNumPieces = index(Piece::BLACK_KING) + 1;
 static const std::string pieceChars = "PNBRQK.pnbrqk";
 
 constexpr PieceType type(Piece piece) {

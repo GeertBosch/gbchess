@@ -6,12 +6,8 @@
 #include "moves.h"
 
 #ifdef DEBUG
-constexpr bool debug = 1;
 #include "debug.h"
-#else
-constexpr bool debug = 0;
 #endif
-
 #define D \
     if constexpr (debug) std::cerr
 

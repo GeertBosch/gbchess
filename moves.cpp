@@ -1,4 +1,5 @@
 #include <cassert>
+#include <emmintrin.h>
 #include <functional>
 
 #include "moves.h"
@@ -106,8 +107,6 @@ MovesTable::MovesTable() {
  * The implementation really finds everything unequal and then inverts the result.
  */
 uint64_t equalSet(uint64_t input, uint8_t nibble) {
-    const uint64_t occupancyNibbles = 0x80402010'08040201ull;  // high nibbles to indicate occupancy
-    const uint64_t oneNibbles = 0x01010101'01010101ull;        // low nibbles set to one
     input ^= 0x01010101'01010101ull * nibble;  // 0 nibbles in the input indicate the piece
     input += 0x7f3f1f0f'7f3f1f0full;           // Cause overflow in the right bits
     input &= 0x80402010'80402010ull;           // These are them, the 8 occupancy bits
@@ -120,17 +119,33 @@ uint64_t equalSet(uint64_t input, uint8_t nibble) {
     return input;
 }
 
-uint64_t equalSet(std::array<Piece, 64> squares, Piece piece, bool invert) {
+uint64_t equalSet(__m128i input, uint8_t nibble) {
+    __m128i cmp = {0x01010101'01010101ll * nibble, 0x01010101'01010101ll * nibble};
+    __m128i res = _mm_cmpeq_epi8(input, cmp);
+    return static_cast<uint16_t>(_mm_movemask_epi8(res));  // avoid sign extending
+}
+
+template <typename T>
+uint64_t equalSetT(std::array<Piece, 64> squares, Piece piece, bool invert) {
     static_assert(kNumPieces <= 16, "Piece must fit in 4 bits");
 
     uint64_t set = 0;
-    for (int j = 0; j < sizeof(squares); j += sizeof(uint64_t)) {
-        uint64_t input;
-        memcpy(&input, &squares[j], sizeof(input));
+    for (int j = 0; j < sizeof(squares); j += sizeof(T)) {
+        T input;
+        memcpy(&input, &squares[j], sizeof(T));
         set |= equalSet(input, static_cast<uint8_t>(piece)) << j;
     }
 
     return invert ? ~set : set;
+}
+
+uint64_t equalSet(std::array<Piece, 64> squares, Piece piece, bool invert) {
+    uint64_t res = equalSetT<__m128i>(squares, piece, invert);
+    if constexpr (debug) {
+        auto ref = equalSetT<uint64_t>(squares, piece, invert);
+        assert(res == ref);
+    }
+    return res;
 }
 
 /**
@@ -152,21 +167,36 @@ uint64_t lessSet(uint64_t input, uint8_t nibble) {
     return input;
 }
 
+uint64_t lessSet(__m128i input, uint8_t nibble) {
+    __m128i cmp = {0x01010101'01010101ll * nibble, 0x01010101'01010101ll * nibble};
+    __m128i res = _mm_cmplt_epi8(input, cmp);
+    return static_cast<uint16_t>(_mm_movemask_epi8(res));  // avoid sign extending
+}
+
 /**
  *  Returns the bits corresponding to the bytes in the input that are less than the piece.
  */
-uint64_t lessSet(std::array<Piece, 64> squares, Piece piece, bool invert) {
+template <typename T>
+uint64_t lessSetT(std::array<Piece, 64> squares, Piece piece, bool invert) {
     static_assert(kNumPieces <= 16, "Piece must fit in 4 bits");
     if (!int(piece)) return invert ? 0xffffffffffffffffull : 0;  // Special case for empty squares
 
     uint64_t set = 0;
-    for (int j = 0; j < sizeof(squares); j += sizeof(uint64_t)) {
-        uint64_t input;
-        memcpy(&input, &squares[j], sizeof(input));
+    for (int j = 0; j < sizeof(squares); j += sizeof(T)) {
+        T input;
+        memcpy(&input, &squares[j], sizeof(T));
         set |= lessSet(input, static_cast<uint8_t>(piece)) << j;
     }
 
     return invert ? ~set : set;
+}
+uint64_t lessSet(std::array<Piece, 64> squares, Piece piece, bool invert) {
+    uint64_t res = lessSetT<__m128i>(squares, piece, invert);
+    if constexpr (debug) {
+        auto ref = lessSetT<uint64_t>(squares, piece, invert);
+        assert(res == ref);
+    }
+    return res;
 }
 
 SquareSet SquareSet::occupancy(const Board& board) {
