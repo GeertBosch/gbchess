@@ -32,22 +32,31 @@ struct MovesTable {
     SquareSet enPassantFrom[2][kNumFiles];  // color, file
 
     MovesTable();
+
+private:
+    void initializePieceMovesAndCaptures();
+    void initializePieceMoveAndCaptureKinds();
+    void initializeAttackers();
+    void initializePaths();
+    void initializeCastlingMasks();
+    void initializeEnPassantFrom();
 } movesTable;
 
-MovesTable::MovesTable() {
-    // Initialize piece specific move and capture tables
-    for (int piece = 0; piece != kNumPieces; ++piece) {
-        // Initialize moves and captures
+void MovesTable::initializePieceMovesAndCaptures() {
+    for (auto piece : pieces) {
         for (Square from = 0; from != kNumSquares; ++from) {
-            moves[piece][from.index()] = possibleMoves(Piece(piece), from);
-            captures[piece][from.index()] = possibleCaptures(Piece(piece), from);
+            moves[int(piece)][from.index()] = possibleMoves(Piece(piece), from);
+            captures[int(piece)][from.index()] = possibleCaptures(Piece(piece), from);
         }
-        // Initialize move kinds and capture kinds
+    }
+}
+void MovesTable::initializePieceMoveAndCaptureKinds() {
+    for (auto piece : pieces) {
         for (int fromRank = 0; fromRank != kNumRanks; ++fromRank) {
             for (int toRank = 0; toRank != kNumRanks; ++toRank) {
                 MoveKind moveKind = MoveKind::QUIET_MOVE;
                 MoveKind captureKind = MoveKind::CAPTURE;
-                switch (Piece(piece)) {
+                switch (piece) {
                 case Piece::WHITE_PAWN:
                     if (fromRank == 1 && toRank == 3) moveKind = MoveKind::DOUBLE_PAWN_PUSH;
                     if (toRank == kNumRanks - 1) {
@@ -65,40 +74,62 @@ MovesTable::MovesTable() {
                     break;
                 default: break;
                 }
-                moveKinds[piece][fromRank][toRank] = moveKind;
-                captureKinds[piece][fromRank][toRank] = captureKind;
+                moveKinds[int(piece)][fromRank][toRank] = moveKind;
+                captureKinds[int(piece)][fromRank][toRank] = captureKind;
             }
         }
     }
+}
 
+void MovesTable::initializeAttackers() {
     // Initialize attackers
     for (Square from = 0; from != kNumSquares; ++from) {
         SquareSet toSquares;
         // Gather all possible squares that can be attacked by any piece
-        for (int piece = 0; piece != kNumPieces; ++piece)
-            toSquares |= captures[piece][from.index()];
+        for (auto piece : pieces) toSquares |= captures[int(piece)][from.index()];
         // Distribute attackers over the target squares
         for (auto to : toSquares) attackers[to.index()].insert(from);
     }
+}
 
+void MovesTable::initializePaths() {
     // Initialize paths
     for (int from = 0; from < kNumSquares; ++from) {
         for (int to = 0; to < kNumSquares; ++to) {
             paths[from][to] = SquareSet::path(Square(from), Square(to));
         }
     }
+}
+
+void MovesTable::initializeCastlingMasks() {
     // Initialize castling masks and en passant from squares
+    for (int color = 0; color < 2; ++color) {
+        castlingClear[color][index(MoveKind::QUEEN_CASTLE)] =
+            castlingPath(Color(color), MoveKind::QUEEN_CASTLE);
+        castlingClear[color][index(MoveKind::KING_CASTLE)] =
+            castlingPath(Color(color), MoveKind::KING_CASTLE);
+    }
+}
+
+void MovesTable::initializeEnPassantFrom() {
+    // Initialize en passant from squares
     for (int color = 0; color < 2; ++color) {
         int fromRank = color == 0 ? kNumRanks - 4 : 3;  // skipping 3 ranks from either side
         for (int fromFile = 0; fromFile < kNumFiles; ++fromFile) {
             enPassantFrom[color][fromFile] = {SquareSet::valid(fromRank, fromFile - 1) |
                                               SquareSet::valid(fromRank, fromFile + 1)};
         }
-        castlingClear[color][index(MoveKind::QUEEN_CASTLE)] =
-            castlingPath(Color(color), MoveKind::QUEEN_CASTLE);
-        castlingClear[color][index(MoveKind::KING_CASTLE)] =
-            castlingPath(Color(color), MoveKind::KING_CASTLE);
     }
+}
+
+MovesTable::MovesTable() {
+    initializePieceMovesAndCaptures();
+    initializePieceMoveAndCaptureKinds();
+
+    initializeAttackers();
+    initializePaths();
+    initializeCastlingMasks();
+    initializeEnPassantFrom();
 }
 
 /**

@@ -93,6 +93,33 @@ enum class Piece : uint8_t {
     BLACK_KING
 };
 static constexpr uint8_t kNumPieces = static_cast<uint8_t>(Piece::BLACK_KING) + 1;
+template <typename T>
+class Range {
+public:
+    class iterator {
+        T value;
+
+    public:
+        constexpr iterator(T value) : value(value) {}
+        T operator*() const { return value; }
+        iterator& operator++() {
+            value = static_cast<T>(static_cast<size_t>(value) + 1);
+            return *this;
+        }
+        bool operator==(iterator other) const { return value == other.value; }
+        bool operator!=(iterator other) const { return value != other.value; }
+    };
+    constexpr Range(T first, T last)
+        : _begin(first), _end(static_cast<T>(static_cast<size_t>(last) + 1)) {}
+
+    iterator begin() const { return _begin; }
+    iterator end() const { return _end; }
+
+private:
+    const iterator _begin;
+    const iterator _end;
+};
+static constexpr Range pieces(Piece::WHITE_PAWN, Piece::BLACK_KING);
 
 inline constexpr uint8_t index(Piece piece) {
     return static_cast<uint8_t>(piece);
