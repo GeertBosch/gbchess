@@ -239,9 +239,9 @@ bool improveMove(EvaluatedMove& best, const EvaluatedMove& ourMove) {
     return ourMove.mate && ourMove.check;
 }
 
-EvaluatedMove computeBestMove(MoveVector& moves, Position& position, int maxdepth) {
+EvaluatedMove computeBestMove(Position& position, int depth, int maxdepth) {
     EvaluatedMove best;  // Default to the worst possible move
-    int depth = moves.size() + 1;
+    ++depth;
     auto indent = debug ? std::string(depth * 4 - 4, ' ') : "";
 
     // Base case: if depth is zero, return the static evaluation of the position
@@ -278,9 +278,7 @@ EvaluatedMove computeBestMove(MoveVector& moves, Position& position, int maxdept
     for (auto move : allMoves) {
         // Recursively compute the best moves for the opponent, worst for us.
         auto newPosition = applyMove(position, move);
-        moves.push_back(move);
-        auto opponentMove = -computeBestMove(moves, newPosition, maxdepth);
-        moves.pop_back();
+        auto opponentMove = -computeBestMove(newPosition, depth, maxdepth);
 
         bool mate = !opponentMove.move;  // Either checkmate or stalemate
         bool check = isAttacked(newPosition.board,
@@ -290,8 +288,7 @@ EvaluatedMove computeBestMove(MoveVector& moves, Position& position, int maxdept
         char kind[2][2] = {{' ', '='}, {'+', '#'}};  // {{check, mate}, {check, mate}}
 
         Score evaluation = mate ? (check ? bestEval : drawEval) : opponentMove.evaluation;
-        EvaluatedMove ourMove(
-            move, check, mate, evaluation, mate ? moves.size() + 1 : opponentMove.depth);
+        EvaluatedMove ourMove(move, check, mate, evaluation, mate ? depth : opponentMove.depth);
         if (improveMove(best, ourMove)) break;
     }
     // Cache the best move for this position
