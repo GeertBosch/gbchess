@@ -13,7 +13,7 @@
  *  position is even.
  */
 class Score {
-    using value_type = int32_t;
+    using value_type = int16_t;
     value_type value = 0;  // centipawns
     constexpr Score(unsigned long long value) : value(value) {
         assert(value <= std::numeric_limits<value_type>::max());
@@ -35,8 +35,15 @@ public:
     Score& operator-=(Score rhs) { return *this = *this - rhs; }
     bool operator==(Score rhs) const { return value == rhs.value; }
     bool operator<(Score rhs) const { return value < rhs.value; }
-    operator std::string() const { return std::to_string(value / 100); }
-    static constexpr Score max() { return 999'00ull; }
+    operator std::string() const {
+        value_type pawns = value / 100;
+        value_type cents = value % 100;
+        std::string result = std::to_string(pawns) + '.';
+        result += '0' + cents / 10;
+        result += '0' + cents % 10;
+        return result;
+    }
+    static constexpr Score max() { return Score(99'99ull); }
     static constexpr Score min() { return -max(); }
 };
 
@@ -45,9 +52,9 @@ constexpr Score operator"" _cp(unsigned long long value) {
     return Score(value);
 }
 
-static Score worstEval = -999'00_cp;
+static Score worstEval = -99'99_cp;
 static Score drawEval = 0_cp;
-static Score bestEval = 999'00_cp;
+static Score bestEval = 99'99_cp;
 
 /**
  * The evaluation is always from the perspective of the active color. Higher evaluations are better,

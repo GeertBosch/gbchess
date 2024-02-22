@@ -108,7 +108,7 @@ void testScore() {
     assert(Q == -q);
     assert(Q + q == zero);
     assert(q < Q);
-    assert(std::string(q) == "-9");
+    assert(std::string(q) == "-9.00");
 }
 
 void testEvaluatedMove() {
@@ -122,11 +122,14 @@ void testEvaluatedMove() {
         assert(none < mateIn3);
         assert(mateIn3 < mateIn1);
         assert(none < mateIn1);
+        assert(mateIn1.evaluation == bestEval);
+        assert(bestEval == Score::max());
     }
     {
         EvaluatedMove stalemate = {Move("f6"_sq, "e5"_sq, Move::QUIET), false, true, 0_cp, 3};
         EvaluatedMove upQueen = {Move("f7"_sq, "a2"_sq, Move::CAPTURE), false, false, 9'00_cp, 6};
         assert(stalemate < upQueen);
+        assert(stalemate.evaluation == drawEval);
     }
     std::cout << "EvaluatedMove tests passed" << std::endl;
 }
