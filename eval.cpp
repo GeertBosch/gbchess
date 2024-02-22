@@ -1,6 +1,6 @@
+#include <iostream>
 #include <random>
 #include <string>
-#include <iostream>
 
 #include "eval.h"
 #include "moves.h"
@@ -22,6 +22,10 @@ std::ostream& operator<<(std::ostream& os, const EvaluatedMove& sq) {
 }
 std::ostream& operator<<(std::ostream& os, Color color) {
     return os << (color == Color::BLACK ? 'b' : 'w');
+}
+
+std::ostream& operator<<(std::ostream& os, Score score) {
+    return os << std::string(score);
 }
 
 EvaluatedMove::operator std::string() const {
@@ -79,7 +83,6 @@ public:
         if (position.turn.enPassantTarget.index())
             toggle(ExtraVectors(position.turn.enPassantTarget.file() + EN_PASSANT_A));
     }
-
 
 
     uint64_t operator()() { return hash; }
@@ -179,49 +182,49 @@ struct HashTable {
 } hashTable;
 
 // Values of pieces, in centipawns
-static std::array<int16_t, kNumPieces> pieceValues = {
-    0,     // None
-    100,   // White pawn
-    300,   // White knight
-    300,   // White bishop
-    500,   // White rook
-    900,   // White queen
-    0,     // Not counting the white king
-    -100,  // Black pawn
-    -300,  // Black knight
-    -300,  // Black bishop
-    -500,  // Black rook
-    -900,  // Black queen
-    0,     // Not counting the black king
+static std::array<Score, kNumPieces> pieceValues = {
+    0_cp,     // No piece
+    100_cp,   // White pawn
+    300_cp,   // White knight
+    300_cp,   // White bishop
+    500_cp,   // White rook
+    900_cp,   // White queen
+    0_cp,     // Not counting the white king
+    -100_cp,  // Black pawn
+    -300_cp,  // Black knight
+    -300_cp,  // Black bishop
+    -500_cp,  // Black rook
+    -900_cp,  // Black queen
+    0_cp,     // Not counting the black king
 };
 // Values of moves, in addition to the value of the piece captured, in centipawns
-static std::array<int16_t, kNumMoveKinds> moveValues = {
-    0,    //  0 Quiet move
-    0,    //  1 Double pawn push
-    0,    //  2 King castle
-    0,    //  3 Queen castle
-    0,    //  4 Capture
-    0,    //  5 En passant
-    0,    //  6 (unused)
-    0,    //  7 (unused)
-    300,  //  8 Knight promotion
-    300,  //  9 Bishop promotion
-    500,  // 10 Rook promotion
-    900,  // 11 Queen promotion
-    300,  // 12 Knight promotion capture
-    300,  // 13 Bishop promotion capture
-    500,  // 14 Rook promotion capture
-    900,  // 15 Queen promotion capture
+static std::array<Score, kNumMoveKinds> moveValues = {
+    0_cp,    //  0 Quiet move
+    0_cp,    //  1 Double pawn push
+    0_cp,    //  2 King castle
+    0_cp,    //  3 Queen castle
+    0_cp,    //  4 Capture
+    0_cp,    //  5 En passant
+    0_cp,    //  6 (unused)
+    0_cp,    //  7 (unused)
+    300_cp,  //  8 Knight promotion
+    300_cp,  //  9 Bishop promotion
+    500_cp,  // 10 Rook promotion
+    900_cp,  // 11 Queen promotion
+    300_cp,  // 12 Knight promotion capture
+    300_cp,  // 13 Bishop promotion capture
+    500_cp,  // 14 Rook promotion capture
+    900_cp,  // 15 Queen promotion capture
 };
 
 uint64_t evalCount = 0;
 uint64_t cacheCount = 0;
-float evaluateBoard(const Board& board) {
-    int32_t value = 0;
+Score evaluateBoard(const Board& board) {
+    Score value = 0_cp;
 
     for (auto piece : board.squares()) value += pieceValues[index(piece)];
 
-    return value / 100.0f;
+    return value;
 }
 
 bool improveMove(EvaluatedMove& best, const EvaluatedMove& ourMove) {
@@ -286,7 +289,7 @@ EvaluatedMove computeBestMove(MoveVector& moves, Position& position, int maxdept
 
         char kind[2][2] = {{' ', '='}, {'+', '#'}};  // {{check, mate}, {check, mate}}
 
-        float evaluation = mate ? (check ? bestEval : drawEval) : opponentMove.evaluation;
+        Score evaluation = mate ? (check ? bestEval : drawEval) : opponentMove.evaluation;
         EvaluatedMove ourMove(
             move, check, mate, evaluation, mate ? moves.size() + 1 : opponentMove.depth);
         if (improveMove(best, ourMove)) break;

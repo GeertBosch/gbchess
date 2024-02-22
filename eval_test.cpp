@@ -79,8 +79,7 @@ void testFromStdIn(int depth) {
         std::string fen;
         std::getline(std::cin, fen);
 
-        if (fen.empty())
-            continue;
+        if (fen.empty()) continue;
 
         // Parse the FEN string into a Position
         std::cerr << fen << std::endl;
@@ -102,18 +101,31 @@ void testFromStdIn(int depth) {
     }
 }
 
+void testScore() {
+    Score zero;
+    Score q = -9'00_cp;
+    Score Q = 9'00_cp;
+    assert(Q == -q);
+    assert(Q + q == zero);
+    assert(q < Q);
+    assert(std::string(q) == "-9");
+}
+
 void testEvaluatedMove() {
     {
         EvaluatedMove none;
-        EvaluatedMove mateIn3 = {Move("f6"_sq, "e5"_sq, Move::QUIET), false, false, 999, 5};
-        EvaluatedMove mateIn1 = {Move("e7"_sq, "g7"_sq, Move::QUIET), true, true, 999, 1};
+        EvaluatedMove mateIn3 = {Move("f6"_sq, "e5"_sq, Move::QUIET), false, false, bestEval, 5};
+        EvaluatedMove mateIn1 = {Move("e7"_sq, "g7"_sq, Move::QUIET), true, true, bestEval, 1};
+        std::cout << "none: " << std::string(none) << std::endl;
+        std::cout << "mateIn3: " << std::string(mateIn3) << std::endl;
+        std::cout << "mateIn1: " << std::string(mateIn1) << std::endl;
         assert(none < mateIn3);
         assert(mateIn3 < mateIn1);
         assert(none < mateIn1);
     }
     {
-        EvaluatedMove stalemate = {Move("f6"_sq, "e5"_sq, Move::QUIET), false, true, 0, 3};
-        EvaluatedMove upQueen = {Move("f7"_sq, "a2"_sq, Move::CAPTURE), false, false, 9, 6};
+        EvaluatedMove stalemate = {Move("f6"_sq, "e5"_sq, Move::QUIET), false, true, 0_cp, 3};
+        EvaluatedMove upQueen = {Move("f7"_sq, "a2"_sq, Move::CAPTURE), false, false, 9'00_cp, 6};
         assert(stalemate < upQueen);
     }
     std::cout << "EvaluatedMove tests passed" << std::endl;
@@ -130,6 +142,7 @@ int main(int argc, char* argv[]) {
         std::exit(1);
     }
 
+    testScore();
     testEvaluatedMove();
 
     std::string fen(argv[1]);
@@ -142,7 +155,7 @@ int main(int argc, char* argv[]) {
     printBoard(std::cout, position.board);
 
     // Evaluate the board
-    std::cout << "Board Evaluation: " << evaluateBoard(position.board) << std::endl;
+    std::cout << "Board Evaluation: " << std::string(evaluateBoard(position.board)) << std::endl;
 
     printAvailableCaptures(position);
     printAvailableMoves(position);

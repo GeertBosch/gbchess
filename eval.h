@@ -1,11 +1,53 @@
+#include <limits>
 #include <map>
 #include <sstream>
+#include <string>
 
 #include "common.h"
 
-static float worstEval = -999;
-static float drawEval = 0;
-static float bestEval = 999;
+/**
+ *  The Score type is used to represent the evaluation of a chess position. It is a signed integer,
+ *  where the value is in centipawns (hundredths of a pawn). The ends of the range indicate
+ *  checkmate. In debug mode, the type protect against overflow. The value is positive if the
+ *  position is good for white, and negative if it is good for black. The value is zero if the
+ *  position is even.
+ */
+class Score {
+    using value_type = int32_t;
+    value_type value = 0;  // centipawns
+    constexpr Score(unsigned long long value) : value(value) {
+        assert(value <= std::numeric_limits<value_type>::max());
+    }
+    constexpr Score(value_type value) : value(value) { this->value = check(value); }
+
+    static constexpr value_type check(value_type value) {
+        if (debug) assert(min().value <= value && value <= max().value);
+        return value;
+    }
+
+public:
+    friend constexpr Score operator"" _cp(unsigned long long value);
+    Score() = default;
+    constexpr Score operator-() const { return check(-value); }
+    Score operator+(Score rhs) const { return check(value + rhs.value); }
+    Score operator-(Score rhs) const { return *this + -rhs; }
+    Score& operator+=(Score rhs) { return *this = *this + rhs; }
+    Score& operator-=(Score rhs) { return *this = *this - rhs; }
+    bool operator==(Score rhs) const { return value == rhs.value; }
+    bool operator<(Score rhs) const { return value < rhs.value; }
+    operator std::string() const { return std::to_string(value / 100); }
+    static constexpr Score max() { return 999'00ull; }
+    static constexpr Score min() { return -max(); }
+};
+
+// literal constructor for _cp (centipawn) suffix
+constexpr Score operator"" _cp(unsigned long long value) {
+    return Score(value);
+}
+
+static Score worstEval = -999'00_cp;
+static Score drawEval = 0_cp;
+static Score bestEval = 999'00_cp;
 
 /**
  * The evaluation is always from the perspective of the active color. Higher evaluations are better,
@@ -13,31 +55,27 @@ static float bestEval = 999;
  */
 struct EvaluatedMove {
     Move move;  // Defaults to an invalid move
-    float evaluation;
+    Score evaluation;
     bool check;
     bool mate;
     int depth;
 
     EvaluatedMove() : depth(0) {}
-    EvaluatedMove(Move move, bool check, bool mate, float evaluation, int depth)
+    EvaluatedMove(Move move, bool check, bool mate, Score evaluation, int depth)
         : move(move), evaluation(evaluation), check(check), mate(mate), depth(depth) {}
     EvaluatedMove& operator=(const EvaluatedMove& other) = default;
     EvaluatedMove operator-() const {
         auto ret = *this;
-        ret.evaluation *= -1;
+        ret.evaluation = -ret.evaluation;
 
         return ret;
     }
 
     operator std::string() const;
-
     bool operator<(const EvaluatedMove& rhs) const {
-        if (!move)
-            return true;
-        if (evaluation < rhs.evaluation)
-            return true;
-        if (rhs.evaluation < evaluation)
-            return false;
+        if (!move) return true;
+        if (evaluation < rhs.evaluation) return true;
+        if (rhs.evaluation < evaluation) return false;
         return depth > rhs.depth;
     }
 };
@@ -52,7 +90,7 @@ extern uint64_t cacheCount;
  * represents the advantage to the white player: positive for white's advantage, negative
  * for black's advantage.
  */
-float evaluateBoard(const Board& board);
+Score evaluateBoard(const Board& board);
 
 /**
  * Evaluates the best moves from a given chess position up to a certain depth.
