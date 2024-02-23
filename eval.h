@@ -35,6 +35,7 @@ public:
     Score& operator-=(Score rhs) { return *this = *this - rhs; }
     bool operator==(Score rhs) const { return value == rhs.value; }
     bool operator<(Score rhs) const { return value < rhs.value; }
+    bool mate() const { return std::abs(value) == max().value; }
 
     /**
      *  For scores indicating mate, reduce the value by one, so that a sooner mate is preferred over
@@ -73,11 +74,10 @@ struct EvaluatedMove {
     Move move;  // Defaults to an invalid move
     Score evaluation;
     bool check;
-    bool mate;
 
     EvaluatedMove() = default;
-    EvaluatedMove(Move move, bool check, bool mate, Score evaluation)
-        : move(move), evaluation(evaluation), check(check), mate(mate) {}
+    EvaluatedMove(Move move, bool check, Score evaluation)
+        : move(move), check(check), evaluation(evaluation) {}
     EvaluatedMove& operator=(const EvaluatedMove& other) = default;
     EvaluatedMove operator-() const {
         auto ret = *this;

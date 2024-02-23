@@ -33,7 +33,7 @@ EvaluatedMove::operator std::string() const {
     std::stringstream ss;
     const char* kind[2][2] = {{"", "="}, {"+", "#"}};  // {{check, mate}, {check, mate}}
     ss << move;
-    ss << kind[check][mate];
+    ss << kind[check][!move || evaluation.mate()];
     ss << " " << evaluation;
     return ss.str();
 }
@@ -236,7 +236,7 @@ bool improveMove(EvaluatedMove& best, const EvaluatedMove& ourMove) {
 
     D << indent << best << " => " << ourMove << std::endl;
     best = ourMove;
-    return ourMove.mate && ourMove.check;
+    return !ourMove.move && ourMove.check;
 }
 
 EvaluatedMove staticEval(Position& position) {
@@ -249,7 +249,7 @@ EvaluatedMove staticEval(Position& position) {
         if (move.kind() >= MoveKind::CAPTURE) newEval -= pieceValues[index(captured)];
         if (position.activeColor() == Color::BLACK) newEval = -newEval;
         newEval += moveValues[index(move.kind())];
-        EvaluatedMove ourMove{move, false, false, newEval};
+        EvaluatedMove ourMove{move, false, newEval};
         improveMove(best, ourMove);
     });
     return best;
@@ -291,7 +291,7 @@ EvaluatedMove computeBestMove(Position& position, int depth, int maxdepth) {
 
         Score evaluation =
             mate ? (check ? bestEval : drawEval) : opponentMove.evaluation.adjustDepth();
-        EvaluatedMove ourMove(move, check, mate, evaluation);
+        EvaluatedMove ourMove(move, check, evaluation);
         if (improveMove(best, ourMove)) break;
     }
     // Cache the best move for this position
