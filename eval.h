@@ -35,6 +35,15 @@ public:
     Score& operator-=(Score rhs) { return *this = *this - rhs; }
     bool operator==(Score rhs) const { return value == rhs.value; }
     bool operator<(Score rhs) const { return value < rhs.value; }
+
+    /**
+     *  For scores indicating mate, reduce the value by one, so that a sooner mate is preferred over
+     *  a later one.
+     */
+    Score adjustDepth() const {
+        return int16_t(value > 0 ? value - 1 : value < 0 ? value + 1 : value);
+    }
+
     operator std::string() const {
         value_type pawns = value / 100;
         value_type cents = value % 100;
@@ -65,11 +74,10 @@ struct EvaluatedMove {
     Score evaluation;
     bool check;
     bool mate;
-    int depth;
 
-    EvaluatedMove() : depth(0) {}
-    EvaluatedMove(Move move, bool check, bool mate, Score evaluation, int depth)
-        : move(move), evaluation(evaluation), check(check), mate(mate), depth(depth) {}
+    EvaluatedMove() = default;
+    EvaluatedMove(Move move, bool check, bool mate, Score evaluation)
+        : move(move), evaluation(evaluation), check(check), mate(mate) {}
     EvaluatedMove& operator=(const EvaluatedMove& other) = default;
     EvaluatedMove operator-() const {
         auto ret = *this;
@@ -79,12 +87,7 @@ struct EvaluatedMove {
     }
 
     operator std::string() const;
-    bool operator<(const EvaluatedMove& rhs) const {
-        if (!move) return true;
-        if (evaluation < rhs.evaluation) return true;
-        if (rhs.evaluation < evaluation) return false;
-        return depth > rhs.depth;
-    }
+    bool operator<(const EvaluatedMove& rhs) const { return !move || evaluation < rhs.evaluation; }
 };
 
 extern uint64_t evalCount;

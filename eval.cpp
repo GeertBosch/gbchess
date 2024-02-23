@@ -34,7 +34,7 @@ EvaluatedMove::operator std::string() const {
     const char* kind[2][2] = {{"", "="}, {"+", "#"}};  // {{check, mate}, {check, mate}}
     ss << move;
     ss << kind[check][mate];
-    ss << " " << evaluation << " @ " << depth;
+    ss << " " << evaluation;
     return ss.str();
 }
 
@@ -228,9 +228,9 @@ Score evaluateBoard(const Board& board) {
 }
 
 bool improveMove(EvaluatedMove& best, const EvaluatedMove& ourMove) {
-    auto indent = debug ? std::string(ourMove.depth * 4 - 4, ' ') : "";
+    std::string indent = "    ";
     bool improved = best < ourMove;
-    D << indent << best << " <  " << ourMove << " @ " << ourMove.depth << " ? " << improved << "\n";
+    D << indent << best << " <  " << ourMove << " ? " << improved << "\n";
 
     if (!improved) return false;
 
@@ -239,26 +239,29 @@ bool improveMove(EvaluatedMove& best, const EvaluatedMove& ourMove) {
     return ourMove.mate && ourMove.check;
 }
 
+EvaluatedMove staticEval(Position& position) {
+    EvaluatedMove best;  // Default to the worst possible move
+    auto currentEval = evaluateBoard(position.board);
+    forAllLegalMoves(position.turn, position.board, [&](Board& board, MoveWithPieces mwp) {
+        auto [move, piece, captured] = mwp;
+        ++evalCount;
+        auto newEval = currentEval;
+        if (move.kind() >= MoveKind::CAPTURE) newEval -= pieceValues[index(captured)];
+        if (position.activeColor() == Color::BLACK) newEval = -newEval;
+        newEval += moveValues[index(move.kind())];
+        EvaluatedMove ourMove{move, false, false, newEval};
+        improveMove(best, ourMove);
+    });
+    return best;
+}
+
 EvaluatedMove computeBestMove(Position& position, int depth, int maxdepth) {
     EvaluatedMove best;  // Default to the worst possible move
     ++depth;
     auto indent = debug ? std::string(depth * 4 - 4, ' ') : "";
 
     // Base case: if depth is zero, return the static evaluation of the position
-    if (depth > maxdepth) {
-        auto currentEval = evaluateBoard(position.board);
-        forAllLegalMoves(position.turn, position.board, [&](Board& board, MoveWithPieces mwp) {
-            auto [move, piece, captured] = mwp;
-            ++evalCount;
-            auto newEval = currentEval;
-            if (move.kind() >= MoveKind::CAPTURE) newEval -= pieceValues[index(captured)];
-            if (position.activeColor() == Color::BLACK) newEval = -newEval;
-            newEval += moveValues[index(move.kind())];
-            EvaluatedMove ourMove{move, false, false, newEval, depth};
-            improveMove(best, ourMove);
-        });
-        return best;
-    }
+    if (depth > maxdepth) return staticEval(position);
 
     Hash hash(position);
     auto cachedMove = hashTable.find(hash);
@@ -285,10 +288,10 @@ EvaluatedMove computeBestMove(Position& position, int depth, int maxdepth) {
                                 opponentKing,
                                 Occupancy(newPosition.board, newPosition.activeColor()));
 
-        char kind[2][2] = {{' ', '='}, {'+', '#'}};  // {{check, mate}, {check, mate}}
 
-        Score evaluation = mate ? (check ? bestEval : drawEval) : opponentMove.evaluation;
-        EvaluatedMove ourMove(move, check, mate, evaluation, mate ? depth : opponentMove.depth);
+        Score evaluation =
+            mate ? (check ? bestEval : drawEval) : opponentMove.evaluation.adjustDepth();
+        EvaluatedMove ourMove(move, check, mate, evaluation);
         if (improveMove(best, ourMove)) break;
     }
     // Cache the best move for this position
