@@ -73,11 +73,10 @@ static Score bestEval = 99'99_cp;
 struct EvaluatedMove {
     Move move;  // Defaults to an invalid move
     Score evaluation;
-    bool check;
 
     EvaluatedMove() = default;
-    EvaluatedMove(Move move, bool check, Score evaluation)
-        : move(move), check(check), evaluation(evaluation) {}
+    EvaluatedMove(Move move, Score evaluation)
+        : move(move), evaluation(evaluation) {}
     EvaluatedMove& operator=(const EvaluatedMove& other) = default;
     EvaluatedMove operator-() const {
         auto ret = *this;
@@ -86,7 +85,6 @@ struct EvaluatedMove {
         return ret;
     }
 
-    operator std::string() const;
     bool operator<(const EvaluatedMove& rhs) const { return !move || evaluation < rhs.evaluation; }
 };
 

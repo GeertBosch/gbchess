@@ -17,25 +17,14 @@ std::ostream& operator<<(std::ostream& os, Move mv) {
 std::ostream& operator<<(std::ostream& os, Square sq) {
     return os << std::string(sq);
 }
-std::ostream& operator<<(std::ostream& os, const EvaluatedMove& sq) {
-    return os << std::string(sq);
-}
 std::ostream& operator<<(std::ostream& os, Color color) {
     return os << (color == Color::BLACK ? 'b' : 'w');
 }
-
 std::ostream& operator<<(std::ostream& os, Score score) {
     return os << std::string(score);
 }
-
-EvaluatedMove::operator std::string() const {
-    if (!move) return "none";
-    std::stringstream ss;
-    const char* kind[2][2] = {{"", "="}, {"+", "#"}};  // {{check, mate}, {check, mate}}
-    ss << move;
-    ss << kind[check][!move || evaluation.mate()];
-    ss << " " << evaluation;
-    return ss.str();
+std::ostream& operator<<(std::ostream& os, const EvaluatedMove& eval) {
+    return os << eval.move << " " << eval.evaluation;
 }
 
 // Implement a hashing method for chess positions using Zobrist hashing
@@ -83,7 +72,6 @@ public:
         if (position.turn.enPassantTarget.index())
             toggle(ExtraVectors(position.turn.enPassantTarget.file() + EN_PASSANT_A));
     }
-
 
     uint64_t operator()() { return hash; }
 
@@ -227,16 +215,15 @@ Score evaluateBoard(const Board& board) {
     return value;
 }
 
-bool improveMove(EvaluatedMove& best, const EvaluatedMove& ourMove) {
+void improveMove(EvaluatedMove& best, const EvaluatedMove& ourMove) {
     std::string indent = "    ";
     bool improved = best < ourMove;
     D << indent << best << " <  " << ourMove << " ? " << improved << "\n";
 
-    if (!improved) return false;
+    if (!improved) return;
 
     D << indent << best << " => " << ourMove << std::endl;
     best = ourMove;
-    return !ourMove.move && ourMove.check;
 }
 
 EvaluatedMove staticEval(Position& position) {
@@ -249,7 +236,7 @@ EvaluatedMove staticEval(Position& position) {
         if (move.kind() >= MoveKind::CAPTURE) newEval -= pieceValues[index(captured)];
         if (position.activeColor() == Color::BLACK) newEval = -newEval;
         newEval += moveValues[index(move.kind())];
-        EvaluatedMove ourMove{move, false, newEval};
+        EvaluatedMove ourMove{move, newEval};
         improveMove(best, ourMove);
     });
     return best;
@@ -291,8 +278,9 @@ EvaluatedMove computeBestMove(Position& position, int depth, int maxdepth) {
 
         Score evaluation =
             mate ? (check ? bestEval : drawEval) : opponentMove.evaluation.adjustDepth();
-        EvaluatedMove ourMove(move, check, evaluation);
-        if (improveMove(best, ourMove)) break;
+        EvaluatedMove ourMove(move, evaluation);
+        improveMove(best, ourMove);
+        if (best.evaluation.mate()) break;
     }
     // Cache the best move for this position
     hashTable.insert(hash, best);

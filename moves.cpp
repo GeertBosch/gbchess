@@ -701,6 +701,11 @@ bool isAttacked(const Board& board, SquareSet squares, Occupancy occupancy) {
     return false;
 }
 
+bool isAttacked(const Board& board, SquareSet squares, Color opponentColor) {
+    auto occupancy = Occupancy(board, opponentColor);
+    return isAttacked(board, squares, occupancy);
+}
+
 namespace {
 std::string toString(SquareSet squares) {
     std::string str;

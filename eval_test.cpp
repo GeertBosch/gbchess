@@ -7,6 +7,7 @@
 #include "fen.h"
 #include "moves.h"
 
+namespace {
 std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     os << "[";
     for (const auto& move : moves) {
@@ -15,6 +16,22 @@ std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     os << "]";
     return os;
 }
+std::ostream& operator<<(std::ostream& os, Move mv) {
+    return os << std::string(mv);
+}
+std::ostream& operator<<(std::ostream& os, Square sq) {
+    return os << std::string(sq);
+}
+std::ostream& operator<<(std::ostream& os, Color color) {
+    return os << (color == Color::BLACK ? 'b' : 'w');
+}
+std::ostream& operator<<(std::ostream& os, Score score) {
+    return os << std::string(score);
+}
+std::ostream& operator<<(std::ostream& os, const EvaluatedMove& eval) {
+    return os << eval.move << " " << eval.evaluation;
+}
+}  // namespace
 
 template <typename F>
 void printEvalRate(const F& fun) {
@@ -50,7 +67,7 @@ void printAvailableCaptures(const Position& position) {
 void printBestMove(Position position, int maxdepth) {
     int depth = 0;
     auto bestMove = computeBestMove(position, depth, maxdepth);
-    std::cout << "Best Move: " << static_cast<std::string>(bestMove) << std::endl;
+    std::cout << "Best Move: " << bestMove << std::endl;
 }
 
 /**
@@ -93,9 +110,16 @@ void testFromStdIn(int depth) {
         EvaluatedMove bestMove;
         printEvalRate([&]() {
             bestMove = computeBestMove(position, 0, depth);
+            auto newPosition = applyMove(position, bestMove.move);
+            auto kingPos = SquareSet::find(newPosition.board,
+                                           addColor(PieceType::KING, newPosition.turn.activeColor));
+            const char* kind[2][2] = {{"", "="}, {"+", "#"}};  // {{check, mate}, {check, mate}}
+
+            auto check = isAttacked(newPosition.board, kingPos, newPosition.turn.activeColor);
+            auto mate = allLegalMoves(newPosition.turn, newPosition.board).empty();
             // Print the best move and its evaluation
-            std::cout << static_cast<std::string>(bestMove) << std::endl;
-            std::cerr << "Solution: " << std::string(bestMove) << "\t";
+            std::cout << bestMove.move << kind[check][mate] << " " << bestMove.evaluation << "\n";
+            std::cerr << "Solution: " << bestMove << "\t";
         });
     }
 }
@@ -113,12 +137,12 @@ void testScore() {
 void testEvaluatedMove() {
     {
         EvaluatedMove none;
-        EvaluatedMove mateIn3 = {
-            Move("f6"_sq, "e5"_sq, Move::QUIET), false, bestEval.adjustDepth().adjustDepth()};
-        EvaluatedMove mateIn1 = {Move("e7"_sq, "g7"_sq, Move::QUIET), true, bestEval};
-        std::cout << "none: " << std::string(none) << std::endl;
-        std::cout << "mateIn3: " << std::string(mateIn3) << std::endl;
-        std::cout << "mateIn1: " << std::string(mateIn1) << std::endl;
+        EvaluatedMove mateIn3 = {Move("f6"_sq, "e5"_sq, Move::QUIET),
+                                 bestEval.adjustDepth().adjustDepth()};
+        EvaluatedMove mateIn1 = {Move("e7"_sq, "g7"_sq, Move::QUIET), bestEval};
+        std::cout << "none: " << none << std::endl;
+        std::cout << "mateIn3: " << mateIn3 << std::endl;
+        std::cout << "mateIn1: " << mateIn1 << std::endl;
         assert(none < mateIn3);
         assert(mateIn3 < mateIn1);
         assert(none < mateIn1);
@@ -126,8 +150,8 @@ void testEvaluatedMove() {
         assert(bestEval == Score::max());
     }
     {
-        EvaluatedMove stalemate = {Move("f6"_sq, "e5"_sq, Move::QUIET), false, 0_cp};
-        EvaluatedMove upQueen = {Move("f7"_sq, "a2"_sq, Move::CAPTURE), false, 9'00_cp};
+        EvaluatedMove stalemate = {Move("f6"_sq, "e5"_sq, Move::QUIET), 0_cp};
+        EvaluatedMove upQueen = {Move("f7"_sq, "a2"_sq, Move::CAPTURE), 9'00_cp};
         assert(stalemate < upQueen);
         assert(stalemate.evaluation == drawEval);
     }
