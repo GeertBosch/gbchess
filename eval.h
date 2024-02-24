@@ -21,7 +21,7 @@ class Score {
     constexpr Score(value_type value) : value(value) { this->value = check(value); }
 
     static constexpr value_type check(value_type value) {
-        if (debug) assert(min().value <= value && value <= max().value);
+        if (debug) assert(-9999 <= value && value <= 9999);
         return value;
     }
 
@@ -41,13 +41,11 @@ public:
      *  For scores indicating mate, reduce the value by one, so that a sooner mate is preferred over
      *  a later one.
      */
-    Score adjustDepth() const {
-        return int16_t(value > 0 ? value - 1 : value < 0 ? value + 1 : value);
-    }
+    Score adjustDepth() const { return int16_t(value > 0 ? value - 1 : value); }
 
     operator std::string() const {
         value_type pawns = value / 100;
-        value_type cents = value % 100;
+        value_type cents = std::abs(value % 100);
         std::string result = std::to_string(pawns) + '.';
         result += '0' + cents / 10;
         result += '0' + cents % 10;
@@ -75,8 +73,7 @@ struct EvaluatedMove {
     Score evaluation;
 
     EvaluatedMove() = default;
-    EvaluatedMove(Move move, Score evaluation)
-        : move(move), evaluation(evaluation) {}
+    EvaluatedMove(Move move, Score evaluation) : move(move), evaluation(evaluation) {}
     EvaluatedMove& operator=(const EvaluatedMove& other) = default;
     EvaluatedMove operator-() const {
         auto ret = *this;
@@ -105,12 +102,8 @@ Score evaluateBoard(const Board& board);
  * Each move is evaluated based on the static evaluation of the board or by recursive calls
  * to this function, decreasing the depth until it reaches zero. It also accounts for checkmate
  * and stalemate situations.
- *
- * @param position The current chess position to evaluate.
- * @param depth The depth to which the evaluation should be performed.
- * @return A map of moves to their evaluation score.
  */
-EvaluatedMove computeBestMove(Position& position, int depth, int maxdepth);
+EvaluatedMove computeBestMove(Position& position, int depthleft);
 
 /**
  *  a debugging function to walk the move generation tree of strictly legal moves to count all the

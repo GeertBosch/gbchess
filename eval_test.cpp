@@ -65,8 +65,7 @@ void printAvailableCaptures(const Position& position) {
 }
 
 void printBestMove(Position position, int maxdepth) {
-    int depth = 0;
-    auto bestMove = computeBestMove(position, depth, maxdepth);
+    auto bestMove = computeBestMove(position, maxdepth);
     std::cout << "Best Move: " << bestMove << std::endl;
 }
 
@@ -109,7 +108,7 @@ void testFromStdIn(int depth) {
         // Compute the best move
         EvaluatedMove bestMove;
         printEvalRate([&]() {
-            bestMove = computeBestMove(position, 0, depth);
+            bestMove = computeBestMove(position, depth);
             auto newPosition = applyMove(position, bestMove.move);
             auto kingPos = SquareSet::find(newPosition.board,
                                            addColor(PieceType::KING, newPosition.turn.activeColor));

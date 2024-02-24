@@ -242,14 +242,53 @@ EvaluatedMove staticEval(Position& position) {
     return best;
 }
 
-EvaluatedMove computeBestMove(Position& position, int depth, int maxdepth) {
+/**
+ * The alpha-beta algorithm with fail-soft negamax search.
+ */
+Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
+    auto indent = debug ? std::string(depthleft * 4, ' ') : "";
+    D << indent << "failSoftAlphaBeta(" << alpha << ", " << beta << ", " << depthleft << ")\n";
+    Score bestscore = worstEval;
+    if (depthleft == 0) {
+        bestscore = staticEval(position).evaluation;
+        D << indent << "staticEval: " << bestscore << "\n";
+        return bestscore;
+    }
+
+    auto allMoves = allLegalMoves(position.turn, position.board);
+    for (auto move : allMoves) {
+        auto newPosition = applyMove(position, move);
+        auto score = -alphaBeta(newPosition, -beta, -alpha, depthleft - 1).adjustDepth();
+        if (beta < score) {
+            D << indent << "fail-soft beta cutoff: " << score << "\n";
+            return score;  // fail-soft beta-cutoff
+        }
+        if (bestscore < score) {
+            D << indent << "new best score: " << score << "\n";
+            bestscore = score;
+            if (alpha < score) {
+                D << indent << "new alpha: " << score << "\n";
+                alpha = score;
+            }
+        }
+    }
+    if (allMoves.empty()) {
+        auto kingPos =
+            SquareSet::find(position.board, addColor(PieceType::KING, position.activeColor()));
+        if (!isAttacked(position.board, kingPos, Occupancy(position.board, position.activeColor())))
+            return drawEval;
+    }
+    return bestscore;
+}
+
+EvaluatedMove computeBestMove(Position& position, int depthleft) {
     EvaluatedMove best;  // Default to the worst possible move
-    ++depth;
-    auto indent = debug ? std::string(depth * 4 - 4, ' ') : "";
+    auto indent = debug ? std::string(depthleft * 4, ' ') : "";
 
     // Base case: if depth is zero, return the static evaluation of the position
-    if (depth > maxdepth) return staticEval(position);
+    if (!depthleft) return staticEval(position);
 
+    --depthleft;
     Hash hash(position);
     auto cachedMove = hashTable.find(hash);
     if (cachedMove) {
@@ -266,18 +305,20 @@ EvaluatedMove computeBestMove(Position& position, int depth, int maxdepth) {
     auto opponentKing =
         SquareSet::find(position.board, addColor(PieceType::KING, !position.activeColor()));
     for (auto move : allMoves) {
+        D << indent << "considering " << move << "\n";
         // Recursively compute the best moves for the opponent, worst for us.
         auto newPosition = applyMove(position, move);
-        auto opponentMove = -computeBestMove(newPosition, depth, maxdepth);
+        // auto opponentMove = -computeBestMove(newPosition, depthleft);
+        auto opponentMove = -alphaBeta(newPosition, worstEval, bestEval, depthleft);
 
-        bool mate = !opponentMove.move;  // Either checkmate or stalemate
+        // !opponentMove.move;  // Either checkmate or stalemate
+        bool mate = opponentMove.mate();
         bool check = isAttacked(newPosition.board,
                                 opponentKing,
                                 Occupancy(newPosition.board, newPosition.activeColor()));
 
 
-        Score evaluation =
-            mate ? (check ? bestEval : drawEval) : opponentMove.evaluation.adjustDepth();
+        Score evaluation = mate ? (check ? bestEval : drawEval) : opponentMove.adjustDepth();
         EvaluatedMove ourMove(move, evaluation);
         improveMove(best, ourMove);
         if (best.evaluation.mate()) break;
