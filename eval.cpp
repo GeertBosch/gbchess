@@ -3,6 +3,7 @@
 #include <string>
 
 #include "eval.h"
+#include "fen.h"
 #include "moves.h"
 
 #ifdef DEBUG
@@ -245,29 +246,33 @@ EvaluatedMove staticEval(Position& position) {
 /**
  * The alpha-beta search algorithm with fail-soft negamax search.
  */
-Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
+using Eval = EvaluatedMove;
+Eval alphaBeta(Position& position, Eval alpha, Eval beta, int depthleft) {
     auto indent = debug ? std::string(depthleft * 4, ' ') : "";
-    D << indent << "failSoftAlphaBeta(" << alpha << ", " << beta << ", " << depthleft << ")\n";
-    Score bestscore = worstEval;
+    D << indent << "failSoftAlphaBeta(" << fen::to_string(position) << ", " << alpha.evaluation
+      << ", " << beta.evaluation << ", " << depthleft << ")\n";
+    Eval bestscore = {Move(), worstEval};
     if (depthleft == 0) {
-        bestscore = staticEval(position).evaluation;
-        D << indent << "staticEval: " << bestscore << "\n";
+        bestscore = staticEval(position);
+        D << indent << "staticEval: " << bestscore.evaluation << "\n";
         return bestscore;
     }
 
     auto allMoves = allLegalMoves(position.turn, position.board);
     for (auto move : allMoves) {
         auto newPosition = applyMove(position, move);
-        auto score = -alphaBeta(newPosition, -beta, -alpha, depthleft - 1).adjustDepth();
-        if (beta < score) {
-            D << indent << "fail-soft beta cutoff: " << score << "\n";
+        D << indent << "considering " << move << "\n";
+        auto score = -alphaBeta(newPosition, -beta, -alpha, depthleft - 1);
+        score.evaluation = score.evaluation.adjustDepth();
+        if (beta.evaluation < score.evaluation) {
+            D << indent << "fail-soft beta cutoff: " << score.evaluation << "\n";
             return score;  // fail-soft beta-cutoff
         }
-        if (bestscore < score) {
-            D << indent << "new best score: " << score << "\n";
+        if (bestscore.evaluation < score.evaluation) {
+            D << indent << "new best score: " << score.evaluation << "\n";
             bestscore = score;
-            if (alpha < score) {
-                D << indent << "new alpha: " << score << "\n";
+            if (alpha.evaluation < score.evaluation) {
+                D << indent << "new alpha: " << score.evaluation << "\n";
                 alpha = score;
             }
         }
@@ -276,7 +281,7 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
         auto kingPos =
             SquareSet::find(position.board, addColor(PieceType::KING, position.activeColor()));
         if (!isAttacked(position.board, kingPos, Occupancy(position.board, position.activeColor())))
-            return drawEval;
+            return {Move(), drawEval};
     }
     return bestscore;
 }
@@ -289,6 +294,7 @@ EvaluatedMove computeBestMove(Position& position, int depthleft) {
     if (!depthleft) return staticEval(position);
 
     --depthleft;
+    /*
     Hash hash(position);
     auto cachedMove = hashTable.find(hash);
     if (cachedMove) {
@@ -296,6 +302,7 @@ EvaluatedMove computeBestMove(Position& position, int depthleft) {
         D << indent << "cached " << *cachedMove << std::endl;
         return *cachedMove;
     }
+    */
 
     auto allMoves = allLegalMoves(position.turn, position.board);
 
@@ -309,21 +316,24 @@ EvaluatedMove computeBestMove(Position& position, int depthleft) {
         // Recursively compute the best moves for the opponent, worst for us.
         auto newPosition = applyMove(position, move);
         // auto opponentMove = -computeBestMove(newPosition, depthleft);
-        auto opponentMove = -alphaBeta(newPosition, worstEval, bestEval, depthleft);
+        auto opponentMove =
+            -alphaBeta(newPosition, {Move(), worstEval}, {Move(), bestEval}, depthleft);
 
         // !opponentMove.move;  // Either checkmate or stalemate
-        bool mate = opponentMove.mate();
+        bool mate = opponentMove.evaluation.mate();
         bool check = isAttacked(newPosition.board,
                                 opponentKing,
                                 Occupancy(newPosition.board, newPosition.activeColor()));
 
-        Score evaluation = mate ? (check ? bestEval : drawEval) : opponentMove.adjustDepth();
+        Score evaluation =
+            mate ? (check ? bestEval : drawEval) : opponentMove.evaluation.adjustDepth();
         EvaluatedMove ourMove(move, evaluation);
         improveMove(best, ourMove);
         if (best.evaluation.mate()) break;
     }
+
     // Cache the best move for this position
-    hashTable.insert(hash, best);
+    // hashTable.insert(hash, best);
     return best;
 }
 
