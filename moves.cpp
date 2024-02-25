@@ -14,15 +14,15 @@ struct MovesTable {
     // precomputed possible squares that each square can be attacked from
     SquareSet attackers[kNumSquares];
 
-    // precomputed move kinds to deal with double pawn push and pawn queen promotion,
-    // under promotions are expanded separately
+    // precomputed move kinds to deal with double pawn push and pawn queen promotion, under
+    // promotions are expanded separately
     MoveKind moveKinds[kNumPieces][kNumRanks][kNumRanks];  // piece, from rank, to rank
 
     // precomputed capture kinds to deal with pawn queen promotion captures, under promotions are
     // expanded separately
     MoveKind captureKinds[kNumPieces][kNumRanks][kNumRanks];  // piece, from rank, to rank
 
-    // precomputed paths from each square to each other square
+    // precomputed horizontal, diagonal and vertical paths from each square to each other square
     SquareSet paths[kNumSquares][kNumSquares];  // from, to
 
     // precomputed squares required to be clear for castling
@@ -125,7 +125,6 @@ void MovesTable::initializeEnPassantFrom() {
 MovesTable::MovesTable() {
     initializePieceMovesAndCaptures();
     initializePieceMoveAndCaptureKinds();
-
     initializeAttackers();
     initializePaths();
     initializeCastlingMasks();
