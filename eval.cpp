@@ -262,8 +262,8 @@ Eval alphaBeta(Position& position, Eval alpha, Eval beta, int depthleft) {
     for (auto move : allMoves) {
         auto newPosition = applyMove(position, move);
         D << indent << "considering " << move << "\n";
-        auto score = -alphaBeta(newPosition, -beta, -alpha, depthleft - 1);
-        score.evaluation = score.evaluation.adjustDepth();
+        auto score = Eval{
+            move, -alphaBeta(newPosition, -beta, -alpha, depthleft - 1).evaluation.adjustDepth()};
         if (beta.evaluation < score.evaluation) {
             D << indent << "fail-soft beta cutoff: " << score.evaluation << "\n";
             return score;  // fail-soft beta-cutoff
@@ -287,54 +287,7 @@ Eval alphaBeta(Position& position, Eval alpha, Eval beta, int depthleft) {
 }
 
 EvaluatedMove computeBestMove(Position& position, int depthleft) {
-    EvaluatedMove best;  // Default to the worst possible move
-    auto indent = debug ? std::string(depthleft * 4, ' ') : "";
-
-    // Base case: if depth is zero, return the static evaluation of the position
-    if (!depthleft) return staticEval(position);
-
-    --depthleft;
-    /*
-    Hash hash(position);
-    auto cachedMove = hashTable.find(hash);
-    if (cachedMove) {
-        ++cacheCount;
-        D << indent << "cached " << *cachedMove << std::endl;
-        return *cachedMove;
-    }
-    */
-
-    auto allMoves = allLegalMoves(position.turn, position.board);
-
-    // TODO: Sort moves by Most Valuable Victim (MVV) / Least Valuable Attacker (LVA)
-
-    // Recursive case: compute all legal moves and evaluate them
-    auto opponentKing =
-        SquareSet::find(position.board, addColor(PieceType::KING, !position.activeColor()));
-    for (auto move : allMoves) {
-        D << indent << "considering " << move << "\n";
-        // Recursively compute the best moves for the opponent, worst for us.
-        auto newPosition = applyMove(position, move);
-        // auto opponentMove = -computeBestMove(newPosition, depthleft);
-        auto opponentMove =
-            -alphaBeta(newPosition, {Move(), worstEval}, {Move(), bestEval}, depthleft);
-
-        // !opponentMove.move;  // Either checkmate or stalemate
-        bool mate = opponentMove.evaluation.mate();
-        bool check = isAttacked(newPosition.board,
-                                opponentKing,
-                                Occupancy(newPosition.board, newPosition.activeColor()));
-
-        Score evaluation =
-            mate ? (check ? bestEval : drawEval) : opponentMove.evaluation.adjustDepth();
-        EvaluatedMove ourMove(move, evaluation);
-        improveMove(best, ourMove);
-        if (best.evaluation.mate()) break;
-    }
-
-    // Cache the best move for this position
-    // hashTable.insert(hash, best);
-    return best;
+    return alphaBeta(position, {Move(), worstEval}, {Move(), bestEval}, depthleft);
 }
 
 uint64_t perft(Turn turn, Board& board, int depth) {
