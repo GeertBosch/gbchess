@@ -35,7 +35,7 @@ public:
     Score& operator-=(Score rhs) { return *this = *this - rhs; }
     bool operator==(Score rhs) const { return value == rhs.value; }
     bool operator<(Score rhs) const { return value < rhs.value; }
-    bool mate() const { return std::abs(value) == max().value; }
+    bool mate() const { return std::abs(value) >= max().value / 100 * 100; }
 
     /**
      *  For scores indicating mate, reduce the value by one, so that a sooner mate is preferred over
@@ -103,7 +103,7 @@ Score evaluateBoard(const Board& board);
  * to this function, decreasing the depth until it reaches zero. It also accounts for checkmate
  * and stalemate situations.
  */
-EvaluatedMove computeBestMove(Position& position, int depthleft);
+EvaluatedMove computeBestMove(Position& position, int maxdepth);
 
 /**
  *  a debugging function to walk the move generation tree of strictly legal moves to count all the

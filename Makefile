@@ -19,7 +19,7 @@ perft: perft.cpp eval.cpp moves.cpp fen.cpp *.h
 	g++ -O2 -g -o $@ $(filter-out %.h,$^)
 
 puzzles: eval-test puzzles.in puzzles.expected
-	./eval-test 4 < puzzles.in > puzzles.actual
+	./eval-test 10 < puzzles.in > puzzles.actual
 	@diff -uaB puzzles.expected puzzles.actual && echo "All puzzles solved correctly!"
 	
 cloc:

@@ -145,9 +145,9 @@ public:
     void toggle(ExtraVectors extra) { toggle(kNumBoardVectors + int(extra)); }
 };
 
-struct HashTable {
-    static constexpr int kNumEntries = 1 << 20;
+struct transpositionTable {
     static constexpr int kNumBits = 20;
+    static constexpr int kNumEntries = 1 << kNumBits;
     static constexpr int kNumMask = kNumEntries - 1;
 
     struct Entry {
@@ -259,6 +259,20 @@ Eval alphaBeta(Position& position, Eval alpha, Eval beta, int depthleft) {
     }
 
     auto allMoves = allLegalMoves(position.turn, position.board);
+
+    Hash hash(position);
+    auto cachedMove = hashTable.find(hash);
+    if (cachedMove) {
+        ++cacheCount;
+        auto it = std::find(allMoves.begin(), allMoves.end(), cachedMove->move);
+
+        if (it != allMoves.end()) {
+            allMoves.erase(it);
+            allMoves.insert(allMoves.begin(), cachedMove->move);
+        }
+        D << indent << "cached " << *cachedMove << std::endl;
+    }
+
     for (auto move : allMoves) {
         auto newPosition = applyMove(position, move);
         D << indent << "considering " << move << "\n";
@@ -266,7 +280,8 @@ Eval alphaBeta(Position& position, Eval alpha, Eval beta, int depthleft) {
             move, -alphaBeta(newPosition, -beta, -alpha, depthleft - 1).evaluation.adjustDepth()};
         if (beta.evaluation < score.evaluation) {
             D << indent << "fail-soft beta cutoff: " << score.evaluation << "\n";
-            return score;  // fail-soft beta-cutoff
+            bestscore = score;
+            break;  // fail-soft beta-cutoff
         }
         if (bestscore.evaluation < score.evaluation) {
             D << indent << "new best score: " << score.evaluation << "\n";
@@ -283,11 +298,19 @@ Eval alphaBeta(Position& position, Eval alpha, Eval beta, int depthleft) {
         if (!isAttacked(position.board, kingPos, Occupancy(position.board, position.activeColor())))
             return {Move(), drawEval};
     }
+    hashTable.insert(hash, bestscore);  // Cache the best move for this position
     return bestscore;
 }
 
-EvaluatedMove computeBestMove(Position& position, int depthleft) {
-    return alphaBeta(position, {Move(), worstEval}, {Move(), bestEval}, depthleft);
+EvaluatedMove computeBestMove(Position& position, int maxdepth) {
+    EvaluatedMove best;  // Default to the worst possible move
+    for (auto depth = 1; depth <= maxdepth; ++depth) {
+        best = alphaBeta(position, {Move(), worstEval}, {Move(), bestEval}, depth);
+        std::cerr << "depth " << depth << ": " << best.move << " " << best.evaluation << std::endl;
+        if (best.evaluation.mate()) break;
+    }
+
+    return best;
 }
 
 uint64_t perft(Turn turn, Board& board, int depth) {
