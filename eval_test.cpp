@@ -131,6 +131,14 @@ void testScore() {
     assert(Q + q == zero);
     assert(q < Q);
     assert(std::string(q) == "-9.00");
+    std::cout << "Score tests passed" << std::endl;
+}
+
+void testEvaluateBoard() {
+    auto board = fen::parsePiecePlacement("8/8/8/8/4p3/5pNN/4p3/2K1k3");
+    auto score = evaluateBoard(board);
+    std::cout << "Board Evaluation: " << std::string(score) << std::endl;
+    assert(score == 300_cp);  // 2 knights vs 3 pawns
 }
 
 void testEvaluatedMove() {
@@ -169,6 +177,7 @@ int main(int argc, char* argv[]) {
     }
 
     testScore();
+    testEvaluateBoard();
     testEvaluatedMove();
 
     std::string fen(argv[1]);

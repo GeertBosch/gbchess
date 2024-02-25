@@ -171,13 +171,13 @@ struct HashTable {
 
 // Values of pieces, in centipawns
 static std::array<Score, kNumPieces> pieceValues = {
-    0_cp,     // No piece
     100_cp,   // White pawn
     300_cp,   // White knight
     300_cp,   // White bishop
     500_cp,   // White rook
     900_cp,   // White queen
     0_cp,     // Not counting the white king
+    0_cp,     // No piece
     -100_cp,  // Black pawn
     -300_cp,  // Black knight
     -300_cp,  // Black bishop
@@ -243,7 +243,7 @@ EvaluatedMove staticEval(Position& position) {
 }
 
 /**
- * The alpha-beta algorithm with fail-soft negamax search.
+ * The alpha-beta search algorithm with fail-soft negamax search.
  */
 Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
     auto indent = debug ? std::string(depthleft * 4, ' ') : "";
@@ -316,7 +316,6 @@ EvaluatedMove computeBestMove(Position& position, int depthleft) {
         bool check = isAttacked(newPosition.board,
                                 opponentKing,
                                 Occupancy(newPosition.board, newPosition.activeColor()));
-
 
         Score evaluation = mate ? (check ? bestEval : drawEval) : opponentMove.adjustDepth();
         EvaluatedMove ourMove(move, evaluation);
