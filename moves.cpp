@@ -1,6 +1,71 @@
 #include <cassert>
-#include <emmintrin.h>
+#include <cstring>
 #include <functional>
+#include <iomanip>
+#include <iostream>
+
+#ifdef __SSE2__
+constexpr bool haveSSE2 = true;
+#include <emmintrin.h>
+#else
+constexpr bool haveSSE2 = false;
+typedef __attribute__((__vector_size__(2 * sizeof(long long)))) long long __m128i;
+__m128i _mm_cmpeq_epi8(__m128i x, __m128i y) {
+    __m128i z;
+    char xm[16];
+    char ym[16];
+    char zm[16];
+
+    memcpy(xm, &x, sizeof(x));
+    memcpy(ym, &y, sizeof(y));
+
+    for (int i = 0; i < sizeof(xm); ++i) zm[i] = xm[i] == ym[i] ? 0xff : 0;
+
+    memcpy(&z, zm, sizeof(z));
+    return z;
+}
+__m128i _mm_cmplt_epi8(__m128i x, __m128i y) {
+    __m128i z;
+    char xm[16];
+    char ym[16];
+    char zm[16];
+
+    memcpy(xm, &x, sizeof(x));
+    memcpy(ym, &y, sizeof(y));
+
+    for (int i = 0; i < sizeof(xm); ++i) zm[i] = xm[i] < ym[i] ? 0xff : 0;
+
+    memcpy(&z, zm, sizeof(z));
+    return z;
+}
+__m128i _mm_cmpgt_epi8(__m128i x, __m128i y) {
+    __m128i z;
+    char xm[16];
+    char ym[16];
+    char zm[16];
+
+    memcpy(xm, &x, sizeof(x));
+    memcpy(ym, &y, sizeof(y));
+
+    for (int i = 0; i < sizeof(xm); ++i) zm[i] = xm[i] > ym[i] ? 0xff : 0;
+
+    memcpy(&z, zm, sizeof(z));
+    return z;
+}
+int32_t _mm_movemask_epi8(__m128i x) {
+    using uint64_t = unsigned long long;
+    x = ~_mm_cmpeq_epi8(x, __m128i{0, 0});
+    uint64_t xm = (static_cast<uint64_t>(x[0])) & 0x8040201008040201ull;
+    uint64_t ym = (static_cast<uint64_t>(x[1])) & 0x8040201008040201ull;
+    xm |= xm >> 8;
+    ym |= ym >> 8;
+    xm |= xm >> 16;
+    ym |= ym >> 16;
+    xm |= xm >> 32;
+    ym |= ym >> 32;
+    return static_cast<unsigned char>(xm) + 256ul * static_cast<unsigned char>(ym);
+}
+#endif
 
 #include "moves.h"
 
@@ -170,8 +235,13 @@ uint64_t equalSetT(std::array<Piece, 64> squares, Piece piece, bool invert) {
 }
 
 uint64_t equalSet(std::array<Piece, 64> squares, Piece piece, bool invert) {
-    uint64_t res = equalSetT<__m128i>(squares, piece, invert);
-    if constexpr (debug) {
+    uint64_t res;
+    if constexpr (haveSSE2)
+        res = equalSetT<__m128i>(squares, piece, invert);
+    else
+        res = equalSetT<uint64_t>(squares, piece, invert);
+
+    if constexpr (debug && haveSSE2) {
         auto ref = equalSetT<uint64_t>(squares, piece, invert);
         assert(res == ref);
     }
@@ -221,11 +291,17 @@ uint64_t lessSetT(std::array<Piece, 64> squares, Piece piece, bool invert) {
     return invert ? ~set : set;
 }
 uint64_t lessSet(std::array<Piece, 64> squares, Piece piece, bool invert) {
-    uint64_t res = lessSetT<__m128i>(squares, piece, invert);
-    if constexpr (debug) {
+    uint64_t res;
+    if constexpr (haveSSE2)
+        res = lessSetT<__m128i>(squares, piece, invert);
+    else
+        res = lessSetT<uint64_t>(squares, piece, invert);
+
+    if constexpr (debug && haveSSE2) {
         auto ref = lessSetT<uint64_t>(squares, piece, invert);
         assert(res == ref);
     }
+
     return res;
 }
 
