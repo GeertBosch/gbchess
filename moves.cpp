@@ -8,7 +8,14 @@
 constexpr bool haveSSE2 = true;
 #include <emmintrin.h>
 #else
+
+#ifdef DEBUG
+// If we don't have SSE2, use the SSE2 emulation for testing purposes
+constexpr bool haveSSE2 = true;
+#else
 constexpr bool haveSSE2 = false;
+#endif
+
 typedef __attribute__((__vector_size__(2 * sizeof(long long)))) long long __m128i;
 __m128i _mm_cmpeq_epi8(__m128i x, __m128i y) {
     __m128i z;

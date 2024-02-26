@@ -1,15 +1,18 @@
-#include <emmintrin.h>
 #include <iomanip>
 #include <iostream>
 
 #include "common.h"
 
 #pragma once
+
+#ifdef __SSE2__
+#include <emmintrin.h>
 inline std::ostream& operator<<(std::ostream& os, __m128i x) {
     os << "0x" << std::hex << std::setfill('0') << std::setw(16) << x[1] << "'" << std::setw(16)
        << x[0] << std::dec << std::setfill(' ');
     return os;
 }
+#endif
 
 inline void printBoard(std::ostream& os, const Board& board) {
     for (int rank = 7; rank >= 0; --rank) {

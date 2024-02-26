@@ -11,12 +11,12 @@ clean:
 moves-test: moves_test.cpp moves.cpp moves.h common.h fen.h fen.cpp
 
 eval-test: eval_test.cpp eval.cpp fen.cpp moves.cpp *.h
-	g++ -O2 -g -o $@ $(filter-out %.h,$^)
+	g++ -std=c++17 -O2 -g -o $@ $(filter-out %.h,$^)
 eval-debug: eval_test.cpp eval.cpp fen.cpp moves.cpp *.h
 	clang++ -std=c++17 -DDEBUG -O0 -g -o $@ $(filter-out %h,$^)
 
 perft: perft.cpp eval.cpp moves.cpp fen.cpp *.h
-	g++ -O2 -g -o $@ $(filter-out %.h,$^)
+	g++ -O2 -std=c++17 -g -o $@ $(filter-out %.h,$^)
 
 puzzles: eval-test puzzles.in puzzles.expected
 	./eval-test 10 < puzzles.in > puzzles.actual
