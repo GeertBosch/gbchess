@@ -28,7 +28,7 @@ std::ostream& operator<<(std::ostream& os, Color color) {
 std::ostream& operator<<(std::ostream& os, Score score) {
     return os << std::string(score);
 }
-std::ostream& operator<<(std::ostream& os, const EvaluatedMove& eval) {
+std::ostream& operator<<(std::ostream& os, const Eval& eval) {
     return os << eval.move << " " << eval.evaluation;
 }
 }  // namespace
@@ -106,7 +106,7 @@ void testFromStdIn(int depth) {
         printBoard(std::cerr, position.board);
 
         // Compute the best move
-        EvaluatedMove bestMove;
+        Eval bestMove;
         printEvalRate([&]() {
             bestMove = computeBestMove(position, depth);
             auto newPosition = applyMove(position, bestMove.move);
@@ -141,12 +141,12 @@ void testEvaluateBoard() {
     assert(score == 300_cp);  // 2 knights vs 3 pawns
 }
 
-void testEvaluatedMove() {
+void testEval() {
     {
-        EvaluatedMove none;
-        EvaluatedMove mateIn3 = {Move("f6"_sq, "e5"_sq, Move::QUIET),
+        Eval none;
+        Eval mateIn3 = {Move("f6"_sq, "e5"_sq, Move::QUIET),
                                  bestEval.adjustDepth().adjustDepth()};
-        EvaluatedMove mateIn1 = {Move("e7"_sq, "g7"_sq, Move::QUIET), bestEval};
+        Eval mateIn1 = {Move("e7"_sq, "g7"_sq, Move::QUIET), bestEval};
         std::cout << "none: " << none << std::endl;
         std::cout << "mateIn3: " << mateIn3 << std::endl;
         std::cout << "mateIn1: " << mateIn1 << std::endl;
@@ -157,12 +157,12 @@ void testEvaluatedMove() {
         assert(bestEval == Score::max());
     }
     {
-        EvaluatedMove stalemate = {Move("f6"_sq, "e5"_sq, Move::QUIET), 0_cp};
-        EvaluatedMove upQueen = {Move("f7"_sq, "a2"_sq, Move::CAPTURE), 9'00_cp};
+        Eval stalemate = {Move("f6"_sq, "e5"_sq, Move::QUIET), 0_cp};
+        Eval upQueen = {Move("f7"_sq, "a2"_sq, Move::CAPTURE), 9'00_cp};
         assert(stalemate < upQueen);
         assert(stalemate.evaluation == drawEval);
     }
-    std::cout << "EvaluatedMove tests passed" << std::endl;
+    std::cout << "Eval tests passed" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -178,7 +178,7 @@ int main(int argc, char* argv[]) {
 
     testScore();
     testEvaluateBoard();
-    testEvaluatedMove();
+    testEval();
 
     std::string fen(argv[1]);
     int depth = std::stoi(argv[2]);

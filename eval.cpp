@@ -24,7 +24,7 @@ std::ostream& operator<<(std::ostream& os, Color color) {
 std::ostream& operator<<(std::ostream& os, Score score) {
     return os << std::string(score);
 }
-std::ostream& operator<<(std::ostream& os, const EvaluatedMove& eval) {
+std::ostream& operator<<(std::ostream& os, const Eval& eval) {
     return os << eval.move << " " << eval.evaluation;
 }
 
@@ -145,30 +145,30 @@ public:
     void toggle(ExtraVectors extra) { toggle(kNumBoardVectors + int(extra)); }
 };
 
-struct transpositionTable {
+struct TranspositionTable {
     static constexpr int kNumBits = 20;
     static constexpr int kNumEntries = 1 << kNumBits;
     static constexpr int kNumMask = kNumEntries - 1;
 
     struct Entry {
         Hash hash;
-        EvaluatedMove move;
+        Eval move;
     };
 
     std::array<Entry, kNumEntries> entries;
 
-    EvaluatedMove* find(Hash hash) {
+    Eval* find(Hash hash) {
         auto& entry = entries[hash() & kNumMask];
         if (entry.hash() == hash()) return &entry.move;
         return nullptr;
     }
 
-    void insert(Hash hash, EvaluatedMove move) {
+    void insert(Hash hash, Eval move) {
         auto& entry = entries[hash() & kNumMask];
         entry.hash = hash;
         entry.move = move;
     }
-} hashTable;
+} transpositionTable;
 
 // Values of pieces, in centipawns
 static std::array<Score, kNumPieces> pieceValues = {
@@ -196,18 +196,19 @@ static std::array<Score, kNumMoveKinds> moveValues = {
     0_cp,    //  5 En passant
     0_cp,    //  6 (unused)
     0_cp,    //  7 (unused)
-    300_cp,  //  8 Knight promotion
-    300_cp,  //  9 Bishop promotion
-    500_cp,  // 10 Rook promotion
-    900_cp,  // 11 Queen promotion
-    300_cp,  // 12 Knight promotion capture
-    300_cp,  // 13 Bishop promotion capture
-    500_cp,  // 14 Rook promotion capture
-    900_cp,  // 15 Queen promotion capture
+    200_cp,  //  8 Knight promotion
+    200_cp,  //  9 Bishop promotion
+    400_cp,  // 10 Rook promotion
+    800_cp,  // 11 Queen promotion
+    200_cp,  // 12 Knight promotion capture
+    200_cp,  // 13 Bishop promotion capture
+    400_cp,  // 14 Rook promotion capture
+    800_cp,  // 15 Queen promotion capture
 };
 
 uint64_t evalCount = 0;
 uint64_t cacheCount = 0;
+
 Score evaluateBoard(const Board& board) {
     Score value = 0_cp;
 
@@ -216,7 +217,7 @@ Score evaluateBoard(const Board& board) {
     return value;
 }
 
-void improveMove(EvaluatedMove& best, const EvaluatedMove& ourMove) {
+void improveMove(Eval& best, const Eval& ourMove) {
     std::string indent = "    ";
     bool improved = best < ourMove;
     D << indent << best << " <  " << ourMove << " ? " << improved << "\n";
@@ -227,8 +228,8 @@ void improveMove(EvaluatedMove& best, const EvaluatedMove& ourMove) {
     best = ourMove;
 }
 
-EvaluatedMove staticEval(Position& position) {
-    EvaluatedMove best;  // Default to the worst possible move
+Eval staticEval(Position& position) {
+    Eval best;  // Default to the worst possible move
     auto currentEval = evaluateBoard(position.board);
     forAllLegalMoves(position.turn, position.board, [&](Board& board, MoveWithPieces mwp) {
         auto [move, piece, captured] = mwp;
@@ -237,20 +238,60 @@ EvaluatedMove staticEval(Position& position) {
         if (move.kind() >= MoveKind::CAPTURE) newEval -= pieceValues[index(captured)];
         if (position.activeColor() == Color::BLACK) newEval = -newEval;
         newEval += moveValues[index(move.kind())];
-        EvaluatedMove ourMove{move, newEval};
+        Eval ourMove{move, newEval};
         improveMove(best, ourMove);
     });
     return best;
 }
 
+using MoveIt = MoveVector::iterator;
+
+/**
+ * Sorts the moves (including captures) in the range [begin, end) in place, so that the move or
+ * capture from the transposition table, if any, comes first. Returns an iterator to the next move.
+ */
+MoveIt sortTransposition(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
+    // See if the current position is a transposition of a previously seen one
+    auto cachedMove = transpositionTable.find(hash);
+    if (!cachedMove) return begin;
+
+    ++cacheCount;
+
+    // If the move is not part of the current legal moves, nothing to do here.
+    auto it = std::find(begin, end, cachedMove->move);
+    if (it == end) return begin;
+
+    // If the transposition is not at the beginning, shift preceeding moves to the right
+    if (it != begin) {
+        auto itMove = *it;
+        std::move_backward(begin, std::prev(it), it);
+        *begin = itMove;
+    }
+
+    // The transposition is now in the beginning, so return an iterator to the next move
+    return std::next(begin);
+}
+
+/**
+ * Sorts the moves in the range [begin, end) in place, so that the capture come before
+ */
+MoveIt sortCaptures(const Position& position, MoveIt begin, MoveIt end) {
+
+    return begin;
+}
+
+void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
+    begin = sortTransposition(position, hash, begin, end);
+    begin = sortCaptures(position, begin, end);
+}
+
 /**
  * The alpha-beta search algorithm with fail-soft negamax search.
  */
-using Eval = EvaluatedMove;
 Eval alphaBeta(Position& position, Eval alpha, Eval beta, int depthleft) {
     auto indent = debug ? std::string(depthleft * 4, ' ') : "";
-    D << indent << "failSoftAlphaBeta(" << fen::to_string(position) << ", " << alpha.evaluation
-      << ", " << beta.evaluation << ", " << depthleft << ")\n";
+    D << indent << "alphaBeta(" << fen::to_string(position) << ", " << alpha.evaluation << ", "
+      << beta.evaluation << ", " << depthleft << ")\n";
     Eval bestscore = {Move(), worstEval};
     if (depthleft == 0) {
         bestscore = staticEval(position);
@@ -261,17 +302,7 @@ Eval alphaBeta(Position& position, Eval alpha, Eval beta, int depthleft) {
     auto allMoves = allLegalMoves(position.turn, position.board);
 
     Hash hash(position);
-    auto cachedMove = hashTable.find(hash);
-    if (cachedMove) {
-        ++cacheCount;
-        auto it = std::find(allMoves.begin(), allMoves.end(), cachedMove->move);
-
-        if (it != allMoves.end()) {
-            allMoves.erase(it);
-            allMoves.insert(allMoves.begin(), cachedMove->move);
-        }
-        D << indent << "cached " << *cachedMove << std::endl;
-    }
+    sortTransposition(position, hash, allMoves.begin(), allMoves.end());
 
     for (auto move : allMoves) {
         auto newPosition = applyMove(position, move);
@@ -298,12 +329,12 @@ Eval alphaBeta(Position& position, Eval alpha, Eval beta, int depthleft) {
         if (!isAttacked(position.board, kingPos, Occupancy(position.board, position.activeColor())))
             return {Move(), drawEval};
     }
-    hashTable.insert(hash, bestscore);  // Cache the best move for this position
+    transpositionTable.insert(hash, bestscore);  // Cache the best move for this position
     return bestscore;
 }
 
-EvaluatedMove computeBestMove(Position& position, int maxdepth) {
-    EvaluatedMove best;  // Default to the worst possible move
+Eval computeBestMove(Position& position, int maxdepth) {
+    Eval best;  // Default to the worst possible move
     for (auto depth = 1; depth <= maxdepth; ++depth) {
         best = alphaBeta(position, {Move(), worstEval}, {Move(), bestEval}, depth);
         std::cerr << "depth " << depth << ": " << best.move << " " << best.evaluation << std::endl;

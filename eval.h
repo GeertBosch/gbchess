@@ -68,21 +68,21 @@ static Score bestEval = 99'99_cp;
  * The evaluation is always from the perspective of the active color. Higher evaluations are better,
  * zero indicates a draw. Units of evaluation are roughly the value of a pawn.
  */
-struct EvaluatedMove {
-    Move move;  // Defaults to an invalid move
-    Score evaluation;
+struct Eval {
+    Move move = {};  // Defaults to an invalid move
+    Score evaluation = worstEval;
 
-    EvaluatedMove() = default;
-    EvaluatedMove(Move move, Score evaluation) : move(move), evaluation(evaluation) {}
-    EvaluatedMove& operator=(const EvaluatedMove& other) = default;
-    EvaluatedMove operator-() const {
+    Eval() = default;
+    Eval(Move move, Score evaluation) : move(move), evaluation(evaluation) {}
+    Eval& operator=(const Eval& other) = default;
+    Eval operator-() const {
         auto ret = *this;
         ret.evaluation = -ret.evaluation;
 
         return ret;
     }
 
-    bool operator<(const EvaluatedMove& rhs) const { return !move || evaluation < rhs.evaluation; }
+    bool operator<(const Eval& rhs) const { return evaluation < rhs.evaluation; }
 };
 
 extern uint64_t evalCount;
@@ -103,7 +103,7 @@ Score evaluateBoard(const Board& board);
  * to this function, decreasing the depth until it reaches zero. It also accounts for checkmate
  * and stalemate situations.
  */
-EvaluatedMove computeBestMove(Position& position, int maxdepth);
+Eval computeBestMove(Position& position, int maxdepth);
 
 /**
  *  a debugging function to walk the move generation tree of strictly legal moves to count all the
