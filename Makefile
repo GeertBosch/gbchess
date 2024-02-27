@@ -23,10 +23,8 @@ perft: perft.cpp eval.cpp moves.cpp fen.cpp *.h
 
 perft-sse2: perft.cpp eval.cpp moves.cpp fen.cpp *.h
 	clang++ -O3 -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@ 5
-	clang++ -O3 -DNOSSE2 -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@ 5
 	clang++ -O3 -DSSE2EMUL -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@  5
 	g++ -O3 -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@  5
-	g++ -O3 -DNOSSE2 -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@  5
 	g++ -O3 -DSSE2EMUL -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@  5
 
 puzzles: eval-test puzzles.in puzzles.expected
