@@ -4,7 +4,10 @@
  *  The compiler should compile most to native SIMD instructions, where available.
  *  Results on my Apple Silicon M1 exceed current on my x86 using native SSE2.
  */
+
 #include <cstring>
+
+#pragma once
 
 typedef __attribute__((__vector_size__(2 * sizeof(long long)))) long long __m128i;
 

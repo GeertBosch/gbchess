@@ -1,9 +1,12 @@
 all: test perft-test puzzles
 
+
 %.h: common.h
 
 %-test: %_test.cpp %.cpp %.h common.h
 	clang++ -fsanitize=address -std=c++17 -DDEBUG -g -O0 -o $@ $(filter-out %.h, $^)
+
+.PHONY: perft-sse2 clean
 
 clean:
 	rm -f *.o *-debug *-test perft *.core puzzles.actual perf.data perf.data.old
@@ -17,6 +20,14 @@ eval-debug: eval_test.cpp eval.cpp fen.cpp moves.cpp *.h
 
 perft: perft.cpp eval.cpp moves.cpp fen.cpp *.h
 	clang++ -O3 -std=c++17 -g -o $@ $(filter-out %.h,$^)
+
+perft-sse2: perft.cpp eval.cpp moves.cpp fen.cpp *.h
+	clang++ -O3 -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@ 5
+	clang++ -O3 -DNOSSE2 -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@ 5
+	clang++ -O3 -DSSE2EMUL -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@  5
+	g++ -O3 -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@  5
+	g++ -O3 -DNOSSE2 -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@  5
+	g++ -O3 -DSSE2EMUL -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@  5
 
 puzzles: eval-test puzzles.in puzzles.expected
 	./eval-test 10 < puzzles.in > puzzles.actual
