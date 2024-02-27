@@ -45,32 +45,20 @@ __m128i _mm_cmplt_epi8(__m128i x, __m128i y) {
     memcpy(&z, zm, sizeof(z));
     return z;
 }
-__m128i _mm_cmpgt_epi8(__m128i x, __m128i y) {
-    __m128i z;
-    char xm[16];
-    char ym[16];
-    char zm[16];
-
-    memcpy(xm, &x, sizeof(x));
-    memcpy(ym, &y, sizeof(y));
-
-    for (int i = 0; i < sizeof(xm); ++i) zm[i] = xm[i] > ym[i] ? 0xff : 0;
-
-    memcpy(&z, zm, sizeof(z));
-    return z;
+__m128i _mm_srli_epi64(__m128i x, int count) {
+    auto srl = [](long long x, int count) -> auto{
+        return static_cast<long long>(static_cast<unsigned long long>(x) >> count);
+    };
+    return {srl(x[0], count), srl(x[1], count)};
 }
-int32_t _mm_movemask_epi8(__m128i x) {
-    using uint64_t = unsigned long long;
+int _mm_movemask_epi8(__m128i x) {
+    auto c1 = static_cast<long long>(0x8040201008040201ull);
     x = ~_mm_cmpeq_epi8(x, __m128i{0, 0});
-    uint64_t xm = (static_cast<uint64_t>(x[0])) & 0x8040201008040201ull;
-    uint64_t ym = (static_cast<uint64_t>(x[1])) & 0x8040201008040201ull;
-    xm |= xm >> 8;
-    ym |= ym >> 8;
-    xm |= xm >> 16;
-    ym |= ym >> 16;
-    xm |= xm >> 32;
-    ym |= ym >> 32;
-    return static_cast<unsigned char>(xm) + 256ul * static_cast<unsigned char>(ym);
+    x &= __m128i{c1, c1};
+    x |= _mm_srli_epi64(x, 8);
+    x |= _mm_srli_epi64(x, 16);
+    x |= _mm_srli_epi64(x, 32);
+    return static_cast<unsigned char>(x[0]) + (static_cast<unsigned char>(x[1]) << 8);
 }
 #endif
 
