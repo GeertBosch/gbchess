@@ -16,7 +16,7 @@ eval-debug: eval_test.cpp eval.cpp fen.cpp moves.cpp *.h
 	clang++ -std=c++17 -DDEBUG -O0 -g -o $@ $(filter-out %h,$^)
 
 perft: perft.cpp eval.cpp moves.cpp fen.cpp *.h
-	g++ -O2 -std=c++17 -g -o $@ $(filter-out %.h,$^)
+	clang++ -O3 -std=c++17 -g -o $@ $(filter-out %.h,$^)
 
 puzzles: eval-test puzzles.in puzzles.expected
 	./eval-test 10 < puzzles.in > puzzles.actual

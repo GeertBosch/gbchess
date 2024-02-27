@@ -4,65 +4,8 @@
 #include <iomanip>
 #include <iostream>
 
-#ifdef __SSE2__
-constexpr bool haveSSE2 = true;
-#include <emmintrin.h>
-#else
-
-#ifdef DEBUG
-// If we don't have SSE2, use the SSE2 emulation for testing purposes
-constexpr bool haveSSE2 = true;
-#else
-constexpr bool haveSSE2 = false;
-#endif
-
-typedef __attribute__((__vector_size__(2 * sizeof(long long)))) long long __m128i;
-__m128i _mm_cmpeq_epi8(__m128i x, __m128i y) {
-    __m128i z;
-    char xm[16];
-    char ym[16];
-    char zm[16];
-
-    memcpy(xm, &x, sizeof(x));
-    memcpy(ym, &y, sizeof(y));
-
-    for (int i = 0; i < sizeof(xm); ++i) zm[i] = xm[i] == ym[i] ? 0xff : 0;
-
-    memcpy(&z, zm, sizeof(z));
-    return z;
-}
-__m128i _mm_cmplt_epi8(__m128i x, __m128i y) {
-    __m128i z;
-    char xm[16];
-    char ym[16];
-    char zm[16];
-
-    memcpy(xm, &x, sizeof(x));
-    memcpy(ym, &y, sizeof(y));
-
-    for (int i = 0; i < sizeof(xm); ++i) zm[i] = xm[i] < ym[i] ? 0xff : 0;
-
-    memcpy(&z, zm, sizeof(z));
-    return z;
-}
-__m128i _mm_srli_epi64(__m128i x, int count) {
-    auto srl = [](long long x, int count) -> auto{
-        return static_cast<long long>(static_cast<unsigned long long>(x) >> count);
-    };
-    return {srl(x[0], count), srl(x[1], count)};
-}
-int _mm_movemask_epi8(__m128i x) {
-    auto c1 = static_cast<long long>(0x8040201008040201ull);
-    x = ~_mm_cmpeq_epi8(x, __m128i{0, 0});
-    x &= __m128i{c1, c1};
-    x |= _mm_srli_epi64(x, 8);
-    x |= _mm_srli_epi64(x, 16);
-    x |= _mm_srli_epi64(x, 32);
-    return static_cast<unsigned char>(x[0]) + (static_cast<unsigned char>(x[1]) << 8);
-}
-#endif
-
 #include "moves.h"
+#include "sse2.h"
 
 struct MovesTable {
     // precomputed possible moves for each piece type on each square
