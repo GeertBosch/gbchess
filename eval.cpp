@@ -28,6 +28,10 @@ std::ostream& operator<<(std::ostream& os, Score score) {
 std::ostream& operator<<(std::ostream& os, const Eval& eval) {
     return os << eval.move << " " << eval.evaluation;
 }
+std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
+    for (const auto& move : moves) os << " " << std::string(move);
+    return os;
+}
 
 struct TranspositionTable {
     static constexpr int kNumBits = 20;
@@ -193,18 +197,14 @@ Eval alphaBeta(Position& position, Eval alpha, Eval beta, int depthleft) {
         D << indent << "considering " << move << "\n";
         auto score = Eval{
             move, -alphaBeta(newPosition, -beta, -alpha, depthleft - 1).evaluation.adjustDepth()};
-        if (beta.evaluation < score.evaluation) {
+        if (beta < score) {
             D << indent << "fail-soft beta cutoff: " << score.evaluation << "\n";
             bestscore = score;
             break;  // fail-soft beta-cutoff
         }
-        if (bestscore.evaluation < score.evaluation) {
-            D << indent << "new best score: " << score.evaluation << "\n";
+        if (bestscore < score) {
             bestscore = score;
-            if (alpha.evaluation < score.evaluation) {
-                D << indent << "new alpha: " << score.evaluation << "\n";
-                alpha = score;
-            }
+            if (alpha < score) alpha = score;
         }
     }
     if (allMoves.empty()) {
@@ -221,11 +221,24 @@ Eval computeBestMove(Position& position, int maxdepth) {
     Eval best;  // Default to the worst possible move
     for (auto depth = 1; depth <= maxdepth; ++depth) {
         best = alphaBeta(position, {Move(), worstEval}, {Move(), bestEval}, depth);
-        std::cerr << "depth " << depth << ": " << best.move << " " << best.evaluation << std::endl;
+        std::cerr << "depth " << depth << ": " << best.move << " " << best.evaluation << " pv"
+                  << principalVariation(position) << std::endl;
         if (best.evaluation.mate()) break;
     }
 
     return best;
+}
+
+MoveVector principalVariation(Position position) {
+    MoveVector pv;
+    Hash hash(position);
+    while (auto found = transpositionTable.find(hash)) {
+        auto move = found->move;
+        pv.push_back(move);
+        position = applyMove(position, move);
+        hash = Hash(position);
+    }
+    return pv;
 }
 
 uint64_t perft(Turn turn, Board& board, int depth) {

@@ -109,6 +109,8 @@ Score evaluateBoard(const Board& board);
  */
 Eval computeBestMove(Position& position, int maxdepth);
 
+MoveVector principalVariation(Position position);
+
 /**
  *  a debugging function to walk the move generation tree of strictly legal moves to count all the
  *  leaf nodes of a certain depth, which can be compared to predetermined values and used to isolate
