@@ -4,6 +4,7 @@
 
 #include "eval.h"
 #include "fen.h"
+#include "hash.h"
 #include "moves.h"
 
 #ifdef DEBUG
@@ -27,123 +28,6 @@ std::ostream& operator<<(std::ostream& os, Score score) {
 std::ostream& operator<<(std::ostream& os, const Eval& eval) {
     return os << eval.move << " " << eval.evaluation;
 }
-
-// Implement a hashing method for chess positions using Zobrist hashing
-// https://en.wikipedia.org/wiki/Zobrist_hashing This relies just on the number of locations
-// ("squares") and number of pieces, where we assume piece 0 to be "no piece". The hash allows for
-// efficient incremental updating of the hash value when a move is made.
-
-// 1 for black to move, 1 for each castling right, 8 for en passant file
-static constexpr int kNumExtraVectors = 24;
-static constexpr int kNumBoardVectors = kNumPieces * kNumSquares;
-static constexpr int kNumHashVectors = kNumBoardVectors + kNumExtraVectors;
-
-// A random 64-bit integer for each piece on each square, as well as the extra vectors. The first
-// piece is None, but it is not omitted here, as it allows removing a hard-to-predict branch in the
-// hash function.
-static std::array<uint64_t, kNumHashVectors> hashVectors = []() {
-    std::array<uint64_t, kNumHashVectors> vectors;
-    std::ranlux48 gen(0xbad5eed5'bad5eed5);
-    for (auto& v : vectors) v = gen();
-    return vectors;
-}();
-
-// A Hash is a 64-bit integer that represents a position. It is the XOR of the hash vectors for
-// each piece on each square, as well as the applicable extra vectors.
-class Hash {
-    uint64_t hash = 0;
-
-public:
-    enum ExtraVectors {
-        BLACK_TO_MOVE = kNumBoardVectors + 0,
-        CASTLING_1 = kNumBoardVectors + 1,
-        CASTLING_15 = kNumBoardVectors + 15,
-        EN_PASSANT_A = kNumBoardVectors + 16,
-        EN_PASSANT_H = kNumBoardVectors + 23,
-    };
-
-    Hash() = default;
-    Hash(Position position) {
-        int location = 0;
-        for (auto square : SquareSet::occupancy(position.board))
-            toggle(position.board[square], square.index());
-        if (position.activeColor() == Color::BLACK) toggle(BLACK_TO_MOVE);
-        if (position.turn.castlingAvailability != CastlingMask::NONE)
-            toggle(ExtraVectors(CASTLING_1 - 1 + uint8_t(position.turn.castlingAvailability)));
-        if (position.turn.enPassantTarget.index())
-            toggle(ExtraVectors(position.turn.enPassantTarget.file() + EN_PASSANT_A));
-    }
-
-    uint64_t operator()() { return hash; }
-
-    void move(Piece piece, int from, int to) {
-        toggle(piece, from);
-        toggle(piece, to);
-    }
-    void capture(Piece piece, Piece target, int from, int to) {
-        toggle(piece, from);
-        toggle(target, to);
-        toggle(piece, to);
-    }
-
-    // Does not cancel out castling rights or en passant targets.
-    // Assumes that passed in board is the same as the board used to construct this hash.
-    void applyMove(const Board& board, Move mv) {
-        auto piece = board[mv.from()];
-        auto target = board[mv.to()];
-        move(piece, mv.from().index(), mv.to().index());
-        switch (mv.kind()) {
-        case MoveKind::QUIET_MOVE: break;
-        case MoveKind::DOUBLE_PAWN_PUSH: toggle(ExtraVectors(mv.to().file() + EN_PASSANT_A)); break;
-        case MoveKind::KING_CASTLE:  // Assume the move has the king move, so adjust the rook here.
-            move(addColor(PieceType::ROOK, color(piece)),
-                 (color(piece) == Color::WHITE ? Position::whiteKingSideRook
-                                               : Position::blackKingSideRook)
-                     .index(),
-                 (color(piece) == Color::WHITE ? Position::whiteRookCastledKingSide
-                                               : Position::blackRookCastledKingSide)
-                     .index());
-            break;
-        case MoveKind::QUEEN_CASTLE:  // Assume the move has the king move, so adjust the rook here.
-            move(addColor(PieceType::ROOK, color(piece)),
-                 (color(piece) == Color::WHITE ? Position::whiteQueenSideRook
-                                               : Position::blackQueenSideRook)
-                     .index(),
-                 (color(piece) == Color::WHITE ? Position::whiteRookCastledQueenSide
-                                               : Position::blackRookCastledQueenSide)
-                     .index());
-            break;
-
-        case MoveKind::CAPTURE: toggle(target, mv.to().index()); break;
-        case MoveKind::EN_PASSANT:
-            // Depending of the color of our piece, the captured pawn is either above or below the
-            // destination square.
-            toggle(target,
-                   mv.to().index() + (color(piece) == Color::WHITE ? -kNumFiles : kNumFiles));
-            break;
-        case MoveKind::KNIGHT_PROMOTION:
-        case MoveKind::BISHOP_PROMOTION:
-        case MoveKind::ROOK_PROMOTION:
-        case MoveKind::QUEEN_PROMOTION:
-            toggle(piece, mv.to().index());  // Remove the pawn, add the promoted piece
-            toggle(addColor(promotionType(mv.kind()), color(piece)), mv.to().index());
-            break;
-        case MoveKind::KNIGHT_PROMOTION_CAPTURE:
-        case MoveKind::BISHOP_PROMOTION_CAPTURE:
-        case MoveKind::ROOK_PROMOTION_CAPTURE:
-        case MoveKind::QUEEN_PROMOTION_CAPTURE:
-            toggle(target, mv.to().index());  // Remove the captured piece
-            toggle(piece, mv.to().index());   // Remove the pawn, add the promoted piece
-            toggle(addColor(promotionType(mv.kind()), color(piece)), mv.to().index());
-            break;
-        }
-    }
-
-    // Use toggle to add/remove a piece or non piece/location vector.
-    void toggle(Piece piece, int location) { toggle(index(piece) * kNumSquares + location); }
-    void toggle(int vector) { hash ^= hashVectors[vector]; }
-    void toggle(ExtraVectors extra) { toggle(kNumBoardVectors + int(extra)); }
-};
 
 struct TranspositionTable {
     static constexpr int kNumBits = 20;
