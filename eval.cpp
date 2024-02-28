@@ -194,11 +194,9 @@ Eval alphaBeta(Position& position, Eval alpha, Eval beta, int depthleft) {
 
     for (auto move : allMoves) {
         auto newPosition = applyMove(position, move);
-        D << indent << "considering " << move << "\n";
         auto score = Eval{
             move, -alphaBeta(newPosition, -beta, -alpha, depthleft - 1).evaluation.adjustDepth()};
         if (beta < score) {
-            D << indent << "fail-soft beta cutoff: " << score.evaluation << "\n";
             bestscore = score;
             break;  // fail-soft beta-cutoff
         }
