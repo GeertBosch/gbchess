@@ -45,10 +45,10 @@ struct TranspositionTable {
 
     std::array<Entry, kNumEntries> entries;
 
-    Eval* find(Hash hash) {
+    Eval find(Hash hash) {
         auto& entry = entries[hash() & kNumMask];
-        if (entry.hash() == hash()) return &entry.move;
-        return nullptr;
+        if (entry.hash() == hash()) return entry.move;
+        return {Move(), drawEval};  // no move found
     }
 
     void insert(Hash hash, Eval move) {
@@ -146,7 +146,7 @@ MoveIt sortTransposition(const Position& position, Hash hash, MoveIt begin, Move
     ++cacheCount;
 
     // If the move is not part of the current legal moves, nothing to do here.
-    auto it = std::find(begin, end, cachedMove->move);
+    auto it = std::find(begin, end, cachedMove.move);
     if (it == end) return begin;
 
     // If the transposition is not at the beginning, shift preceeding moves to the right
@@ -176,49 +176,48 @@ void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
 /**
  * The alpha-beta search algorithm with fail-soft negamax search.
  */
-Eval alphaBeta(Position& position, Eval alpha, Eval beta, int depthleft) {
+Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
     auto indent = debug ? std::string(depthleft * 4, ' ') : "";
-    D << indent << "alphaBeta(" << fen::to_string(position) << ", " << alpha.evaluation << ", "
-      << beta.evaluation << ", " << depthleft << ")\n";
-    Eval bestscore = {Move(), worstEval};
-    if (depthleft == 0) {
-        bestscore = staticEval(position);
-        D << indent << "staticEval: " << bestscore.evaluation << "\n";
-        return bestscore;
-    }
+    D << indent << "alphaBeta(" << fen::to_string(position) << ", " << alpha << ", " << beta << ", "
+      << depthleft << ")\n";
+    if (depthleft == 0) return staticEval(position).evaluation;
 
     auto allMoves = allLegalMoves(position.turn, position.board);
 
     Hash hash(position);
     sortTransposition(position, hash, allMoves.begin(), allMoves.end());
 
+    Eval best;
     for (auto move : allMoves) {
         auto newPosition = applyMove(position, move);
-        auto score = Eval{
-            move, -alphaBeta(newPosition, -beta, -alpha, depthleft - 1).evaluation.adjustDepth()};
+        auto score = -alphaBeta(newPosition, -beta, -alpha, depthleft - 1).adjustDepth();
         if (beta < score) {
-            bestscore = score;
+            best = {move, score};
             break;  // fail-soft beta-cutoff
         }
-        if (bestscore < score) {
-            bestscore = score;
+        if (best.evaluation < score) {
+            best = {move, score};
             if (alpha < score) alpha = score;
         }
     }
+
     if (allMoves.empty()) {
         auto kingPos =
             SquareSet::find(position.board, addColor(PieceType::KING, position.activeColor()));
         if (!isAttacked(position.board, kingPos, Occupancy(position.board, position.activeColor())))
-            return {Move(), drawEval};
+            return drawEval;
     }
-    transpositionTable.insert(hash, bestscore);  // Cache the best move for this position
-    return bestscore;
+    transpositionTable.insert(hash, best);  // Cache the best move for this position
+    return best.evaluation;
 }
 
 Eval computeBestMove(Position& position, int maxdepth) {
     Eval best;  // Default to the worst possible move
     for (auto depth = 1; depth <= maxdepth; ++depth) {
-        best = alphaBeta(position, {Move(), worstEval}, {Move(), bestEval}, depth);
+        auto score = alphaBeta(position, worstEval, bestEval, depth);
+        best = transpositionTable.find(Hash(position));
+        assert(best.evaluation == score);
+
         std::cerr << "depth " << depth << ": " << best.move << " " << best.evaluation << " pv"
                   << principalVariation(position) << std::endl;
         if (best.evaluation.mate()) break;
@@ -231,9 +230,8 @@ MoveVector principalVariation(Position position) {
     MoveVector pv;
     Hash hash(position);
     while (auto found = transpositionTable.find(hash)) {
-        auto move = found->move;
-        pv.push_back(move);
-        position = applyMove(position, move);
+        pv.push_back(found.move);
+        position = applyMove(position, found.move);
         hash = Hash(position);
     }
     return pv;

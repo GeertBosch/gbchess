@@ -85,6 +85,7 @@ struct Eval {
 
         return ret;
     }
+    explicit operator bool() const { return move; }
 
     bool operator<(const Eval& rhs) const { return evaluation < rhs.evaluation; }
 };
