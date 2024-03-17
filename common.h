@@ -192,6 +192,27 @@ inline constexpr bool isCastle(MoveKind kind) {
     return kind == MoveKind::KING_CASTLE || kind == MoveKind::QUEEN_CASTLE;
 }
 static constexpr uint8_t kNumMoveKinds = index(MoveKind::QUEEN_PROMOTION_CAPTURE) + 1;
+static constexpr uint8_t kNumNoPromoMoveKinds = index(MoveKind::EN_PASSANT) + 1;
+
+inline int noPromo(MoveKind kind) {
+    MoveKind noPromoKinds[] = {MoveKind::QUIET_MOVE,
+                               MoveKind::DOUBLE_PAWN_PUSH,
+                               MoveKind::KING_CASTLE,
+                               MoveKind::QUEEN_CASTLE,
+                               MoveKind::CAPTURE,
+                               MoveKind::EN_PASSANT,
+                               MoveKind::QUIET_MOVE,
+                               MoveKind::QUIET_MOVE,
+                               MoveKind::QUIET_MOVE,
+                               MoveKind::QUIET_MOVE,
+                               MoveKind::QUIET_MOVE,
+                               MoveKind::QUIET_MOVE,
+                               MoveKind::CAPTURE,
+                               MoveKind::CAPTURE,
+                               MoveKind::CAPTURE,
+                               MoveKind::CAPTURE};
+    return index(noPromoKinds[index(kind)]);
+}
 
 inline PieceType promotionType(MoveKind kind) {
     return static_cast<PieceType>((static_cast<uint8_t>(kind) & 3) + 1);

@@ -12,7 +12,7 @@ std::string toString(SquareSet squares) {
         str += static_cast<std::string>(sq);
         str += " ";
     }
-    str.pop_back();  // Remove the last space
+    if (!squares.empty()) str.pop_back();  // Remove the last space unless the string is empty
     return str;
 }
 
@@ -395,7 +395,24 @@ void testAddAvailableCastling() {
 
 void testMakeAndUnmakeMove(Board& board, Move move) {
     auto originalBoard = board;
+    auto activeColor = color(board[move.from()]);
+    auto occupancy = Occupancy(board, activeColor);
+    auto delta = occupancyDelta(move);
     auto captured = makeMove(board, move);
+    auto expected = Occupancy(board, !activeColor);
+    auto actual = !(occupancy ^ delta);
+    if (actual != expected) {
+        std::cout << "Move: " << static_cast<std::string>(move) << ", kind " << (int)move.kind()
+                  << "\n";
+        std::cout << "Occupancy: {" << toString(occupancy.ours) << ", "
+                  << toString(occupancy.theirs) << "}\n";
+        std::cout << "Delta: { " << toString(delta.ours) << ", " << toString(delta.theirs) << "}\n";
+        std::cout << "Expected occupancy: { " << toString(expected.ours) << ", "
+                  << toString(expected.theirs) << "}\n";
+        std::cout << "Actual occupancy: { " << toString(actual.ours) << ", "
+                  << toString(actual.theirs) << "}\n";
+    }
+    assert(actual == expected);
     unmakeMove(board, move, captured);
     if (board != originalBoard) {
         std::cout << "Original board:" << std::endl;
@@ -418,7 +435,6 @@ void testMakeAndUnmakeMove(Board& board, Move move) {
     assert(board == originalBoard);
     makeMove(board, move);
 }
-
 
 void testMakeAndUnmakeMove() {
     // Test pawn move
@@ -524,6 +540,29 @@ void testMakeAndUnmakeMove() {
         assert(board["b6"_sq] == Piece::WHITE_PAWN);
         assert(board["b5"_sq] == Piece::NONE);
         assert(board["a5"_sq] == Piece::NONE);
+    }
+
+    // Test king castling move
+    {
+        Board board;
+        board["e1"_sq] = Piece::WHITE_KING;
+        board["h1"_sq] = Piece::WHITE_ROOK;
+        testMakeAndUnmakeMove(board, Move("e1"_sq, "g1"_sq, MoveKind::KING_CASTLE));
+        assert(board["g1"_sq] == Piece::WHITE_KING);
+        assert(board["f1"_sq] == Piece::WHITE_ROOK);
+        assert(board["e1"_sq] == Piece::NONE);
+        assert(board["h1"_sq] == Piece::NONE);
+    }
+    // Test queen castling move
+    {
+        Board board;
+        board["e1"_sq] = Piece::WHITE_KING;
+        board["a1"_sq] = Piece::WHITE_ROOK;
+        testMakeAndUnmakeMove(board, Move("e1"_sq, "c1"_sq, MoveKind::QUEEN_CASTLE));
+        assert(board["c1"_sq] == Piece::WHITE_KING);
+        assert(board["d1"_sq] == Piece::WHITE_ROOK);
+        assert(board["e1"_sq] == Piece::NONE);
+        assert(board["a1"_sq] == Piece::NONE);
     }
     std::cout << "All makeMove and unmakeMove tests passed!" << std::endl;
 }

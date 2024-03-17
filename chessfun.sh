@@ -24,10 +24,10 @@ d" | stockfish
 
 # Compare a perft run on a  base FEN position followed by some moves at the given depth
 perftdiff() {
-	if (($# == 0)) ; then
+	if [ $# == 0 ] ; then
 		echo "$0 fen depth"
 		exit 1
-	elif (($# == 1)) ; then
+	elif [ $# == 1 ] ; then
 		echo "set fen to startpos"
 		fen="startpos"
 	else

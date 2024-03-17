@@ -52,10 +52,11 @@ public:
 
     bool empty() const { return _squares == 0; }
     size_t size() const { return __builtin_popcountll(_squares); }
-    bool contains(Square square) const { return (_squares >> square.index()) & 1; }
+    bool contains(Square square) const { return _squares & (1ull << square.index()); }
 
     SquareSet operator&(SquareSet other) const { return _squares & other._squares; }
     SquareSet operator|(SquareSet other) const { return _squares | other._squares; }
+    SquareSet operator^(SquareSet other) const { return _squares ^ other._squares; }
     SquareSet operator!(void) const { return ~_squares; }
 
     SquareSet operator|=(SquareSet other) { return _squares |= other._squares; }
@@ -83,26 +84,37 @@ public:
     };
 
     iterator begin() { return {*this}; }
-
     iterator end() { return SquareSet(); }
 };
 
 struct Occupancy {
     SquareSet theirs;
     SquareSet ours;
+    constexpr Occupancy() = default;
     constexpr Occupancy(const Board& board, Color activeColor) {
         theirs = SquareSet::occupancy(board, !activeColor);
         ours = SquareSet::occupancy(board, activeColor);
     }
     constexpr Occupancy(SquareSet theirs, SquareSet ours) : theirs(theirs), ours(ours) {}
+
     SquareSet operator()(void) const { return SquareSet{theirs | ours}; }
     Occupancy operator!() const { return {ours, theirs}; }
+    Occupancy operator^(Occupancy other) const {
+        return {theirs ^ other.theirs, ours ^ other.ours};
+    }
+    bool operator==(Occupancy other) const { return theirs == other.theirs && ours == other.ours; }
+    bool operator!=(Occupancy other) const { return !(*this == other); }
 };
 
 /**
  * Returns the set of squares that needs to be empty for castling to be legal.
  */
 SquareSet castlingPath(Color color, MoveKind side);
+
+/**
+ * Compute the delta in occupancy due to the given move
+ */
+Occupancy occupancyDelta(Move move);
 
 /**
  * This availableMoves function iterates over each square on the board. If a piece of the active
@@ -175,7 +187,9 @@ struct MoveWithPieces {
     Piece captured;
 };
 
-void forAllLegalMoves(Turn turn, Board& board, std::function<void(Board&, MoveWithPieces)> action);
+using MoveFun = std::function<void(Board&, MoveWithPieces)>;
+void forAllLegalCaptures(Turn turn, Board& board, MoveFun action);
+void forAllLegalMovesAndCaptures(Turn turn, Board& board, MoveFun action);
 
 /**
  * Returns true if the given square is attacked by a piece of the given opponent color.

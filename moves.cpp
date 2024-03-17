@@ -29,6 +29,9 @@ struct MovesTable {
     // expanded separately
     MoveKind captureKinds[kNumPieces][kNumRanks][kNumRanks];  // piece, from rank, to rank
 
+    // precomputed delta in occupancy as result of a move
+    Occupancy occupancyDelta[kNumNoPromoMoveKinds][kNumSquares][kNumSquares];  // moveKind, from, to
+
     // precomputed horizontal, diagonal and vertical paths from each square to each other square
     SquareSet paths[kNumSquares][kNumSquares];  // from, to
 
@@ -44,6 +47,7 @@ private:
     void initializePieceMovesAndCaptures();
     void initializePieceMoveAndCaptureKinds();
     void initializeAttackers();
+    void initializeOccupancyChanges();
     void initializePaths();
     void initializeCastlingMasks();
     void initializeEnPassantFrom();
@@ -99,6 +103,15 @@ void MovesTable::initializeAttackers() {
     }
 }
 
+void MovesTable::initializeOccupancyChanges() {
+    // Initialize occupancy changes
+    for (int moveKind = 0; moveKind < kNumNoPromoMoveKinds; ++moveKind)
+        for (int from = 0; from < kNumSquares; ++from)
+            for (int to = 0; to < kNumSquares; ++to)
+                occupancyDelta[moveKind][from][to] =
+                    ::occupancyDelta(Move{Square(from), Square(to), MoveKind(moveKind)});
+}
+
 void MovesTable::initializePaths() {
     // Initialize paths
     for (int from = 0; from < kNumSquares; ++from) {
@@ -133,6 +146,7 @@ MovesTable::MovesTable() {
     initializePieceMovesAndCaptures();
     initializePieceMoveAndCaptureKinds();
     initializeAttackers();
+    initializeOccupancyChanges();
     initializePaths();
     initializeCastlingMasks();
     initializeEnPassantFrom();
@@ -414,9 +428,44 @@ bool clearPath(SquareSet occupancy, Square from, Square to) {
     return (occupancy & path).empty();
 }
 
+Occupancy occupancyDelta(Move move) {
+    auto [from, to, kind] = Move::Tuple(move);
+    SquareSet ours;
+    ours.insert(from);
+    ours.insert(to);
+    SquareSet theirs;
+    switch (kind) {
+    case MoveKind::KING_CASTLE:
+        ours.insert(Square(from.rank(), Position::kRookCastledKingSideFile));
+        ours.insert(Square(from.rank(), Position::kKingSideRookFile));
+        break;
+    case MoveKind::QUEEN_CASTLE:
+        ours.insert(Square(from.rank(), Position::kRookCastledQueenSideFile));
+        ours.insert(Square(from.rank(), Position::kQueenSideRookFile));
+        break;
+    case MoveKind::CAPTURE:
+    case MoveKind::KNIGHT_PROMOTION_CAPTURE:
+    case MoveKind::BISHOP_PROMOTION_CAPTURE:
+    case MoveKind::ROOK_PROMOTION_CAPTURE:
+    case MoveKind::QUEEN_PROMOTION_CAPTURE: theirs.insert(to); break;
+    case MoveKind::EN_PASSANT: theirs.insert(Square(from.rank(), to.file())); break;
+    default: break;
+    }
+    return {theirs, ours};
+}
+
+
 void addMove(MoveVector& moves, Piece piece, Move move) {
     moves.emplace_back(move);
 }
+
+struct SearchState {
+    SearchState(const Board& board, Color activeColor)
+        : kingSquares(SquareSet::find(board, addColor(PieceType::KING, activeColor))),
+          occupied(Occupancy(board, activeColor)) {}
+    SquareSet kingSquares;
+    Occupancy occupied;
+};
 
 template <typename F>
 void expandMovePromotions(Piece piece, Move move, const F& fun) {
@@ -700,7 +749,7 @@ Position applyMove(Position position, Move move) {
 
 bool isAttacked(const Board& board, Square square, Occupancy occupancy) {
     // We're using this function to find out if empty squares are attacked for determining
-    // legality of castling, so we ca't assume that the capture square is occupied.
+    // legality of castling, so we can't assume that the capture square is occupied.
     for (Square from : occupancy.theirs& movesTable.attackers[square.index()]) {
         auto piece = board[from];
         auto possibleCaptureSquares = movesTable.captures[index(piece)][from.index()];
@@ -730,66 +779,66 @@ std::string toString(SquareSet squares) {
         str += static_cast<std::string>(sq);
         str += " ";
     }
-    str.pop_back();  // Remove the last space
+    if (!squares.empty()) str.pop_back();  // Remove the last space
     return str;
 }
+std::string toString(Occupancy occupancy) {
+    return "{ " + toString(occupancy.ours) + ", " + toString(occupancy.theirs) + " }";
+}
+
+template <typename F>
+void doMoveIfLegal(Board& board, SearchState state, Piece piece, Move move, const F& fun) {
+    auto [from, to, kind] = Move::Tuple(move);
+    // If we move the king, reflect that in the king squares
+    auto checkSquares = state.kingSquares;
+    if (state.kingSquares.contains(from)) {
+        if (kind == MoveKind::KING_CASTLE || kind == MoveKind::QUEEN_CASTLE)
+            checkSquares |= movesTable.paths[from.index()][to.index()];
+        else
+            checkSquares.erase(from);
+        checkSquares.insert(to);
+    }
+
+    // Apply the move to the board
+    auto captured = makeMove(board, move);
+
+    // Update the occupancy
+    auto delta = movesTable.occupancyDelta[noPromo(kind)][from.index()][to.index()];
+
+    // Check if the move would result in our king being in check.
+    if (!isAttacked(board, checkSquares, state.occupied ^ delta))
+        fun(board, MoveWithPieces{Move{from, to, kind}, piece, captured});
+
+    unmakeMove(board, move, captured);
+};
 }  // namespace
 
-void forAllLegalMoves(Turn turn, Board& board, std::function<void(Board&, MoveWithPieces)> action) {
-
-    auto ourKing = addColor(PieceType::KING, turn.activeColor);
-    auto oldKing = SquareSet::find(board, ourKing);
-    auto occupancy = Occupancy(board, turn.activeColor);
-
+void forAllLegalMovesAndCaptures(Turn turn, Board& board, MoveFun action) {
     // Iterate over all moves and captures
-    auto addIfLegal = [&](Piece piece, Move move) {
-        auto [from, to, kind] = Move::Tuple(move);
-        // If we move the king, reflect that in the king squares
-        auto newKing = oldKing;
-        if (piece == ourKing) {
-            if (kind == MoveKind::KING_CASTLE || kind == MoveKind::QUEEN_CASTLE)
-                newKing |= movesTable.paths[from.index()][to.index()];
-            else
-                newKing.erase(from);
-            newKing.insert(to);
-        }
-
-        // Apply the move to the board
-        auto captured = makeMove(board, move);
-
-        auto newOccupancy =
-            Occupancy{occupancy.theirs & !SquareSet(to), (occupancy.ours & !SquareSet(from)) | to};
-
-        // Adjust the opponent squares for the en passant and castling cases.
-        switch (kind) {
-        case MoveKind::KING_CASTLE:
-            newOccupancy.ours.erase(Square(from.rank(), Position::kKingSideRookFile));
-            newOccupancy.ours.insert(Square(from.rank(), Position::kRookCastledKingSideFile));
-            break;
-        case MoveKind::QUEEN_CASTLE:
-            newOccupancy.ours.erase(Square(from.rank(), Position::kQueenSideRookFile));
-            newOccupancy.ours.insert(Square(from.rank(), Position::kRookCastledQueenSideFile));
-            break;
-        case MoveKind::EN_PASSANT: newOccupancy = Occupancy(board, turn.activeColor); break;
-        default: break;
-        }
-
-        // Check if the move would result in our king being in check.
-        if (!isAttacked(board, newKing, newOccupancy))
-            action(board, MoveWithPieces{Move{from, to, kind}, piece, captured});
-
-        unmakeMove(board, move, captured);
+    auto state = SearchState(board, turn.activeColor);
+    auto doMove = [&](Piece piece, Move move) {
+        doMoveIfLegal(board, state, piece, move, action);
     };
-
-    findCaptures(board, occupancy, addIfLegal);
-    findEnPassant(board, turn, addIfLegal);
-    findMoves(board, occupancy, addIfLegal);
-    findCastles(board, occupancy, turn, addIfLegal);
+    findCaptures(board, state.occupied, doMove);
+    findEnPassant(board, turn, doMove);
+    findMoves(board, state.occupied, doMove);
+    findCastles(board, state.occupied, turn, doMove);
 }
+
+void forAllLegalCaptures(Turn turn, Board& board, MoveFun action) {
+    // Iterate over all moves and captures
+    auto state = SearchState(board, turn.activeColor);
+    auto doMove = [&](Piece piece, Move move) {
+        doMoveIfLegal(board, state, piece, move, action);
+    };
+    findCaptures(board, state.occupied, doMove);
+    findEnPassant(board, turn, doMove);
+}
+
 
 MoveVector allLegalMoves(Turn turn, Board& board) {
     MoveVector legalMoves;
-    forAllLegalMoves(
+    forAllLegalMovesAndCaptures(
         turn, board, [&](Board&, MoveWithPieces move) { legalMoves.emplace_back(move.move); });
     return legalMoves;
 }

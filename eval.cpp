@@ -119,16 +119,17 @@ void improveMove(Eval& best, const Eval& ourMove) {
 Eval staticEval(Position& position) {
     Eval best;  // Default to the worst possible move
     auto currentEval = evaluateBoard(position.board);
-    forAllLegalMoves(position.turn, position.board, [&](Board& board, MoveWithPieces mwp) {
-        auto [move, piece, captured] = mwp;
-        ++evalCount;
-        auto newEval = currentEval;
-        if (move.kind() >= MoveKind::CAPTURE) newEval -= pieceValues[index(captured)];
-        if (position.activeColor() == Color::BLACK) newEval = -newEval;
-        newEval += moveValues[index(move.kind())];
-        Eval ourMove{move, newEval};
-        improveMove(best, ourMove);
-    });
+    forAllLegalMovesAndCaptures(
+        position.turn, position.board, [&](Board& board, MoveWithPieces mwp) {
+            auto [move, piece, captured] = mwp;
+            ++evalCount;
+            auto newEval = currentEval;
+            if (move.kind() >= MoveKind::CAPTURE) newEval -= pieceValues[index(captured)];
+            if (position.activeColor() == Color::BLACK) newEval = -newEval;
+            newEval += moveValues[index(move.kind())];
+            Eval ourMove{move, newEval};
+            improveMove(best, ourMove);
+        });
     return best;
 }
 
@@ -240,7 +241,7 @@ MoveVector principalVariation(Position position) {
 uint64_t perft(Turn turn, Board& board, int depth) {
     if (depth <= 0) return 1;
     uint64_t nodes = 0;
-    forAllLegalMoves(turn, board, [&](Board& board, MoveWithPieces mwp) {
+    forAllLegalMovesAndCaptures(turn, board, [&](Board& board, MoveWithPieces mwp) {
         auto newTurn = applyMove(turn, mwp.piece, mwp.move);
         nodes += perft(newTurn, board, depth - 1);
     });
