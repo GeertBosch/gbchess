@@ -93,6 +93,7 @@ enum class Piece : uint8_t {
     BLACK_KING
 };
 static constexpr uint8_t kNumPieces = static_cast<uint8_t>(Piece::BLACK_KING) + 1;
+
 template <typename T>
 class Range {
 public:
@@ -120,6 +121,10 @@ private:
     const iterator _end;
 };
 static constexpr Range pieces(Piece::WHITE_PAWN, Piece::BLACK_KING);
+
+inline bool operator<(Piece lhs, Piece rhs) {
+    return static_cast<uint8_t>(lhs) < static_cast<uint8_t>(rhs);
+}
 
 inline constexpr uint8_t index(Piece piece) {
     return static_cast<uint8_t>(piece);

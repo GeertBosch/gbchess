@@ -32,7 +32,6 @@ std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     for (const auto& move : moves) os << " " << std::string(move);
     return os;
 }
-
 struct TranspositionTable {
     static constexpr int kNumBits = 20;
     static constexpr int kNumEntries = 1 << kNumBits;
@@ -124,7 +123,7 @@ Eval staticEval(Position& position) {
             auto [move, piece, captured] = mwp;
             ++evalCount;
             auto newEval = currentEval;
-            if (move.kind() >= MoveKind::CAPTURE) newEval -= pieceValues[index(captured)];
+            if (isCapture(move.kind())) newEval -= pieceValues[index(captured)];
             if (position.activeColor() == Color::BLACK) newEval = -newEval;
             newEval += moveValues[index(move.kind())];
             Eval ourMove{move, newEval};
@@ -163,8 +162,27 @@ MoveIt sortTransposition(const Position& position, Hash hash, MoveIt begin, Move
 
 /**
  * Sorts the moves in the range [begin, end) in place, so that the capture come before
+ * non-captures, and captures are sorted by victim value, attacker value, and move kind.
  */
 MoveIt sortCaptures(const Position& position, MoveIt begin, MoveIt end) {
+    std::sort(begin, end, [&board = position.board](Move a, Move b) {
+        if (!isCapture(a.kind())) return false;
+
+        // Most valuable victims first
+        auto ato = board[a.to()];
+        auto bto = board[b.to()];
+        if (bto < ato) return true;
+        if (ato < bto) return false;
+
+        // Least valuable attackers next
+        auto afrom = board[a.from()];
+        auto bfrom = board[b.from()];
+        if (afrom < bfrom) return true;
+        if (bfrom < afrom) return false;
+
+        // Otherwise, sort by move kind, highest first
+        return b.kind() < a.kind();
+    });
 
     return begin;
 }
@@ -186,7 +204,7 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
     auto allMoves = allLegalMoves(position.turn, position.board);
 
     Hash hash(position);
-    sortTransposition(position, hash, allMoves.begin(), allMoves.end());
+    sortMoves(position, hash, allMoves.begin(), allMoves.end());
 
     Eval best;
     for (auto move : allMoves) {

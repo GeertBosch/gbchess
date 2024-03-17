@@ -29,7 +29,8 @@ struct MovesTable {
     // expanded separately
     MoveKind captureKinds[kNumPieces][kNumRanks][kNumRanks];  // piece, from rank, to rank
 
-    // precomputed delta in occupancy as result of a move
+    // precomputed delta in occupancy as result of a move, but only for non-promotion moves
+    // to save on memory: convert promotion kinds using the noPromo function
     Occupancy occupancyDelta[kNumNoPromoMoveKinds][kNumSquares][kNumSquares];  // moveKind, from, to
 
     // precomputed horizontal, diagonal and vertical paths from each square to each other square
@@ -750,13 +751,12 @@ Position applyMove(Position position, Move move) {
 bool isAttacked(const Board& board, Square square, Occupancy occupancy) {
     // We're using this function to find out if empty squares are attacked for determining
     // legality of castling, so we can't assume that the capture square is occupied.
-    for (Square from : occupancy.theirs& movesTable.attackers[square.index()]) {
-        auto piece = board[from];
-        auto possibleCaptureSquares = movesTable.captures[index(piece)][from.index()];
-        if (possibleCaptureSquares.contains(square) &&
-            clearPath(SquareSet::occupancy(board), from, square))
+    auto attackers = occupancy.theirs & movesTable.attackers[square.index()];
+    for (auto from : attackers)
+        if (clearPath(occupancy(), from, square) &&
+            movesTable.captures[index(board[from])][from.index()].contains(square))
             return true;
-    }
+
     return false;
 }
 
@@ -787,9 +787,9 @@ std::string toString(Occupancy occupancy) {
 }
 
 template <typename F>
-void doMoveIfLegal(Board& board, SearchState state, Piece piece, Move move, const F& fun) {
+void doMoveIfLegal(Board& board, SearchState& state, Piece piece, Move move, const F& fun) {
     auto [from, to, kind] = Move::Tuple(move);
-    // If we move the king, reflect that in the king squares
+    // If we move the king, reflect that in the king squares to check for checks
     auto checkSquares = state.kingSquares;
     if (state.kingSquares.contains(from)) {
         if (kind == MoveKind::KING_CASTLE || kind == MoveKind::QUEEN_CASTLE)

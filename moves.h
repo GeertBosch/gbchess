@@ -50,9 +50,10 @@ public:
         for (auto it = begin; it != end; ++it) insert(*it);
     }
 
+    operator bool() const { return _squares; }
     bool empty() const { return _squares == 0; }
     size_t size() const { return __builtin_popcountll(_squares); }
-    bool contains(Square square) const { return _squares & (1ull << square.index()); }
+    bool contains(Square square) const { return *this & SquareSet(square); }
 
     SquareSet operator&(SquareSet other) const { return _squares & other._squares; }
     SquareSet operator|(SquareSet other) const { return _squares | other._squares; }
