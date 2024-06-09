@@ -835,8 +835,15 @@ void forAllLegalCaptures(Turn turn, Board& board, MoveFun action) {
     findEnPassant(board, turn, doMove);
 }
 
+MoveVector allLegalCaptures(Turn turn, Board& board) {
+    MoveVector legalCaptures;
+    forAllLegalCaptures(turn, board, [&](Board& board, MoveWithPieces mwp) {
+        legalCaptures.emplace_back(mwp.move);
+    });
+    return legalCaptures;
+ }
 
-MoveVector allLegalMoves(Turn turn, Board& board) {
+MoveVector allLegalMovesAndCaptures(Turn turn, Board& board) {
     MoveVector legalMoves;
     forAllLegalMovesAndCaptures(
         turn, board, [&](Board&, MoveWithPieces move) { legalMoves.emplace_back(move.move); });

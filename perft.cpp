@@ -16,7 +16,7 @@ void perftWithDivide(Position position, int depth, int expectedCount) {
     std::cout << "Fen: " << fen::to_string(position) << std::endl;
 
     auto startTime = std::chrono::high_resolution_clock::now();
-    for (auto move : allLegalMoves(position.turn, position.board)) {
+    for (auto move : allLegalMovesAndCaptures(position.turn, position.board)) {
         auto newPosition = applyMove(position, move);
         auto count = perft(newPosition.turn, newPosition.board, depth - 1);
         std::cout << static_cast<std::string>(move) << ": " << count << std::endl;

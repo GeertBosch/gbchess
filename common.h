@@ -22,6 +22,7 @@ class Square {
     uint8_t square = 0;
 
 public:
+    // rank and file range from 0 to 7
     constexpr Square(int rank, int file) : square(rank * kNumFiles + file) {}
     constexpr Square(int index) : square(index) {}
 
@@ -275,7 +276,7 @@ public:
     Board() { _squares.fill(Piece::NONE); }
 
     Piece& operator[](Square sq) { return _squares[sq.index()]; }
-    const Piece operator[](Square sq) const { return _squares[sq.index()]; }
+    const Piece& operator[](Square sq) const { return _squares[sq.index()]; }
     const auto& squares() const { return _squares; }
     bool operator==(const Board& other) const { return _squares == other._squares; }
     bool operator!=(const Board& other) const { return _squares != other._squares; }

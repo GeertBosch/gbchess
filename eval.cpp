@@ -1,8 +1,10 @@
 #include <iostream>
 #include <random>
 #include <string>
+#include <unordered_set>
 
 #include "eval.h"
+#include "eval_tables.h"
 #include "fen.h"
 #include "hash.h"
 #include "moves.h"
@@ -31,6 +33,31 @@ std::ostream& operator<<(std::ostream& os, const Eval& eval) {
 std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     for (const auto& move : moves) os << " " << std::string(move);
     return os;
+}
+
+PieceSquareTable operator+(PieceSquareTable lhs, Score rhs) {
+    for (auto& value : lhs) value += rhs;
+    return lhs;
+}
+
+PieceSquareTable operator+(PieceSquareTable lhs, PieceSquareTable rhs) {
+    for (size_t i = 0; i < lhs.size(); ++i) lhs[i] += rhs[i];
+    return lhs;
+}
+
+PieceSquareTable operator*(PieceSquareTable table, Score score) {
+    for (auto& value : table) value *= score;
+    return table;
+}
+
+void flip(PieceSquareTable& table) {
+    // Flip the table vertically (king side remains king side, queen side remains queen side)
+    for (auto sq = Square(0); sq != kNumSquares / 2; ++sq) {
+        auto other = Square(kNumRanks - 1 - sq.rank(), sq.file());
+        std::swap(table[sq.index()], table[other.index()]);
+    };
+    // Invert the values
+    for (auto& sq : table) sq = -sq;
 }
 struct TranspositionTable {
     static constexpr int kNumBits = 20;
@@ -93,43 +120,99 @@ static std::array<Score, kNumMoveKinds> moveValues = {
     800_cp,  // 15 Queen promotion capture
 };
 
+/** The GamePhase reflects the current phase of the game, ranging from opening to endgame.
+ * The phase is used to adjust the evaluation function based on the amount of material left on the
+ * board. We follow the method of the Rookie 2.0 chess program by M.N.J. van Kervinck.
+ * The transitiion uses multiple steps to avoid sudden changes in the evaluation function.
+ * Unlike in Rookie 2.0, we use the phase of the least advanced player as overall phase, rather
+ * than maintain a separate phase per side.
+ */
+struct GamePhase {
+    static constexpr int kOpening = 7;
+    static constexpr int kEndgame = 0;
+    static constexpr Score weights[kOpening + 1] = {
+        0_cp,    // Endgame
+        14_cp,   // 1
+        28_cp,   // 2
+        42_cp,   // 3
+        58_cp,   // 4
+        72_cp,   // 5
+        86_cp,   // 6
+        100_cp,  // Opening
+    };
+
+    uint8_t phase = 0;  // ranges from 7 (opening) down to 0 (endgame)
+    GamePhase(int phase) : phase(std::clamp(phase, kEndgame, kOpening)) {}
+    GamePhase(const Board& board) {
+        int material[2] = {0, 0};  // per color, in pawns
+        for (auto piece : board.squares()) {
+            auto val = pieceValues[index(piece)].pawns();
+            // Ignore pawns
+            if (val < -1) material[0] -= val;
+            if (val > 1) material[1] += val;
+        }
+        *this = GamePhase((std::max(material[0], material[1]) - 10) / 2);
+    }
+
+    PieceSquareTable interpolate(PieceSquareTable opening, PieceSquareTable endgame) const {
+        return opening * weights[phase] + endgame * (100_cp - weights[phase]);
+    }
+};
+
+struct EvalTable {
+    std::array<PieceSquareTable, kNumPieces> pieceSquareTables{};
+    EvalTable(GamePhase phase, bool usePieceSquareTables) {
+        for (auto piece : pieces) {
+            auto& table = pieceSquareTables[index(piece)];
+            table = {};
+            if (piece != Piece::NONE && usePieceSquareTables) {
+                switch (type(piece)) {
+                case PieceType::PAWN: table = pawnScores; break;
+                case PieceType::KNIGHT: table = knightScores; break;
+                case PieceType::BISHOP: table = bishopScores; break;
+                case PieceType::ROOK: table = rookScores; break;
+                case PieceType::QUEEN: table = queenScores; break;
+                case PieceType::KING:
+                    table = phase.interpolate(kingOpeningScores, kingEndgameScore);
+                    break;
+                default: break;
+                }
+                if (color(piece) == Color::BLACK) flip(table);
+            }
+            table = table + pieceValues[index(piece)];
+        }
+    }
+    const PieceSquareTable& operator[](Piece piece) const {
+        return pieceSquareTables[index(piece)];
+    }
+};
+
+EvalTable evalTable(GamePhase::kOpening, false);
 uint64_t evalCount = 0;
 uint64_t cacheCount = 0;
 
-Score evaluateBoard(const Board& board) {
+Score evaluateBoard(const Board& board, const EvalTable& table) {
     Score value = 0_cp;
+    auto occupied = SquareSet::occupancy(board);
 
-    for (auto piece : board.squares()) value += pieceValues[index(piece)];
+    for (auto square : occupied) value += table[board[square]][square.index()];
 
     return value;
 }
 
-void improveMove(Eval& best, const Eval& ourMove) {
-    std::string indent = "    ";
-    bool improved = best < ourMove;
-    D << indent << best << " <  " << ourMove << " ? " << improved << "\n";
-
-    if (!improved) return;
-
-    D << indent << best << " => " << ourMove << std::endl;
-    best = ourMove;
-}
-
-Eval staticEval(Position& position) {
-    Eval best;  // Default to the worst possible move
-    auto currentEval = evaluateBoard(position.board);
-    forAllLegalMovesAndCaptures(
-        position.turn, position.board, [&](Board& board, MoveWithPieces mwp) {
-            auto [move, piece, captured] = mwp;
-            ++evalCount;
-            auto newEval = currentEval;
-            if (isCapture(move.kind())) newEval -= pieceValues[index(captured)];
-            if (position.activeColor() == Color::BLACK) newEval = -newEval;
-            newEval += moveValues[index(move.kind())];
-            Eval ourMove{move, newEval};
-            improveMove(best, ourMove);
-        });
-    return best;
+Score evaluateBoard(const Board& board, bool usePieceSquareTables) {
+    auto phase = GamePhase(board);
+    D << "phase: " << std::to_string((int)phase.phase) << std::endl;
+    auto table = EvalTable(phase, usePieceSquareTables);
+    auto occupancy = SquareSet::occupancy(board);
+    Score value = 0_cp;
+    for (auto sq : occupancy) {
+        auto piece = board[sq];
+        auto score = table[piece][sq.index()];
+        D << to_char(piece) << " at " << std::string(sq) << ": " << score << "\n";
+        value += score;
+    }
+    return value;
 }
 
 using MoveIt = MoveVector::iterator;
@@ -192,35 +275,83 @@ void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
     begin = sortCaptures(position, begin, end);
 }
 
+bool isInCheck(const Position& position) {
+    auto kingPos =
+        SquareSet::find(position.board, addColor(PieceType::KING, position.activeColor()));
+    return isAttacked(position.board, kingPos, Occupancy(position.board, position.activeColor()));
+}
+
+Eval staticEval(Position& position) {
+    Eval best;  // Default to the worst possible move
+    auto currentEval = evaluateBoard(position.board, evalTable);
+    forAllLegalMovesAndCaptures(
+        position.turn, position.board, [&](Board& board, MoveWithPieces mwp) {
+            auto [move, piece, captured] = mwp;
+            ++evalCount;
+            auto newEval = currentEval;
+            if (isCapture(move.kind())) newEval -= pieceValues[index(captured)];
+            if (position.activeColor() == Color::BLACK) newEval = -newEval;
+            newEval += moveValues[index(move.kind())];
+            Eval ourMove{move, newEval};
+            if (ourMove > best) best = ourMove;
+        });
+    if (!best.move) {
+        auto moves = allLegalMovesAndCaptures(position.turn, position.board);
+        Move first = moves.size() ? moves.front() : Move();
+        assert(moves.size() == 0);
+        if (!isInCheck(position)) best.evaluation = drawEval;
+    }
+    return best;
+}
+
+Score quiesce(Position& position, Score alpha, Score beta, int depthleft = 2) {
+    Score stand_pat = evaluateBoard(position.board, evalTable);
+    if (position.activeColor() == Color::BLACK) stand_pat = -stand_pat;
+    if (stand_pat >= beta) return beta;
+    if (alpha < stand_pat) alpha = stand_pat;
+
+    auto captureList = allLegalCaptures(position.turn, position.board);
+    // Hash hash(position);
+    // sortMoves(position, hash, allCaptures.begin(), allCaptures.end());
+
+    Eval best;
+    for (auto capture : captureList) {
+        auto newPosition = applyMove(position, capture);
+        auto score = -quiesce(newPosition, -beta, -alpha, depthleft - 1).adjustDepth();
+
+        if (score >= beta) return beta;
+        if (score > alpha) alpha = score;
+    }
+    return alpha;
+}
+
 /**
  * The alpha-beta search algorithm with fail-soft negamax search.
  */
 Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
-    auto indent = debug ? std::string(depthleft * 4, ' ') : "";
-    D << indent << "alphaBeta(" << fen::to_string(position) << ", " << alpha << ", " << beta << ", "
-      << depthleft << ")\n";
+    // if (depthleft == 0) return quiesce(position, alpha, beta);
     if (depthleft == 0) return staticEval(position).evaluation;
 
-    auto allMoves = allLegalMoves(position.turn, position.board);
+    auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
 
     Hash hash(position);
-    sortMoves(position, hash, allMoves.begin(), allMoves.end());
+    sortMoves(position, hash, moveList.begin(), moveList.end());
 
     Eval best;
-    for (auto move : allMoves) {
+    for (auto move : moveList) {
         auto newPosition = applyMove(position, move);
-        auto score = -alphaBeta(newPosition, -beta, -alpha, depthleft - 1).adjustDepth();
-        if (beta < score) {
+        auto score =
+            -alphaBeta(newPosition, -beta, -std::max(alpha, best.evaluation), depthleft - 1)
+                 .adjustDepth();
+        if (score > best.evaluation) {
             best = {move, score};
-            break;  // fail-soft beta-cutoff
         }
-        if (best.evaluation < score) {
-            best = {move, score};
-            if (alpha < score) alpha = score;
+        if (best.evaluation >= beta) {
+            break;
         }
     }
 
-    if (allMoves.empty()) {
+    if (moveList.empty()) {
         auto kingPos =
             SquareSet::find(position.board, addColor(PieceType::KING, position.activeColor()));
         if (!isAttacked(position.board, kingPos, Occupancy(position.board, position.activeColor())))
@@ -231,14 +362,22 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
 }
 
 Eval computeBestMove(Position& position, int maxdepth) {
+    evalTable = {GamePhase(position.board), true};
+    // std::cerr << "computeBestMove " << fen::to_string(position) << ", maxdepth " << maxdepth
+    //          << "\n";
+
     Eval best;  // Default to the worst possible move
+
+    best = staticEval(position);
+    // std::cerr << "staticEval is " << best << "\n";
+
     for (auto depth = 1; depth <= maxdepth; ++depth) {
         auto score = alphaBeta(position, worstEval, bestEval, depth);
         best = transpositionTable.find(Hash(position));
         assert(best.evaluation == score);
 
-        std::cerr << "depth " << depth << ": " << best.move << " " << best.evaluation << " pv"
-                  << principalVariation(position) << std::endl;
+        // std::cerr << "depth " << depth << ": " << best.move << " " << best.evaluation << " pv"
+        //          << principalVariation(position) << std::endl;
         if (best.evaluation.mate()) break;
     }
 
@@ -247,9 +386,12 @@ Eval computeBestMove(Position& position, int maxdepth) {
 
 MoveVector principalVariation(Position position) {
     MoveVector pv;
-    Hash hash(position);
+    std::unordered_multiset<Hash> seen;
+    Hash hash = Hash(position);
     while (auto found = transpositionTable.find(hash)) {
         pv.push_back(found.move);
+        seen.insert(hash);
+        if (seen.count(hash) == 3) break;  // limit to 3 repetitions, at that's a draw
         position = applyMove(position, found.move);
         hash = Hash(position);
     }

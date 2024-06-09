@@ -5,6 +5,8 @@
 
 #include "common.h"
 
+#pragma once
+
 /**
  *  The Score type is used to represent the evaluation of a chess position. It is a signed integer,
  *  where the value is in centipawns (hundredths of a pawn). The ends of the range indicate
@@ -31,11 +33,17 @@ public:
     constexpr Score operator-() const { return check(-value); }
     Score operator+(Score rhs) const { return check(value + rhs.value); }
     Score operator-(Score rhs) const { return *this + -rhs; }
+    Score operator*(Score rhs) const { return check(value * rhs.value / 100); }
     Score& operator+=(Score rhs) { return *this = *this + rhs; }
     Score& operator-=(Score rhs) { return *this = *this - rhs; }
+    Score& operator*=(Score rhs) { return *this = *this * rhs; }
     bool operator==(Score rhs) const { return value == rhs.value; }
     bool operator<(Score rhs) const { return value < rhs.value; }
+    bool operator>(Score rhs) const { return value > rhs.value; }
+    bool operator<=(Score rhs) const { return value <= rhs.value; }
+    bool operator>=(Score rhs) const { return value >= rhs.value; }
     bool mate() const { return std::abs(value) >= max().value / 100 * 100; }
+    int pawns() const { return value / 100; }
 
     /**
      *  For scores indicating mate, reduce the value by one, so that a sooner mate is preferred over
@@ -68,6 +76,16 @@ static Score worstEval = -99'99_cp;
 static Score drawEval = 0_cp;
 static Score bestEval = 99'99_cp;
 
+using PieceSquareTable = std::array<Score, kNumSquares>;
+PieceSquareTable operator+(PieceSquareTable lhs, Score rhs);
+PieceSquareTable operator+(PieceSquareTable lhs, PieceSquareTable rhs);
+PieceSquareTable operator*(PieceSquareTable table, Score score);
+
+/** Reverse the ranks in the table and negate the scores, so tables made from the viewpoint
+ *  of one side can be used for the other side.
+ */
+void flip(PieceSquareTable& table);
+
 /**
  * The evaluation is always from the perspective of the active color. Higher evaluations are better,
  * zero indicates a draw. Units of evaluation are roughly the value of a pawn.
@@ -87,7 +105,16 @@ struct Eval {
     }
     explicit operator bool() const { return move; }
 
+    bool operator==(const Eval& rhs) const {
+        return move == rhs.move && evaluation == rhs.evaluation;
+    }
+    bool operator!=(const Eval& rhs) const { return !(*this == rhs); }
     bool operator<(const Eval& rhs) const { return evaluation < rhs.evaluation; }
+    bool operator>(const Eval&  rhs) const { return evaluation > rhs.evaluation; }
+
+    operator std::string() const {
+        return static_cast<std::string>(move) + "@" + static_cast<std::string>(evaluation);
+    }
 };
 
 extern uint64_t evalCount;
@@ -99,8 +126,10 @@ extern uint64_t cacheCount;
  * pieces have positive values, and black pieces have negative values, so the returned value
  * represents the advantage to the white player: positive for white's advantage, negative
  * for black's advantage.
+ * If usePieceSquareTables is true, additionally adjust the evaluation of each piece based on
+ * its position and the phase of the game.
  */
-Score evaluateBoard(const Board& board);
+Score evaluateBoard(const Board& board, bool usePieceSquareTables);
 
 /**
  * Evaluates the best moves from a given chess position up to a certain depth.

@@ -1,4 +1,5 @@
 # applies some move to a position in FEN format and shows the result using stockfish
+echo "apply <fen> <move> ..."
 apply() {
 	if (($# < 2)) ; then
 		echo "$0 <fen> <move> ..."
@@ -19,6 +20,20 @@ apply() {
 	done
 	echo "\
 position fen \"$fen\" $moves
+d" | stockfish
+}
+
+echo "fish <fen>"
+fish() {
+	if (($# < 1)) ; then
+		echo "$0 fish <fen>"
+		exit 1
+	fi
+	fen=$1
+	shift
+	echo "\
+position fen \"$fen\"
+go infinite
 d" | stockfish
 }
 

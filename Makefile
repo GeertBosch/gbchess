@@ -9,7 +9,7 @@ all: test perft-test puzzles
 .PHONY: perft-sse2 clean
 
 clean:
-	rm -f *.o *-debug *-test perft core *.core puzzles.actual perf.data perf.data.old
+	rm -f *.o *-debug *-test perft core *.core puzzles.actual perf.data* *.dSYM
 
 moves-test: moves_test.cpp moves.cpp moves.h common.h fen.h fen.cpp
 

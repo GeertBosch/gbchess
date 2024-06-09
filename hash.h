@@ -35,7 +35,8 @@ public:
     Hash() = default;
     Hash(Position position);
 
-    uint64_t operator()() { return hash; }
+    size_t operator()() const { return hash; }
+    bool operator==(const Hash& other) const { return hash == other.hash; }
 
     void move(Piece piece, int from, int to) {
         toggle(piece, from);
@@ -56,3 +57,10 @@ public:
     void toggle(int vector) { hash ^= hashVectors[vector]; }
     void toggle(ExtraVectors extra) { toggle(kNumBoardVectors + int(extra)); }
 };
+
+namespace std {
+template <>
+struct hash<Hash> {
+    std::size_t operator()(const Hash& h) const { return std::hash<uint64_t>()(h()); }
+};
+}  // namespace std

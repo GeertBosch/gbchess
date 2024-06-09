@@ -175,12 +175,13 @@ SquareSet possibleMoves(Piece piece, Square from);
 
 SquareSet possibleCaptures(Piece piece, Square from);
 
+
 /**
  * Computes all legal moves from a given chess position. This function checks for moves
  * that do not leave or place the king of the active color in check, including the special
  * case of castling.
  */
-MoveVector allLegalMoves(Turn turn, Board& board);
+MoveVector allLegalMovesAndCaptures(Turn turn, Board& board);
 
 struct MoveWithPieces {
     Move move;
@@ -191,6 +192,8 @@ struct MoveWithPieces {
 using MoveFun = std::function<void(Board&, MoveWithPieces)>;
 void forAllLegalCaptures(Turn turn, Board& board, MoveFun action);
 void forAllLegalMovesAndCaptures(Turn turn, Board& board, MoveFun action);
+
+MoveVector allLegalCaptures(Turn turn, Board& board);
 
 /**
  * Returns true if the given square is attacked by a piece of the given opponent color.

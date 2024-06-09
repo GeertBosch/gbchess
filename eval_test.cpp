@@ -31,6 +31,37 @@ std::ostream& operator<<(std::ostream& os, Score score) {
 std::ostream& operator<<(std::ostream& os, const Eval& eval) {
     return os << eval.move << " " << eval.evaluation;
 }
+
+Eval analyzePosition(Position position, int maxdepth) {
+    auto eval = computeBestMove(position, maxdepth);
+    std::cout << "        analyzePosition " << fen::to_string(position) << " as " << eval.evaluation
+              << ", move " << eval.move << "\n";
+    return eval;
+}
+Eval analyzeMoves(Position position, int maxdepth) {
+    MoveVector moves;
+    Eval bestMove;
+
+    if (maxdepth > 0) moves = allLegalMovesAndCaptures(position.turn, position.board);
+
+    std::cout << "Analyzing " << moves.size() << " moves from " << fen::to_string(position) << "\n";
+    if (moves.empty()) bestMove = analyzePosition(position, 0);
+
+    for (auto move : moves) {
+        std::cout << "    Considering " << move << "\n";
+        auto newPosition = applyMove(position, move);
+        auto newEval = -analyzePosition(newPosition, maxdepth - 1);
+        std::cout << "    Evaluated " << move << " as " << newEval.evaluation << "\n";
+
+        if (newEval.evaluation > bestMove.evaluation) {
+            bestMove = {move, newEval.evaluation};
+            std::cout << "    New best move: " << bestMove.move << " " << bestMove.evaluation
+                      << "\n";
+        }
+    }
+
+    return bestMove;
+}
 }  // namespace
 
 template <typename F>
@@ -66,7 +97,14 @@ void printAvailableCaptures(const Position& position) {
 
 void printBestMove(Position position, int maxdepth) {
     auto bestMove = computeBestMove(position, maxdepth);
-    std::cout << "Best Move: " << bestMove << std::endl;
+    std::cout << "Best Move: " << bestMove << " for " << fen::to_string(position) << std::endl;
+
+    auto analyzed = analyzeMoves(position, maxdepth);
+    if (analyzed != bestMove) {
+        std::cerr << "Analyzed: " << analyzed << std::endl;
+        std::cerr << "bestMove: " << bestMove << std::endl;
+    }
+    assert(analyzed == bestMove);
 }
 
 /**
@@ -87,8 +125,6 @@ void printBoard(std::ostream& os, const Board& board) {
     }
     os << std::endl;
 }
-
-
 void testFromStdIn(int depth) {
     // While there is input on stdin, read a line, parse it as a FEN string and print the best move.
     while (std::cin) {
@@ -115,7 +151,7 @@ void testFromStdIn(int depth) {
             const char* kind[2][2] = {{"", "="}, {"+", "#"}};  // {{check, mate}, {check, mate}}
 
             auto check = isAttacked(newPosition.board, kingPos, newPosition.turn.activeColor);
-            auto mate = allLegalMoves(newPosition.turn, newPosition.board).empty();
+            auto mate = allLegalMovesAndCaptures(newPosition.turn, newPosition.board).empty();
             // Print the best move and its evaluation
             std::cout << bestMove.move << kind[check][mate] << " " << bestMove.evaluation << "\n";
             std::cerr << "Solution: " << bestMove << "\t";
@@ -135,17 +171,26 @@ void testScore() {
 }
 
 void testEvaluateBoard() {
-    auto board = fen::parsePiecePlacement("8/8/8/8/4p3/5pNN/4p3/2K1k3");
-    auto score = evaluateBoard(board);
-    std::cout << "Board Evaluation: " << std::string(score) << std::endl;
+    std::string piecePlacement = "8/8/8/8/4p3/5pNN/4p3/2K1k3";
+    auto board = fen::parsePiecePlacement(piecePlacement);
+    auto score = evaluateBoard(board, false);
+    std::cout << "Board Evaluation for "
+                 ""
+              << piecePlacement
+              << ""
+                 ": "
+              << std::string(score) << std::endl;
     assert(score == 300_cp);  // 2 knights vs 3 pawns
+    board = fen::parsePiecePlacement(fen::initialPiecePlacement);
+    score = evaluateBoard(board, true);
+    std::cout << "Board Evaluation for initial position: " << std::string(score) << std::endl;
+    assert(score == 0_cp);
 }
 
 void testEval() {
     {
         Eval none;
-        Eval mateIn3 = {Move("f6"_sq, "e5"_sq, Move::QUIET),
-                                 bestEval.adjustDepth().adjustDepth()};
+        Eval mateIn3 = {Move("f6"_sq, "e5"_sq, Move::QUIET), bestEval.adjustDepth().adjustDepth()};
         Eval mateIn1 = {Move("e7"_sq, "g7"_sq, Move::QUIET), bestEval};
         std::cout << "none: " << none << std::endl;
         std::cout << "mateIn3: " << mateIn3 << std::endl;
@@ -190,7 +235,11 @@ int main(int argc, char* argv[]) {
     printBoard(std::cout, position.board);
 
     // Evaluate the board
-    std::cout << "Board Evaluation: " << std::string(evaluateBoard(position.board)) << std::endl;
+    Score simpleEval = evaluateBoard(position.board, false);
+    std::cout << "Simple Board Evaluation: " << std::string(simpleEval) << std::endl;
+
+    Score pieceSquareEval = evaluateBoard(position.board, true);
+    std::cout << "Piece-Square Board Evaluation: " << std::string(pieceSquareEval) << std::endl;
 
     printAvailableCaptures(position);
     printAvailableMoves(position);
