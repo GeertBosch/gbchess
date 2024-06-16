@@ -175,7 +175,6 @@ SquareSet possibleMoves(Piece piece, Square from);
 
 SquareSet possibleCaptures(Piece piece, Square from);
 
-
 /**
  * Computes all legal moves from a given chess position. This function checks for moves
  * that do not leave or place the king of the active color in check, including the special
@@ -201,6 +200,13 @@ MoveVector allLegalCaptures(Turn turn, Board& board);
 bool isAttacked(const Board& board, Square square, Occupancy occupancy);
 bool isAttacked(const Board& board, SquareSet squares, Occupancy occupancy);
 bool isAttacked(const Board& board, SquareSet squares, Color opponentColor);
+
+/**
+ * Parses a move string in UCI notation and returns a Move of the appropriate kind. The move is a 4
+ * or 5 character string representing from/to squares and promotion piece, if any. Returns the
+ * corresponding Move object, or an empty move if the string does not specify a legal move.
+ */
+Move parseMoveUCI(Position position, const std::string& move);
 
 /**
  * Updates the board with the given move, which may be a capture.

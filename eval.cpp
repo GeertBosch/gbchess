@@ -1,5 +1,4 @@
 #include <iostream>
-#include <random>
 #include <string>
 #include <unordered_set>
 
@@ -82,6 +81,8 @@ struct TranspositionTable {
         entry.hash = hash;
         entry.move = move;
     }
+
+    void clear() { entries.fill({}); }
 } transpositionTable;
 
 // Values of pieces, in centipawns
@@ -230,12 +231,13 @@ MoveIt sortTransposition(const Position& position, Hash hash, MoveIt begin, Move
 
     // If the move is not part of the current legal moves, nothing to do here.
     auto it = std::find(begin, end, cachedMove.move);
-    if (it == end) return begin;
+    if (it == end || true) return begin;  // TODO: Fix bug below
 
     // If the transposition is not at the beginning, shift preceeding moves to the right
     if (it != begin) {
+        // BUGGY! - Fix before use
         auto itMove = *it;
-        std::move_backward(begin, std::prev(it), it);
+        std::move_backward(begin, it, it);
         *begin = itMove;
     }
 
@@ -279,6 +281,11 @@ bool isInCheck(const Position& position) {
     auto kingPos =
         SquareSet::find(position.board, addColor(PieceType::KING, position.activeColor()));
     return isAttacked(position.board, kingPos, Occupancy(position.board, position.activeColor()));
+}
+
+bool isMate(const Position& position) {
+    auto board = position.board;
+    return allLegalMovesAndCaptures(position.turn, board).size() == 0;
 }
 
 Eval staticEval(Position& position) {
@@ -363,8 +370,7 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
 
 Eval computeBestMove(Position& position, int maxdepth) {
     evalTable = {GamePhase(position.board), true};
-    // std::cerr << "computeBestMove " << fen::to_string(position) << ", maxdepth " << maxdepth
-    //          << "\n";
+    transpositionTable.clear();
 
     Eval best;  // Default to the worst possible move
 
@@ -376,8 +382,6 @@ Eval computeBestMove(Position& position, int maxdepth) {
         best = transpositionTable.find(Hash(position));
         assert(best.evaluation == score);
 
-        // std::cerr << "depth " << depth << ": " << best.move << " " << best.evaluation << " pv"
-        //          << principalVariation(position) << std::endl;
         if (best.evaluation.mate()) break;
     }
 
@@ -391,7 +395,8 @@ MoveVector principalVariation(Position position) {
     while (auto found = transpositionTable.find(hash)) {
         pv.push_back(found.move);
         seen.insert(hash);
-        if (seen.count(hash) == 3) break;  // limit to 3 repetitions, at that's a draw
+        // Limit to 3 repetitions, at that's a draw. This prevents unbounded recursion.
+        if (seen.count(hash) == 3) break;
         position = applyMove(position, found.move);
         hash = Hash(position);
     }

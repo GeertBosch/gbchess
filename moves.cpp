@@ -1,8 +1,5 @@
 #include <cassert>
 #include <cstring>
-#include <functional>
-#include <iomanip>
-#include <iostream>
 
 #include "moves.h"
 #include "sse2.h"
@@ -771,6 +768,17 @@ bool isAttacked(const Board& board, SquareSet squares, Color opponentColor) {
     auto occupancy = Occupancy(board, opponentColor);
     return isAttacked(board, squares, occupancy);
 }
+
+Move parseMoveUCI(Position position, const std::string& move) {
+    auto moves = allLegalMovesAndCaptures(position.turn, position.board);
+
+    // Try to find a legal move or capture corresponding to the given move string.
+    for (auto m : moves)
+        if (std::string(m) == move) return m;
+
+    return Move();
+}
+
 
 namespace {
 std::string toString(SquareSet squares) {

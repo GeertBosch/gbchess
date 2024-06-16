@@ -1,14 +1,15 @@
-all: test perft-test puzzles
+PUZZLES=puzzles/lichess_db_puzzle.csv
 
+all: test perft-test puzzles
 
 %.h: common.h
 
 %-test: %_test.cpp %.cpp %.h common.h
 	clang++ -fsanitize=address -std=c++17 -DDEBUG -g -O0 -o $@ $(filter-out %.h, $^)
 
-.PHONY: perft-sse2 clean
+.PHONY:
 
-clean:
+clean: .PHONY
 	rm -f *.o *-debug *-test perft core *.core puzzles.actual perf.data* *.dSYM
 
 moves-test: moves_test.cpp moves.cpp moves.h common.h fen.h fen.cpp
@@ -23,16 +24,15 @@ perft: perft.cpp eval.cpp hash.cpp moves.cpp fen.cpp *.h
 	clang++ -O3 -std=c++17 -g -o $@ $(filter-out %.h,$^)
 
 # Compare the perft tool with some different compilation options for speed comparison
-perft-sse2: perft.cpp eval.cpp hash.cpp moves.cpp fen.cpp *.h
+perft-sse2: perft.cpp eval.cpp hash.cpp moves.cpp fen.cpp *.h .PHONY
 	clang++ -O3 -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@ 5
 	clang++ -O3 -DSSE2EMUL -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@  5
 	g++ -O3 -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@  5
 	g++ -O3 -DSSE2EMUL -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@  5
 
 # Solve some known puzzles, for correctness of the search methods
-puzzles: eval-test puzzles.in puzzles.expected
-	./eval-test 10 < puzzles.in > puzzles.actual
-	@diff -uaB puzzles.expected puzzles.actual && echo "All puzzles solved correctly!"
+puzzles: eval-test ${PUZZLES} .PHONY
+	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -101 | ./eval-test 5
 	
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:
@@ -59,6 +59,10 @@ perft-test: perft
 	./perft ${position4m} 4 422333
 	./perft ${position5} 4 2103487
 	./perft ${position6} 4 3894594
+
+${PUZZLES}:
+	cd $(dir ${PUZZLES}) && wget https://database.lichess.org/$(notdir ${PUZZLES}).zst
+	zstd -d ${PUZZLES}.zst
 
 test: fen-test moves-test eval-test eval-debug perft
 	./fen-test

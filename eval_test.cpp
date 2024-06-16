@@ -1,3 +1,4 @@
+#include "common.h"
 #include <chrono>
 #include <cstdlib>  // For std::exit
 #include <iostream>
@@ -31,6 +32,16 @@ std::ostream& operator<<(std::ostream& os, Score score) {
 std::ostream& operator<<(std::ostream& os, const Eval& eval) {
     return os << eval.move << " " << eval.evaluation;
 }
+
+std::string cmdName = "eval-test";
+
+void usage(std::string cmdName, std::string errmsg) {
+    std::cerr << "Error: " << errmsg << "\n\n";
+    std::cerr << "Usage: " << cmdName << " <FEN-string> [move...] <search-depth>" << std::endl;
+    std::cerr << "       " << cmdName << " <search-depth>" << std::endl;
+    std::exit(1);
+}
+
 
 Eval analyzePosition(Position position, int maxdepth) {
     auto eval = computeBestMove(position, maxdepth);
@@ -98,13 +109,16 @@ void printAvailableCaptures(const Position& position) {
 void printBestMove(Position position, int maxdepth) {
     auto bestMove = computeBestMove(position, maxdepth);
     std::cout << "Best Move: " << bestMove << " for " << fen::to_string(position) << std::endl;
+    std::cout << "pv " << principalVariation(position) << "\n";
+}
 
+void printAnalysis(Position position, int maxdepth) {
     auto analyzed = analyzeMoves(position, maxdepth);
-    if (analyzed != bestMove) {
-        std::cerr << "Analyzed: " << analyzed << std::endl;
-        std::cerr << "bestMove: " << bestMove << std::endl;
+    std::cerr << "Analyzed: " << analyzed << std::endl;
+    if (debug) {
+        auto bestMove = computeBestMove(position, maxdepth);
+        assert(analyzed == bestMove);
     }
-    assert(analyzed == bestMove);
 }
 
 /**
@@ -125,7 +139,8 @@ void printBoard(std::ostream& os, const Board& board) {
     }
     os << std::endl;
 }
-void testFromStdIn(int depth) {
+
+void testFromStdInOld(int depth) {
     // While there is input on stdin, read a line, parse it as a FEN string and print the best move.
     while (std::cin) {
         std::string fen;
@@ -136,7 +151,6 @@ void testFromStdIn(int depth) {
         // Parse the FEN string into a Position
         std::cerr << fen << std::endl;
         Position position = fen::parsePosition(fen);
-        auto startTime = std::chrono::high_resolution_clock::now();
 
         // Print the board in grid notation
         printBoard(std::cerr, position.board);
@@ -157,6 +171,80 @@ void testFromStdIn(int depth) {
             std::cerr << "Solution: " << bestMove << "\t";
         });
     }
+}
+std::vector<std::string> split(std::string line, char delim) {
+    std::vector<std::string> res;
+    std::string word;
+    for (auto c : line) {
+        if (c == delim) {
+            res.emplace_back(std::move(word));
+            word = "";
+        } else {
+            word.push_back(c);
+        }
+    }
+    if (word.size()) res.emplace_back(std::move(word));
+    return res;
+}
+template <typename T>
+int find(T t, std::string what) {
+    auto it = std::find(t.begin(), t.end(), what);
+    if (it == t.end()) usage(cmdName, "Missing field \"" + what + "\"");
+    return it - t.begin();
+}
+
+bool testPuzzle(std::string puzzleId, Position position, MoveVector moves, int maxdepth) {
+    auto best = computeBestMove(position, maxdepth);
+    bool correct = best.move == moves.front();
+    if (!correct) {
+        std::cout << "Puzzle " << puzzleId << ": \"" << fen::to_string(position) << "\" " << moves
+                  << "\n";
+        // As a special case, if multiple mates are possible, they're considered equivalent.
+        auto expected = applyMove(position, moves.front());
+        auto actual = applyMove(position, best.move);
+        correct = isMate(expected) && isMate(actual) && isInCheck(expected) == isInCheck(actual);
+        if (correct)
+            std::cout << "Note: Both " << moves.front() << " and " << best.move
+                      << " lead to mate\n";
+        else
+            std::cout << "Error: Got " << best << ", but expected " << moves.front() << "\n";
+    }
+    return correct;
+}
+
+void testFromStdIn(int depth) {
+    // Assumes CSV input as from the lichess puzzle database:
+    // PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,GameUrl,OpeningTags
+    std::string line;
+    std::getline(std::cin, line);
+    auto columns = split(line, ',');
+    auto colFEN = find(columns, "FEN");
+    auto colMoves = find(columns, "Moves");
+    auto colPuzzleId = find(columns, "PuzzleId");
+    uint64_t numPuzzles = 0;
+    uint64_t numCorrect = 0;
+
+    while (std::cin) {
+        std::getline(std::cin, line);
+        columns = split(line, ',');
+        if (columns.size() < std::max(colMoves, colFEN)) continue;
+        auto initialPosition = fen::parsePosition(columns[colFEN]);
+        auto currentPosition = initialPosition;
+
+        MoveVector moves;
+        for (auto move : split(columns[colMoves], ' ')) {
+            moves.emplace_back(parseMoveUCI(currentPosition, move));
+            currentPosition = applyMove(currentPosition, moves.back());
+            // In puzzles, the first move is just to establish the initial position
+            if (moves.size() == 1) initialPosition = currentPosition;
+        }
+        // Drop the first move
+        std::move(std::next(moves.begin()), moves.end(), moves.begin());
+        auto puzzleId = columns[colPuzzleId];
+        numCorrect += testPuzzle(puzzleId, initialPosition, moves, depth);
+        ++numPuzzles;
+    }
+    std::cout << numPuzzles << " puzzles, " << numCorrect << " correct" << "\n";
 }
 
 void testScore() {
@@ -210,26 +298,35 @@ void testEval() {
     std::cout << "Eval tests passed" << std::endl;
 }
 
+
 int main(int argc, char* argv[]) {
+    cmdName = argv[0];
     if (argc == 2) {
         int depth = std::stoi(argv[1]);
-        testFromStdIn(depth);
+        printEvalRate([depth]() { testFromStdIn(depth); });
         std::exit(0);
     }
-    if (argc != 3) {
-        std::cerr << "Usage: " << argv[0] << " [FEN-string] <search-depth>" << std::endl;
-        std::exit(1);
-    }
+    if (argc < 3) usage(argv[0], "missing search depth argument");
 
     testScore();
     testEvaluateBoard();
     testEval();
 
     std::string fen(argv[1]);
-    int depth = std::stoi(argv[2]);
 
     // Parse the FEN string into a Position
     Position position = fen::parsePosition(fen);
+
+    MoveVector moves;
+    for (int j = 2; j < argc - 1; ++j) {
+        moves.push_back(parseMoveUCI(position, argv[j]));
+        if (!moves.back()) usage(argv[0], std::string(argv[j]) + " is not a valid move");
+        position = applyMove(position, moves.back());
+    }
+
+    if (moves.size()) std::cout << "New position: " << fen::to_string(position) << "\n";
+
+    int depth = std::stoi(argv[argc - 1]);
 
     // Print the board in grid notation
     printBoard(std::cout, position.board);
@@ -244,6 +341,6 @@ int main(int argc, char* argv[]) {
     printAvailableCaptures(position);
     printAvailableMoves(position);
     printEvalRate([&]() { printBestMove(position, depth); });
-
+    printEvalRate([&]() { printAnalysis(position, depth); });
     return 0;
 }

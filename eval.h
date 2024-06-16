@@ -132,6 +132,16 @@ extern uint64_t cacheCount;
 Score evaluateBoard(const Board& board, bool usePieceSquareTables);
 
 /**
+ * Returns true if and only if the side whose turn it is is in check.
+ */
+bool isInCheck(const Position& position);
+
+/**
+ * Returns true if and only if the size whose turn it is has no legal moves.
+ */
+bool isMate(const Position& position);
+
+/**
  * Evaluates the best moves from a given chess position up to a certain depth.
  * Each move is evaluated based on the static evaluation of the board or by recursive calls
  * to this function, decreasing the depth until it reaches zero. It also accounts for checkmate
