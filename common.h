@@ -317,6 +317,7 @@ inline std::string to_string(CastlingMask mask) {
     if ((mask & CastlingMask::WHITE_QUEENSIDE) != CastlingMask::NONE) str += "Q";
     if ((mask & CastlingMask::BLACK_KINGSIDE) != CastlingMask::NONE) str += "k";
     if ((mask & CastlingMask::BLACK_QUEENSIDE) != CastlingMask::NONE) str += "q";
+    if (str == "") str = "-";
     return str;
 }
 

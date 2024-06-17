@@ -76,6 +76,7 @@ int main() {
     testparse();
     testInitialPosition();
     testFENPiecePlacement();
+    testFENPosition();
     std::cout << "All FEN tests passed!" << std::endl;
     return 0;
 }

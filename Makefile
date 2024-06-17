@@ -10,7 +10,8 @@ all: test perft-test puzzles
 .PHONY:
 
 clean: .PHONY
-	rm -f *.o *-debug *-test perft core *.core puzzles.actual perf.data* *.dSYM
+	rm -f *.o *-debug *-test perft core *.core puzzles.actual perf.data* 
+	rm -rf *.dSYM
 
 moves-test: moves_test.cpp moves.cpp moves.h common.h fen.h fen.cpp
 
