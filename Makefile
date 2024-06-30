@@ -1,40 +1,48 @@
 PUZZLES=puzzles/lichess_db_puzzle.csv
 
+ifeq ($(_system_type),Darwin)
+    sdk=$(shell xcrun --sdk macosx --show-sdk-path)
+    arch=$(shell uname -m)
+    CCFLAGS=-isysroot ${sdk} -mmacosx-version-min=10.13 -target darwin17.0.0 -arch ${arch} -std=c++17 -stdlib=libc++ -Wl,-syslibroot,${sdk} -mmacosx-version-min=10.13 -target darwin17.0.0 -arch ${arch}
+else
+    CCFLAGS=-std=c++17
+endif
+
 all: test perft-test puzzles
 
 %.h: common.h
 
 %-test: %_test.cpp %.cpp %.h common.h
-	clang++ -fsanitize=address -std=c++17 -DDEBUG -g -O0 -o $@ $(filter-out %.h, $^)
+	clang++ -fsanitize=address ${CCFLAGS} ${LINKFLAGS} -DDEBUG -g -O0 -o $@ $(filter-out %.h, $^)
 
 .PHONY:
 
 clean: .PHONY
-	rm -f *.o *-debug *-test perft core *.core puzzles.actual perf.data* 
+	rm -f *.o *-debug *-test perft core *.core puzzles.actual perf.data* *.ii *.bc *.s
 	rm -rf *.dSYM
 
 moves-test: moves_test.cpp moves.cpp moves.h common.h fen.h fen.cpp
 
 eval-test: eval_test.cpp eval.cpp hash.cpp fen.cpp moves.cpp *.h
-	g++ -std=c++17 -O2 -g -o $@ $(filter-out %.h,$^)
+	g++ ${CCFLAGS} -O2 -g -o $@ $(filter-out %.h,$^)
 eval-debug: eval_test.cpp eval.cpp hash.cpp fen.cpp moves.cpp *.h
-	clang++ -std=c++17 -DDEBUG -O0 -g -o $@ $(filter-out %h,$^)
+	clang++ ${CCFLAGS} -DDEBUG -O0 -g -o $@ $(filter-out %h,$^)
 
 # perft counst total leaf nodes in the search tree for a position, see the perft-test target
 perft: perft.cpp eval.cpp hash.cpp moves.cpp fen.cpp *.h
-	clang++ -O3 -std=c++17 -g -o $@ $(filter-out %.h,$^)
+	clang++ -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
 
 # Compare the perft tool with some different compilation options for speed comparison
 perft-sse2: perft.cpp eval.cpp hash.cpp moves.cpp fen.cpp *.h .PHONY
-	clang++ -O3 -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@ 5
-	clang++ -O3 -DSSE2EMUL -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@  5
-	g++ -O3 -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@  5
-	g++ -O3 -DSSE2EMUL -std=c++17 -g -o $@ $(filter-out %.h,$^) && ./$@  5
+	clang++ -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@ 5
+	clang++ -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5
+	g++ -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5
+	g++ -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5
 
 # Solve some known puzzles, for correctness of the search methods
 puzzles: eval-test ${PUZZLES} .PHONY
 	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -101 | ./eval-test 5
-	
+
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:
 	@echo Excluding Tests
@@ -62,7 +70,7 @@ perft-test: perft
 	./perft ${position6} 4 3894594
 
 ${PUZZLES}:
-	cd $(dir ${PUZZLES}) && wget https://database.lichess.org/$(notdir ${PUZZLES}).zst
+	mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) && wget https://database.lichess.org/$(notdir ${PUZZLES}).zst
 	zstd -d ${PUZZLES}.zst
 
 test: fen-test moves-test eval-test eval-debug perft
