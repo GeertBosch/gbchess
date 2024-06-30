@@ -1,3 +1,6 @@
 *-test
 *.swp
-*.actual
+*.dSYM
+eval-debug
+perft
+puzzles
