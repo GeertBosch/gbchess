@@ -3,7 +3,7 @@ echo "apply <fen> <move> ..."
 apply() {
 	if (($# < 2)) ; then
 		echo "$0 <fen> <move> ..."
-		exit 1
+		return 1
 	fi
 	fen=$1
 	shift
@@ -11,7 +11,7 @@ apply() {
 		fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 	fi
 	if [ "$1" == "moves" ] ; then
-		shift;
+		shift
 	fi
 	moves="moves"
 	while (($#)) ; do
@@ -23,11 +23,41 @@ position fen \"$fen\" $moves
 d" | stockfish
 }
 
+echo "flip <fen>"
+flip() {
+    if (($# < 1)) ; then
+        echo "$0 <fen>"
+        return 1
+    fi
+    echo -n $(echo "$1" | tr '/' '\n' | tail -r | rev) | tr ' ' '/'
+    shift
+    if (($# >= 1)) ; then
+        case $1 in
+        b|B)
+            side=w
+            ;;
+        w|W)
+            side=b
+            ;;
+        *)
+            side=w
+            ;;
+        esac
+        echo -n " $side"
+        shift
+    fi
+    while (($# != 0)) ; do
+        echo -n " $1"
+        shift
+    done
+    echo ""
+}
+
 echo "fish <fen>"
 fish() {
 	if (($# < 1)) ; then
 		echo "$0 fish <fen>"
-		exit 1
+		return 1
 	fi
 	fen=$1
 	shift
@@ -41,7 +71,7 @@ d" | stockfish
 perftdiff() {
 	if [ $# == 0 ] ; then
 		echo "$0 fen depth"
-		exit 1
+		return 1
 	elif [ $# == 1 ] ; then
 		echo "set fen to startpos"
 		fen="startpos"
@@ -83,12 +113,12 @@ perftnext() {
 	echo "next: $next, result $?"
 	if [ $? != 0 ] ; then
 		echo "error $?, result $next"
-		exit 1
+		return 1
 	fi
 	move=$(echo "$next" | cut -d: -f1)
 	if [ "$move" == "Fen" ] ; then
 		echo "Incorrect Fen: $next"
-		exit 2
+		return 2
 	fi
 	echo "Move: $move"
 	nextfen=$(apply "$fen" "$move"| egrep "Fen:" | cut -d" " -f2-)
