@@ -8,7 +8,7 @@ else
     CCFLAGS=-std=c++17
 endif
 
-all: test perft-test puzzles
+all: test perft-test mate123
 
 %.h: common.h
 
@@ -28,7 +28,7 @@ eval-test: eval_test.cpp eval.cpp hash.cpp fen.cpp moves.cpp *.h
 eval-debug: eval_test.cpp eval.cpp hash.cpp fen.cpp moves.cpp *.h
 	clang++ ${CCFLAGS} -DDEBUG -O0 -g -o $@ $(filter-out %h,$^)
 
-# perft counst total leaf nodes in the search tree for a position, see the perft-test target
+# perft counts the total leaf nodes in the search tree for a position, see the perft-test target
 perft: perft.cpp eval.cpp hash.cpp moves.cpp fen.cpp *.h
 	clang++ -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
 
@@ -39,9 +39,12 @@ perft-sse2: perft.cpp eval.cpp hash.cpp moves.cpp fen.cpp *.h .PHONY
 	g++ -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5
 	g++ -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5
 
-# Solve some known puzzles, for correctness of the search methods
-puzzles: eval-test ${PUZZLES} .PHONY
+# Solve some known mate-in-n puzzles, for correctness of the search methods
+mate123: eval-test ${PUZZLES} .PHONY
 	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -101 | ./eval-test 5
+
+puzzles: eval-test ${PUZZLES} .PHONY
+	egrep -v "mateIn[123]" ${PUZZLES} | head -21| ./eval-test 6
 
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:
