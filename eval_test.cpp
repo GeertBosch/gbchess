@@ -240,6 +240,7 @@ void testFromStdIn(int depth) {
         }
         // Drop the first move
         std::move(std::next(moves.begin()), moves.end(), moves.begin());
+        moves.pop_back();
         auto puzzleId = columns[colPuzzleId];
         numCorrect += testPuzzle(puzzleId, initialPosition, moves, depth);
         ++numPuzzles;
