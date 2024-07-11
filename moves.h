@@ -224,6 +224,7 @@ void unmakeMove(Board& board, Move move, Piece captured);
  * en passant target, halfmove clock, and fullmove number).
  */
 [[nodiscard]] Position applyMove(Position position, Move move);
+[[nodiscard]] Position applyMoves(Position position, MoveVector const& moves);
 
 Turn applyMove(Turn turn, Piece piece, Move move);
 

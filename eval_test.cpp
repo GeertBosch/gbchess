@@ -193,11 +193,21 @@ int find(T t, std::string what) {
     return it - t.begin();
 }
 
+void reportFailedPuzzle(Position position, MoveVector moves, MoveVector pv) {
+    std::cout << "Error: Got " << pv << ", but expected " << moves << "\n";
+    auto gotPosition = applyMoves(position, pv);
+    auto gotEval = evaluateBoard(gotPosition.board, false);
+    auto expectedPosition = applyMoves(position, moves);
+    auto expectedEval = evaluateBoard(expectedPosition.board, false);
+    std::cout << "Got " << gotEval << " \"" << fen::to_string(gotPosition) << "\"\n";
+    std::cout << "Expected " << expectedEval << " \"" << fen::to_string(expectedPosition) << "\"\n";
+}
+
 bool testPuzzle(std::string puzzleId, Position position, MoveVector moves, int maxdepth) {
     auto best = computeBestMove(position, maxdepth);
     bool correct = best.move == moves.front();
     if (!correct) {
-        std::cout << "Puzzle " << puzzleId << ": \"" << fen::to_string(position) << "\" " << moves
+        std::cout << "\nPuzzle " << puzzleId << ": \"" << fen::to_string(position) << "\" " << moves
                   << "\n";
         // As a special case, if multiple mates are possible, they're considered equivalent.
         auto expected = applyMove(position, moves.front());
@@ -207,7 +217,7 @@ bool testPuzzle(std::string puzzleId, Position position, MoveVector moves, int m
             std::cout << "Note: Both " << moves.front() << " and " << best.move
                       << " lead to mate\n";
         else
-            std::cout << "Error: Got " << best << ", but expected " << moves.front() << "\n";
+            reportFailedPuzzle(position, moves, principalVariation(position));
     }
     return correct;
 }

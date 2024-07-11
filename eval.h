@@ -110,7 +110,7 @@ struct Eval {
     }
     bool operator!=(const Eval& rhs) const { return !(*this == rhs); }
     bool operator<(const Eval& rhs) const { return evaluation < rhs.evaluation; }
-    bool operator>(const Eval&  rhs) const { return evaluation > rhs.evaluation; }
+    bool operator>(const Eval& rhs) const { return evaluation > rhs.evaluation; }
 
     operator std::string() const {
         return static_cast<std::string>(move) + "@" + static_cast<std::string>(evaluation);
