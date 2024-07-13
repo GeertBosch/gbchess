@@ -313,13 +313,14 @@ Eval staticEval(Position& position) {
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft = 2) {
     Score stand_pat = evaluateBoard(position.board, evalTable);
+    ++evalCount;
     if (position.activeColor() == Color::BLACK) stand_pat = -stand_pat;
     if (stand_pat >= beta) return beta;
     if (alpha < stand_pat) alpha = stand_pat;
 
     auto captureList = allLegalCaptures(position.turn, position.board);
-    // Hash hash(position);
-    // sortMoves(position, hash, allCaptures.begin(), allCaptures.end());
+    Hash hash(position);
+    sortMoves(position, hash, captureList.begin(), captureList.end());
 
     Eval best;
     for (auto capture : captureList) {
@@ -336,8 +337,8 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft = 2) {
  * The alpha-beta search algorithm with fail-soft negamax search.
  */
 Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
-    // if (depthleft == 0) return quiesce(position, alpha, beta);
-    if (depthleft == 0) return staticEval(position).evaluation;
+    if (depthleft == 0) return quiesce(position, alpha, beta);
+    // if (depthleft == 0) return staticEval(position).evaluation;
 
     auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
 

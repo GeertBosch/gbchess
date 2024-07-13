@@ -41,7 +41,7 @@ perft-sse2: perft.cpp eval.cpp hash.cpp moves.cpp fen.cpp *.h .PHONY
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
 mate123: eval-test ${PUZZLES} .PHONY
-	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -101 | ./eval-test 5
+	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -101 | ./eval-test 6
 
 puzzles: eval-test ${PUZZLES} .PHONY
 	egrep -v "mateIn[123]" ${PUZZLES} | head -21| ./eval-test 6
