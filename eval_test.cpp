@@ -59,7 +59,7 @@ Eval analyzeMoves(Position position, int maxdepth) {
     if (moves.empty()) bestMove = analyzePosition(position, 0);
 
     for (auto move : moves) {
-        std::cout << "    Considering " << move << "\n";
+        std::cout << "    Considering " << move << " depth " << maxdepth - 1 << "\n";
         auto newPosition = applyMove(position, move);
         auto newEval = -analyzePosition(newPosition, maxdepth - 1);
         std::cout << "    Evaluated " << move << " as " << newEval.evaluation << "\n";
@@ -255,7 +255,8 @@ void testFromStdIn(int depth) {
         numCorrect += testPuzzle(puzzleId, initialPosition, moves, depth);
         ++numPuzzles;
     }
-    std::cout << numPuzzles << " puzzles, " << numCorrect << " correct" << "\n";
+    std::cout << numPuzzles << " puzzles, " << numCorrect << " correct"
+              << "\n";
 }
 
 void testScore() {
@@ -266,6 +267,13 @@ void testScore() {
     assert(Q + q == zero);
     assert(q < Q);
     assert(std::string(q) == "-9.00");
+    assert(std::string(Q) == "9.00");
+    Score f = -1'23_cp;
+    Score F = 1'23_cp;
+    assert(F == -f);
+    assert(F + f == zero);
+    assert(std::string(f) == "-1.23");
+    assert(std::string(F) == "1.23");
     std::cout << "Score tests passed" << std::endl;
 }
 

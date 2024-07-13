@@ -53,10 +53,11 @@ public:
 
     operator std::string() const {
         value_type pawns = value / 100;
-        value_type cents = std::abs(value % 100);
+        value_type cents = value % 100;
 
         // For mate scores, the number of moves to mate is encoded in the cents part
-        if (mate()) return (value > 0 ? "M" : "-M") + std::to_string(100 - cents);
+        if (value < 0) return "-" + std::string(-*this);
+        if (mate()) return "M" + std::to_string(100 - cents);
 
         std::string result = std::to_string(pawns) + '.';
         result += '0' + cents / 10;
