@@ -1,9 +1,10 @@
-#include "common.h"
 #include <chrono>
 #include <cstdlib>  // For std::exit
 #include <iostream>
 #include <string>
 
+#include "common.h"
+#include "elo.h"
 #include "eval.h"
 #include "fen.h"
 #include "moves.h"
@@ -94,7 +95,6 @@ void usage(std::string cmdName, std::string errmsg) {
     std::cerr << "       " << cmdName << " <FEN-string>" << std::endl;
     std::exit(1);
 }
-
 
 Eval analyzePosition(Position position, int maxdepth) {
     auto eval = computeBestMove(position, maxdepth);
@@ -260,12 +260,13 @@ void reportFailedPuzzle(Position position, MoveVector moves, MoveVector pv) {
     std::cout << "Expected " << expectedEval << " \"" << fen::to_string(expectedPosition) << "\"\n";
 }
 
-bool testPuzzle(std::string puzzleId, Position position, MoveVector moves, int maxdepth) {
+bool testPuzzle(
+    std::string puzzleId, int rating, Position position, MoveVector moves, int maxdepth) {
     auto best = computeBestMove(position, maxdepth);
     bool correct = best.move == moves.front();
     if (!correct) {
-        std::cout << "\nPuzzle " << puzzleId << ": \"" << fen::to_string(position) << "\" " << moves
-                  << "\n";
+        std::cout << "\nPuzzle " << puzzleId << ", rating " << rating << ": \""
+                  << fen::to_string(position) << "\" " << moves << "\n";
         // As a special case, if multiple mates are possible, they're considered equivalent.
         auto expected = applyMove(position, moves.front());
         auto actual = applyMove(position, best.move);
@@ -282,14 +283,17 @@ bool testPuzzle(std::string puzzleId, Position position, MoveVector moves, int m
 void testFromStdIn(int depth) {
     // Assumes CSV input as from the lichess puzzle database:
     // PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,GameUrl,OpeningTags
+    const int kExpectedPuzzleRating = 2000;
     std::string line;
     std::getline(std::cin, line);
     auto columns = split(line, ',');
     auto colFEN = find(columns, "FEN");
     auto colMoves = find(columns, "Moves");
     auto colPuzzleId = find(columns, "PuzzleId");
+    auto colRating = find(columns, "Rating");
     uint64_t numPuzzles = 0;
     uint64_t numCorrect = 0;
+    auto puzzleRating = ELO(kExpectedPuzzleRating);
 
     while (std::cin) {
         std::getline(std::cin, line);
@@ -297,6 +301,7 @@ void testFromStdIn(int depth) {
         if (columns.size() < std::max(colMoves, colFEN)) continue;
         auto initialPosition = fen::parsePosition(columns[colFEN]);
         auto currentPosition = initialPosition;
+        auto rating = ELO(std::stoi(columns[colRating]));
 
         MoveVector moves;
         for (auto move : split(columns[colMoves], ' ')) {
@@ -308,12 +313,16 @@ void testFromStdIn(int depth) {
         // Drop the first move
         std::move(std::next(moves.begin()), moves.end(), moves.begin());
         moves.pop_back();
+
         auto puzzleId = columns[colPuzzleId];
-        numCorrect += testPuzzle(puzzleId, initialPosition, moves, depth);
+        auto correct = testPuzzle(puzzleId, rating(), initialPosition, moves, depth);
+        puzzleRating.updateOne(rating, correct ? ELO::WIN : ELO::LOSS);
+        numCorrect += correct;
         ++numPuzzles;
     }
     std::cout << numPuzzles << " puzzles, " << numCorrect << " correct"
-              << "\n";
+              << ", " << puzzleRating() << " rating\n";
+    assert(puzzleRating() >= kExpectedPuzzleRating - ELO::K);
 }
 
 void testScore() {

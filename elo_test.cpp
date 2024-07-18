@@ -32,8 +32,7 @@ void testWin25PercentAgainstOne() {
     const int kOpponentRating = ELO::kInitialRating + kOpponentDiff;
     ELO player;
 
-    // After a player wins 25% of the time against a given opponent rated 400 points higher,
-    // their rating difference should converge to about 200 points.
+    // Simulate a player winning 25% of the time against a given opponent rated 400 points higher.
     ELO opponent(kOpponentRating);  // Same opponent every time
     for (int round = 0; round < kNumRounds; ++round) {
         player.updateBoth(opponent, round % 4 == 0 ? ELO::WIN : ELO::LOSS);

@@ -48,7 +48,7 @@ mate123: eval-test ${PUZZLES} .PHONY
 	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -101 | ./eval-test 6
 
 puzzles: eval-test ${PUZZLES} .PHONY
-	egrep -v "mateIn[123]" ${PUZZLES} | head -21| ./eval-test 6
+	egrep -v "mateIn[123]" ${PUZZLES} | head -101| ./eval-test 4
 
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:
