@@ -1,11 +1,12 @@
 PUZZLES=puzzles/lichess_db_puzzle.csv
+CCFLAGS=-std=c++17
 
+# MacOS specific stuff - why can't thinks just work by default?
 ifeq ($(_system_type),Darwin)
+    export MallocNanoZone=0
     sdk=$(shell xcrun --sdk macosx --show-sdk-path)
     arch=$(shell uname -m)
-    CCFLAGS=-isysroot ${sdk} -mmacosx-version-min=10.13 -target darwin17.0.0 -arch ${arch} -std=c++17 -stdlib=libc++ -Wl,-syslibroot,${sdk} -mmacosx-version-min=10.13 -target darwin17.0.0 -arch ${arch}
-else
-    CCFLAGS=-std=c++17
+    CCFLAGS:=${CCFLAGS} -isysroot ${sdk} -mmacosx-version-min=10.13 -target darwin17.0.0 -arch ${arch} -stdlib=libc++ -Wl,-syslibroot,${sdk} -mmacosx-version-min=10.13 -target darwin17.0.0 -arch ${arch}
 endif
 
 all: test perft-test mate123
@@ -22,6 +23,9 @@ clean: .PHONY
 	rm -rf *.dSYM
 
 moves-test: moves_test.cpp moves.cpp moves.h common.h fen.h fen.cpp
+
+elo-test: elo_test.cpp elo.h
+	clang++ -fsanitize=address ${CCFLAGS} ${LINKFLAGS} -DDEBUG -g -O0 -o $@ $(filter-out %.h, $^)
 
 eval-test: eval_test.cpp eval.cpp hash.cpp fen.cpp moves.cpp *.h
 	g++ ${CCFLAGS} -O2 -g -o $@ $(filter-out %.h,$^)
@@ -79,4 +83,5 @@ ${PUZZLES}:
 test: fen-test moves-test eval-test eval-debug perft
 	./fen-test
 	./moves-test
-	./eval-test "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 5
+	./elo-test
+	./eval-debug "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 5
