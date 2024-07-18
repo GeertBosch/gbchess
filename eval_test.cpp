@@ -35,10 +35,63 @@ std::ostream& operator<<(std::ostream& os, const Eval& eval) {
 
 std::string cmdName = "eval-test";
 
+using GridDrawing = std::array<std::string, 11>;
+GridDrawing gridDrawing = {
+    " ┌─",
+    "─",
+    "─┬─",
+    "─┐ ",
+    " │ ",
+    " ├─",
+    "─┼─",
+    "─┤ ",
+    " └─",
+    "─┴─",
+    "─┘ ",
+};
+
+std::string operator*(std::string str, int n) {
+    if (!n) return "";
+    return n == 1 ? str : str * (n / 2) + str * (n - n / 2);
+}
+
+std::string gridTop(int width) {
+    std::string res;
+    res += gridDrawing[0];
+    res += (gridDrawing[1] + gridDrawing[2]) * (width - 1);
+    res += gridDrawing[1] + gridDrawing[3];
+    return res;
+}
+std::string gridRow(std::string row) {
+    std::string res;
+    res += gridDrawing[4];
+    for (int i = 0; i < row.size(); ++i) {
+        res += row[i];
+        if (i < row.size() - 1) res += gridDrawing[4];
+    }
+    res += gridDrawing[4];
+    return res;
+}
+std::string gridMiddle(int width) {
+    std::string res;
+    res += gridDrawing[5];
+    res += (gridDrawing[1] + gridDrawing[6]) * (width - 1);
+    res += gridDrawing[1] + gridDrawing[7];
+    return res;
+}
+std::string gridBottom(int width) {
+    std::string res;
+    res += gridDrawing[8];
+    res += (gridDrawing[1] + gridDrawing[9]) * (width - 1);
+    res += gridDrawing[1] + gridDrawing[10];
+    return res;
+}
+
 void usage(std::string cmdName, std::string errmsg) {
     std::cerr << "Error: " << errmsg << "\n\n";
     std::cerr << "Usage: " << cmdName << " <FEN-string> [move...] <search-depth>" << std::endl;
     std::cerr << "       " << cmdName << " <search-depth>" << std::endl;
+    std::cerr << "       " << cmdName << " <FEN-string>" << std::endl;
     std::exit(1);
 }
 
@@ -125,17 +178,21 @@ void printAnalysis(Position position, int maxdepth) {
  * Prints the chess board to the specified output stream in grid notation.
  */
 void printBoard(std::ostream& os, const Board& board) {
-    for (int rank = 7; rank >= 0; --rank) {
-        os << rank + 1 << "  ";
-        for (int file = 0; file < 8; ++file) {
+    os << " " << gridTop(kNumFiles) << std::endl;
+    for (int rank = kNumRanks - 1; rank >= 0; --rank) {
+        os << rank + 1;
+        std::string row;
+        for (int file = 0; file < kNumFiles; ++file) {
             auto piece = board[Square(rank, file)];
-            os << ' ' << to_char(piece);
+            row.push_back(to_char(piece));
         }
-        os << std::endl;
+        os << gridRow(row) << std::endl;
+        if (rank > 0) os << " " << gridMiddle(kNumFiles) << std::endl;
     }
-    os << "   ";
+    os << " " << gridBottom(kNumFiles) << std::endl;
+    os << " ";
     for (char file = 'a'; file <= 'h'; ++file) {
-        os << ' ' << file;
+        os << "   " << file;
     }
     os << std::endl;
 }
@@ -281,17 +338,11 @@ void testEvaluateBoard() {
     std::string piecePlacement = "8/8/8/8/4p3/5pNN/4p3/2K1k3";
     auto board = fen::parsePiecePlacement(piecePlacement);
     auto score = evaluateBoard(board, false);
-    std::cout << "Board Evaluation for "
-                 ""
-              << piecePlacement
-              << ""
-                 ": "
-              << std::string(score) << std::endl;
     assert(score == 300_cp);  // 2 knights vs 3 pawns
     board = fen::parsePiecePlacement(fen::initialPiecePlacement);
     score = evaluateBoard(board, true);
-    std::cout << "Board Evaluation for initial position: " << std::string(score) << std::endl;
     assert(score == 0_cp);
+    std::cout << "evaluateBoard tests passed" << std::endl;
 }
 
 void testEval() {
@@ -299,9 +350,9 @@ void testEval() {
         Eval none;
         Eval mateIn3 = {Move("f6"_sq, "e5"_sq, Move::QUIET), bestEval.adjustDepth().adjustDepth()};
         Eval mateIn1 = {Move("e7"_sq, "g7"_sq, Move::QUIET), bestEval};
-        std::cout << "none: " << none << std::endl;
-        std::cout << "mateIn3: " << mateIn3 << std::endl;
-        std::cout << "mateIn1: " << mateIn1 << std::endl;
+        assert(std::string(none) == "0000@-M1");
+        assert(std::string(mateIn3) == "f6e5@M3");
+        assert(std::string(mateIn1) == "e7g7@M1");
         assert(none < mateIn3);
         assert(mateIn3 < mateIn1);
         assert(none < mateIn1);
@@ -317,15 +368,29 @@ void testEval() {
     std::cout << "Eval tests passed" << std::endl;
 }
 
+// Returns true if and only if number consists exclusively of digits and  is not empty
+bool isAllDigits(std::string number) {
+    return !number.empty() && std::all_of(number.begin(), number.end(), ::isdigit);
+}
 
 int main(int argc, char* argv[]) {
     cmdName = argv[0];
-    if (argc == 2) {
-        int depth = std::stoi(argv[1]);
+
+    // Need at least one argument
+    if (argc < 2) usage(argv[0], "missing argument");
+
+    // If the last argument is a number, it's the search depth
+    int depth = 0;
+    if (isAllDigits(argv[argc - 1])) {
+        depth = std::stoi(argv[argc - 1]);
+        --argc;
+    }
+
+    // Special puzzle test mode reading from stdin
+    if (argc == 1) {
         printEvalRate([depth]() { testFromStdIn(depth); });
         std::exit(0);
     }
-    if (argc < 3) usage(argv[0], "missing search depth argument");
 
     testScore();
     testEvaluateBoard();
@@ -345,8 +410,6 @@ int main(int argc, char* argv[]) {
 
     if (moves.size()) std::cout << "New position: " << fen::to_string(position) << "\n";
 
-    int depth = std::stoi(argv[argc - 1]);
-
     // Print the board in grid notation
     printBoard(std::cout, position.board);
 
@@ -359,7 +422,10 @@ int main(int argc, char* argv[]) {
 
     printAvailableCaptures(position);
     printAvailableMoves(position);
-    printEvalRate([&]() { printBestMove(position, depth); });
-    printEvalRate([&]() { printAnalysis(position, depth); });
+
+    if (depth) {
+        printEvalRate([&]() { printBestMove(position, depth); });
+        printEvalRate([&]() { printAnalysis(position, depth); });
+    }
     return 0;
 }

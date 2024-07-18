@@ -240,6 +240,7 @@ public:
 
     // String conversion operator
     operator std::string() const {
+        if (!move) return "0000";
         auto str = static_cast<std::string>(from()) + static_cast<std::string>(to());
         if (isPromotion()) str += to_char(promotionType(kind()));
         return str;

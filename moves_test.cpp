@@ -16,6 +16,16 @@ std::string toString(SquareSet squares) {
     return str;
 }
 
+// Output stream operator for std::vector<std::string>
+std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
+    os << "[";
+    for (const auto& move : moves) {
+        if (move) os << std::string(move) << ", ";
+    }
+    os << "]";
+    return os;
+}
+
 void testPiece() {
     // Test toPiece
     assert(toPiece('P') == Piece::WHITE_PAWN);
@@ -207,7 +217,25 @@ void testPossibleCaptures() {
 
     std::cout << "All possibleCaptures tests passed!" << std::endl;
 }
+void testMove() {
+    // Test constructor
+    Move move("a2"_sq, "a4"_sq, Move::QUIET);
+    assert(move.from() == "a2"_sq);
+    assert(move.to() == "a4"_sq);
+    assert(move.kind() == Move::QUIET);
 
+    // Test operator==
+    Move capture = Move("a2"_sq, "a4"_sq, Move::CAPTURE);
+    assert(move == Move("a2"_sq, "a4"_sq, Move::QUIET));
+    assert(!(move == capture));
+
+    // Test conversion to std::string
+    Move promotion = Move("a7"_sq, "a8"_sq, MoveKind::QUEEN_PROMOTION);
+    assert(static_cast<std::string>(move) == "a2a4");
+    assert(static_cast<std::string>(Move()) == "0000");
+
+    std::cout << "All Move tests passed!" << std::endl;
+}
 void testSquare() {
     // Test constructor with rank and file
     Square square1(2, 3);
@@ -351,7 +379,24 @@ void testAddAvailableMoves() {
 }
 
 void testAddAvailableCaptures() {
-    // TODO: Add test cases, including en passant
+    auto find = [](MoveVector& moves, Move move) -> bool {
+        return std::find(moves.begin(), moves.end(), move) != moves.end();
+    };
+
+    // Test case with a regular captures and one promoting a pawn while capturing
+    {
+        Board board = fen::parsePiecePlacement("r3kbnr/pP1qpppp/3p4/4N3/4P3/8/PPP2PPP/RNB1K2R");
+        MoveVector captures;
+        addAvailableCaptures(captures, board, Color::WHITE);
+        assert(captures.size() == 6);
+        assert(find(captures, Move("e5"_sq, "d7"_sq, Move::CAPTURE)));
+        assert(find(captures, Move("e5"_sq, "f7"_sq, Move::CAPTURE)));
+        assert(find(captures, Move("b7"_sq, "a8"_sq, MoveKind::QUEEN_PROMOTION_CAPTURE)));
+        assert(find(captures, Move("b7"_sq, "a8"_sq, MoveKind::ROOK_PROMOTION_CAPTURE)));
+        assert(find(captures, Move("b7"_sq, "a8"_sq, MoveKind::BISHOP_PROMOTION_CAPTURE)));
+        assert(find(captures, Move("b7"_sq, "a8"_sq, MoveKind::KNIGHT_PROMOTION_CAPTURE)));
+    }
+    std::cout << "All addAvailableCaptures tests passed!" << std::endl;
 }
 
 void testAddAvailableEnPassant() {
@@ -713,15 +758,6 @@ void testIsAttacked() {
     std::cout << "All isAttacked tests passed!" << std::endl;
 }
 
-std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
-    os << "[";
-    for (const auto& move : moves) {
-        if (move) os << std::string(move) << ", ";
-    }
-    os << "]";
-    return os;
-}
-
 void testAllLegalMoves() {
     {
         auto position =
@@ -762,6 +798,7 @@ void testAllLegalMoves() {
 
 int main() {
     testSquare();
+    testMove();
     testSquareSet();
     testPiece();
     testPieceType();
