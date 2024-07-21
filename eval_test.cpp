@@ -98,8 +98,8 @@ void usage(std::string cmdName, std::string errmsg) {
 
 Eval analyzePosition(Position position, int maxdepth) {
     auto eval = computeBestMove(position, maxdepth);
-    std::cout << "        analyzePosition " << fen::to_string(position) << " as " << eval.evaluation
-              << ", move " << eval.move << "\n";
+    std::cout << "        analyzePosition \"" << fen::to_string(position) << "\" as "
+              << eval.evaluation << ", move " << eval.move << "\n";
     return eval;
 }
 Eval analyzeMoves(Position position, int maxdepth) {
@@ -428,6 +428,10 @@ int main(int argc, char* argv[]) {
 
     Score pieceSquareEval = evaluateBoard(position.board, true);
     std::cout << "Piece-Square Board Evaluation: " << std::string(pieceSquareEval) << std::endl;
+
+    Score quiescenceEval = quiesce(position, worstEval, bestEval, 4);
+    if (position.turn.activeColor == Color::BLACK) quiescenceEval = -quiescenceEval;
+    std::cout << "Quiescence Evaluation: " << std::string(quiescenceEval) << std::endl;
 
     printAvailableCaptures(position);
     printAvailableMoves(position);

@@ -311,7 +311,7 @@ Eval staticEval(Position& position) {
     return best;
 }
 
-Score quiesce(Position& position, Score alpha, Score beta, int depthleft = 2) {
+Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     Score stand_pat = evaluateBoard(position.board, evalTable);
     ++evalCount;
     if (position.activeColor() == Color::BLACK) stand_pat = -stand_pat;
