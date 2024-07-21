@@ -80,7 +80,7 @@ ${PUZZLES}:
 	mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) && wget https://database.lichess.org/$(notdir ${PUZZLES}).zst
 	zstd -d ${PUZZLES}.zst
 
-test: fen-test moves-test eval-test eval-debug perft
+test: fen-test moves-test elo-test eval-debug perft
 	./fen-test
 	./moves-test
 	./elo-test
