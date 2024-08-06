@@ -595,8 +595,8 @@ Piece makeMove(Board& board, Move move) {
         // Place king and rook on their new squares
         board[Square(rank, Position::kKingCastledKingSideFile)] = king;
         board[Square(rank, Position::kRookCastledKingSideFile)] = rook;
-        return Piece::NONE;
     }
+        return Piece::NONE;
 
     case MoveKind::QUEEN_CASTLE: {
         auto rank = move.from().rank();
@@ -610,8 +610,8 @@ Piece makeMove(Board& board, Move move) {
         // Place king and rook on their new squares
         board[Square(rank, Position::kKingCastledQueenSideFile)] = king;
         board[Square(rank, Position::kRookCastledQueenSideFile)] = rook;
-        return Piece::NONE;
     }
+        return Piece::NONE;
 
     case MoveKind::EN_PASSANT:
         // The pawns target is empty, so move the piece to capture en passant there.
@@ -654,8 +654,8 @@ void unmakeMove(Board& board, Move move, Piece captured) {
         // Place king and rook on their new squares
         board[Square(rank, Position::kKingFile)] = king;
         board[Square(rank, Position::kKingSideRookFile)] = rook;
-        break;
-    }
+
+    } break;
     case MoveKind::QUEEN_CASTLE: {
         auto rank = move.from().rank();
         auto rook = board[Square(rank, Position::kRookCastledQueenSideFile)];
@@ -746,8 +746,7 @@ Position applyMove(Position position, Move move) {
 }
 
 Position applyMoves(Position position, MoveVector const& moves) {
-    for (auto move : moves)
-        position  = applyMove(position, move);
+    for (auto move : moves) position = applyMove(position, move);
 
     return position;
 }
@@ -856,7 +855,7 @@ MoveVector allLegalCaptures(Turn turn, Board& board) {
         legalCaptures.emplace_back(mwp.move);
     });
     return legalCaptures;
- }
+}
 
 MoveVector allLegalMovesAndCaptures(Turn turn, Board& board) {
     MoveVector legalMoves;
