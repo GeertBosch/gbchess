@@ -123,10 +123,6 @@ private:
 };
 static constexpr Range pieces(Piece::WHITE_PAWN, Piece::BLACK_KING);
 
-inline bool operator<(Piece lhs, Piece rhs) {
-    return static_cast<uint8_t>(lhs) < static_cast<uint8_t>(rhs);
-}
-
 inline constexpr uint8_t index(Piece piece) {
     return static_cast<uint8_t>(piece);
 }
@@ -148,16 +144,10 @@ constexpr Color color(Piece piece) {
 inline char to_char(Piece piece) {
     return pieceChars[index(piece)];
 }
-inline char to_char(PieceType type, Color color) {
-    return to_char(addColor(type, color));
-}
 
 inline Piece toPiece(char piece) {
     auto pieceIndex = pieceChars.find(piece);
     return pieceIndex == std::string::npos ? Piece::NONE : static_cast<Piece>(pieceIndex);
-}
-inline PieceType toPieceType(char piece) {
-    return type(toPiece(piece));
 }
 
 enum class MoveKind : uint8_t {
@@ -222,9 +212,6 @@ inline int noPromo(MoveKind kind) {
 
 inline PieceType promotionType(MoveKind kind) {
     return static_cast<PieceType>((static_cast<uint8_t>(kind) & 3) + 1);
-}
-inline MoveKind operator|(MoveKind lhs, MoveKind rhs) {
-    return static_cast<MoveKind>(static_cast<uint8_t>(lhs) | static_cast<uint8_t>(rhs));
 }
 
 class Move {

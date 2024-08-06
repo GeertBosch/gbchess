@@ -1,3 +1,5 @@
+# chess utility bash shell functions for testing and debugging
+
 # applies some move to a position in FEN format and shows the result using stockfish
 echo "apply <fen> <move> ..."
 apply() {
@@ -22,6 +24,139 @@ apply() {
 position fen \"$fen\" $moves
 d" | stockfish
 }
+
+export esc="\\033["
+echo "setfg [color256] - sets the terminal foreground color to the given index, or reset"
+setfg() {
+	if (($# < 1)) ; then
+		printf "\\E[0m"
+	else
+		printf "\\E[38;5;$1m"
+	fi
+}
+
+echo "setbg [color256] - sets the terminal background color to the given index, or reset"
+setbg() {
+	if (($# < 1)) ; then
+		printf "\\E[49m"
+	else
+		printf "\\E[48;5;$1m"
+	fi
+}
+export lg="\\E[48;5;187m" # light green background
+export dg="\\E[48;5;64m" # dark green background
+export lh="▌" # left half block
+export rh="▐" # right half block
+
+echo "expfen <fen> - expands a FEN placement so empty squares become dots, / replaced by newline"
+expfen() {
+	if (($# != 1)) ; then
+		echo "$0 <fen>"
+		return 1
+	fi
+	dots=""
+	exp=$1
+	for i in $(seq 8) ; do
+		dots=".$dots"
+		exp=${exp//$i/$dots}
+	done
+	echo "$exp" | tr '/' '\n'
+}
+
+echo "chessrow <bg1> <bg2> <fenrow> - prints a chess row with alternating background colors"
+chessrow() {
+	if (($# < 3)) ; then
+		echo "$0 <bg1> <bg2> <fenrow>"
+		return 1
+	fi
+	bg1=$1
+	bg2=$2
+	row=$(echo "$3" | tr "." " ")
+	for (( i=0; i<${#row}; i++ )) ; do
+		piece=${row:$i:1}
+		case $piece in
+		"p")
+			piece="♟"
+			;;
+		"n")
+			piece="♞"
+			;;
+		"b")
+			piece="♝"
+			;;
+		"r")
+			piece="♜"
+			;;
+		"q")
+			piece="♛"
+			;;
+		"k")
+			piece="♚"
+			;;
+		"P")
+			piece="♙"
+			;;
+		"N")
+			piece="♘"
+			;;
+		"B")
+			piece="♗"
+			;;
+		"R")
+			piece="♖"
+			;;
+		"Q")
+			piece="♕"
+			;;
+		"K")
+			piece="♔"
+			;;
+		".")
+			piece=" "
+			;;
+		esac
+		if [ $((i % 2)) == 0 ] ; then
+			printf "\\E[38;5;${bg1}m$rh\\E[48;5;${bg1}m\\E[38;5;0m$piece"
+		else
+			printf "\\E[38;5;${bg1}m\\E[48;5;${bg2}m$lh\\E[38;5;0m$piece"
+		fi
+	done
+	printf "\\E[49m\\E[38;5;${bg2}m$lh\\E[39m\\n"
+}
+
+echo "chessboard <fen> - prints a chess board for the given FEN piece placement"
+chessboard() {
+	if (($# < 1)) ; then
+		echo "$0 <fen>"
+		return 1
+	fi
+	bg1=187
+	bg2=64
+	set - $(expfen $*)
+	while [ $# -gt 0 ] ; do
+		chessrow $bg1 $bg2 "$1"
+		shift
+		t=$bg1
+		bg1=$bg2
+		bg2=$t
+	done
+}
+
+setfg 187
+for i in 0 1 2 3 ; do
+	p=" "
+	P=" "
+	if [ $i == 0 ] ; then
+		p="♟"
+	fi
+	if [ $i == 3 ] ; then
+		P="♙"
+	fi
+	chessrow 187 64 "$P$P$P$P$P$P$P$P"
+	chessrow 64 187 "$p$p$p$p$p$p$p$p"
+done
+setbg
+setfg
 
 echo "flip <fen>"
 flip() {
