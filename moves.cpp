@@ -498,6 +498,26 @@ void findMoves(const Board& board, Occupancy occupied, const F& fun) {
     }
 }
 
+/** For use in quiescent search: allow pawn moves that promote or near promotion */
+template <typename F>
+void findPromotionMoves(const Board& board, Occupancy occupied, const F& fun) {
+    auto fromSquares = occupied.ours & SquareSet(0x00ff'ff00'00ff'ff00ull);  // Rank 2, 3, 6 and 7
+    auto ToSquares = SquareSet(0xffff'0000'0000'ffffull);                    // Rank 1 and 8
+    for (auto from : fromSquares) {
+        auto piece = board[from];
+        if (type(piece) != PieceType::PAWN) continue;
+
+        auto possibleSquares =
+            movesTable.moves[index(piece)][from.index()] & !occupied() & ToSquares;
+        for (auto to : possibleSquares) {
+            // No need to check for moving through pieces, as these are single moves
+            auto kind = movesTable.moveKinds[index(piece)][from.rank()][to.rank()];
+            expandMovePromotions(piece, Move{from, to, kind}, fun);
+        }
+    }
+}
+
+
 template <typename F>
 void findCastles(const Board& board, Occupancy occupied, Turn turn, const F& fun) {
     auto color = int(turn.activeColor);
@@ -827,6 +847,26 @@ void doMoveIfLegal(Board& board, SearchState& state, Piece piece, Move move, con
 };
 }  // namespace
 
+void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun action) {
+    // Iterate over all moves and captures
+    auto state = SearchState(board, turn.activeColor);
+    auto doMove = [&](Piece piece, Move move) {
+        doMoveIfLegal(board, state, piece, move, action);
+    };
+    findCaptures(board, state.occupied, doMove);
+    if (depthleft > 3)  // Avoid horizon effect by not promoting in the last few plies
+        findPromotionMoves(board, state.occupied, doMove);
+    findEnPassant(board, turn, doMove);
+}
+
+MoveVector allLegalQuiescentMoves(Turn turn, Board& board, int depthleft) {
+    MoveVector legalQuiescentMoves;
+    forAllLegalQuiescentMoves(turn, board, depthleft, [&](Board& board, MoveWithPieces mwp) {
+        legalQuiescentMoves.emplace_back(mwp.move);
+    });
+    return legalQuiescentMoves;
+}
+
 void forAllLegalMovesAndCaptures(Turn turn, Board& board, MoveFun action) {
     // Iterate over all moves and captures
     auto state = SearchState(board, turn.activeColor);
@@ -839,23 +879,6 @@ void forAllLegalMovesAndCaptures(Turn turn, Board& board, MoveFun action) {
     findCastles(board, state.occupied, turn, doMove);
 }
 
-void forAllLegalCaptures(Turn turn, Board& board, MoveFun action) {
-    // Iterate over all moves and captures
-    auto state = SearchState(board, turn.activeColor);
-    auto doMove = [&](Piece piece, Move move) {
-        doMoveIfLegal(board, state, piece, move, action);
-    };
-    findCaptures(board, state.occupied, doMove);
-    findEnPassant(board, turn, doMove);
-}
-
-MoveVector allLegalCaptures(Turn turn, Board& board) {
-    MoveVector legalCaptures;
-    forAllLegalCaptures(turn, board, [&](Board& board, MoveWithPieces mwp) {
-        legalCaptures.emplace_back(mwp.move);
-    });
-    return legalCaptures;
-}
 
 MoveVector allLegalMovesAndCaptures(Turn turn, Board& board) {
     MoveVector legalMoves;

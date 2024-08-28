@@ -3,6 +3,7 @@
 *.dSYM
 *.gcda
 *.gcno
+.vscode
 eval-debug
 perft
 puzzles

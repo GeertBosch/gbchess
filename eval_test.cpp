@@ -162,7 +162,7 @@ void printAvailableCaptures(const Position& position) {
 void printBestMove(Position position, int maxdepth) {
     auto bestMove = computeBestMove(position, maxdepth);
     std::cout << "Best Move: " << bestMove << " for " << fen::to_string(position) << std::endl;
-    std::cout << "pv " << principalVariation(position) << "\n";
+    std::cout << "pv " << principalVariation(position, maxdepth) << "\n";
 }
 
 void printAnalysis(Position position, int maxdepth) {
@@ -275,7 +275,7 @@ bool testPuzzle(
             std::cout << "Note: Both " << moves.front() << " and " << best.move
                       << " lead to mate\n";
         else
-            reportFailedPuzzle(position, moves, principalVariation(position));
+            reportFailedPuzzle(position, moves, principalVariation(position, maxdepth));
     }
     return correct;
 }

@@ -189,10 +189,10 @@ struct MoveWithPieces {
 };
 
 using MoveFun = std::function<void(Board&, MoveWithPieces)>;
-void forAllLegalCaptures(Turn turn, Board& board, MoveFun action);
+void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun action);
 void forAllLegalMovesAndCaptures(Turn turn, Board& board, MoveFun action);
 
-MoveVector allLegalCaptures(Turn turn, Board& board);
+MoveVector allLegalQuiescentMoves(Turn turn, Board& board, int depthleft);
 
 /**
  * Returns true if the given square is attacked by a piece of the given opponent color.

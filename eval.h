@@ -1,6 +1,5 @@
 #include <limits>
 #include <map>
-#include <sstream>
 #include <string>
 
 #include "common.h"
@@ -46,8 +45,8 @@ public:
     int pawns() const { return value / 100; }
 
     /**
-     *  For scores indicating mate, reduce the value by one, so that a sooner mate is preferred over
-     *  a later one.
+     *  For scores indicating an advantage, reduce the value by one for each additional ply, so that
+     *  a sooner achievement of the same advantage is preferred over a later one.
      */
     Score adjustDepth() const { return int16_t(value > 0 ? value - 1 : value); }
 
@@ -153,9 +152,9 @@ Eval computeBestMove(Position& position, int maxdepth);
 /**
  * Search all tactical moves necessary to achieve a quiet position and return the best score
  */
-Score quiesce(Position& position, Score alpha, Score beta, int depthleft = 2);
+Score quiesce(Position& position, Score alpha, Score beta, int depthleft = 4);
 
-MoveVector principalVariation(Position position);
+MoveVector principalVariation(Position position, int depth);
 
 /**
  *  a debugging function to walk the move generation tree of strictly legal moves to count all the
