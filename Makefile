@@ -1,6 +1,9 @@
 PUZZLES=puzzles/lichess_db_puzzle.csv
 CCFLAGS=-std=c++17
-DEBUGFLAGS=-fsanitize=address -DDEBUG -O0 -g --coverage
+CLANGPP=clang++
+GPP=g++
+# DEBUGFLAGS=-fsanitize=address -DDEBUG -O0 -g --coverage
+DEBUGFLAGS=-DDEBUG -O0 -g
 # -fprofile-instr-generate -fcoverage-mapping
 
 export LLVM_PROFILE_FILE=coverage-%m.profraw
@@ -19,7 +22,7 @@ all: test perft-test mate123
 %.h: common.h
 
 %-test: %_test.cpp %.cpp %.h common.h
-	clang++ ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $(filter-out %.h, $^)
+	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $(filter-out %.h, $^)
 
 .PHONY:
 
@@ -31,30 +34,30 @@ clean: .PHONY
 moves-test: moves_test.cpp moves.cpp moves.h common.h fen.h fen.cpp
 
 elo-test: elo_test.cpp elo.h
-	clang++ ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $(filter-out %.h, $^)
+	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $(filter-out %.h, $^)
 
 eval-test: eval_test.cpp eval.cpp hash.cpp fen.cpp moves.cpp *.h
-	g++ ${CCFLAGS} -O2 -g -o $@ $(filter-out %.h,$^)
+	${GPP} ${CCFLAGS} -g -O2 -o $@ $(filter-out %.h,$^)
 eval-debug: eval_test.cpp eval.cpp hash.cpp fen.cpp moves.cpp *.h
-	clang++ ${CCFLAGS}  ${DEBUGFLAGS} -o $@ $(filter-out %h,$^)
+	${CLANGPP} ${CCFLAGS}  ${DEBUGFLAGS} -o $@ $(filter-out %h,$^)
 
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
 perft: perft.cpp eval.cpp hash.cpp moves.cpp fen.cpp *.h
-	clang++ -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
+	${CLANGPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
 
 # Compare the perft tool with some different compilation options for speed comparison
 perft-sse2: perft.cpp eval.cpp hash.cpp moves.cpp fen.cpp *.h .PHONY
-	clang++ -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@ 5
-	clang++ -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5
-	g++ -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5
-	g++ -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5
+	${CLANGPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@ 5
+	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5
+	${GPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5
+	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
 mate123: eval-test ${PUZZLES} .PHONY
 	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -101 | ./eval-test 6
 
 puzzles: eval-test ${PUZZLES} .PHONY
-	egrep -v "mateIn[123]" ${PUZZLES} | head -101| ./eval-test 4
+	egrep -v "mateIn[123]" ${PUZZLES} | head -101| ./eval-test 6
 
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:
