@@ -381,29 +381,6 @@ bool isMate(const Position& position) {
     return allLegalMovesAndCaptures(position.turn, board).size() == 0;
 }
 
-Eval staticEval(Position& position) {
-    Eval best;  // Default to the worst possible move
-    auto currentEval = evaluateBoard(position.board, evalTable);
-    forAllLegalMovesAndCaptures(
-        position.turn, position.board, [&](Board& board, MoveWithPieces mwp) {
-            auto [move, piece, captured] = mwp;
-            ++evalCount;
-            auto newEval = currentEval;
-            if (isCapture(move.kind())) newEval -= pieceValues[index(captured)];
-            if (position.activeColor() == Color::BLACK) newEval = -newEval;
-            newEval += moveValues[index(move.kind())];
-            Eval ourMove{move, newEval};
-            if (ourMove > best) best = ourMove;
-        });
-    if (!best.move) {
-        auto moves = allLegalMovesAndCaptures(position.turn, position.board);
-        Move first = moves.size() ? moves.front() : Move();
-        assert(moves.size() == 0);
-        if (!isInCheck(position)) best.evaluation = drawEval;
-    }
-    return best;
-}
-
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     Score stand_pat = evaluateBoard(position.board, evalTable);
     ++evalCount;
@@ -493,8 +470,7 @@ Eval computeBestMove(Position& position, int maxdepth) {
 
     Eval best;  // Default to the worst possible move
 
-    best.evaluation = quiesce(position, worstEval, bestEval, 2);
-    // std::cerr << "staticEval is " << best << "\n";
+    best.evaluation = quiesce(position, worstEval, bestEval, Options::quiescenceDepth);
 
     for (auto depth = 1; depth <= maxdepth; ++depth) {
         transpositionTable.newGeneration();
