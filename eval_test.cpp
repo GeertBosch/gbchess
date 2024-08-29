@@ -438,7 +438,7 @@ int main(int argc, char* argv[]) {
 
     if (depth) {
         printEvalRate([&]() { printBestMove(position, depth); });
-        printEvalRate([&]() { printAnalysis(position, depth); });
+        if (debug) printEvalRate([&]() { printAnalysis(position, depth); });
     }
     return 0;
 }

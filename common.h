@@ -349,7 +349,7 @@ struct Turn {
     CastlingMask castlingAvailability = CastlingMask::ALL;  // Bitmask of CastlingMask
     Square enPassantTarget = noEnPassantTarget;
     uint8_t halfmoveClock = 0;  // If the clock is used, we'll draw at 100, well before it overflows
-    int fullmoveNumber = 1;     // >65,535 moves is a lot of moves
+    uint16_t fullmoveNumber = 1;  // >65,535 moves is a lot of moves
 };
 
 struct Position {

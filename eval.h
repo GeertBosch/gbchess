@@ -152,7 +152,7 @@ Eval computeBestMove(Position& position, int maxdepth);
 /**
  * Search all tactical moves necessary to achieve a quiet position and return the best score
  */
-Score quiesce(Position& position, Score alpha, Score beta, int depthleft = 4);
+Score quiesce(Position& position, Score alpha, Score beta, int depthleft);
 
 MoveVector principalVariation(Position position, int depth);
 

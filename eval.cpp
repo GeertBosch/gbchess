@@ -7,6 +7,7 @@
 #include "fen.h"
 #include "hash.h"
 #include "moves.h"
+#include "options.h"
 
 #ifdef DEBUG
 #include "debug.h"
@@ -70,9 +71,7 @@ void flip(PieceSquareTable& table) {
  * This allows us to still use the old entries for things like move ordering, but prefer new ones.
  */
 struct TranspositionTable {
-    static constexpr int kNumBits = 20;
-    static constexpr size_t kNumEntries = 1ull << kNumBits;
-    static constexpr size_t kNumMask = kNumEntries - 1;
+    static constexpr size_t kNumEntries = Options::transpositionTableEntries;
 
     enum EntryType { EXACT, LOWERBOUND, UPPERBOUND };
 
@@ -107,7 +106,7 @@ struct TranspositionTable {
 
     Eval find(Hash hash) {
         ++numHits;
-        auto& entry = entries[hash() & kNumMask];
+        auto& entry = entries[hash() % kNumEntries];
         if (entry.hash() == hash()) return entry.move;
         --numHits;
         ++numMisses;
@@ -115,7 +114,9 @@ struct TranspositionTable {
     }
 
     Entry* lookup(Hash hash, int depth) {
-        auto idx = hash() & kNumMask;
+        if constexpr (kNumEntries == 0) return nullptr;
+
+        auto idx = hash() % kNumEntries;
         auto& entry = entries[idx];
         ++numHits;
         if (entry.hash == hash && entry.generation == generation && entry.depth >= depth) {
@@ -127,7 +128,7 @@ struct TranspositionTable {
     }
 
     void insert(Hash hash, Eval move, uint8_t depthleft, EntryType type) {
-        auto idx = hash() & kNumMask;
+        auto idx = hash() % kNumEntries;
         auto& entry = entries[idx];
         ++numInserted;
 
@@ -136,7 +137,9 @@ struct TranspositionTable {
             entry.move = {};
         }
 
-        if (entry.type == EXACT && entry.move && type != EXACT) return;
+        if (entry.type == EXACT && entry.depth > depthleft && entry.move &&
+            (type != EXACT || entry.move.evaluation >= move.evaluation))
+            return;
 
         // 3 cases: improve existing entry, collision with unrelated entry, or occupy an empty slot
         if (entry.move && entry.hash == hash)
@@ -404,6 +407,7 @@ Eval staticEval(Position& position) {
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     Score stand_pat = evaluateBoard(position.board, evalTable);
     ++evalCount;
+    if (depthleft == 0) return stand_pat;
     if (position.activeColor() == Color::BLACK) stand_pat = -stand_pat;
     if (stand_pat >= beta) return beta;
     if (alpha < stand_pat) alpha = stand_pat;
@@ -427,7 +431,7 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
  * The alpha-beta search algorithm with fail-soft negamax search.
  */
 Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
-    if (depthleft == 0) return quiesce(position, alpha, beta);
+    if (depthleft == 0) return quiesce(position, alpha, beta, Options::quiescenceDepth);
 
     Hash hash(position);
 
@@ -521,7 +525,7 @@ MoveVector principalVariation(Position position, int depth) {
     if (pv.size() < depth && !isMate(position)) {
         std::cout << "Hash " << hash() << " (FEN " << fen::to_string(position)
                   << ") not found in transposition table ["
-                  << (hash() & TranspositionTable::kNumMask) << "]\n";
+                  << (hash() % TranspositionTable::kNumEntries) << "]\n";
     }
     return pv;
 }
