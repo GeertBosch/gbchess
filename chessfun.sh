@@ -197,10 +197,27 @@ fish() {
 	fen=$1
 	shift
 	echo "\
+uci
 position fen \"$fen\"
-go infinite
-d" | stockfish
+go movetime 2000
+" | while read line ; do echo "$line" ; sleep 0.1 ; done | stockfish | cat
 }
+
+echo "nnue <fen>"
+nnue() {
+	if (($# < 1)) ; then
+		echo "$0 fish <fen>"
+		return 1
+	fi
+        fen=$1
+        shift
+        echo "\
+uci
+position fen \"$fen\"
+eval
+" | while read line ; do echo "$line"; sleep 0.1 ; done | stockfish | grep "^NNUE eval"
+}
+
 
 # Compare a perft run on a  base FEN position followed by some moves at the given depth
 perftdiff() {
