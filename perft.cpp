@@ -3,9 +3,23 @@
 #include <iostream>
 #include <string>
 
-#include "eval.h"
 #include "fen.h"
 #include "moves.h"
+
+/**
+ *  a debugging function to walk the move generation tree of strictly legal moves to count all the
+ *  leaf nodes of a certain depth, which can be compared to predetermined values and used to isolate
+ *  bugs. (See https://www.chessprogramming.org/Perft)
+ */
+uint64_t perft(Turn turn, Board& board, int depth) {
+    if (depth <= 0) return 1;
+    uint64_t nodes = 0;
+    forAllLegalMovesAndCaptures(turn, board, [&](Board& board, MoveWithPieces mwp) {
+        auto newTurn = applyMove(turn, mwp.piece, mwp.move);
+        nodes += perft(newTurn, board, depth - 1);
+    });
+    return nodes;
+}
 
 void perftWithDivide(Position position, int depth, int expectedCount) {
     struct Division {

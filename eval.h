@@ -85,6 +85,16 @@ PieceSquareTable operator*(PieceSquareTable table, Score score);
  *  of one side can be used for the other side.
  */
 void flip(PieceSquareTable& table);
+struct EvalTable {
+    std::array<PieceSquareTable, kNumPieces> pieceSquareTables{};
+    EvalTable();
+    EvalTable(const Board& board, bool usePieceSquareTables);
+    EvalTable& operator=(const EvalTable& other) = default;
+
+    const PieceSquareTable& operator[](Piece piece) const {
+        return pieceSquareTables[index(piece)];
+    }
+};
 
 /**
  * The evaluation is always from the perspective of the active color. Higher evaluations are better,
@@ -117,9 +127,6 @@ struct Eval {
     }
 };
 
-extern uint64_t evalCount;
-extern uint64_t cacheCount;
-
 /**
  * This function iterates over each square in the board, uses the pieceValues map to find
  * the value of the piece on that square, and adjusts the total value accordingly. White
@@ -132,6 +139,11 @@ extern uint64_t cacheCount;
 Score evaluateBoard(const Board& board, bool usePieceSquareTables);
 
 /**
+ * Same as above, but uses a pre-computed evaluation table.
+ */
+Score evaluateBoard(const Board& board, const EvalTable& table);
+
+/**
  * Returns true if and only if the side whose turn it is is in check.
  */
 bool isInCheck(const Position& position);
@@ -140,25 +152,3 @@ bool isInCheck(const Position& position);
  * Returns true if and only if the size whose turn it is has no legal moves.
  */
 bool isMate(const Position& position);
-
-/**
- * Evaluates the best moves from a given chess position up to a certain depth.
- * Each move is evaluated based on the static evaluation of the board or by recursive calls
- * to this function, decreasing the depth until it reaches zero. It also accounts for checkmate
- * and stalemate situations.
- */
-Eval computeBestMove(Position& position, int maxdepth);
-
-/**
- * Search all tactical moves necessary to achieve a quiet position and return the best score
- */
-Score quiesce(Position& position, Score alpha, Score beta, int depthleft);
-
-MoveVector principalVariation(Position position, int depth);
-
-/**
- *  a debugging function to walk the move generation tree of strictly legal moves to count all the
- *  leaf nodes of a certain depth, which can be compared to predetermined values and used to isolate
- *  bugs. (See https://www.chessprogramming.org/Perft)
- */
-uint64_t perft(Turn turn, Board& board, int depth);

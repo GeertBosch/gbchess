@@ -38,26 +38,29 @@ elo-test: elo_test.cpp elo.h
 
 eval-test: eval_test.cpp eval.cpp hash.cpp fen.cpp moves.cpp *.h
 	${GPP} ${CCFLAGS} -g -O2 -o $@ $(filter-out %.h,$^)
-eval-debug: eval_test.cpp eval.cpp hash.cpp fen.cpp moves.cpp *.h
-	${CLANGPP} ${CCFLAGS}  ${DEBUGFLAGS} -o $@ $(filter-out %h,$^)
+
+search-test: search_test.cpp search.cpp eval.cpp hash.cpp fen.cpp moves.cpp *.h
+	${GPP} ${CCFLAGS} -g -O2 -o $@ $(filter-out %.h,$^)
+search-debug: search_test.cpp search.cpp eval.cpp hash.cpp fen.cpp moves.cpp *.h
+	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} -o $@ $(filter-out %.h,$^)
 
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
 perft: perft.cpp eval.cpp hash.cpp moves.cpp fen.cpp *.h
 	${CLANGPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
 
 # Compare the perft tool with some different compilation options for speed comparison
-perft-sse2: perft.cpp eval.cpp hash.cpp moves.cpp fen.cpp *.h .PHONY
+perft-sse2: perft.cpp hash.cpp moves.cpp fen.cpp *.h .PHONY
 	${CLANGPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@ 5
 	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5
 	${GPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
-mate123: eval-test ${PUZZLES} .PHONY
-	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -101 | ./eval-test 6
+mate123: search-test ${PUZZLES} .PHONY
+	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -101 | ./search-test 6
 
-puzzles: eval-test ${PUZZLES} .PHONY
-	egrep -v "mateIn[123]" ${PUZZLES} | head -101| ./eval-test 6
+puzzles: search-test ${PUZZLES} .PHONY
+	egrep -v "mateIn[123]" ${PUZZLES} | head -101| ./search-test 6
 
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:
@@ -89,16 +92,18 @@ ${PUZZLES}:
 	mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) && wget https://database.lichess.org/$(notdir ${PUZZLES}).zst
 	zstd -d ${PUZZLES}.zst
 
-test: fen-test moves-test elo-test eval-debug
+test: fen-test moves-test elo-test eval-test search-debug
 	rm -f coverage-*.profraw
 	./fen-test
 	./moves-test
 	./elo-test
-	./eval-debug "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 5
+	./eval-test "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1"
+	./search-debug "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 5
 
 coverage: test
 	${LLVM-MERGE}
 	llvm-cov report ./fen-test -instr-profile=coverage.profdata
 	llvm-cov report ./moves-test -instr-profile=coverage.profdata
-	llvm-cov report  ./elo-test -instr-profile=coverage.profdata
-	llvm-cov report ./eval-debug -instr-profile=coverage.profdata
+	llvm-cov report ./elo-test -instr-profile=coverage.profdata
+	llvm-cov report ./eval-test -instr-profile=coverage.profdata
+	llvm-cov report ./search-debug -instr-profile=coverage.profdata
