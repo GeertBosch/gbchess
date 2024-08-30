@@ -71,7 +71,7 @@ void flip(PieceSquareTable& table) {
  * This allows us to still use the old entries for things like move ordering, but prefer new ones.
  */
 struct TranspositionTable {
-    static constexpr size_t kNumEntries = Options::transpositionTableEntries;
+    static constexpr size_t kNumEntries = options::transpositionTableEntries;
 
     enum EntryType { EXACT, LOWERBOUND, UPPERBOUND };
 
@@ -408,7 +408,7 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
  * The alpha-beta search algorithm with fail-soft negamax search.
  */
 Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
-    if (depthleft == 0) return quiesce(position, alpha, beta, Options::quiescenceDepth);
+    if (depthleft == 0) return quiesce(position, alpha, beta, options::quiescenceDepth);
 
     Hash hash(position);
 
@@ -470,15 +470,13 @@ Eval computeBestMove(Position& position, int maxdepth) {
 
     Eval best;  // Default to the worst possible move
 
-    best.evaluation = quiesce(position, worstEval, bestEval, Options::quiescenceDepth);
+    best.evaluation = quiesce(position, worstEval, bestEval, options::quiescenceDepth);
 
     for (auto depth = 1; depth <= maxdepth; ++depth) {
         transpositionTable.newGeneration();
         auto score = alphaBeta(position, worstEval, bestEval, depth);
         best = transpositionTable.find(Hash(position));
         assert(best.evaluation == score);
-        // auto pv = principalVariation(position, depth);
-        // std::cerr << "Depth " << depth << ": " << best << " pv " << pv << "\n";
 
         if (best.evaluation.mate()) break;
     }
@@ -497,11 +495,6 @@ MoveVector principalVariation(Position position, int depth) {
         if (seen.count(hash) == 3) break;
         position = applyMove(position, found.move);
         hash = Hash(position);
-    }
-    if (pv.size() < depth && !isMate(position)) {
-        std::cout << "Hash " << hash() << " (FEN " << fen::to_string(position)
-                  << ") not found in transposition table ["
-                  << (hash() % TranspositionTable::kNumEntries) << "]\n";
     }
     return pv;
 }
