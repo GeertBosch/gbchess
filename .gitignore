@@ -4,6 +4,6 @@
 *.gcda
 *.gcno
 .vscode
-eval-debug
+search-debug
 perft
 puzzles
