@@ -8,6 +8,7 @@
 #include "eval.h"
 #include "fen.h"
 #include "moves.h"
+#include "options.h"
 #include "search.h"
 
 namespace {
@@ -324,7 +325,7 @@ int main(int argc, char* argv[]) {
     // Parse the FEN string into a Position
     Position position = fen::parsePosition(fen);
 
-    Score quiescenceEval = quiesce(position, worstEval, bestEval, 4);
+    Score quiescenceEval = quiesce(position, 4);
     if (position.turn.activeColor == Color::BLACK) quiescenceEval = -quiescenceEval;
     std::cout << "Quiescence search: " << std::string(quiescenceEval) << std::endl;
 

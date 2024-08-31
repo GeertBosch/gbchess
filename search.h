@@ -13,15 +13,13 @@ extern uint64_t cacheCount;
 Eval computeBestMove(Position& position, int maxdepth);
 
 /**
- * Interrupt computeBestMove and make it return the best move found sofar. This is the only function
- * that may be called concurrently with any others in the evaluation module.
- *
+ * Interrupt computeBestMove and make it return the best move found sofar. 
  */
 void stop();
 
 /**
  * Search all tactical moves necessary to achieve a quiet position and return the best score
  */
-Score quiesce(Position& position, Score alpha, Score beta, int depthleft);
+Score quiesce(Position& position, int depthleft);
 
 MoveVector principalVariation(Position position, int depth);

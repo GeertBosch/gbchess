@@ -1,3 +1,6 @@
+#include "eval.h"
+
+#include <atomic>
 #include <iostream>
 #include <unordered_set>
 #include <vector>
@@ -6,6 +9,7 @@
 #include "moves.h"
 #include "options.h"
 #include "search.h"
+#include "single_runner.h"
 
 EvalTable evalTable;
 uint64_t evalCount = 0;
@@ -34,6 +38,7 @@ struct TranspositionTable {
         uint8_t depth = 0;
         EntryType type = EXACT;
         Entry() = default;
+        Entry& operator=(const Entry& other) = default;
 
         Entry(Hash hash, Eval move, uint8_t generation, uint8_t depth, EntryType type)
             : hash(hash), move(move), generation(generation), depth(depth), type(type) {}
@@ -101,11 +106,7 @@ struct TranspositionTable {
         else
             ++numOccupied;
 
-        entry.hash = hash;
-        entry.move = move;
-        entry.generation = generation;
-        entry.depth = depthleft;
-        entry.type = type;
+        entry = Entry{hash, move, generation, depthleft, type};
     }
 
     void clear() {
@@ -192,7 +193,7 @@ void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     Score stand_pat = evaluateBoard(position.board, evalTable);
-    ++evalCount;
+    if (++evalCount % options::stopCheckIterations == 0) SingleRunner::checkStop();
     if (depthleft == 0) return stand_pat;
     if (position.activeColor() == Color::BLACK) stand_pat = -stand_pat;
     if (stand_pat >= beta) return beta;
@@ -211,6 +212,12 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
         if (score > alpha) alpha = score;
     }
     return alpha;
+}
+
+Score quiesce(Position& position, int depthleft) {
+    SingleRunner quiesce;
+
+    return ::quiesce(position, worstEval, bestEval, depthleft);
 }
 
 /**
@@ -258,11 +265,8 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
         }
     }
 
-    if (moveList.empty()) {
-        auto kingPos =
-            SquareSet::find(position.board, addColor(PieceType::KING, position.activeColor()));
-        if (!isAttacked(position.board, kingPos, Occupancy(position.board, position.activeColor())))
-            return drawEval;
+    if (moveList.empty() && !isInCheck(position)) {
+        return drawEval;
     }
 
     if (best.evaluation <= alpha) {
@@ -274,7 +278,8 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
     return best.evaluation;
 }
 
-Eval computeBestMove(Position& position, int maxdepth) {
+Eval computeBestMove(Position& position, int maxdepth) try {
+    SingleRunner search;
     evalTable = EvalTable{position.board, true};
     transpositionTable.clear();
 
@@ -292,6 +297,8 @@ Eval computeBestMove(Position& position, int maxdepth) {
     }
 
     return best;
+} catch (SingleRunner::Stop&) {
+    return transpositionTable.find(Hash(position));
 }
 
 MoveVector principalVariation(Position position, int depth) {
