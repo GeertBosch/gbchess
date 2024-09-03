@@ -41,8 +41,13 @@ public:
     bool operator>(Score rhs) const { return value > rhs.value; }
     bool operator<=(Score rhs) const { return value <= rhs.value; }
     bool operator>=(Score rhs) const { return value >= rhs.value; }
-    bool mate() const { return std::abs(value) >= max().value / 100 * 100; }
+    // The mate score is the number of moves to mate, with the sign indicating the winner.
+    int mate() const {
+        return value < 0 ? -operator-().mate()
+                         : (value < max().value / 100 * 100 ? 0 : 100 - value % 100);
+    }
     int pawns() const { return value / 100; }
+    int cp() const { return value; }
 
     /**
      *  For scores indicating an advantage, reduce the value by one for each additional ply, so that

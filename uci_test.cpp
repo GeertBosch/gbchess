@@ -13,7 +13,7 @@ void fromStdIn() {
 void fromFile(const char* filename) {
     std::ifstream file(filename);
     if (file.is_open()) {
-        enterUCI(file, std::cout, std::cerr);
+        enterUCI(file, std::cout, std::cout);
     } else {
         std::cerr << "Failed to open file: " << filename << std::endl;
         std::exit(2);

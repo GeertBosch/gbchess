@@ -1,5 +1,7 @@
+#include "options.h"
 #include <algorithm>
 #include <chrono>
+#include <ostream>
 #include <sstream>
 #include <thread>
 
@@ -13,7 +15,7 @@ namespace {
 const char* const cmdName = "gbchess";
 class UCIRunner {
 public:
-    UCIRunner(std::ostream& out) : out(out) {}
+    UCIRunner(std::ostream& out, std::ostream& log) : out(out), log(log) {}
     ~UCIRunner() { stop(); }
 
     void execute(std::string line);
@@ -25,13 +27,38 @@ private:
     Position position = fen::parsePosition(fen::initialPosition);
 
     void go(UCIArguments arguments) {
+        auto depth = options::defaultDepth;
+        auto wait = false;
+        for (size_t i = 0; i < arguments.size(); ++i) {
+            if (arguments[i] == "depth" && ++i < arguments.size()) {
+                depth = std::stoi(arguments[i]);
+                continue;
+            }
+            if (arguments[i] == "wait") {
+                wait = true;
+                continue;
+            }
+        }
         stop();
-        thread = std::thread([this, pos = position] {
+        auto search = [this, depth, pos = position] {
             auto position = pos;  // need to copy the position
-            auto move = search::computeBestMove(position, 5);
+            auto move = search::computeBestMove(position, depth, [this](std::string info) -> bool {
+                out << "info " << info << "\n";
+                std::flush(out);
+                if (&out != &log) {
+                    log << "info " << info << "\n";
+                    std::flush(log);
+                }
+                return false;
+            });
             out << "bestmove " << std::string(move.move) << "\n";
             std::flush(out);
-        });
+        };
+        if (wait) {
+            search();
+        } else {
+            thread = std::thread(search);
+        }
     }
 
     void stop() {
@@ -43,6 +70,7 @@ private:
     }
 
     std::ostream& out;
+    std::ostream& log;
     std::thread thread;
 };
 
@@ -104,6 +132,12 @@ void UCIRunner::execute(std::string line) {
             out << "Unknown position kind: " << positionKind << "\n";
             return;
         }
+        if (!moves.size()) return;
+        if (moves[0] != "moves") {
+            out << "Expected moves, got: " << moves[0] << "\n";
+            return;
+        }
+        moves.erase(moves.begin());
         for (auto move : moves) {
             position = applyMove(position, parseMoveUCI(position, move));
         }
@@ -128,7 +162,7 @@ void UCIRunner::execute(std::string line) {
 }  // namespace
 
 void enterUCI(std::istream& in, std::ostream& out, std::ostream& log) {
-    UCIRunner runner(out);
+    UCIRunner runner(out, log);
     std::flush(log);
     for (std::string line; std::getline(in, line);) {
         log << "UCI: " << line << "\n";
