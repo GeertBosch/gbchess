@@ -3,7 +3,8 @@ CCFLAGS=-std=c++17
 CLANGPP=clang++
 GPP=g++
 # DEBUGFLAGS=-fsanitize=address -DDEBUG -O0 -g --coverage
-DEBUGFLAGS=-DDEBUG -O0 -g
+# DEBUGFLAGS=-DDEBUG -O0 -g
+DEBUGFLAGS=-O2
 # -fprofile-instr-generate -fcoverage-mapping
 
 export LLVM_PROFILE_FILE=coverage-%m.profraw
@@ -37,17 +38,23 @@ moves-test: moves_test.cpp moves.cpp moves.h common.h fen.h fen.cpp
 elo-test: elo_test.cpp elo.h
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $(filter-out %.h, $^)
 
-eval-test: eval_test.cpp eval.cpp hash.cpp fen.cpp moves.cpp *.h
+EVAL_SRCS=eval.cpp hash.cpp fen.cpp moves.cpp
+
+eval-test: eval_test.cpp ${EVAL_SRCS} *.h
 	${GPP} ${CCFLAGS} -g -O2 -o $@ $(filter-out %.h,$^)
 
-search-test: search_test.cpp search.cpp eval.cpp hash.cpp fen.cpp moves.cpp single_runner.cpp *.h
+SEARCH_SRCS=${EVAL_SRCS} search.cpp single_runner.cpp
+
+search-test: search_test.cpp ${SEARCH_SRCS} *.h
 	${GPP} ${CCFLAGS} -g -O2 -o $@ $(filter-out %.h,$^)
-search-debug: search_test.cpp search.cpp eval.cpp hash.cpp fen.cpp moves.cpp single_runner.cpp *.h
+search-debug: search_test.cpp ${SEARCH_SRCS} *.h
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} -o $@ $(filter-out %.h,$^)
+
+uci-test: uci_test.cpp uci.cpp ${SEARCH_SRCS}
 
 
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
-perft: perft.cpp eval.cpp hash.cpp moves.cpp fen.cpp *.h
+perft: perft.cpp ${EVAL_SRCS} *.h
 	${CLANGPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
 
 # Compare the perft tool with some different compilation options for speed comparison
@@ -62,7 +69,7 @@ mate123: search-test ${PUZZLES} .PHONY
 	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -101 | ./search-test 6
 
 puzzles: search-test ${PUZZLES} .PHONY
-	egrep -v "mateIn[123]" ${PUZZLES} | head -101| ./search-test 6
+	egrep -v "mateIn[123]" ${PUZZLES} | head -31| ./search-test 6
 
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:
@@ -94,7 +101,7 @@ ${PUZZLES}:
 	mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) && wget https://database.lichess.org/$(notdir ${PUZZLES}).zst
 	zstd -d ${PUZZLES}.zst
 
-test: fen-test moves-test elo-test eval-test search-debug single_runner-test
+test: fen-test moves-test elo-test eval-test search-debug single_runner-test uci-test
 	rm -f coverage-*.profraw
 	./fen-test
 	./moves-test

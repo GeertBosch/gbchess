@@ -99,7 +99,7 @@ void usage(std::string cmdName, std::string errmsg) {
 }
 
 Eval analyzePosition(Position position, int maxdepth) {
-    auto eval = computeBestMove(position, maxdepth);
+    auto eval = search::computeBestMove(position, maxdepth);
     std::cout << "        analyzePosition \"" << fen::to_string(position) << "\" as "
               << eval.evaluation << ", move " << eval.move << "\n";
     return eval;
@@ -133,12 +133,12 @@ Eval analyzeMoves(Position position, int maxdepth) {
 template <typename F>
 void printEvalRate(const F& fun) {
     auto startTime = std::chrono::high_resolution_clock::now();
-    auto startEvals = evalCount;
-    auto startCache = cacheCount;
+    auto startEvals = search::evalCount;
+    auto startCache = search::cacheCount;
     fun();
     auto endTime = std::chrono::high_resolution_clock::now();
-    auto endEvals = evalCount;
-    auto endCache = cacheCount;
+    auto endEvals = search::evalCount;
+    auto endCache = search::cacheCount;
 
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
     auto evals = endEvals - startEvals;
@@ -162,16 +162,16 @@ void printAvailableCaptures(const Position& position) {
 }
 
 void printBestMove(Position position, int maxdepth) {
-    auto bestMove = computeBestMove(position, maxdepth);
+    auto bestMove = search::computeBestMove(position, maxdepth);
     std::cout << "Best Move: " << bestMove << " for " << fen::to_string(position) << std::endl;
-    std::cout << "pv " << principalVariation(position, maxdepth) << "\n";
+    std::cout << "pv " << search::principalVariation(position, maxdepth) << "\n";
 }
 
 void printAnalysis(Position position, int maxdepth) {
     auto analyzed = analyzeMoves(position, maxdepth);
     std::cerr << "Analyzed: " << analyzed << std::endl;
     if (debug) {
-        auto bestMove = computeBestMove(position, maxdepth);
+        auto bestMove = search::computeBestMove(position, maxdepth);
         assert(analyzed == bestMove);
     }
 }
@@ -232,7 +232,7 @@ void reportFailedPuzzle(Position position, MoveVector moves, MoveVector pv) {
 
 bool testPuzzle(
     std::string puzzleId, int rating, Position position, MoveVector moves, int maxdepth) {
-    auto best = computeBestMove(position, maxdepth);
+    auto best = search::computeBestMove(position, maxdepth);
     bool correct = best.move == moves.front();
     if (!correct) {
         std::cout << "\nPuzzle " << puzzleId << ", rating " << rating << ": \""
@@ -245,7 +245,7 @@ bool testPuzzle(
             std::cout << "Note: Both " << moves.front() << " and " << best.move
                       << " lead to mate\n";
         else
-            reportFailedPuzzle(position, moves, principalVariation(position, maxdepth));
+            reportFailedPuzzle(position, moves, search::principalVariation(position, maxdepth));
     }
     return correct;
 }
@@ -325,7 +325,7 @@ int main(int argc, char* argv[]) {
     // Parse the FEN string into a Position
     Position position = fen::parsePosition(fen);
 
-    Score quiescenceEval = quiesce(position, 4);
+    Score quiescenceEval = search::quiesce(position, 4);
     if (position.turn.activeColor == Color::BLACK) quiescenceEval = -quiescenceEval;
     std::cout << "Quiescence search: " << std::string(quiescenceEval) << std::endl;
 

@@ -11,6 +11,7 @@
 #include "search.h"
 #include "single_runner.h"
 
+namespace search {
 EvalTable evalTable;
 uint64_t evalCount = 0;
 uint64_t cacheCount = 0;
@@ -194,9 +195,13 @@ void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     Score stand_pat = evaluateBoard(position.board, evalTable);
     if (++evalCount % options::stopCheckIterations == 0) SingleRunner::checkStop();
-    if (depthleft == 0) return stand_pat;
+    if (depthleft == 0) {
+        return stand_pat;
+    }
     if (position.activeColor() == Color::BLACK) stand_pat = -stand_pat;
-    if (stand_pat >= beta) return beta;
+    if (stand_pat >= beta) {
+        return beta;
+    }
     if (alpha < stand_pat) alpha = stand_pat;
 
     auto moveList = allLegalQuiescentMoves(position.turn, position.board, depthleft);
@@ -217,15 +222,17 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
 Score quiesce(Position& position, int depthleft) {
     SingleRunner quiesce;
 
-    return ::quiesce(position, worstEval, bestEval, depthleft);
+    return search::quiesce(position, worstEval, bestEval, depthleft);
 }
 
 /**
  * The alpha-beta search algorithm with fail-soft negamax search.
  */
 Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
-    if (depthleft == 0) return quiesce(position, alpha, beta, options::quiescenceDepth);
-
+    if (depthleft == 0) {
+        auto score = quiesce(position, alpha, beta, options::quiescenceDepth);
+        return score;
+    }
     Hash hash(position);
 
     // Check the transposition table
@@ -253,9 +260,7 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
     TranspositionTable::EntryType type = TranspositionTable::EXACT;
     for (auto move : moveList) {
         auto newPosition = applyMove(position, move);
-        auto score =
-            -alphaBeta(newPosition, -beta, -std::max(alpha, best.evaluation), depthleft - 1)
-                 .adjustDepth();
+        auto score = -alphaBeta(newPosition, -beta, -alpha, depthleft - 1).adjustDepth();
         if (score > best.evaluation) {
             best = {move, score};
         }
@@ -278,7 +283,71 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
     return best.evaluation;
 }
 
-Eval computeBestMove(Position& position, int maxdepth) try {
+
+bool currmoveInfo(InfoFn info, int depthleft, Move currmove, int currmovenumber) {
+    if (!info) return false;
+
+    std::string currmoveString = "depth " + std::to_string(depthleft) + " currmove " +
+        std::string(currmove) + " currmovenumber " + std::to_string(currmovenumber);
+    auto stop = info(currmoveString);
+    if (stop) SingleRunner::stop();
+    return stop;
+}
+
+bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
+    if (!info) return false;
+
+    std::string pvString = "depth " + std::to_string(depthleft);
+    if (score.mate())
+        pvString += " score mate " + std::to_string(score.mate());
+    else
+        pvString += " score cp " + std::to_string(score.cp());
+
+    pvString += " pv";
+    for (Move move : pv) {
+        pvString += " " + std::string(move);
+    }
+    auto stop = info(pvString);
+    if (stop) SingleRunner::stop();
+    return stop;
+}
+
+Score toplevelAlphaBeta(Position& position, int depthleft, InfoFn info) {
+    assert(depthleft > 0);
+    Score alpha = worstEval;
+    Score beta = bestEval;
+
+    Hash hash(position);
+    auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
+    sortMoves(position, hash, moveList.begin(), moveList.end());
+    Eval best;
+
+    int currmovenumber = 0;
+    for (auto currmove : moveList) {
+        ++currmovenumber;
+        if (currmoveInfo(info, depthleft, currmove, currmovenumber)) break;
+        auto newPosition = applyMove(position, currmove);
+        auto score =
+            -alphaBeta(newPosition, -beta, -std::max(alpha, best.evaluation), depthleft - 1)
+                 .adjustDepth();
+        if (score > best.evaluation) {
+            best = {currmove, score};
+        }
+        if (best.evaluation >= beta) {
+            break;
+        }
+    }
+    if (moveList.empty() && !isInCheck(position)) {
+        best = {Move(), drawEval};
+    }
+
+    // Cache the best move for this position
+    transpositionTable.insert(hash, best, depthleft, TranspositionTable::EXACT);
+
+    return best.evaluation;
+}
+
+Eval computeBestMove(Position& position, int maxdepth, InfoFn info) try {
     SingleRunner search;
     evalTable = EvalTable{position.board, true};
     transpositionTable.clear();
@@ -289,11 +358,12 @@ Eval computeBestMove(Position& position, int maxdepth) try {
 
     for (auto depth = 1; depth <= maxdepth; ++depth) {
         transpositionTable.newGeneration();
-        auto score = alphaBeta(position, worstEval, bestEval, depth);
+        auto score = toplevelAlphaBeta(position, depth, info);
         best = transpositionTable.find(Hash(position));
         assert(best.evaluation == score);
+        if (pvInfo(info, depth, score, principalVariation(position, depth))) break;
 
-        if (best.evaluation.mate()) break;
+        if (best.evaluation.mate() || SingleRunner::stopping()) break;
     }
 
     return best;
@@ -315,3 +385,8 @@ MoveVector principalVariation(Position position, int depth) {
     }
     return pv;
 }
+
+void stop() {
+    SingleRunner::stop();
+}
+}  // namespace search

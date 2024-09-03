@@ -24,7 +24,7 @@ void test_runner_can_be_instantiated() {
 std::atomic_int activeRunners{0};
 class Runner {
 public:
-    static const int manyIterations = 1'000;
+    static const int manyIterations = 10'000;
     Runner() {
         thread = std::thread([this] {
             SingleRunner runner;

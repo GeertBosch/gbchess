@@ -165,6 +165,27 @@ void testScore() {
     std::cout << "Score tests passed" << std::endl;
 }
 
+void testMateScore() {
+    Score M1 = bestEval;
+    assert(std::string(M1) == "M1");
+    assert(M1.mate() == 1);
+
+    Score m1 = -M1;
+    assert(m1.mate() == -1);
+    assert(m1 == worstEval);
+    assert(std::string(m1) == "-M1");
+
+    Score M2 = M1.adjustDepth();
+    Score m2 = -((-m1).adjustDepth());
+
+    assert(M2.mate() == 2);
+    assert(m2.mate() == -2);
+    assert(M2 == -m2);
+    assert(std::string(M2) == "M2");
+    assert(std::string(m2) == "-M2");
+    std::cout << "Mate score tests passed" << std::endl;
+}
+
 void testEvaluateBoard() {
     std::string piecePlacement = "8/8/8/8/4p3/5pNN/4p3/2K1k3";
     auto board = fen::parsePiecePlacement(piecePlacement);
@@ -206,6 +227,7 @@ int main(int argc, char* argv[]) {
     if (argc < 2) usage(argv[0], "missing argument");
 
     testScore();
+    testMateScore();
     testEvaluateBoard();
     testEval();
 
