@@ -85,6 +85,16 @@ struct TranspositionTable {
         return nullptr;
     }
 
+    void refineAlphaBeta(Hash hash, int depth, Score& alpha, Score& beta) {
+        if (auto entry = lookup(hash, depth); entry) {
+            switch (entry->type) {
+            case EXACT: alpha = beta = entry->move.evaluation; break;
+            case LOWERBOUND: alpha = std::max(alpha, entry->move.evaluation); break;
+            case UPPERBOUND: beta = std::min(beta, entry->move.evaluation); break;
+            }
+        }
+    }
+
     void insert(Hash hash, Eval move, uint8_t depthleft, EntryType type) {
         auto idx = hash() % kNumEntries;
         auto& entry = entries[idx];
@@ -230,25 +240,13 @@ Score quiesce(Position& position, int depthleft) {
  * The alpha-beta search algorithm with fail-soft negamax search.
  */
 Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
-    if (depthleft == 0) {
-        auto score = quiesce(position, alpha, beta, options::quiescenceDepth);
-        return score;
-    }
+    if (depthleft == 0) return quiesce(position, alpha, beta, options::quiescenceDepth);
+
     Hash hash(position);
 
     // Check the transposition table
-    if (auto ttEntry = transpositionTable.lookup(hash, depthleft)) {
-        auto move = ttEntry->move;
-        ++cacheCount;
-        switch (ttEntry->type) {
-        case TranspositionTable::EXACT: alpha = beta = move.evaluation; break;
-        case TranspositionTable::LOWERBOUND: alpha = std::max(alpha, move.evaluation); break;
-        case TranspositionTable::UPPERBOUND: beta = std::min(beta, move.evaluation); break;
-        }
-        if (alpha >= beta) {
-            return move.evaluation;
-        }
-    }
+    transpositionTable.refineAlphaBeta(hash, depthleft, alpha, beta);
+    if (alpha >= beta) return alpha;
 
     auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
 
@@ -262,25 +260,19 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
     for (auto move : moveList) {
         auto newPosition = applyMove(position, move);
         auto score = -alphaBeta(newPosition, -beta, -alpha, depthleft - 1).adjustDepth();
-        if (score > best.evaluation) {
-            best = {move, score};
-        }
+        if (score > best.evaluation) best = {move, score};
+
         if (best.evaluation >= beta) {
             type = TranspositionTable::LOWERBOUND;
             break;
         }
     }
 
-    if (moveList.empty() && !isInCheck(position)) {
-        return drawEval;
-    }
+    if (moveList.empty() && !isInCheck(position)) best.evaluation = drawEval;
 
-    if (best.evaluation <= alpha) {
-        type = TranspositionTable::UPPERBOUND;
-    }
+    if (best.evaluation <= alpha) type = TranspositionTable::UPPERBOUND;
 
-    transpositionTable.insert(
-        hash, best, depthleft, type);  // Cache the best move for this position
+    transpositionTable.insert(hash, best, depthleft, type);
     return best.evaluation;
 }
 
