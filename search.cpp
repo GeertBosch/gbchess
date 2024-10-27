@@ -65,7 +65,7 @@ struct TranspositionTable {
     Eval find(Hash hash) {
         ++numHits;
         auto& entry = entries[hash() % kNumEntries];
-        if (entry.hash() == hash()) return entry.move;
+        if (entry.hash() == hash() && entry.generation == generation) return entry.move;
         --numHits;
         ++numMisses;
         return {Move(), drawEval};  // no move found
@@ -147,6 +147,7 @@ MoveIt sortTransposition(const Position& position, Hash hash, MoveIt begin, Move
     // See if the current position is a transposition of a previously seen one
     auto cachedMove = transpositionTable.find(hash);
     if (!cachedMove) return begin;
+
     // If the move is not part of the current legal moves, nothing to do here.
     auto it = std::find(begin, end, cachedMove.move);
     if (it == end) return begin;

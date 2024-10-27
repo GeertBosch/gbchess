@@ -3,8 +3,8 @@ CCFLAGS=-std=c++17
 CLANGPP=clang++
 GPP=g++
 # DEBUGFLAGS=-fsanitize=address -DDEBUG -O0 -g --coverage
-# DEBUGFLAGS=-DDEBUG -O0 -g
-DEBUGFLAGS=-O2
+DEBUGFLAGS=-DDEBUG -O0 -g
+# DEBUGFLAGS=-O2
 # -fprofile-instr-generate -fcoverage-mapping
 
 export LLVM_PROFILE_FILE=coverage-%m.profraw
