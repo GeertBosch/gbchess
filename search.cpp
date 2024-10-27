@@ -86,12 +86,14 @@ struct TranspositionTable {
     }
 
     void refineAlphaBeta(Hash hash, int depth, Score& alpha, Score& beta) {
-        if (auto entry = lookup(hash, depth); entry) {
-            switch (entry->type) {
-            case EXACT: alpha = beta = entry->move.evaluation; break;
-            case LOWERBOUND: alpha = std::max(alpha, entry->move.evaluation); break;
-            case UPPERBOUND: beta = std::min(beta, entry->move.evaluation); break;
-            }
+        auto entry = lookup(hash, depth);
+        if (!entry) return;
+
+        ++cacheCount;
+        switch (entry->type) {
+        case EXACT: alpha = beta = entry->move.evaluation; break;
+        case LOWERBOUND: alpha = std::max(alpha, entry->move.evaluation); break;
+        case UPPERBOUND: beta = std::min(beta, entry->move.evaluation); break;
         }
     }
 
@@ -259,7 +261,9 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
     TranspositionTable::EntryType type = TranspositionTable::EXACT;
     for (auto move : moveList) {
         auto newPosition = applyMove(position, move);
-        auto score = -alphaBeta(newPosition, -beta, -alpha, depthleft - 1).adjustDepth();
+        auto score =
+            -alphaBeta(newPosition, -beta, -std::max(alpha, best.evaluation), depthleft - 1)
+                 .adjustDepth();
         if (score > best.evaluation) best = {move, score};
 
         if (best.evaluation >= beta) {
@@ -307,11 +311,15 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
 
 Score toplevelAlphaBeta(Position& position, int depthleft, InfoFn info) {
     assert(depthleft > 0);
+
+    Hash hash(position);
+
+    // No need to check the transposition table here, as we're at the top level
     Score alpha = worstEval;
     Score beta = bestEval;
 
-    Hash hash(position);
     auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
+
     sortMoves(position, hash, moveList.begin(), moveList.end());
     Eval best;
 
