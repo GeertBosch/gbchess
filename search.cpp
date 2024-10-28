@@ -1,6 +1,5 @@
 #include "eval.h"
 
-#include <atomic>
 #include <iostream>
 #include <unordered_set>
 #include <vector>
@@ -64,6 +63,7 @@ struct TranspositionTable {
 
     Eval find(Hash hash) {
         ++numHits;
+        if constexpr (kNumEntries == 0) return {Move(), drawEval};
         auto& entry = entries[hash() % kNumEntries];
         if (entry.hash() == hash() && entry.generation == generation) return entry.move;
         --numHits;
@@ -98,6 +98,7 @@ struct TranspositionTable {
     }
 
     void insert(Hash hash, Eval move, uint8_t depthleft, EntryType type) {
+        if constexpr (kNumEntries == 0) return;
         auto idx = hash() % kNumEntries;
         auto& entry = entries[idx];
         ++numInserted;
@@ -123,7 +124,7 @@ struct TranspositionTable {
     }
 
     void clear() {
-        if (debug && numInserted) {
+        if (debug && options::transpositionTableDebug && numInserted) {
             printStats();
             std::cout << "Cleared transposition table\n";
         }
@@ -207,11 +208,12 @@ void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     Score stand_pat = evaluateBoard(position.board, evalTable);
+    if (position.activeColor() == Color::BLACK) stand_pat = -stand_pat;
+
     if (++evalCount % options::stopCheckIterations == 0) SingleRunner::checkStop();
     if (depthleft == 0) {
         return stand_pat;
     }
-    if (position.activeColor() == Color::BLACK) stand_pat = -stand_pat;
     if (stand_pat >= beta) {
         return beta;
     }
@@ -221,7 +223,6 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     Hash hash(position);
     sortMoves(position, hash, moveList.begin(), moveList.end());
 
-    Eval best;
     for (auto move : moveList) {
         auto newPosition = applyMove(position, move);
         auto score = -quiesce(newPosition, -beta, -alpha, depthleft - 1).adjustDepth();
@@ -262,8 +263,7 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
     for (auto move : moveList) {
         auto newPosition = applyMove(position, move);
         auto score =
-            -alphaBeta(newPosition, -beta, -std::max(alpha, best.evaluation), depthleft - 1)
-                 .adjustDepth();
+            -alphaBeta(newPosition, -beta, -std::max(alpha, best.evaluation), depthleft - 1);
         if (score > best.evaluation) best = {move, score};
 
         if (best.evaluation >= beta) {
@@ -272,9 +272,11 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
         }
     }
 
-    if (moveList.empty() && !isInCheck(position)) best.evaluation = drawEval;
-
     if (best.evaluation <= alpha) type = TranspositionTable::UPPERBOUND;
+
+    best.evaluation = best.evaluation.adjustDepth();
+
+    if (moveList.empty() && !isInCheck(position)) best.evaluation = drawEval;
 
     transpositionTable.insert(hash, best, depthleft, type);
     return best.evaluation;
@@ -309,6 +311,15 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
     return stop;
 }
 
+std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
+    os << "[";
+    for (const auto& move : moves) {
+        if (move) os << std::string(move) << ", ";
+    }
+    os << "]";
+    return os;
+}
+
 Score toplevelAlphaBeta(Position& position, int depthleft, InfoFn info) {
     assert(depthleft > 0);
 
@@ -323,14 +334,15 @@ Score toplevelAlphaBeta(Position& position, int depthleft, InfoFn info) {
     sortMoves(position, hash, moveList.begin(), moveList.end());
     Eval best;
 
+    if (debug) std::cerr << "move list: " << moveList << "\n";
+
     int currmovenumber = 0;
     for (auto currmove : moveList) {
         ++currmovenumber;
         if (currmoveInfo(info, depthleft, currmove, currmovenumber)) break;
         auto newPosition = applyMove(position, currmove);
         auto score =
-            -alphaBeta(newPosition, -beta, -std::max(alpha, best.evaluation), depthleft - 1)
-                 .adjustDepth();
+            -alphaBeta(newPosition, -beta, -std::max(alpha, best.evaluation), depthleft - 1);
         if (score > best.evaluation) {
             best = {currmove, score};
         }
@@ -338,6 +350,7 @@ Score toplevelAlphaBeta(Position& position, int depthleft, InfoFn info) {
             break;
         }
     }
+    best.evaluation = best.evaluation.adjustDepth();
     if (moveList.empty() && !isInCheck(position)) {
         best = {Move(), drawEval};
     }
@@ -361,6 +374,9 @@ Eval computeBestMove(Position& position, int maxdepth, InfoFn info) try {
         transpositionTable.newGeneration();
         auto score = toplevelAlphaBeta(position, depth, info);
         best = transpositionTable.find(Hash(position));
+        if (best.evaluation != score) {
+            std::cerr << "Mismatch: " << std::string(best) << " != " << std::string(score) << "\n";
+        }
         assert(best.evaluation == score);
         if (pvInfo(info, depth, score, principalVariation(position, depth))) break;
 

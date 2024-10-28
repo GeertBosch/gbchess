@@ -37,6 +37,7 @@ public:
     Score& operator-=(Score rhs) { return *this = *this - rhs; }
     Score& operator*=(Score rhs) { return *this = *this * rhs; }
     bool operator==(Score rhs) const { return value == rhs.value; }
+    bool operator!=(Score rhs) const { return value != rhs.value; }
     bool operator<(Score rhs) const { return value < rhs.value; }
     bool operator>(Score rhs) const { return value > rhs.value; }
     bool operator<=(Score rhs) const { return value <= rhs.value; }
