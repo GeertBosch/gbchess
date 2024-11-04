@@ -1,10 +1,8 @@
-#include <chrono>
 #include <cstdlib>  // For std::exit
 #include <iostream>
 #include <string>
 
 #include "common.h"
-#include "elo.h"
 #include "eval.h"
 #include "fen.h"
 #include "moves.h"

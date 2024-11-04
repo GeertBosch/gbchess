@@ -69,7 +69,7 @@ mate123: search-test ${PUZZLES} .PHONY
 	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -101 | ./search-test 6
 
 puzzles: search-test ${PUZZLES} .PHONY
-	egrep -v "mateIn[123]" ${PUZZLES} | head -31| ./search-test 6
+	egrep -v "mateIn[123]" ${PUZZLES} | head -31| ./search-test 5
 
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:

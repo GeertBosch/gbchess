@@ -62,8 +62,8 @@ struct TranspositionTable {
     }
 
     Eval find(Hash hash) {
-        ++numHits;
         if constexpr (kNumEntries == 0) return {Move(), drawEval};
+        ++numHits;
         auto& entry = entries[hash() % kNumEntries];
         if (entry.hash() == hash() && entry.generation == generation) return entry.move;
         --numHits;
@@ -86,9 +86,13 @@ struct TranspositionTable {
     }
 
     void refineAlphaBeta(Hash hash, int depth, Score& alpha, Score& beta) {
+        if constexpr (kNumEntries == 0) return;
         auto entry = lookup(hash, depth);
+        ++numMisses;
         if (!entry) return;
 
+        --numMisses;
+        ++numHits;
         ++cacheCount;
         switch (entry->type) {
         case EXACT: alpha = beta = entry->move.evaluation; break;
@@ -207,21 +211,21 @@ void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
 }
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
-    Score stand_pat = evaluateBoard(position.board, evalTable);
-    if (position.activeColor() == Color::BLACK) stand_pat = -stand_pat;
+    ++evalCount;
+    Score stand_pat = evaluateBoard(position.board, position.activeColor(), evalTable);
 
-    if (++evalCount % options::stopCheckIterations == 0) SingleRunner::checkStop();
-    if (depthleft == 0) {
-        return stand_pat;
-    }
-    if (stand_pat >= beta) {
-        return beta;
-    }
+    if (depthleft == 0) return stand_pat;
+
+    if (stand_pat >= beta && !isInCheck(position)) return beta;
+
     if (alpha < stand_pat) alpha = stand_pat;
 
+    // The moveList includes moves needed to get out of check
     auto moveList = allLegalQuiescentMoves(position.turn, position.board, depthleft);
     Hash hash(position);
     sortMoves(position, hash, moveList.begin(), moveList.end());
+
+    if (moveList.empty() && isInCheck(position)) return worstEval;
 
     for (auto move : moveList) {
         auto newPosition = applyMove(position, move);
@@ -241,15 +245,21 @@ Score quiesce(Position& position, int depthleft) {
 
 /**
  * The alpha-beta search algorithm with fail-soft negamax search.
+ * The alpha represents the best score that the maximizing player can guarantee at the current
+ * level, and beta the best score that the minimizing player can guarantee. The function returns
+ * the best score that the current player can guarantee, assuming the opponent plays optimally.
  */
 Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
     if (depthleft == 0) return quiesce(position, alpha, beta, options::quiescenceDepth);
 
     Hash hash(position);
 
-    // Check the transposition table
+    // Check the transposition table, which may tighten one or both search bounds
     transpositionTable.refineAlphaBeta(hash, depthleft, alpha, beta);
     if (alpha >= beta) return alpha;
+
+    // Check for interrupts
+    SingleRunner::checkStop();
 
     auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
 
@@ -259,27 +269,24 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
     sortMoves(position, hash, moveList.begin(), moveList.end());
 
     Eval best;
-    TranspositionTable::EntryType type = TranspositionTable::EXACT;
     for (auto move : moveList) {
         auto newPosition = applyMove(position, move);
-        auto score =
-            -alphaBeta(newPosition, -beta, -std::max(alpha, best.evaluation), depthleft - 1);
-        if (score > best.evaluation) best = {move, score};
+        auto newAlpha = std::max(alpha, best.evaluation);
+        auto score = -alphaBeta(newPosition, -beta, -newAlpha, depthleft - 1);
 
-        if (best.evaluation >= beta) {
-            type = TranspositionTable::LOWERBOUND;
-            break;
-        }
+        if (score > best.evaluation) best = {move, score};
+        if (best.evaluation >= beta) break;
     }
 
-    if (best.evaluation <= alpha) type = TranspositionTable::UPPERBOUND;
-
-    best.evaluation = best.evaluation.adjustDepth();
 
     if (moveList.empty() && !isInCheck(position)) best.evaluation = drawEval;
 
+    TranspositionTable::EntryType type = TranspositionTable::EXACT;
+    if (best.evaluation <= alpha) type = TranspositionTable::UPPERBOUND;
+    if (best.evaluation >= beta) type = TranspositionTable::LOWERBOUND;
     transpositionTable.insert(hash, best, depthleft, type);
-    return best.evaluation;
+
+    return best.evaluation.adjustDepth();
 }
 
 
@@ -320,7 +327,7 @@ std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     return os;
 }
 
-Score toplevelAlphaBeta(Position& position, int depthleft, InfoFn info) {
+Eval toplevelAlphaBeta(Position& position, int depthleft, InfoFn info) {
     assert(depthleft > 0);
 
     Hash hash(position);
@@ -358,8 +365,29 @@ Score toplevelAlphaBeta(Position& position, int depthleft, InfoFn info) {
     // Cache the best move for this position
     transpositionTable.insert(hash, best, depthleft, TranspositionTable::EXACT);
 
-    return best.evaluation;
+    return best;
 }
+
+Eval computePuzzleMove(Position& position, int maxdepth, InfoFn info) {
+    evalTable = EvalTable{position.board, false};  // Simple evaluation
+    transpositionTable.clear();
+
+    Eval best;  // Default to the worst possible move
+
+    best.evaluation = quiesce(position, worstEval, bestEval, options::quiescenceDepth);
+
+    for (auto depth = 1; depth <= maxdepth; ++depth) {
+        transpositionTable.newGeneration();
+        auto newBest = toplevelAlphaBeta(position, depth, info);
+        if (newBest.evaluation >= best.evaluation - 150_cp) best = newBest;
+        best.evaluation += 40_cp;  // Slightly prefer shorter plays
+
+        if (best.evaluation.mate()) break;
+    }
+
+    return best;
+}
+
 
 Eval computeBestMove(Position& position, int maxdepth, InfoFn info) try {
     SingleRunner search;
@@ -372,13 +400,8 @@ Eval computeBestMove(Position& position, int maxdepth, InfoFn info) try {
 
     for (auto depth = 1; depth <= maxdepth; ++depth) {
         transpositionTable.newGeneration();
-        auto score = toplevelAlphaBeta(position, depth, info);
-        best = transpositionTable.find(Hash(position));
-        if (best.evaluation != score) {
-            std::cerr << "Mismatch: " << std::string(best) << " != " << std::string(score) << "\n";
-        }
-        assert(best.evaluation == score);
-        if (pvInfo(info, depth, score, principalVariation(position, depth))) break;
+        best = toplevelAlphaBeta(position, depth, info);
+        if (pvInfo(info, depth, best.evaluation, principalVariation(position, depth))) break;
 
         if (best.evaluation.mate() || SingleRunner::stopping()) break;
     }

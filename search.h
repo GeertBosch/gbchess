@@ -18,6 +18,8 @@ using InfoFn = std::function<bool(std::string info)>;
  */
 Eval computeBestMove(Position& position, int maxdepth, InfoFn info = nullptr);
 
+Eval computePuzzleMove(Position& position, int maxdepth, InfoFn info = nullptr);
+
 /**
  * Interrupt computeBestMove and make it return the best move found sofar.
  */
