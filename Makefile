@@ -42,6 +42,8 @@ EVAL_SRCS=eval.cpp hash.cpp fen.cpp moves.cpp
 
 eval-test: eval_test.cpp ${EVAL_SRCS} *.h
 	${GPP} ${CCFLAGS} -g -O2 -o $@ $(filter-out %.h,$^)
+eval-debug: eval_test.cpp ${EVAL_SRCS} *.h
+	${GPP} ${CCFLAGS} ${DEBUGFLAGS} -o $@ $(filter-out %.h,$^)
 
 SEARCH_SRCS=${EVAL_SRCS} search.cpp single_runner.cpp
 
@@ -56,6 +58,8 @@ uci-test: uci_test.cpp uci.cpp ${SEARCH_SRCS}
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
 perft: perft.cpp ${EVAL_SRCS} *.h
 	${CLANGPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
+perft-debug: perft.cpp ${EVAL_SRCS} *.h
+	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} -o $@ $(filter-out %.h,$^)
 
 # Compare the perft tool with some different compilation options for speed comparison
 perft-sse2: perft.cpp hash.cpp moves.cpp fen.cpp *.h .PHONY
@@ -87,7 +91,8 @@ position5="rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8"
 position6="r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10"
 
 # Verify well-known perft results. Great for checking correct move generation.
-perft-test: perft
+perft-test: perft perft-debug
+	./perft-debug 4 197281
 	./perft 5 4865609
 	./perft "rnbqkbnr/1ppppppp/B7/p7/4P3/8/PPPP1PPP/RNBQK1NR b KQkq - 1 2" 4 509448
 	./perft ${kiwipete} 4 4085603

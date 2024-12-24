@@ -254,8 +254,8 @@ perftdiff() {
 echo "\
 position fen \"$fen\" $moves
 d
-perft $depth" | stockfish 2>&1 | egrep "^....(.)?:|Fen" | sort) <(
-./perft "$fen" $moves $depth | egrep "^....(.)?:|Fen" | sort)
+go perft $depth" | stockfish 2>&1 | egrep "^....(.)?:|Fen" | sort) <(
+./perft-debug "$fen" $moves $depth | egrep "^....(.)?:|Fen" | sort)
 }
 
 perftnext() {
