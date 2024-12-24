@@ -70,10 +70,13 @@ perft-sse2: perft.cpp hash.cpp moves.cpp fen.cpp *.h .PHONY
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
 mate123: search-test ${PUZZLES} .PHONY
-	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -101 | ./search-test 6
+	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -101 | ./search-test 5
+# There are still some failures in these
+mate45: search-test ${PUZZLES} .PHONY
+	egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -31 | ./search-test 9
 
 puzzles: search-test ${PUZZLES} .PHONY
-	egrep -v "mateIn[123]" ${PUZZLES} | head -31| ./search-test 6
+	egrep -v "mateIn[12345]" ${PUZZLES} | head -31| ./search-test 5
 
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:
