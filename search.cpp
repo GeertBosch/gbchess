@@ -1,6 +1,5 @@
 #include "eval.h"
 
-#include <atomic>
 #include <iostream>
 #include <unordered_set>
 #include <vector>
@@ -309,7 +308,7 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
     return stop;
 }
 
-Score toplevelAlphaBeta(Position& position, int depthleft, InfoFn info) {
+Eval toplevelAlphaBeta(Position& position, int depthleft, InfoFn info) {
     assert(depthleft > 0);
 
     Hash hash(position);
@@ -345,7 +344,27 @@ Score toplevelAlphaBeta(Position& position, int depthleft, InfoFn info) {
     // Cache the best move for this position
     transpositionTable.insert(hash, best, depthleft, TranspositionTable::EXACT);
 
-    return best.evaluation;
+    return best;
+}
+
+Eval computePuzzleMove(Position& position, int maxdepth, InfoFn info) {
+    evalTable = EvalTable{position.board, false};  // Simple evaluation
+    transpositionTable.clear();
+
+    Eval best;  // Default to the worst possible move
+
+    best.evaluation = quiesce(position, worstEval, bestEval, options::quiescenceDepth);
+
+    for (auto depth = 1; depth <= maxdepth; ++depth) {
+        transpositionTable.newGeneration();
+        auto newBest = toplevelAlphaBeta(position, depth, info);
+        if (newBest.evaluation >= best.evaluation - 150_cp) best = newBest;
+        best.evaluation += 40_cp;  // Slightly prefer shorter plays
+
+        if (best.evaluation.mate()) break;
+    }
+
+    return best;
 }
 
 Eval computeBestMove(Position& position, int maxdepth, InfoFn info) try {
@@ -359,10 +378,8 @@ Eval computeBestMove(Position& position, int maxdepth, InfoFn info) try {
 
     for (auto depth = 1; depth <= maxdepth; ++depth) {
         transpositionTable.newGeneration();
-        auto score = toplevelAlphaBeta(position, depth, info);
-        best = transpositionTable.find(Hash(position));
-        assert(best.evaluation == score);
-        if (pvInfo(info, depth, score, principalVariation(position, depth))) break;
+        best = toplevelAlphaBeta(position, depth, info);
+        if (pvInfo(info, depth, best.evaluation, principalVariation(position, depth))) break;
 
         if (best.evaluation.mate() || SingleRunner::stopping()) break;
     }
