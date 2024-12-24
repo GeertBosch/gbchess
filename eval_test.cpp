@@ -1,10 +1,8 @@
-#include <chrono>
 #include <cstdlib>  // For std::exit
 #include <iostream>
 #include <string>
 
 #include "common.h"
-#include "elo.h"
 #include "eval.h"
 #include "fen.h"
 #include "moves.h"
@@ -90,9 +88,7 @@ std::string gridBottom(int width) {
 
 void usage(std::string cmdName, std::string errmsg) {
     std::cerr << "Error: " << errmsg << "\n\n";
-    std::cerr << "Usage: " << cmdName << " <FEN-string> [move...] <search-depth>" << std::endl;
-    std::cerr << "       " << cmdName << " <search-depth>" << std::endl;
-    std::cerr << "       " << cmdName << " <FEN-string>" << std::endl;
+    std::cerr << "Usage: " << cmdName << " <FEN-string> [move...]" << std::endl;
     std::exit(1);
 }
 }  // namespace
@@ -237,7 +233,7 @@ int main(int argc, char* argv[]) {
     Position position = fen::parsePosition(fen);
 
     MoveVector moves;
-    for (int j = 2; j < argc - 1; ++j) {
+    for (int j = 2; j < argc; ++j) {
         moves.push_back(parseMoveUCI(position, argv[j]));
         if (!moves.back()) usage(argv[0], std::string(argv[j]) + " is not a valid move");
         position = applyMove(position, moves.back());
