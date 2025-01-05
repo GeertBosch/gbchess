@@ -699,6 +699,20 @@ void testApplyMove() {
         assert(position.turn.halfmoveClock == 0);
     }
 
+    // Test that capture of rook a by a rook removes castling rights on both sides
+    {
+        Position position;
+        position.board["a1"_sq] = Piece::WHITE_ROOK;
+        position.board["e1"_sq] = Piece::WHITE_KING;
+        position.board["a8"_sq] = Piece::BLACK_ROOK;
+        position.board["e8"_sq] = Piece::BLACK_KING;
+        position.turn.activeColor = Color::WHITE;
+        position.turn.castlingAvailability =
+            CastlingMask::BLACK_QUEENSIDE | CastlingMask::WHITE_QUEENSIDE;
+        position = applyMove(position, Move("a1"_sq, "a8"_sq, Move::CAPTURE));
+        assert(position.turn.castlingAvailability == CastlingMask::NONE);
+    }
+
     std::cout << "All applyMove tests passed!" << std::endl;
 }
 
@@ -796,6 +810,16 @@ void testAllLegalMoves() {
     std::cout << "All allLegalMovesAndCaptures tests passed!" << std::endl;
 }
 
+/**
+ * Test that moves remove the correct castling rights
+ */
+void testCastlingMask() {
+    {
+        auto mask = castlingMask("a1"_sq, "a8"_sq);
+        assert(mask == (CastlingMask::WHITE_QUEENSIDE | CastlingMask::BLACK_QUEENSIDE));
+    }
+}
+
 int main() {
     testSquare();
     testMove();
@@ -812,6 +836,7 @@ int main() {
     testAddAvailableEnPassant();
     testAddAvailableCastling();
     testMakeAndUnmakeMove();
+    testCastlingMask();
     testApplyMove();
     testIsAttacked();
     testAllLegalMoves();

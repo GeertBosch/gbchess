@@ -719,17 +719,20 @@ CastlingMask castlingMask(Square from, Square to) {
     using P = Position;
     using CM = CastlingMask;
 
-    // Remove castling availability if a rook moves or is captured
-    if (from == P::whiteQueenSideRook || to == P::whiteQueenSideRook) return CM::WHITE_QUEENSIDE;
-    if (from == P::whiteKingSideRook || to == P::whiteKingSideRook) return CM::WHITE_KINGSIDE;
-    if (from == P::blackQueenSideRook || to == P::blackQueenSideRook) return CM::BLACK_QUEENSIDE;
-    if (from == P::blackKingSideRook || to == P::blackKingSideRook) return CM::BLACK_KINGSIDE;
+    const struct MaskTable {
+        std::array<CM, kNumSquares> mask;
+        constexpr MaskTable() : mask{} {
+            mask[P::whiteQueenSideRook.index()] = CM::WHITE_QUEENSIDE;
+            mask[P::whiteKingSideRook.index()] = CM::WHITE_KINGSIDE;
+            mask[P::blackQueenSideRook.index()] = CM::BLACK_QUEENSIDE;
+            mask[P::blackKingSideRook.index()] = CM::BLACK_KINGSIDE;
+            mask[P::whiteKing.index()] = CM::WHITE;
+            mask[P::blackKing.index()] = CM::BLACK;
+        }
+        CM operator[](Square sq) const { return mask[sq.index()]; }
+    } maskTable;
 
-    // Remove castling availability if the king is moves
-    if (from == P::whiteKing) return CM::WHITE;
-    if (from == P::blackKing) return CM::BLACK;
-
-    return CM::NONE;
+    return maskTable[from] | maskTable[to];
 }
 
 Turn applyMove(Turn turn, Piece piece, Move move) {
