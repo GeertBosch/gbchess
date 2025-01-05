@@ -27,6 +27,7 @@ all: test perft-test mate123
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $(filter-out %.h, $^)
 
 .PHONY:
+.PHONY.h: .PHONY
 
 clean: .PHONY
 	rm -f *.o *-debug *-test perft core *.core puzzles.actual perf.data* *.ii *.bc *.s
@@ -62,11 +63,11 @@ perft-debug: perft.cpp ${EVAL_SRCS} *.h
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} -o $@ $(filter-out %.h,$^)
 
 # Compare the perft tool with some different compilation options for speed comparison
-perft-sse2: perft.cpp hash.cpp moves.cpp fen.cpp *.h .PHONY
-	${CLANGPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@ 5
-	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5
-	${GPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5
-	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5
+perft-sse2: perft.cpp hash.cpp moves.cpp fen.cpp *.h .PHONY.h
+	${CLANGPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@ 5 4865609
+	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5 4865609
+	${GPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5 4865609
+	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5 4865609
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
 mate123: search-test ${PUZZLES} .PHONY
@@ -94,7 +95,7 @@ position5="rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8"
 position6="r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10"
 
 # Verify well-known perft results. Great for checking correct move generation.
-perft-test: perft perft-debug
+perft-test: perft perft-debug perft-sse2
 	./perft-debug 4 197281
 	./perft 5 4865609
 	./perft "rnbqkbnr/1ppppppp/B7/p7/4P3/8/PPPP1PPP/RNBQK1NR b KQkq - 1 2" 4 509448
