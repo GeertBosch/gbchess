@@ -10,8 +10,6 @@
 #ifdef DEBUG
 #include "debug.h"
 #endif
-#define D \
-    if constexpr (debug) std::cerr
 
 std::ostream& operator<<(std::ostream& os, Move mv) {
     return os << std::string(mv);
@@ -175,14 +173,12 @@ Score evaluateBoard(const Board& board, const EvalTable& table) {
 }
 
 Score evaluateBoard(const Board& board, bool usePieceSquareTables) {
-    D << "phase: " << std::to_string((int)GamePhase(board).phase) << std::endl;
     auto table = EvalTable(board, usePieceSquareTables);
     auto occupancy = SquareSet::occupancy(board);
     Score value = 0_cp;
     for (auto sq : occupancy) {
         auto piece = board[sq];
         auto score = table[piece][sq.index()];
-        D << to_char(piece) << " at " << std::string(sq) << ": " << score << "\n";
         value += score;
     }
     return value;
