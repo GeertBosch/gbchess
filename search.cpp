@@ -205,12 +205,12 @@ void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
 }
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
-    Score stand_pat = evaluateBoard(position.board, evalTable);
+    Score stand_pat = evaluateBoard(position.board, position.activeColor(), evalTable);
     if (++evalCount % options::stopCheckIterations == 0) SingleRunner::checkStop();
     if (depthleft == 0) {
         return stand_pat;
     }
-    if (position.activeColor() == Color::BLACK) stand_pat = -stand_pat;
+
     if (stand_pat >= beta) {
         return beta;
     }

@@ -150,6 +150,15 @@ Score evaluateBoard(const Board& board, bool usePieceSquareTables);
 Score evaluateBoard(const Board& board, const EvalTable& table);
 
 /**
+ * Same as the two functions above, but with player-relative scores
+ */
+template <typename TableArg>
+Score evaluateBoard(const Board& board, Color activePlayer, TableArg&& arg) {
+    Score eval = evaluateBoard(board, arg);
+    return activePlayer == Color::WHITE ? eval : -eval;
+}
+
+/**
  * Returns true if and only if the side whose turn it is is in check.
  */
 bool isInCheck(const Position& position);
