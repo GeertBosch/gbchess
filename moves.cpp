@@ -850,6 +850,7 @@ void doMoveIfLegal(Board& board, SearchState& state, Piece piece, Move move, con
 void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun action) {
     // Iterate over all moves and captures
     auto state = SearchState(board, turn.activeColor);
+    auto inCheck = isAttacked(board, state.kingSquares, state.occupied);
     auto doMove = [&](Piece piece, Move move) {
         doMoveIfLegal(board, state, piece, move, action);
     };
@@ -857,6 +858,7 @@ void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun a
     if (depthleft > 3)  // Avoid horizon effect by not promoting in the last few plies
         findPromotionMoves(board, state.occupied, doMove);
     findEnPassant(board, turn, doMove);
+    if (inCheck) findMoves(board, state.occupied, doMove);  // In check is not a quiet position
 }
 
 MoveVector allLegalQuiescentMoves(Turn turn, Board& board, int depthleft) {
