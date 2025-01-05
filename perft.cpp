@@ -12,11 +12,12 @@
  *  bugs. (See https://www.chessprogramming.org/Perft)
  */
 uint64_t perft(Turn turn, Board& board, int depth) {
-    if (depth <= 0) return 1;
+    if (--depth <= 0) return depth ? 1 : countLegalMovesAndCaptures(turn, board);
+
     uint64_t nodes = 0;
     forAllLegalMovesAndCaptures(turn, board, [&](Board& board, MoveWithPieces mwp) {
         auto newTurn = applyMove(turn, mwp.piece, mwp.move);
-        nodes += perft(newTurn, board, depth - 1);
+        nodes += perft(newTurn, board, depth);
     });
     return nodes;
 }

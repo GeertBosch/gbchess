@@ -191,6 +191,7 @@ struct MoveWithPieces {
 using MoveFun = std::function<void(Board&, MoveWithPieces)>;
 void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun action);
 void forAllLegalMovesAndCaptures(Turn turn, Board& board, MoveFun action);
+size_t countLegalMovesAndCaptures(Turn turn, Board& board);
 
 MoveVector allLegalQuiescentMoves(Turn turn, Board& board, int depthleft);
 

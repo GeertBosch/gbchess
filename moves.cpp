@@ -884,6 +884,11 @@ void forAllLegalMovesAndCaptures(Turn turn, Board& board, MoveFun action) {
     findCastles(board, state.occupied, turn, doMove);
 }
 
+size_t countLegalMovesAndCaptures(Turn turn, Board& board) {
+    size_t count = 0;
+    forAllLegalMovesAndCaptures(turn, board, [&](Board&, MoveWithPieces) { ++count; });
+    return count;
+}
 
 MoveVector allLegalMovesAndCaptures(Turn turn, Board& board) {
     MoveVector legalMoves;
