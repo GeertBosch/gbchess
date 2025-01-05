@@ -6,7 +6,6 @@
 #include "fen.h"
 #include "hash.h"
 #include "moves.h"
-#include "options.h"
 
 #ifdef DEBUG
 #include "debug.h"

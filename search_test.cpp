@@ -8,7 +8,6 @@
 #include "eval.h"
 #include "fen.h"
 #include "moves.h"
-#include "options.h"
 #include "search.h"
 
 namespace {
@@ -101,7 +100,7 @@ void usage(std::string cmdName, std::string errmsg) {
 Eval analyzePosition(Position position, int maxdepth) {
     auto eval = search::computeBestMove(position, maxdepth);
     std::cout << "        analyzePosition \"" << fen::to_string(position) << "\" as "
-              << eval.evaluation << ", move " << eval.move << "\n";
+              << eval.evaluation << ", move " << std::string(eval) << "\n";
     return eval;
 }
 Eval analyzeMoves(Position position, int maxdepth) {
@@ -170,10 +169,10 @@ void printBestMove(Position position, int maxdepth) {
 void printAnalysis(Position position, int maxdepth) {
     auto analyzed = analyzeMoves(position, maxdepth);
     std::cerr << "Analyzed: " << analyzed << std::endl;
-    if (debug) {
-        auto bestMove = search::computeBestMove(position, maxdepth);
-        assert(analyzed == bestMove);
-    }
+    auto bestMove = search::computeBestMove(position, maxdepth);
+    if (bestMove.evaluation != analyzed.evaluation)
+        std::cerr << "Mismatch: " << bestMove << " != " << analyzed << "\n";
+    assert(analyzed == bestMove);
 }
 
 /**
