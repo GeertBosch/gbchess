@@ -122,7 +122,7 @@ struct TranspositionTable {
     }
 
     void clear() {
-        if (debug && numInserted) {
+        if (debug && options::transpositionTableDebug && numInserted) {
             printStats();
             std::cout << "Cleared transposition table\n";
         }

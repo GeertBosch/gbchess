@@ -9,4 +9,6 @@ constexpr int quiescenceDepth = 4;
 constexpr size_t transpositionTableEntries = 1ull << 20;
 constexpr size_t stopCheckIterations = 4096;  // Power of two is most efficient.
 
+constexpr bool transpositionTableDebug = false;
+
 };  // namespace options
