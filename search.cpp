@@ -255,7 +255,7 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
 
     Hash hash(position);
 
-    // Check the transposition table
+    // Check the transposition table, which may tighten one or both search bounds
     transpositionTable.refineAlphaBeta(hash, depthleft, alpha, beta);
     if (alpha >= beta) return alpha;
 
@@ -270,22 +270,19 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
     sortMoves(position, hash, moveList.begin(), moveList.end());
 
     Eval best;
-    TranspositionTable::EntryType type = TranspositionTable::EXACT;
     for (auto move : moveList) {
         auto newPosition = applyMove(position, move);
         auto score =
             -alphaBeta(newPosition, -beta, -std::max(alpha, best.evaluation), depthleft - 1)
                  .adjustDepth();
         if (score > best.evaluation) best = {move, score};
-
-        if (best.evaluation >= beta) {
-            type = TranspositionTable::LOWERBOUND;
-            break;
-        }
+        if (best.evaluation >= beta) break;
     }
 
     if (moveList.empty() && !isInCheck(position)) best.evaluation = drawEval;
 
+    TranspositionTable::EntryType type = TranspositionTable::EXACT;
+    if (best.evaluation >= beta) type = TranspositionTable::LOWERBOUND;
     if (best.evaluation <= alpha) type = TranspositionTable::UPPERBOUND;
     if (best.evaluation >= beta) type = TranspositionTable::LOWERBOUND;
     transpositionTable.insert(hash, best, depthleft, type);
