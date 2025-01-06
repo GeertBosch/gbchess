@@ -206,10 +206,8 @@ void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     Score stand_pat = evaluateBoard(position.board, position.activeColor(), evalTable);
-    if (++evalCount % options::stopCheckIterations == 0) SingleRunner::checkStop();
-    if (depthleft == 0) {
-        return stand_pat;
-    }
+    if (!depthleft) return stand_pat;
+
 
     if (stand_pat >= beta && !isInCheck(position)) return beta;
     if (alpha < stand_pat) alpha = stand_pat;
@@ -248,6 +246,9 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
     // Check the transposition table
     transpositionTable.refineAlphaBeta(hash, depthleft, alpha, beta);
     if (alpha >= beta) return alpha;
+
+    // Check for interrupts
+    SingleRunner::checkStop();
 
     auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
 
