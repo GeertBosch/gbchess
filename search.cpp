@@ -249,6 +249,9 @@ Score quiesce(Position& position, int depthleft) {
 
 /**
  * The alpha-beta search algorithm with fail-soft negamax search.
+ * The alpha represents the best score that the maximizing player can guarantee at the current
+ * level, and beta the best score that the minimizing player can guarantee. The function returns
+ * the best score that the current player can guarantee, assuming the opponent plays optimally.
  */
 Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
     if (depthleft == 0) return quiesce(position, alpha, beta, options::quiescenceDepth);
@@ -273,8 +276,8 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
     for (auto move : moveList) {
         auto newPosition = applyMove(position, move);
         auto score =
-            -alphaBeta(newPosition, -beta, -std::max(alpha, best.evaluation), depthleft - 1)
-                 .adjustDepth();
+            -alphaBeta(newPosition, -beta, -std::max(alpha, best.evaluation), depthleft - 1);
+
         if (score > best.evaluation) best = {move, score};
         if (best.evaluation >= beta) break;
     }
@@ -287,7 +290,7 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
     if (best.evaluation >= beta) type = TranspositionTable::LOWERBOUND;
     transpositionTable.insert(hash, best, depthleft, type);
 
-    return best.evaluation;
+    return best.evaluation.adjustDepth();
 }
 
 
@@ -338,8 +341,7 @@ Eval toplevelAlphaBeta(Position& position, int depthleft, InfoFn info) {
         if (currmoveInfo(info, depthleft, currmove, currmovenumber)) break;
         auto newPosition = applyMove(position, currmove);
         auto score =
-            -alphaBeta(newPosition, -beta, -std::max(alpha, best.evaluation), depthleft - 1)
-                 .adjustDepth();
+            -alphaBeta(newPosition, -beta, -std::max(alpha, best.evaluation), depthleft - 1);
         if (score > best.evaluation) {
             best = {currmove, score};
         }
