@@ -62,6 +62,7 @@ struct TranspositionTable {
     }
 
     Eval find(Hash hash) {
+        if constexpr (kNumEntries == 0) return {Move(), drawEval};
         ++numHits;
         auto& entry = entries[hash() % kNumEntries];
         if (entry.hash() == hash() && entry.generation == generation) return entry.move;
@@ -85,6 +86,7 @@ struct TranspositionTable {
     }
 
     void refineAlphaBeta(Hash hash, int depth, Score& alpha, Score& beta) {
+        if constexpr (kNumEntries == 0) return;
         auto entry = lookup(hash, depth);
         ++numMisses;
         if (!entry) return;
@@ -100,6 +102,7 @@ struct TranspositionTable {
     }
 
     void insert(Hash hash, Eval move, uint8_t depthleft, EntryType type) {
+        if constexpr (kNumEntries == 0) return;
         auto idx = hash() % kNumEntries;
         auto& entry = entries[idx];
         ++numInserted;
