@@ -211,16 +211,16 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
         return stand_pat;
     }
 
-    if (stand_pat >= beta) {
-        return beta;
-    }
+    if (stand_pat >= beta && !isInCheck(position)) return beta;
     if (alpha < stand_pat) alpha = stand_pat;
 
+    // The moveList includes moves needed to get out of check; an empty list may mean mate
     auto moveList = allLegalQuiescentMoves(position.turn, position.board, depthleft);
+    if (moveList.empty() && isInCheck(position)) return worstEval;
+
     Hash hash(position);
     sortMoves(position, hash, moveList.begin(), moveList.end());
 
-    Eval best;
     for (auto move : moveList) {
         auto newPosition = applyMove(position, move);
         auto score = -quiesce(newPosition, -beta, -alpha, depthleft - 1).adjustDepth();
