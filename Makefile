@@ -31,6 +31,7 @@ all: test perft-test mate123
 
 clean: .PHONY
 	rm -f *.o *-debug *-test perft core *.core puzzles.actual perf.data* *.ii *.bc *.s
+	rm -f perft-sse2
 	rm -f *.profraw *.profdata *.gcda *.gcno lcov.info
 	rm -rf *.dSYM
 
