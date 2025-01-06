@@ -86,8 +86,11 @@ struct TranspositionTable {
 
     void refineAlphaBeta(Hash hash, int depth, Score& alpha, Score& beta) {
         auto entry = lookup(hash, depth);
+        ++numMisses;
         if (!entry) return;
 
+        --numMisses;
+        ++numHits;
         ++cacheCount;
         switch (entry->type) {
         case EXACT: alpha = beta = entry->move.evaluation; break;
@@ -204,20 +207,26 @@ void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
     begin = sortCaptures(position, begin, end);
 }
 
+void sortMoves(const Position& position, MoveIt begin, MoveIt end) {
+    Hash hash(position);
+    sortMoves(position, hash, begin, end);
+}
+
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
+    ++evalCount;
     Score stand_pat = evaluateBoard(position.board, position.activeColor(), evalTable);
     if (!depthleft) return stand_pat;
 
 
     if (stand_pat >= beta && !isInCheck(position)) return beta;
+
     if (alpha < stand_pat) alpha = stand_pat;
 
     // The moveList includes moves needed to get out of check; an empty list may mean mate
     auto moveList = allLegalQuiescentMoves(position.turn, position.board, depthleft);
     if (moveList.empty() && isInCheck(position)) return worstEval;
 
-    Hash hash(position);
-    sortMoves(position, hash, moveList.begin(), moveList.end());
+    sortMoves(position, moveList.begin(), moveList.end());
 
     for (auto move : moveList) {
         auto newPosition = applyMove(position, move);
@@ -275,8 +284,9 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
     if (moveList.empty() && !isInCheck(position)) best.evaluation = drawEval;
 
     if (best.evaluation <= alpha) type = TranspositionTable::UPPERBOUND;
-
+    if (best.evaluation >= beta) type = TranspositionTable::LOWERBOUND;
     transpositionTable.insert(hash, best, depthleft, type);
+
     return best.evaluation;
 }
 
@@ -312,14 +322,13 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
 Eval toplevelAlphaBeta(Position& position, int depthleft, InfoFn info) {
     assert(depthleft > 0);
 
-    Hash hash(position);
-
     // No need to check the transposition table here, as we're at the top level
     Score alpha = worstEval;
     Score beta = bestEval;
 
     auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
 
+    Hash hash(position);
     sortMoves(position, hash, moveList.begin(), moveList.end());
     Eval best;
 
@@ -342,7 +351,6 @@ Eval toplevelAlphaBeta(Position& position, int depthleft, InfoFn info) {
         best = {Move(), drawEval};
     }
 
-    // Cache the best move for this position
     transpositionTable.insert(hash, best, depthleft, TranspositionTable::EXACT);
 
     return best;
