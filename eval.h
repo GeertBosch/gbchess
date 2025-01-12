@@ -22,7 +22,7 @@ class Score {
     constexpr Score(value_type value) : value(value) { this->value = check(value); }
 
     static constexpr value_type check(value_type value) {
-        if (debug) assert(-9999 <= value && value <= 9999);
+        assert(-9999 <= value && value <= 9999);
         return value;
     }
 
@@ -57,7 +57,7 @@ public:
     Score adjustDepth() const { return int16_t(value > 0 ? value - 1 : value); }
 
     operator std::string() const {
-        value_type pawns = value / 100;
+        value_type pawns = check(value) / 100;
         value_type cents = value % 100;
 
         // For mate scores, the number of moves to mate is encoded in the cents part
