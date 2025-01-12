@@ -284,6 +284,8 @@ void testFromStdIn(int depth) {
         moves.pop_back();
 
         auto puzzleId = columns[colPuzzleId];
+        std::cout << "Puzzle " << puzzleId << ", rating " << rating() << ": \""
+                  << fen::to_string(initialPosition) << "\" " << moves << "\n";
         auto correct = testPuzzle(puzzleId, rating(), initialPosition, moves, depth);
         puzzleRating.updateOne(rating, correct ? ELO::WIN : ELO::LOSS);
         numCorrect += correct;
@@ -294,17 +296,37 @@ void testFromStdIn(int depth) {
     assert(puzzleRating() >= kExpectedPuzzleRating - ELO::K);
 }
 
+void testBasicPuzzles() {
+    {
+        auto puzfen = "4r3/1k6/pp3r2/1b2P2p/3R1p2/P1R2P2/1P4PP/6K1 w - - 0 35";
+        auto puzpos = fen::parsePosition(puzfen);
+        auto puzmoves = parseMovesUCI(puzpos, "e8e1 g1f2 e1f1");
+        assert(testPuzzle("000Zo", 1311, puzpos, puzmoves, 5));
+    }
+
+    std::cout << "Basic puzzle test passed!\n";
+}
 
 // Returns true if and only if number consists exclusively of digits and  is not empty
 bool isAllDigits(std::string number) {
     return !number.empty() && std::all_of(number.begin(), number.end(), ::isdigit);
 }
 
+bool maybeFEN(std::string fen) {
+    std::string startChars = "rnbqkpRNBQKP12345678";
+    return fen != "" && startChars.find(fen[0]) != std::string::npos &&
+        std::count(fen.begin(), fen.end(), '/') == 7;
+}
+
 int main(int argc, char* argv[]) {
     cmdName = argv[0];
 
+    testBasicPuzzles();
+
+    if (argc < 2) return 0;
+
     // Need at least one argument
-    if (argc < 2) usage(argv[0], "missing argument");
+    if (!isAllDigits(argv[1]) && !maybeFEN(argv[1])) usage(argv[0], "invalid argument");
 
     // If the last argument is a number, it's the search depth
     int depth = 0;
