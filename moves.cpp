@@ -808,6 +808,29 @@ Move parseMoveUCI(Position position, const std::string& move) {
     return Move();
 }
 
+namespace {
+std::vector<std::string> split(std::string line, char delim) {
+    std::vector<std::string> res;
+    std::string word;
+    for (auto c : line) {
+        if (c == delim) {
+            res.emplace_back(std::move(word));
+            word = "";
+        } else {
+            word.push_back(c);
+        }
+    }
+    if (word.size()) res.emplace_back(std::move(word));
+    return res;
+}
+}  // namespace
+
+MoveVector parseMovesUCI(Position position, const std::string& moves) {
+    MoveVector vector;
+    for (auto move : split(moves, ' '))
+        position = applyMove(position, vector.emplace_back(parseMoveUCI(position, move)));
+    return vector;
+}
 
 namespace {
 std::string toString(SquareSet squares) {

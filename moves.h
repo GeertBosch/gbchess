@@ -208,6 +208,7 @@ bool isAttacked(const Board& board, SquareSet squares, Color opponentColor);
  * corresponding Move object, or an empty move if the string does not specify a legal move.
  */
 Move parseMoveUCI(Position position, const std::string& move);
+MoveVector parseMovesUCI(Position position, const std::string& moves);
 
 /**
  * Updates the board with the given move, which may be a capture.
