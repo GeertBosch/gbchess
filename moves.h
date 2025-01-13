@@ -202,13 +202,26 @@ bool isAttacked(const Board& board, Square square, Occupancy occupancy);
 bool isAttacked(const Board& board, SquareSet squares, Occupancy occupancy);
 bool isAttacked(const Board& board, SquareSet squares, Color opponentColor);
 
+struct ParseError : public std::exception {
+    std::string message;
+    ParseError(std::string message) : message(message) {}
+    const char* what() const noexcept override { return message.c_str(); }
+};
+
 /**
- * Parses a move string in UCI notation and returns a Move of the appropriate kind. The move is a 4
- * or 5 character string representing from/to squares and promotion piece, if any. Returns the
- * corresponding Move object, or an empty move if the string does not specify a legal move.
+ * Parses a move string in UCI notation and returns a Move or MoveVector of the appropriate kind.
+ * The UCI string is a 4 or 5 character string representing from/to squares and promotion piece, if
+ * any. Returns the corresponding Move object, or an empty move if the string does not specify a
+ * legal move. Throws a ParseError if the string is not a legal move for the position.
  */
-Move parseMoveUCI(Position position, const std::string& move);
-MoveVector parseMovesUCI(Position position, const std::string& moves);
+Move parseUCIMove(Position position, const std::string& move);
+MoveVector parseUCIMoves(Position position, const std::string& moves);
+
+/**
+ * Similar to above, but applies the move to a position and returns the updated position.
+ * Throws a ParseError if the string is not a legal move for the position.
+ */
+Position applyUCIMove(Position position, const std::string& move);
 
 /**
  * Updates the board with the given move, which may be a capture.

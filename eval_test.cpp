@@ -234,7 +234,7 @@ int main(int argc, char* argv[]) {
 
     MoveVector moves;
     for (int j = 2; j < argc; ++j) {
-        moves.push_back(parseMoveUCI(position, argv[j]));
+        moves.push_back(parseUCIMove(position, argv[j]));
         if (!moves.back()) usage(argv[0], std::string(argv[j]) + " is not a valid move");
         position = applyMove(position, moves.back());
     }

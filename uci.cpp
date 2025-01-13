@@ -139,7 +139,7 @@ void UCIRunner::execute(std::string line) {
         }
         moves.erase(moves.begin());
         for (auto move : moves) {
-            position = applyMove(position, parseMoveUCI(position, move));
+            position = applyMove(position, parseUCIMove(position, move));
         }
     } else if (command == "go") {
         UCIArguments args;

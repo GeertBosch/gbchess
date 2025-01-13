@@ -798,7 +798,7 @@ bool isAttacked(const Board& board, SquareSet squares, Color opponentColor) {
     return isAttacked(board, squares, occupancy);
 }
 
-Move parseMoveUCI(Position position, const std::string& move) {
+Move parseUCIMove(Position position, const std::string& move) {
     auto moves = allLegalMovesAndCaptures(position.turn, position.board);
 
     // Try to find a legal move or capture corresponding to the given move string.
@@ -825,11 +825,22 @@ std::vector<std::string> split(std::string line, char delim) {
 }
 }  // namespace
 
-MoveVector parseMovesUCI(Position position, const std::string& moves) {
+Move check(Move move, const std::string& uci) {
+    if (!move) throw ParseError("Invalid UCI move: " + uci);
+    return move;
+}
+
+MoveVector parseUCIMoves(Position position, const std::string& moves) {
     MoveVector vector;
-    for (auto move : split(moves, ' '))
-        position = applyMove(position, vector.emplace_back(parseMoveUCI(position, move)));
+    for (auto uci : split(moves, ' '))
+        position =
+            applyMove(position, vector.emplace_back(check(parseUCIMove(position, uci), uci)));
+
     return vector;
+}
+
+Position applyUCIMove(Position position, const std::string& move) {
+    return applyMove(position, check(parseUCIMove(position, move), move));
 }
 
 namespace {

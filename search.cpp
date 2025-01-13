@@ -370,7 +370,6 @@ Eval computePuzzleMove(Position& position, int maxdepth, InfoFn info) {
         transpositionTable.newGeneration();
         auto newBest = toplevelAlphaBeta(position, depth, info);
         if (newBest.evaluation >= best.evaluation - 150_cp) best = newBest;
-        best.evaluation += 40_cp;  // Slightly prefer shorter plays
 
         if (best.evaluation.mate()) break;
     }

@@ -274,7 +274,7 @@ void testFromStdIn(int depth) {
 
         MoveVector moves;
         for (auto move : split(columns[colMoves], ' ')) {
-            moves.emplace_back(parseMoveUCI(currentPosition, move));
+            moves.emplace_back(parseUCIMove(currentPosition, move));
             currentPosition = applyMove(currentPosition, moves.back());
             // In puzzles, the first move is just to establish the initial position
             if (moves.size() == 1) initialPosition = currentPosition;
@@ -300,7 +300,8 @@ void testBasicPuzzles() {
     {
         auto puzfen = "4r3/1k6/pp3r2/1b2P2p/3R1p2/P1R2P2/1P4PP/6K1 w - - 0 35";
         auto puzpos = fen::parsePosition(puzfen);
-        auto puzmoves = parseMovesUCI(puzpos, "e8e1 g1f2 e1f1");
+        puzpos = applyUCIMove(puzpos, "e5f6");
+        auto puzmoves = parseUCIMoves(puzpos, "e8e1 g1f2 e1f1");
         assert(testPuzzle("000Zo", 1311, puzpos, puzmoves, 5));
     }
 
