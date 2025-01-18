@@ -42,7 +42,7 @@ private:
         stop();
         auto search = [this, depth, pos = position] {
             auto position = pos;  // need to copy the position
-            auto move = search::computeBestMove(position, depth, [this](std::string info) -> bool {
+            Eval move = search::computeBestMove(position, depth, [this](std::string info) -> bool {
                 out << "info " << info << "\n";
                 std::flush(out);
                 if (&out != &log) {

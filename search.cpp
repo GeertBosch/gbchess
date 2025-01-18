@@ -1,7 +1,7 @@
 #include "eval.h"
 
+#include "pv.h"
 #include <iostream>
-#include <unordered_set>
 #include <vector>
 
 #include "hash.h"
@@ -253,14 +253,14 @@ Score quiesce(Position& position, int depthleft) {
  * level, and beta the best score that the minimizing player can guarantee. The function returns
  * the best score that the current player can guarantee, assuming the opponent plays optimally.
  */
-Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
-    if (depthleft == 0) return quiesce(position, alpha, beta, options::quiescenceDepth);
+PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
+    if (depthleft == 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
 
     Hash hash(position);
 
     // Check the transposition table, which may tighten one or both search bounds
     transpositionTable.refineAlphaBeta(hash, depthleft, alpha, beta);
-    if (alpha >= beta) return alpha;
+    if (alpha >= beta) return {{}, alpha};
 
     // Check for interrupts
     SingleRunner::checkStop();
@@ -272,24 +272,25 @@ Score alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
 
     sortMoves(position, hash, moveList.begin(), moveList.end());
 
-    Eval best;
+    PrincipalVariation pv;
     for (auto move : moveList) {
         auto newPosition = applyMove(position, move);
-        auto score = -alphaBeta(newPosition, -beta, -std::max(alpha, best.score), depthleft - 1);
+        auto score = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), depthleft - 1);
 
-        if (score > best.score) best = {move, score};
-        if (best.score >= beta) break;
+        if (score.score > pv.score) pv = {move, score};
+        if (pv.score >= beta) break;
     }
 
-    if (moveList.empty() && !isInCheck(position)) best.score = Score();  // Stalemate
+    if (moveList.empty() && !isInCheck(position)) pv.score = Score();  // Stalemate
 
     TranspositionTable::EntryType type = TranspositionTable::EXACT;
-    if (best.score >= beta) type = TranspositionTable::LOWERBOUND;
-    if (best.score <= alpha) type = TranspositionTable::UPPERBOUND;
-    if (best.score >= beta) type = TranspositionTable::LOWERBOUND;
-    transpositionTable.insert(hash, best, depthleft, type);
+    if (pv.score >= beta) type = TranspositionTable::LOWERBOUND;
+    if (pv.score <= alpha) type = TranspositionTable::UPPERBOUND;
+    if (pv.score >= beta) type = TranspositionTable::LOWERBOUND;
+    transpositionTable.insert(hash, pv, depthleft, type);
 
-    return best.score.adjustDepth();
+    pv.score = pv.score.adjustDepth();
+    return pv;
 }
 
 
@@ -321,7 +322,7 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
     return stop;
 }
 
-Eval toplevelAlphaBeta(Position& position, int depthleft, InfoFn info) {
+PrincipalVariation toplevelAlphaBeta(Position& position, int depthleft, InfoFn info) {
     assert(depthleft > 0);
 
     // No need to check the transposition table here, as we're at the top level
@@ -332,84 +333,69 @@ Eval toplevelAlphaBeta(Position& position, int depthleft, InfoFn info) {
 
     Hash hash(position);
     sortMoves(position, hash, moveList.begin(), moveList.end());
-    Eval best;
+    PrincipalVariation pv;
 
     int currmovenumber = 0;
     for (auto currmove : moveList) {
         ++currmovenumber;
         if (currmoveInfo(info, depthleft, currmove, currmovenumber)) break;
         auto newPosition = applyMove(position, currmove);
-        auto score = -alphaBeta(newPosition, -beta, -std::max(alpha, best.score), depthleft - 1);
-        if (score > best.score) {
-            best = {currmove, score};
+        auto score = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), depthleft - 1);
+        if (score.score > pv.score) {
+            pv = {currmove, score};
         }
-        if (best.score >= beta) {
+        if (pv.score >= beta) {
             break;
         }
     }
     if (moveList.empty() && !isInCheck(position)) {
-        best = {Move(), Score()};
+        pv = {Move(), Score()};
     }
 
-    transpositionTable.insert(hash, best, depthleft, TranspositionTable::EXACT);
+    transpositionTable.insert(hash, pv, depthleft, TranspositionTable::EXACT);
 
-    return best;
+    return pv;
 }
 
-Eval computePuzzleMove(Position& position, int maxdepth, InfoFn info) {
+PrincipalVariation computePuzzleMove(Position& position, int maxdepth, InfoFn info) {
     evalTable = EvalTable{position.board, false};  // Simple evaluation
     transpositionTable.clear();
 
-    Eval best;  // Default to the worst possible move
+    PrincipalVariation pv;  // Default to the worst possible move
 
-    best.score = quiesce(position, Score::min(), Score::max(), options::quiescenceDepth);
+    pv.score = quiesce(position, Score::min(), Score::max(), options::quiescenceDepth);
 
     for (auto depth = 1; depth <= maxdepth; ++depth) {
         transpositionTable.newGeneration();
-        auto newBest = toplevelAlphaBeta(position, depth, info);
-        if (newBest.score >= best.score - 150_cp) best = newBest;
+        auto newVariation = toplevelAlphaBeta(position, depth, info);
+        if (newVariation.score >= pv.score - 150_cp) pv = newVariation;
 
-        if (best.score.mate()) break;
+        if (pv.score.mate()) break;
     }
 
-    return best;
+    return pv;
 }
 
-Eval computeBestMove(Position& position, int maxdepth, InfoFn info) try {
+PrincipalVariation computeBestMove(Position& position, int maxdepth, InfoFn info) try {
     SingleRunner search;
     evalTable = EvalTable{position.board, true};
     transpositionTable.clear();
 
-    Eval best;  // Default to the worst possible move
+    PrincipalVariation pv;  // Default to the worst possible move
 
-    best.score = quiesce(position, Score::min(), Score::max(), options::quiescenceDepth);
+    pv.score = quiesce(position, Score::min(), Score::max(), options::quiescenceDepth);
 
     for (auto depth = 1; depth <= maxdepth; ++depth) {
         transpositionTable.newGeneration();
-        best = toplevelAlphaBeta(position, depth, info);
-        if (pvInfo(info, depth, best.score, principalVariation(position, depth))) break;
+        pv = toplevelAlphaBeta(position, depth, info);
+        if (pvInfo(info, depth, pv.score, pv)) break;
 
-        if (best.score.mate() || SingleRunner::stopping()) break;
+        if (pv.score.mate() || SingleRunner::stopping()) break;
     }
 
-    return best;
+    return pv;
 } catch (SingleRunner::Stop&) {
     return transpositionTable.find(Hash(position));
-}
-
-MoveVector principalVariation(Position position, int depth) {
-    MoveVector pv;
-    std::unordered_multiset<Hash> seen;
-    Hash hash = Hash(position);
-    while (auto found = transpositionTable.find(hash)) {
-        pv.push_back(found.move);
-        seen.insert(hash);
-        // Limit to 3 repetitions, as that's a draw. This prevents unbounded recursion.
-        if (seen.count(hash) == 3) break;
-        position = applyMove(position, found.move);
-        hash = Hash(position);
-    }
-    return pv;
 }
 
 void stop() {

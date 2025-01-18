@@ -100,7 +100,7 @@ void usage(std::string cmdName, std::string errmsg) {
 Eval analyzePosition(Position position, int maxdepth) {
     auto eval = search::computeBestMove(position, maxdepth);
     std::cout << "        analyzePosition \"" << fen::to_string(position) << "\" as " << eval.score
-              << ", move " << std::string(eval) << "\n";
+              << ", move " << std::string(eval.front()) << "\n";
     return eval;
 }
 Eval analyzeMoves(Position position, int maxdepth) {
@@ -161,14 +161,15 @@ void printAvailableCaptures(const Position& position) {
 
 void printBestMove(Position position, int maxdepth) {
     auto bestMove = search::computeBestMove(position, maxdepth);
-    std::cout << "Best Move: " << bestMove << " for " << fen::to_string(position) << std::endl;
-    std::cout << "pv " << search::principalVariation(position, maxdepth) << "\n";
+    std::cout << "Best Move: " << Eval(bestMove) << " for " << fen::to_string(position)
+              << std::endl;
+    std::cout << "pv " << bestMove.moves << "\n";
 }
 
 void printAnalysis(Position position, int maxdepth) {
     auto analyzed = analyzeMoves(position, maxdepth);
     std::cerr << "Analyzed: " << analyzed << std::endl;
-    auto bestMove = search::computeBestMove(position, maxdepth);
+    Eval bestMove = search::computeBestMove(position, maxdepth);
     if (bestMove.score != analyzed.score)
         std::cerr << "Mismatch: " << bestMove << " != " << analyzed << "\n";
     assert(analyzed == bestMove);
@@ -231,19 +232,19 @@ void reportFailedPuzzle(Position position, MoveVector moves, MoveVector pv) {
 bool testPuzzle(
     std::string puzzleId, int rating, Position position, MoveVector moves, int maxdepth) {
     auto best = search::computePuzzleMove(position, maxdepth);
-    bool correct = best.move == moves.front();
+    bool correct = best.front() == moves.front();
     if (!correct) {
         std::cout << "\nPuzzle " << puzzleId << ", rating " << rating << ": \""
                   << fen::to_string(position) << "\" " << moves << "\n";
         // As a special case, if multiple mates are possible, they're considered equivalent.
         auto expected = applyMove(position, moves.front());
-        auto actual = applyMove(position, best.move);
+        auto actual = applyMove(position, best.front());
         correct = isMate(expected) && isMate(actual) && isInCheck(expected) == isInCheck(actual);
         if (correct)
-            std::cout << "Note: Both " << moves.front() << " and " << best.move
+            std::cout << "Note: Both " << moves.front() << " and " << best.front()
                       << " lead to mate\n";
         else
-            reportFailedPuzzle(position, moves, search::principalVariation(position, maxdepth));
+            reportFailedPuzzle(position, moves, best);
     }
     return correct;
 }
