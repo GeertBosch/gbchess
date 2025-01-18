@@ -78,10 +78,6 @@ constexpr Score operator"" _cp(unsigned long long value) {
     return Score(value);
 }
 
-static Score worstEval = -99'99_cp;
-static Score drawEval = 0_cp;
-static Score bestEval = 99'99_cp;
-
 using PieceSquareTable = std::array<Score, kNumSquares>;
 PieceSquareTable operator+(PieceSquareTable lhs, Score rhs);
 PieceSquareTable operator+(PieceSquareTable lhs, PieceSquareTable rhs);
@@ -108,28 +104,26 @@ struct EvalTable {
  */
 struct Eval {
     Move move = {};  // Defaults to an invalid move
-    Score evaluation = worstEval;
+    Score score = Score::min();
 
     Eval() = default;
-    Eval(Move move, Score evaluation) : move(move), evaluation(evaluation) {}
+    Eval(Move move, Score score) : move(move), score(score) {}
     Eval& operator=(const Eval& other) = default;
     Eval operator-() const {
         auto ret = *this;
-        ret.evaluation = -ret.evaluation;
+        ret.score = -ret.score;
 
         return ret;
     }
     explicit operator bool() const { return move; }
 
-    bool operator==(const Eval& rhs) const {
-        return move == rhs.move && evaluation == rhs.evaluation;
-    }
+    bool operator==(const Eval& rhs) const { return move == rhs.move && score == rhs.score; }
     bool operator!=(const Eval& rhs) const { return !(*this == rhs); }
-    bool operator<(const Eval& rhs) const { return evaluation < rhs.evaluation; }
-    bool operator>(const Eval& rhs) const { return evaluation > rhs.evaluation; }
+    bool operator<(const Eval& rhs) const { return score < rhs.score; }
+    bool operator>(const Eval& rhs) const { return score > rhs.score; }
 
     operator std::string() const {
-        return static_cast<std::string>(move) + "@" + static_cast<std::string>(evaluation);
+        return static_cast<std::string>(move) + "@" + static_cast<std::string>(score);
     }
 };
 

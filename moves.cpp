@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <cstring>
 
@@ -787,10 +788,9 @@ bool isAttacked(const Board& board, Square square, Occupancy occupancy) {
 }
 
 bool isAttacked(const Board& board, SquareSet squares, Occupancy occupancy) {
-    for (auto square : squares)
-        if (isAttacked(board, square, occupancy)) return true;
-
-    return false;
+    return std::any_of(squares.begin(), squares.end(), [&](auto square) {
+        return isAttacked(board, square, occupancy);
+    });
 }
 
 bool isAttacked(const Board& board, SquareSet squares, Color opponentColor) {

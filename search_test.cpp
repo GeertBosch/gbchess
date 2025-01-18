@@ -32,7 +32,7 @@ std::ostream& operator<<(std::ostream& os, Score score) {
     return os << std::string(score);
 }
 std::ostream& operator<<(std::ostream& os, const Eval& eval) {
-    return os << eval.move << " " << eval.evaluation;
+    return os << eval.move << " " << eval.score;
 }
 
 std::string cmdName = "search-test";
@@ -99,8 +99,8 @@ void usage(std::string cmdName, std::string errmsg) {
 
 Eval analyzePosition(Position position, int maxdepth) {
     auto eval = search::computeBestMove(position, maxdepth);
-    std::cout << "        analyzePosition \"" << fen::to_string(position) << "\" as "
-              << eval.evaluation << ", move " << std::string(eval) << "\n";
+    std::cout << "        analyzePosition \"" << fen::to_string(position) << "\" as " << eval.score
+              << ", move " << std::string(eval) << "\n";
     return eval;
 }
 Eval analyzeMoves(Position position, int maxdepth) {
@@ -116,12 +116,11 @@ Eval analyzeMoves(Position position, int maxdepth) {
         std::cout << "    Considering " << move << " depth " << maxdepth - 1 << "\n";
         auto newPosition = applyMove(position, move);
         auto newEval = -analyzePosition(newPosition, maxdepth - 1);
-        std::cout << "    Evaluated " << move << " as " << newEval.evaluation << "\n";
+        std::cout << "    Evaluated " << move << " as " << newEval.score << "\n";
 
-        if (newEval.evaluation > bestMove.evaluation) {
-            bestMove = {move, newEval.evaluation};
-            std::cout << "    New best move: " << bestMove.move << " " << bestMove.evaluation
-                      << "\n";
+        if (newEval.score > bestMove.score) {
+            bestMove = {move, newEval.score};
+            std::cout << "    New best move: " << bestMove.move << " " << bestMove.score << "\n";
         }
     }
 
@@ -170,7 +169,7 @@ void printAnalysis(Position position, int maxdepth) {
     auto analyzed = analyzeMoves(position, maxdepth);
     std::cerr << "Analyzed: " << analyzed << std::endl;
     auto bestMove = search::computeBestMove(position, maxdepth);
-    if (bestMove.evaluation != analyzed.evaluation)
+    if (bestMove.score != analyzed.score)
         std::cerr << "Mismatch: " << bestMove << " != " << analyzed << "\n";
     assert(analyzed == bestMove);
 }

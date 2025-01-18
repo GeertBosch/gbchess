@@ -29,7 +29,7 @@ std::ostream& operator<<(std::ostream& os, Score score) {
     return os << std::string(score);
 }
 std::ostream& operator<<(std::ostream& os, const Eval& eval) {
-    return os << eval.move << " " << eval.evaluation;
+    return os << eval.move << " " << eval.score;
 }
 
 std::string cmdName = "eval-test";
@@ -162,13 +162,13 @@ void testScore() {
 }
 
 void testMateScore() {
-    Score M1 = bestEval;
+    Score M1 = Score::max();
     assert(std::string(M1) == "M1");
     assert(M1.mate() == 1);
 
     Score m1 = -M1;
     assert(m1.mate() == -1);
-    assert(m1 == worstEval);
+    assert(m1 == Score::min());
     assert(std::string(m1) == "-M1");
 
     Score M2 = M1.adjustDepth();
@@ -196,22 +196,22 @@ void testEvaluateBoard() {
 void testEval() {
     {
         Eval none;
-        Eval mateIn3 = {Move("f6"_sq, "e5"_sq, Move::QUIET), bestEval.adjustDepth().adjustDepth()};
-        Eval mateIn1 = {Move("e7"_sq, "g7"_sq, Move::QUIET), bestEval};
+        Eval mateIn3 = {Move("f6"_sq, "e5"_sq, Move::QUIET),
+                        Score::max().adjustDepth().adjustDepth()};
+        Eval mateIn1 = {Move("e7"_sq, "g7"_sq, Move::QUIET), Score::max()};
         assert(std::string(none) == "0000@-M1");
         assert(std::string(mateIn3) == "f6e5@M3");
         assert(std::string(mateIn1) == "e7g7@M1");
         assert(none < mateIn3);
         assert(mateIn3 < mateIn1);
         assert(none < mateIn1);
-        assert(mateIn1.evaluation == bestEval);
-        assert(bestEval == Score::max());
+        assert(mateIn1.score == Score::max());
     }
     {
         Eval stalemate = {Move("f6"_sq, "e5"_sq, Move::QUIET), 0_cp};
         Eval upQueen = {Move("f7"_sq, "a2"_sq, Move::CAPTURE), 9'00_cp};
         assert(stalemate < upQueen);
-        assert(stalemate.evaluation == drawEval);
+        assert(stalemate.score == Score());
     }
     std::cout << "Eval tests passed" << std::endl;
 }
