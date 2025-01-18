@@ -233,7 +233,7 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
 
     for (auto move : moveList) {
         auto newPosition = applyMove(position, move);
-        auto score = -quiesce(newPosition, -beta, -alpha, depthleft - 1).adjustDepth();
+        auto score = -quiesce(newPosition, -beta, -alpha, depthleft - 1);
 
         if (score >= beta) return beta;
         if (score > alpha) alpha = score;
@@ -289,10 +289,8 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
     if (pv.score >= beta) type = TranspositionTable::LOWERBOUND;
     transpositionTable.insert(hash, pv, depthleft, type);
 
-    pv.score = pv.score.adjustDepth();
     return pv;
 }
-
 
 bool currmoveInfo(InfoFn info, int depthleft, Move currmove, int currmovenumber) {
     if (!info) return false;
