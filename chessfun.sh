@@ -206,7 +206,7 @@ go movetime 2000
 echo "nnue <fen>"
 nnue() {
 	if (($# < 1)) ; then
-		echo "$0 fish <fen>"
+		echo "$0 nnue <fen>"
 		return 1
 	fi
         fen=$1
@@ -215,7 +215,7 @@ nnue() {
 uci
 position fen \"$fen\"
 eval
-" | while read line ; do echo "$line"; sleep 0.1 ; done | stockfish | grep "^NNUE eval"
+" | stockfish | grep "^NNUE eval"
 }
 
 
