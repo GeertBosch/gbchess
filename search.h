@@ -19,8 +19,6 @@ using InfoFn = std::function<bool(std::string info)>;
  */
 PrincipalVariation computeBestMove(Position& position, int maxdepth, InfoFn info = nullptr);
 
-PrincipalVariation computePuzzleMove(Position& position, int maxdepth, InfoFn info = nullptr);
-
 /**
  * Interrupt computeBestMove and make it return the best move found sofar.
  */

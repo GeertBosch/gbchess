@@ -220,7 +220,6 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     Score stand_pat = evaluateBoard(position.board, position.activeColor(), evalTable);
     if (!depthleft) return stand_pat;
 
-
     if (stand_pat >= beta && !isInCheck(position)) return beta;
 
     if (alpha < stand_pat) alpha = stand_pat;
@@ -351,25 +350,6 @@ PrincipalVariation toplevelAlphaBeta(Position& position, int depthleft, InfoFn i
     }
 
     transpositionTable.insert(hash, pv, depthleft, TranspositionTable::EXACT);
-
-    return pv;
-}
-
-PrincipalVariation computePuzzleMove(Position& position, int maxdepth, InfoFn info) {
-    evalTable = EvalTable{position.board, false};  // Simple evaluation
-    transpositionTable.clear();
-
-    PrincipalVariation pv;  // Default to the worst possible move
-
-    pv.score = quiesce(position, Score::min(), Score::max(), options::quiescenceDepth);
-
-    for (auto depth = 1; depth <= maxdepth; ++depth) {
-        transpositionTable.newGeneration();
-        auto newVariation = toplevelAlphaBeta(position, depth, info);
-        if (newVariation.score >= pv.score - 150_cp) pv = newVariation;
-
-        if (pv.score.mate()) break;
-    }
 
     return pv;
 }

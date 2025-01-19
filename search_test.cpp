@@ -231,7 +231,7 @@ void reportFailedPuzzle(Position position, MoveVector moves, MoveVector pv) {
 
 bool testPuzzle(
     std::string puzzleId, int rating, Position position, MoveVector moves, int maxdepth) {
-    auto best = search::computePuzzleMove(position, maxdepth);
+    auto best = search::computeBestMove(position, maxdepth);
     bool correct = best.front() == moves.front();
     if (!correct) {
         std::cout << "\nPuzzle " << puzzleId << ", rating " << rating << ": \""
