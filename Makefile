@@ -19,7 +19,7 @@ ifeq ($(_system_type),Darwin)
     CCFLAGS:=${CCFLAGS} -isysroot ${sdk} -mmacosx-version-min=11.0 -target darwin17.0.0 -arch ${arch} -stdlib=libc++ -Wl,-syslibroot,${sdk} -mmacosx-version-min=11.0 -target darwin17.0.0 -arch ${arch}
 endif
 
-all: test perft-test mate123
+all: test perft-test mate123 mate45 puzzles
 
 %.h: common.h
 
@@ -72,7 +72,7 @@ perft-sse2: perft.cpp hash.cpp moves.cpp fen.cpp *.h .PHONY.h
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
 mate123: search-test ${PUZZLES} .PHONY
-	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -101 | ./search-test 5
+	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -1001 | ./search-test 5
 # There are still some failures in these
 mate45: search-test ${PUZZLES} .PHONY
 	egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -31 | ./search-test 9

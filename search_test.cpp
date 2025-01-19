@@ -1,6 +1,8 @@
 #include <chrono>
 #include <cstdlib>  // For std::exit
 #include <iostream>
+#include <numeric>
+#include <sstream>
 #include <string>
 
 #include "common.h"
@@ -8,6 +10,7 @@
 #include "eval.h"
 #include "fen.h"
 #include "moves.h"
+#include "options.h"
 #include "search.h"
 
 namespace {
@@ -126,7 +129,6 @@ Eval analyzeMoves(Position position, int maxdepth) {
 
     return bestMove;
 }
-}  // namespace
 
 template <typename F>
 void printEvalRate(const F& fun) {
@@ -212,6 +214,7 @@ std::vector<std::string> split(std::string line, char delim) {
     if (word.size()) res.emplace_back(std::move(word));
     return res;
 }
+
 template <typename T>
 int find(T t, std::string what) {
     auto it = std::find(t.begin(), t.end(), what);
@@ -219,34 +222,82 @@ int find(T t, std::string what) {
     return it - t.begin();
 }
 
-void reportFailedPuzzle(Position position, MoveVector moves, MoveVector pv) {
-    std::cout << "Error: Got " << pv << ", but expected " << moves << "\n";
-    auto gotPosition = applyMoves(position, pv);
-    auto gotEval = evaluateBoard(gotPosition.board, false);
-    auto expectedPosition = applyMoves(position, moves);
-    auto expectedEval = evaluateBoard(expectedPosition.board, false);
-    std::cout << "Got " << gotEval << " \"" << fen::to_string(gotPosition) << "\"\n";
-    std::cout << "Expected " << expectedEval << " \"" << fen::to_string(expectedPosition) << "\"\n";
+using ScoreWithReason = std::pair<Score, std::string>;
+ScoreWithReason computeScore(Position position, MoveVector moves) {
+    Color active = position.activeColor();
+    std::string side = active == Color::WHITE ? "white" : "black";
+    position = applyMoves(position, moves);
+    auto score = search::quiesce(position, options::quiescenceDepth);
+    assert(!isStalemate(position) || score == 0_cp);
+    assert(!isCheckmate(position) || score == Score::min());
+    if (isCheckmate(position)) score = -Score::mateIn((moves.size() + 1) / 2);
+    if (position.activeColor() != active) score = -score;
+
+    return {score, " (" + side + " side) \"" + fen::to_string(position) + "\""};
 }
 
-bool testPuzzle(
-    std::string puzzleId, int rating, Position position, MoveVector moves, int maxdepth) {
-    auto best = search::computeBestMove(position, maxdepth);
-    bool correct = best.front() == moves.front();
-    if (!correct) {
-        std::cout << "\nPuzzle " << puzzleId << ", rating " << rating << ": \""
-                  << fen::to_string(position) << "\" " << moves << "\n";
-        // As a special case, if multiple mates are possible, they're considered equivalent.
-        auto expected = applyMove(position, moves.front());
-        auto actual = applyMove(position, best.front());
-        correct = isMate(expected) && isMate(actual) && isInCheck(expected) == isInCheck(actual);
-        if (correct)
-            std::cout << "Note: Both " << moves.front() << " and " << best.front()
-                      << " lead to mate\n";
-        else
-            reportFailedPuzzle(position, moves, best);
+bool sameMate(Eval expected, Eval got) {
+    return expected.score.mate() && got.score.mate() && expected.score == got.score;
+}
+
+enum PuzzleError { NO_ERROR, DEPTH_ERROR, EVAL_ERROR, SEARCH_ERROR, COUNT };
+
+struct PuzzleStats {
+    std::array<uint64_t, PuzzleError::COUNT> counts = {0};
+    uint64_t& operator[](PuzzleError error) { return counts[error]; }
+    // Return a string representation of the stats
+    uint64_t total() const { return std::accumulate(counts.begin(), counts.end(), 0); }
+    std::string operator()() {
+        std::stringstream ss;
+        ss << total() << " puzzles, "                 //
+           << counts[NO_ERROR] << " correct "         //
+           << counts[DEPTH_ERROR] << " too deep, "    //
+           << counts[EVAL_ERROR] << " eval errors, "  //
+           << counts[SEARCH_ERROR] << " search errors";
+        return ss.str();
     }
-    return correct;
+};
+
+/**
+ * Analyze the solution to a puzzle. For mate puzzles, the solution is considered correct if the
+ * mate is found in the same number of moves, regardless of the exact move sequence. For other
+ * puzzles, the solution is considered correct if the best move found matches the expected move,
+ * even if the principal variation diverges in subsequent moves.
+ *
+ * For incorrect solutions, displays the expected and actual move sequences, as well as the
+ * resulting positions in FEN format, their evaluations according to our quiescence search
+ * and whether the error is a evaluation error or a search error.
+ */
+PuzzleError analyzePuzzleSolution(std::string puzzle,
+                                  Position position,
+                                  MoveVector expected,
+                                  MoveVector got) {
+    if (expected.front() == got.front()) return NO_ERROR;
+
+    std::cout << "\n" << puzzle << ": \"" << fen::to_string(position) << "\" " << expected << "\n";
+    auto [gotScore, gotReason] = computeScore(position, got);
+    auto [expectedScore, expectedReason] = computeScore(position, expected);
+    if (expectedScore.mate() && gotScore.mate() && expectedScore == gotScore) {
+        std::cout << "Note: Both " << expected.front() << " and " << got.front() << " lead to "
+                  << gotScore << "\n";
+        return NO_ERROR;
+    }
+    auto evalError = gotScore >= expectedScore;
+    auto errorKind = evalError ? "Evaluation error" : "Search error";
+    std::cout << errorKind << ": Got " << got << ", but expected " << expected << "\n";
+    std::cout << "Got: " << gotScore << gotReason << "\n";
+    std::cout << "Expected: " << expectedScore << expectedReason << "\n";
+    return evalError ? EVAL_ERROR : SEARCH_ERROR;
+}
+
+PuzzleError doPuzzle(std::string puzzle, Position position, MoveVector moves, int maxdepth) {
+    if (moves.size() > maxdepth) {
+        std::cout << puzzle << " too deep:\"" << fen::to_string(position) << "\" " << moves
+                  << " (skipped)\n";
+        return DEPTH_ERROR;  // Skip puzzles that are too deep
+    }
+    auto best = search::computeBestMove(position, maxdepth);
+    return analyzePuzzleSolution(puzzle, position, moves, best.moves);
 }
 
 void testFromStdIn(int depth) {
@@ -260,9 +311,8 @@ void testFromStdIn(int depth) {
     auto colMoves = find(columns, "Moves");
     auto colPuzzleId = find(columns, "PuzzleId");
     auto colRating = find(columns, "Rating");
-    uint64_t numPuzzles = 0;
-    uint64_t numCorrect = 0;
     auto puzzleRating = ELO(kExpectedPuzzleRating);
+    PuzzleStats stats;
 
     while (std::cin) {
         std::getline(std::cin, line);
@@ -283,16 +333,14 @@ void testFromStdIn(int depth) {
         std::move(std::next(moves.begin()), moves.end(), moves.begin());
         moves.pop_back();
 
-        auto puzzleId = columns[colPuzzleId];
-        std::cout << "Puzzle " << puzzleId << ", rating " << rating() << ": \""
-                  << fen::to_string(initialPosition) << "\" " << moves << "\n";
-        auto correct = testPuzzle(puzzleId, rating(), initialPosition, moves, depth);
-        puzzleRating.updateOne(rating, correct ? ELO::WIN : ELO::LOSS);
-        numCorrect += correct;
-        ++numPuzzles;
+        auto puzzle = "Puzzle " + columns[colPuzzleId] + ", rating " + std::to_string(rating());
+        auto result = doPuzzle(puzzle, initialPosition, moves, depth);
+        ++stats[result];
+        // Don't count skipped puzzles for our puzzle rating
+        if (result != DEPTH_ERROR)
+            puzzleRating.updateOne(rating, result == NO_ERROR ? ELO::WIN : ELO::LOSS);
     }
-    std::cout << numPuzzles << " puzzles, " << numCorrect << " correct"
-              << ", " << puzzleRating() << " rating\n";
+    std::cout << stats() << ", " << puzzleRating() << " rating\n";
     assert(puzzleRating() >= kExpectedPuzzleRating - ELO::K);
 }
 
@@ -302,7 +350,7 @@ void testBasicPuzzles() {
         auto puzpos = fen::parsePosition(puzfen);
         puzpos = applyUCIMove(puzpos, "e5f6");
         auto puzmoves = parseUCIMoves(puzpos, "e8e1 g1f2 e1f1");
-        assert(testPuzzle("000Zo", 1311, puzpos, puzmoves, 5));
+        assert(doPuzzle("000Zo, ranking 1311", puzpos, puzmoves, 5) == NO_ERROR);
     }
 
     std::cout << "Basic puzzle test passed!\n";
@@ -318,6 +366,8 @@ bool maybeFEN(std::string fen) {
     return fen != "" && startChars.find(fen[0]) != std::string::npos &&
         std::count(fen.begin(), fen.end(), '/') == 7;
 }
+
+}  // namespace
 
 int main(int argc, char* argv[]) {
     cmdName = argv[0];
