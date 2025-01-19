@@ -194,3 +194,11 @@ bool isMate(const Position& position) {
     auto board = position.board;
     return allLegalMovesAndCaptures(position.turn, board).size() == 0;
 }
+
+bool isCheckmate(const Position& position) {
+    return isInCheck(position) && isMate(position);
+}
+
+bool isStalemate(const Position& position) {
+    return !isInCheck(position) && isMate(position);
+}

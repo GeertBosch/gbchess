@@ -165,3 +165,12 @@ bool isInCheck(const Position& position);
  * Returns true if and only if the size whose turn it is has no legal moves.
  */
 bool isMate(const Position& position);
+
+/**
+ * Returns true if and only if the size whose turn it is has been checkmated.
+ */
+bool isCheckmate(const Position& position);
+/**
+ * Returns true if and only if the game is in stalemate.
+ */
+bool isStalemate(const Position& position);

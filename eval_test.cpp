@@ -221,6 +221,21 @@ void testEval() {
     std::cout << "Eval tests passed" << std::endl;
 }
 
+void testCheckAndMate() {
+    auto checkmate =
+        fen::parsePosition("rn1qr3/pbppk1Q1/1p2p3/3nP1N1/1b1P4/2N5/PPP2PPP/R1B1K2R b KQ - 0 15");
+    assert(isCheckmate(checkmate));
+    assert(!isStalemate(checkmate));
+    assert(isMate(checkmate));
+    assert(isInCheck(checkmate));
+
+    auto stalemate = fen::parsePosition("4k3/8/8/4b1r1/8/8/8/7K w - - 0 1");
+    assert(isStalemate(stalemate));
+    assert(isMate(stalemate));
+    assert(!isCheckmate(stalemate));
+    assert(!isInCheck(stalemate));
+}
+
 int main(int argc, char* argv[]) {
     cmdName = argv[0];
 
