@@ -179,6 +179,11 @@ void testMateScore() {
     assert(M2 == -m2);
     assert(std::string(M2) == "M2");
     assert(std::string(m2) == "-M2");
+    assert(Score::mateIn(2) == M2);
+
+    Score M3 = M2.adjustDepth();
+    assert(Score::mateIn(3) == M3);
+
     std::cout << "Mate score tests passed" << std::endl;
 }
 

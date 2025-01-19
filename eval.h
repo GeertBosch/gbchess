@@ -69,6 +69,10 @@ public:
         result += '0' + cents % 10;
         return result;
     }
+    static constexpr Score mateIn(int moves) {
+        assert(moves > 0 && moves < 100);
+        return Score(value_type(Score::max().cp() - moves + 1));
+    }
     static constexpr Score max() { return Score(99'99ull); }
     static constexpr Score min() { return -max(); }
 };
