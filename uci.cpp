@@ -13,6 +13,8 @@
 
 namespace {
 const char* const cmdName = "gbchess";
+const char* const authorName = "Geert Bosch";
+
 class UCIRunner {
 public:
     UCIRunner(std::ostream& out, std::ostream& log) : out(out), log(log) {}
@@ -42,7 +44,7 @@ private:
         stop();
         auto search = [this, depth, pos = position] {
             auto position = pos;  // need to copy the position
-            Eval move = search::computeBestMove(position, depth, [this](std::string info) -> bool {
+            auto pv = search::computeBestMove(position, depth, [this](std::string info) -> bool {
                 out << "info " << info << "\n";
                 std::flush(out);
                 if (&out != &log) {
@@ -51,7 +53,11 @@ private:
                 }
                 return false;
             });
-            out << "bestmove " << std::string(move.move) << "\n";
+            std::stringstream ss;
+            ss << "bestmove " << pv.front();
+            if (Move ponder = pv[1]) ss << " ponder " << ponder;
+            ss << "\n";
+            out << ss.str();
             std::flush(out);
         };
         if (wait) {
@@ -101,7 +107,7 @@ void UCIRunner::execute(std::string line) {
 
     if (command == "uci") {
         out << "id name " << cmdName << "\n";
-        out << "id author " << cmdName << "\n";
+        out << "id author " << authorName << "\n";
         out << "uciok\n";
     } else if (command == "isready") {
         out << "readyok\n";
@@ -111,7 +117,6 @@ void UCIRunner::execute(std::string line) {
     } else if (command == "position") {
         std::string positionKind;
         in >> positionKind >> std::ws;
-        std::cerr << "position kind: \"" << positionKind << "\"\n";
         UCIArguments args;
         UCIArguments moves;
         std::copy(std::istream_iterator<std::string>(in), {}, std::back_inserter(args));
@@ -124,7 +129,6 @@ void UCIRunner::execute(std::string line) {
             if (fen.size() >= 2 && fen[0] == '"' && fen[fen.size() - 1] == '"')
                 fen = fen.substr(1, fen.size() - 2);
 
-            std::cerr << "position fen \"" << fen << "\"\n";
             position = fen::parsePosition(fen);
             skip(args.begin(), args.end(), 6, std::back_inserter(moves));
 

@@ -25,6 +25,7 @@ struct PrincipalVariation {
     }
     PrincipalVariation& operator=(const PrincipalVariation& other) = default;
     Move front() const { return moves.empty() ? Move() : moves.front(); }
+    Move operator[](size_t i) const { return i < moves.size() ? moves[i] : Move(); }
 
     operator MoveVector() const { return moves; }
     operator Eval() const { return {front(), score}; }

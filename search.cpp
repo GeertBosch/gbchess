@@ -2,6 +2,7 @@
 
 #include "pv.h"
 #include <iostream>
+#include <sstream>
 #include <vector>
 
 #include "hash.h"
@@ -293,10 +294,12 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
 
 bool currmoveInfo(InfoFn info, int depthleft, Move currmove, int currmovenumber) {
     if (!info) return false;
-
-    std::string currmoveString = "depth " + std::to_string(depthleft) + " currmove " +
-        std::string(currmove) + " currmovenumber " + std::to_string(currmovenumber);
-    auto stop = info(currmoveString);
+    std::stringstream ss;
+    ss << "depth " << std::to_string(depthleft)  //
+       << " nodes " << evalCount                 //
+       << " currmove " << std::string(currmove)  //
+       << " currmovenumber " + std::to_string(currmovenumber);
+    auto stop = info(ss.str());
     if (stop) SingleRunner::stop();
     return stop;
 }
@@ -319,8 +322,8 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
     return stop;
 }
 
-PrincipalVariation toplevelAlphaBeta(Position& position, int depthleft, InfoFn info) {
-    assert(depthleft > 0);
+PrincipalVariation toplevelAlphaBeta(Position& position, int maxdepth, InfoFn info) {
+    assert(maxdepth > 0);
 
     // No need to check the transposition table here, as we're at the top level
     Score alpha = Score::min();
@@ -335,9 +338,9 @@ PrincipalVariation toplevelAlphaBeta(Position& position, int depthleft, InfoFn i
     int currmovenumber = 0;
     for (auto currmove : moveList) {
         ++currmovenumber;
-        if (currmoveInfo(info, depthleft, currmove, currmovenumber)) break;
+        if (currmoveInfo(info, maxdepth, currmove, currmovenumber)) break;
         auto newPosition = applyMove(position, currmove);
-        auto score = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), depthleft - 1);
+        auto score = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), maxdepth - 1);
         if (score.score > pv.score) {
             pv = {currmove, score};
         }
@@ -349,7 +352,7 @@ PrincipalVariation toplevelAlphaBeta(Position& position, int depthleft, InfoFn i
         pv = {Move(), Score()};
     }
 
-    transpositionTable.insert(hash, pv, depthleft, TranspositionTable::EXACT);
+    transpositionTable.insert(hash, pv, maxdepth, TranspositionTable::EXACT);
 
     return pv;
 }
@@ -358,6 +361,8 @@ PrincipalVariation computeBestMove(Position& position, int maxdepth, InfoFn info
     SingleRunner search;
     evalTable = EvalTable{position.board, true};
     transpositionTable.clear();
+    evalCount = 0;
+    cacheCount = 0;
 
     PrincipalVariation pv;  // Default to the worst possible move
 
