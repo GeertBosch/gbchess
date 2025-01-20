@@ -3,7 +3,13 @@
 *.dSYM
 *.gcda
 *.gcno
+log.*
+*.log
+*.out
+game.*
 .vscode
 search-debug
 perft
+perft-*
 puzzles
+players.dat
