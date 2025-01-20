@@ -23,7 +23,10 @@ all: test perft-test mate123 mate45 puzzles
 
 %.h: common.h
 
-%-test: %_test.cpp %.cpp %.h common.h
+%-test: %_test.cpp %.h common.h
+	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $(filter-out %.h, $^)
+
+%-debug: %_test.cpp %.h common.h
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $(filter-out %.h, $^)
 
 .PHONY:
@@ -31,14 +34,17 @@ all: test perft-test mate123 mate45 puzzles
 
 clean: .PHONY
 	rm -f *.o *-debug *-test perft core *.core puzzles.actual perf.data* *.ii *.bc *.s
-	rm -f perft-sse2
+	rm -f perft-{clang,gcc}-{sse2,emul}
 	rm -f *.profraw *.profdata *.gcda *.gcno lcov.info
 	rm -rf *.dSYM
 
 moves-test: moves_test.cpp moves.cpp moves.h common.h fen.h fen.cpp
 
-elo-test: elo_test.cpp elo.h
-	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $(filter-out %.h, $^)
+fen-test: fen_test.cpp fen.cpp fen.h common.h
+single_runner-test: single_runner_test.cpp single_runner.cpp single_runner.h common.h
+
+# elo-test: elo_test.cpp elo.h
+#	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $(filter-out %.h, $^)
 
 EVAL_SRCS=eval.cpp hash.cpp fen.cpp moves.cpp
 
@@ -55,25 +61,35 @@ search-debug: search_test.cpp ${SEARCH_SRCS} *.h
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} -o $@ $(filter-out %.h,$^)
 
 uci-test: uci_test.cpp uci.cpp ${SEARCH_SRCS}
+uci-debug: uci_test.cpp uci.cpp ${SEARCH_SRCS}
 
-
+PERFT_SRCS=perft.cpp moves.h moves.cpp fen.h fen.cpp
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
-perft: perft.cpp ${EVAL_SRCS} *.h
+perft: ${PERFT_SRCS}
 	${CLANGPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
-perft-debug: perft.cpp ${EVAL_SRCS} *.h
+perft-debug: ${PERFT_SRCS}
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} -o $@ $(filter-out %.h,$^)
 
 # Compare the perft tool with some different compilation options for speed comparison
-perft-sse2: perft.cpp hash.cpp moves.cpp fen.cpp *.h .PHONY.h
-	${CLANGPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@ 5 4865609
-	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5 4865609
-	${GPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5 4865609
-	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^) && ./$@  5 4865609
+perft-clang-sse2: perft.cpp moves.cpp fen.cpp *.h
+	${CLANGPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
+perft-clang-emul: perft.cpp  moves.cpp fen.cpp *.h
+	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
+perft-gcc-sse2: perft.cpp  moves.cpp fen.cpp *.h
+	${GPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
+perft-gcc-emul: perft.cpp  moves.cpp fen.cpp *.h
+	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
+
+perft-sse2: perft-clang-sse2 perft-clang-emul perft-gcc-sse2 perft-gcc-emul .PHONY
+	./perft-clang-sse2 5 4865609
+	./perft-clang-emul 5 4865609
+	./perft-gcc-sse2 5 4865609
+	./perft-gcc-emul 5 4865609
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
 mate123: search-test ${PUZZLES} .PHONY
 	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -1001 | ./search-test 5
-# There are still some failures in these
+
 mate45: search-test ${PUZZLES} .PHONY
 	egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -31 | ./search-test 9
 
@@ -120,6 +136,7 @@ test: fen-test moves-test elo-test eval-test search-test search-debug single_run
 	./single_runner-test
 	./search-test "r4rk1/p3ppbp/Pp3np1/3PpbB1/2q5/2N2P2/1PPQ2PP/3RR2K w - - 0 20" 1
 	./search-debug "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 5
+	./uci-test uci-test.in | grep "bestmove g5f6 ponder"
 
 coverage: test
 	${LLVM-MERGE}

@@ -1,4 +1,5 @@
 *-test
+*-debug
 *.swp
 *.dSYM
 *.gcda
@@ -8,7 +9,6 @@ log.*
 *.out
 game.*
 .vscode
-search-debug
 perft
 perft-*
 puzzles

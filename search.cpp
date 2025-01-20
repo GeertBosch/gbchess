@@ -275,9 +275,9 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
     PrincipalVariation pv;
     for (auto move : moveList) {
         auto newPosition = applyMove(position, move);
-        auto score = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), depthleft - 1);
+        auto newVar = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), depthleft - 1);
 
-        if (score.score > pv.score) pv = {move, score};
+        if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
         if (pv.score >= beta) break;
     }
 
