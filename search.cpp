@@ -15,6 +15,7 @@ namespace search {
 EvalTable evalTable;
 uint64_t evalCount = 0;
 uint64_t cacheCount = 0;
+uint64_t searchEvalCount = 0;  // copy of evalCount at the start of the search
 
 /**
  * The transposition table is a hash table that stores the best move found for a position, so it can
@@ -294,9 +295,9 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
 bool currmoveInfo(InfoFn info, int depthleft, Move currmove, int currmovenumber) {
     if (!info) return false;
     std::stringstream ss;
-    ss << "depth " << std::to_string(depthleft)  //
-       << " nodes " << evalCount                 //
-       << " currmove " << std::string(currmove)  //
+    ss << "depth " << std::to_string(depthleft)     //
+       << " nodes " << evalCount - searchEvalCount  //
+       << " currmove " << std::string(currmove)     //
        << " currmovenumber " + std::to_string(currmovenumber);
     auto stop = info(ss.str());
     if (stop) SingleRunner::stop();
@@ -392,6 +393,7 @@ PrincipalVariation computeBestMove(Position& position, int maxdepth, InfoFn info
     SingleRunner search;
     evalTable = EvalTable{position.board, true};
     transpositionTable.clear();
+    searchEvalCount = evalCount;
 
     return options::iterativeDeepening ? iterativeDeepening(position, maxdepth, info)
                                        : toplevelAlphaBeta(position, maxdepth, info);

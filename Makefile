@@ -60,8 +60,8 @@ search-test: search_test.cpp ${SEARCH_SRCS} *.h
 search-debug: search_test.cpp ${SEARCH_SRCS} *.h
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} -o $@ $(filter-out %.h,$^)
 
-uci-test: uci_test.cpp uci.cpp ${SEARCH_SRCS}
-uci-debug: uci_test.cpp uci.cpp ${SEARCH_SRCS}
+uci-test: uci_test.cpp uci.cpp ${SEARCH_SRCS} *.h
+uci-debug: uci_test.cpp uci.cpp ${SEARCH_SRCS} *.h
 
 PERFT_SRCS=perft.cpp moves.h moves.cpp fen.h fen.cpp
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
