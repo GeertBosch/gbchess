@@ -75,6 +75,7 @@ public:
     }
     static constexpr Score max() { return Score(99'99ull); }
     static constexpr Score min() { return -max(); }
+    static constexpr Score fromCP(value_type cp) { return Score(cp); }
 };
 
 // literal constructor for _cp (centipawn) suffix

@@ -46,7 +46,6 @@ struct TranspositionTable {
     };
 
     std::vector<Entry> entries{kNumEntries};
-    // std::array<Entry, kNumEntries> entries{};
     uint64_t numInserted = 0;
     uint64_t numOccupied = 0;   // Number of non-obsolete entries
     uint64_t numObsoleted = 0;  // Number of entries in the table from previous generations
@@ -219,13 +218,14 @@ void sortMoves(const Position& position, MoveIt begin, MoveIt end) {
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     ++evalCount;
     Score stand_pat = evaluateBoard(position.board, position.activeColor(), evalTable);
+
     if (!depthleft) return stand_pat;
 
     if (stand_pat >= beta && !isInCheck(position)) return beta;
 
     if (alpha < stand_pat) alpha = stand_pat;
 
-    // The moveList includes moves needed to get out of check; an empty list may mean mate
+    // The moveList includes moves needed to get out of check; an empty list means mate
     auto moveList = allLegalQuiescentMoves(position.turn, position.board, depthleft);
     if (moveList.empty() && isInCheck(position)) return Score::min();
 
@@ -284,7 +284,6 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
     if (moveList.empty() && !isInCheck(position)) pv.score = Score();  // Stalemate
 
     TranspositionTable::EntryType type = TranspositionTable::EXACT;
-    if (pv.score >= beta) type = TranspositionTable::LOWERBOUND;
     if (pv.score <= alpha) type = TranspositionTable::UPPERBOUND;
     if (pv.score >= beta) type = TranspositionTable::LOWERBOUND;
     transpositionTable.insert(hash, pv, depthleft, type);
@@ -322,12 +321,12 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
     return stop;
 }
 
-PrincipalVariation toplevelAlphaBeta(Position& position, int maxdepth, InfoFn info) {
-    assert(maxdepth > 0);
+PrincipalVariation toplevelAlphaBeta(
+    Position& position, Score alpha, Score beta, int maxdepth, InfoFn info) {
+    if (maxdepth <= 0)
+        return {{}, quiesce(position, Score::min(), Score::max(), options::quiescenceDepth)};
 
     // No need to check the transposition table here, as we're at the top level
-    Score alpha = Score::min();
-    Score beta = Score::max();
 
     auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
 
@@ -337,23 +336,55 @@ PrincipalVariation toplevelAlphaBeta(Position& position, int maxdepth, InfoFn in
 
     int currmovenumber = 0;
     for (auto currmove : moveList) {
-        ++currmovenumber;
-        if (currmoveInfo(info, maxdepth, currmove, currmovenumber)) break;
+        if (currmoveInfo(info, maxdepth, currmove, ++currmovenumber)) break;
         auto newPosition = applyMove(position, currmove);
-        auto score = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), maxdepth - 1);
-        if (score.score > pv.score) {
-            pv = {currmove, score};
-        }
-        if (pv.score >= beta) {
-            break;
-        }
+        auto newVar = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), maxdepth - 1);
+        if (newVar.score > pv.score) pv = {currmove, newVar};
+        if (pv.score >= beta) break;
     }
-    if (moveList.empty() && !isInCheck(position)) {
-        pv = {Move(), Score()};
-    }
+    if (moveList.empty() && !isInCheck(position)) pv = {Move(), Score()};
 
     transpositionTable.insert(hash, pv, maxdepth, TranspositionTable::EXACT);
 
+    return pv;
+}
+
+PrincipalVariation toplevelAlphaBeta(Position& position, int maxdepth, InfoFn info) {
+    return toplevelAlphaBeta(position, Score::min(), Score::max(), maxdepth, info);
+}
+
+PrincipalVariation aspirationWindows(Position position, Score expected, int maxdepth, InfoFn info) {
+    auto windows = options::aspirationWindows;
+    auto maxWindow = Score::fromCP(windows.back());
+    expected = std::clamp(expected, Score::min() + maxWindow, Score::max() - maxWindow);
+    auto alphaIt = windows.begin();
+    auto betaIt = windows.begin();
+
+    while (maxdepth > 3 && alphaIt != windows.end() && betaIt != windows.end()) {
+        auto alpha = expected - Score::fromCP(*alphaIt);
+        auto beta = expected + Score::fromCP(*betaIt);
+
+        auto pv = toplevelAlphaBeta(position, alpha, beta, maxdepth, info);
+
+        if (pv.score <= alpha)
+            ++alphaIt;
+        else if (pv.score >= beta)
+            ++betaIt;
+        else
+            return pv;
+        transpositionTable.newGeneration();
+    }
+    return toplevelAlphaBeta(position, maxdepth, info);
+}
+
+PrincipalVariation iterativeDeepening(Position& position, int maxdepth, InfoFn info) {
+    PrincipalVariation pv = toplevelAlphaBeta(position, 0, info);
+    for (auto depth = 1; depth <= maxdepth; ++depth) {
+        transpositionTable.newGeneration();
+        pv = aspirationWindows(position, pv.score, depth, info);
+        if (pvInfo(info, depth, pv.score, pv.moves)) break;
+        if (pv.score.mate() || SingleRunner::stopping()) break;
+    }
     return pv;
 }
 
@@ -361,22 +392,9 @@ PrincipalVariation computeBestMove(Position& position, int maxdepth, InfoFn info
     SingleRunner search;
     evalTable = EvalTable{position.board, true};
     transpositionTable.clear();
-    evalCount = 0;
-    cacheCount = 0;
 
-    PrincipalVariation pv;  // Default to the worst possible move
-
-    pv.score = quiesce(position, Score::min(), Score::max(), options::quiescenceDepth);
-
-    for (auto depth = 1; depth <= maxdepth; ++depth) {
-        transpositionTable.newGeneration();
-        pv = toplevelAlphaBeta(position, depth, info);
-        if (pvInfo(info, depth, pv.score, pv)) break;
-
-        if (pv.score.mate() || SingleRunner::stopping()) break;
-    }
-
-    return pv;
+    return options::iterativeDeepening ? iterativeDeepening(position, maxdepth, info)
+                                       : toplevelAlphaBeta(position, maxdepth, info);
 } catch (SingleRunner::Stop&) {
     return transpositionTable.find(Hash(position));
 }
