@@ -1,4 +1,4 @@
-#include <algorithm>
+#include "common.h"
 #include <cassert>
 #include <cstring>
 
@@ -8,6 +8,14 @@
 // Unconditionally use actual SSE2 or emulated SSE2: it turns out that the emulated CPU has more
 // benefits for ARM (on at least Apple Silicon M1) than real SSE2 has for x86.
 constexpr bool haveSSE2 = true;
+
+using TwoSquares = std::array<Square, 2>;
+
+struct CompoundMove {
+    Square to = 0;
+    uint8_t promo = 0;
+    TwoSquares second = {0, 0};
+};
 
 struct MovesTable {
     // precomputed possible moves for each piece type on each square
@@ -40,6 +48,9 @@ struct MovesTable {
     // precomputed from squares for en passant targets
     SquareSet enPassantFrom[2][kNumFiles];  // color, file
 
+    // precompute compound moves for castling, en passant and promotions
+    CompoundMove compound[16][kNumSquares];  // moveKind, to square
+
     MovesTable();
 
 private:
@@ -50,6 +61,7 @@ private:
     void initializePaths();
     void initializeCastlingMasks();
     void initializeEnPassantFrom();
+    void initializeCompound();
 } movesTable;
 
 void MovesTable::initializePieceMovesAndCaptures() {
@@ -141,6 +153,44 @@ void MovesTable::initializeEnPassantFrom() {
     }
 }
 
+void MovesTable::initializeCompound() {
+    using MK = MoveKind;
+    using PT = PieceType;
+
+    // Initialize non-compound moves
+    for (auto kind = 0; kind < kNumMoveKinds; ++kind)
+        for (auto to = 0; to < kNumSquares; ++to)
+            compound[kind][to] = {Square(to), 0, {Square(to), Square(to)}};
+
+    // Initialize castles
+    compound[index(MK::KING_CASTLE)]["g1"_sq.index()] = {"g1"_sq, 0, {"h1"_sq, "f1"_sq}};
+    compound[index(MK::KING_CASTLE)]["g8"_sq.index()] = {"g8"_sq, 0, {"h8"_sq, "f8"_sq}};
+    compound[index(MK::QUEEN_CASTLE)]["c1"_sq.index()] = {"c1"_sq, 0, {"a1"_sq, "d1"_sq}};
+    compound[index(MK::QUEEN_CASTLE)]["c8"_sq.index()] = {"c8"_sq, 0, {"a8"_sq, "d8"_sq}};
+
+    // Initialize en passant capture for white
+    for (auto to : SquareSet::ipath("a6"_sq, "h6"_sq)) {
+        auto capture = Square(to.rank() - 1, to.file());
+        compound[index(MK::EN_PASSANT)][to.index()] = {capture, 0, {capture, to}};
+    }
+
+    // Initialize en passant capture for black
+    for (auto to : SquareSet::ipath("a3"_sq, "h3"_sq)) {
+        auto capture = Square(to.rank() + 1, to.file());
+        compound[index(MK::EN_PASSANT)][to.index()] = {capture, 0, {capture, to}};
+    }
+
+    // Initialize promotion moves
+    auto mk = index(MK::KNIGHT_PROMOTION);
+    auto ck = index(MK::KNIGHT_PROMOTION_CAPTURE);
+    for (auto promo = index(PT::KNIGHT); promo <= index(PT::QUEEN); ++promo, ++mk, ++ck) {
+        for (auto to : SquareSet::ipath("a8"_sq, "h8"_sq) | SquareSet::ipath("a1"_sq, "h1"_sq)) {
+            compound[mk][to.index()] = {to, promo, {to, to}};
+            compound[ck][to.index()] = {to, promo, {to, to}};
+        }
+    }
+}
+
 MovesTable::MovesTable() {
     initializePieceMovesAndCaptures();
     initializePieceMoveAndCaptureKinds();
@@ -149,6 +199,7 @@ MovesTable::MovesTable() {
     initializePaths();
     initializeCastlingMasks();
     initializeEnPassantFrom();
+    initializeCompound();
 }
 
 /**
@@ -599,65 +650,20 @@ void addAvailableCastling(MoveVector& captures,
 }
 
 Piece makeMove(Board& board, Move move) {
-    auto& piece = board[move.from()];
-    auto& target = board[move.to()];
+    // Lookup the compound move for the given move kind and target square. This breaks moves like
+    // castling, en passant and promotion into a simple capture/move and a second move that can be a
+    // no-op move, a quiet move or a promotion. The target square is taken from the compound move.
+    auto compound = movesTable.compound[index(move.kind())][move.to().index()];
 
-    // En passant capture
-    switch (move.kind()) {
-    case MoveKind::KING_CASTLE: {
-        auto rank = move.from().rank();
-        auto rook = board[Square(rank, Position::kKingSideRookFile)];
-        auto king = board[Square(rank, Position::kKingFile)];
+    auto captured = Piece::NONE;
+    std::swap(captured, board[move.from()]);
+    std::swap(captured, board[compound.to]);
 
-        // Remove king and rook from their original squares
-        board[Square(rank, Position::kKingSideRookFile)] = Piece::NONE;
-        board[Square(rank, Position::kKingFile)] = Piece::NONE;
+    // The following 3 statements are a no-op for non-compound moves
+    auto piece = Piece::NONE;
+    std::swap(piece, board[compound.second[0]]);
+    board[compound.second[1]] = Piece(index(piece) + compound.promo);
 
-        // Place king and rook on their new squares
-        board[Square(rank, Position::kKingCastledKingSideFile)] = king;
-        board[Square(rank, Position::kRookCastledKingSideFile)] = rook;
-    }
-        return Piece::NONE;
-
-    case MoveKind::QUEEN_CASTLE: {
-        auto rank = move.from().rank();
-        auto rook = board[Square(rank, Position::kQueenSideRookFile)];
-        auto king = board[Square(rank, Position::kKingFile)];
-
-        // Remove king and rook from their original squares
-        board[Square(rank, Position::kQueenSideRookFile)] = Piece::NONE;
-        board[Square(rank, Position::kKingFile)] = Piece::NONE;
-
-        // Place king and rook on their new squares
-        board[Square(rank, Position::kKingCastledQueenSideFile)] = king;
-        board[Square(rank, Position::kRookCastledQueenSideFile)] = rook;
-    }
-        return Piece::NONE;
-
-    case MoveKind::EN_PASSANT:
-        // The pawns target is empty, so move the piece to capture en passant there.
-        std::swap(board[Square{move.from().rank(), move.to().file()}], target);
-        break;
-
-    case MoveKind::KNIGHT_PROMOTION:
-    case MoveKind::BISHOP_PROMOTION:
-    case MoveKind::ROOK_PROMOTION:
-    case MoveKind::QUEEN_PROMOTION:
-    case MoveKind::KNIGHT_PROMOTION_CAPTURE:
-    case MoveKind::BISHOP_PROMOTION_CAPTURE:
-    case MoveKind::ROOK_PROMOTION_CAPTURE:
-    case MoveKind::QUEEN_PROMOTION_CAPTURE:
-        piece = addColor(promotionType(move.kind()), color(piece));  // Promote the pawn
-        [[fallthrough]];
-    case MoveKind::QUIET_MOVE:
-    case MoveKind::DOUBLE_PAWN_PUSH:
-    case MoveKind::CAPTURE:;
-    }
-
-    // Update the target, and empty the source square
-    auto captured = target;
-    target = piece;
-    piece = Piece::NONE;
     return captured;
 }
 
@@ -788,9 +794,10 @@ bool isAttacked(const Board& board, Square square, Occupancy occupancy) {
 }
 
 bool isAttacked(const Board& board, SquareSet squares, Occupancy occupancy) {
-    return std::any_of(squares.begin(), squares.end(), [&](auto square) {
-        return isAttacked(board, square, occupancy);
-    });
+    for (auto square : squares)
+        if (isAttacked(board, square, occupancy)) return true;
+
+    return false;
 }
 
 bool isAttacked(const Board& board, SquareSet squares, Color opponentColor) {

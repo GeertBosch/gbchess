@@ -54,8 +54,12 @@ private:
                 return false;
             });
             std::stringstream ss;
-            ss << "bestmove " << pv.front();
-            if (Move ponder = pv[1]) ss << " ponder " << ponder;
+            if (!pv.front()) {
+                ss << "resign\n";
+            } else {
+                ss << "bestmove " << pv.front();
+                if (Move ponder = pv[1]) ss << " ponder " << ponder;
+            }
             ss << "\n";
             out << ss.str();
             std::flush(out);

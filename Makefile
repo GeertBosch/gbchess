@@ -19,7 +19,7 @@ ifeq ($(_system_type),Darwin)
     CCFLAGS:=${CCFLAGS} -isysroot ${sdk} -mmacosx-version-min=11.0 -target darwin17.0.0 -arch ${arch} -stdlib=libc++ -Wl,-syslibroot,${sdk} -mmacosx-version-min=11.0 -target darwin17.0.0 -arch ${arch}
 endif
 
-all: test perft-test mate123 mate45 puzzles
+all: test gouda perft-test mate123 mate45 puzzles
 
 %.h: common.h
 
@@ -39,6 +39,7 @@ clean: .PHONY
 	rm -rf *.dSYM
 
 moves-test: moves_test.cpp moves.cpp moves.h common.h fen.h fen.cpp
+moves-debug: moves_test.cpp moves.cpp moves.h common.h fen.h fen.cpp
 
 fen-test: fen_test.cpp fen.cpp fen.h common.h
 single_runner-test: single_runner_test.cpp single_runner.cpp single_runner.h common.h
@@ -126,6 +127,9 @@ perft-test: perft perft-debug perft-sse2
 ${PUZZLES}:
 	mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) && wget https://database.lichess.org/$(notdir ${PUZZLES}).zst
 	zstd -d ${PUZZLES}.zst
+
+gouda: uci-test
+	cp uci-test gouda
 
 test: fen-test moves-test elo-test eval-test search-test search-debug single_runner-test uci-test
 	rm -f coverage-*.profraw

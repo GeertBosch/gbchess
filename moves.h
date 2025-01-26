@@ -29,6 +29,13 @@ public:
     static SquareSet path(Square from, Square to);
 
     /**
+     * Returns the set of squares between two squares, inclusive of the `to` square.
+     */
+    static SquareSet ipath(Square from, Square to) {
+        return path(from, to) | SquareSet(from) | SquareSet(to);
+    }
+
+    /**
      * Returns the set of non-empty fields on the board, possibly limited to one color.
      */
     static SquareSet occupancy(const Board& board);
