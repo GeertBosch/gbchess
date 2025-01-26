@@ -233,8 +233,10 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     sortMoves(position, moveList.begin(), moveList.end());
 
     for (auto move : moveList) {
-        auto newPosition = applyMove(position, move);
-        auto score = -quiesce(newPosition, -beta, -alpha, depthleft - 1);
+        // Apply the move to the board
+        auto undo = makeMove(position, move);
+        auto score = -quiesce(position, -beta, -alpha, depthleft - 1);
+        unmakeMove(position, undo);
 
         if (score >= beta) return beta;
         if (score > alpha) alpha = score;

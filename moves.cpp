@@ -647,7 +647,7 @@ void addAvailableCastling(MoveVector& captures,
         board, occupancy, turn, [&](Piece piece, Move move) { addMove(captures, piece, move); });
 }
 
-UndoMove makeMove(Board& board, Move move) {
+UndoBoard makeMove(Board& board, Move move) {
     // Lookup the compound move for the given move kind and target square. This breaks moves like
     // castling, en passant and promotion into a simple capture/move and a second move that can be a
     // no-op move, a quiet move or a promotion. The target square is taken from the compound move.
@@ -660,18 +660,29 @@ UndoMove makeMove(Board& board, Move move) {
     // The following 3 statements don't change the board for non-compound moves
     auto piece = Piece::NONE;
     std::swap(piece, board[compound.second[0]]);
-    UndoMove undo = {captured, {move.from(), compound.to}, piece, compound.second};
+    UndoBoard undo = {captured, {move.from(), compound.to}, piece, compound.second};
     piece = Piece(index(piece) + compound.promo);
     board[compound.second[1]] = piece;
     return undo;
 }
 
-void unmakeMove(Board& board, UndoMove undo) {
+UndoPosition makeMove(Position& position, Move move) {
+    auto undo = UndoPosition{makeMove(position.board, move), position.turn};
+    position.turn = applyMove(position.turn, undo.board.ours, move);
+    return undo;
+}
+
+void unmakeMove(Board& board, UndoBoard undo) {
     board[undo.second[1]] = Piece::NONE;
     board[undo.second[0]] = undo.ours;
     auto piece = undo.captured;
     std::swap(piece, board[undo.first[1]]);
     board[undo.first[0]] = piece;
+}
+
+void unmakeMove(Position& position, UndoPosition undo) {
+    unmakeMove(position.board, undo.board);
+    position.turn = undo.turn;
 }
 
 CastlingMask castlingMask(Square from, Square to) {
