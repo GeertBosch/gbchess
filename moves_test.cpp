@@ -2,6 +2,7 @@
 #include <cassert>
 #include <iostream>
 
+#include "common.h"
 #include "debug.h"
 #include "fen.h"
 #include "moves.h"
@@ -443,7 +444,7 @@ void testMakeAndUnmakeMove(Board& board, Move move) {
     auto activeColor = color(board[move.from()]);
     auto occupancy = Occupancy(board, activeColor);
     auto delta = occupancyDelta(move);
-    auto captured = makeMove(board, move);
+    auto undo = makeMove(board, move);
     auto expected = Occupancy(board, !activeColor);
     auto actual = !(occupancy ^ delta);
     if (actual != expected) {
@@ -456,16 +457,20 @@ void testMakeAndUnmakeMove(Board& board, Move move) {
                   << toString(expected.theirs) << "}\n";
         std::cout << "Actual occupancy: { " << toString(actual.ours) << ", "
                   << toString(actual.theirs) << "}\n";
+        std::cout << "Original board:\n";
+        printBoard(std::cout, originalBoard);
+        std::cout << "Board after makeMove:\n";
+        printBoard(std::cout, board);
     }
     assert(actual == expected);
-    unmakeMove(board, move, captured);
+    unmakeMove(board, undo);
     if (board != originalBoard) {
         std::cout << "Original board:" << std::endl;
         std::cout << fen::to_string(originalBoard) << std::endl;
         printBoard(std::cout, originalBoard);
         std::cout << "Move: " << static_cast<std::string>(move) << std::endl;
         std::cout << "Kind: " << static_cast<int>(move.kind()) << std::endl;
-        std::cout << "Captured: " << to_char(captured) << std::endl;
+        std::cout << "Captured: " << to_char(undo.captured) << std::endl;
         {
             auto newBoard = originalBoard;
             makeMove(newBoard, move);

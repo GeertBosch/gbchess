@@ -9,8 +9,6 @@
 // benefits for ARM (on at least Apple Silicon M1) than real SSE2 has for x86.
 constexpr bool haveSSE2 = true;
 
-using TwoSquares = std::array<Square, 2>;
-
 struct CompoundMove {
     Square to = 0;
     uint8_t promo = 0;
@@ -649,7 +647,7 @@ void addAvailableCastling(MoveVector& captures,
         board, occupancy, turn, [&](Piece piece, Move move) { addMove(captures, piece, move); });
 }
 
-Piece makeMove(Board& board, Move move) {
+UndoMove makeMove(Board& board, Move move) {
     // Lookup the compound move for the given move kind and target square. This breaks moves like
     // castling, en passant and promotion into a simple capture/move and a second move that can be a
     // no-op move, a quiet move or a promotion. The target square is taken from the compound move.
@@ -659,67 +657,21 @@ Piece makeMove(Board& board, Move move) {
     std::swap(captured, board[move.from()]);
     std::swap(captured, board[compound.to]);
 
-    // The following 3 statements are a no-op for non-compound moves
+    // The following 3 statements don't change the board for non-compound moves
     auto piece = Piece::NONE;
     std::swap(piece, board[compound.second[0]]);
-    board[compound.second[1]] = Piece(index(piece) + compound.promo);
-
-    return captured;
+    UndoMove undo = {captured, {move.from(), compound.to}, piece, compound.second};
+    piece = Piece(index(piece) + compound.promo);
+    board[compound.second[1]] = piece;
+    return undo;
 }
 
-void unmakeMove(Board& board, Move move, Piece captured) {
-    switch (move.kind()) {
-    case MoveKind::KING_CASTLE: {
-        auto rank = move.from().rank();
-        auto rook = board[Square(rank, Position::kRookCastledKingSideFile)];
-        auto king = board[Square(rank, Position::kKingCastledKingSideFile)];
-
-        // Remove king and rook from their original squares
-        board[Square(rank, Position::kKingCastledKingSideFile)] = Piece::NONE;
-        board[Square(rank, Position::kRookCastledKingSideFile)] = Piece::NONE;
-
-        // Place king and rook on their new squares
-        board[Square(rank, Position::kKingFile)] = king;
-        board[Square(rank, Position::kKingSideRookFile)] = rook;
-
-    } break;
-    case MoveKind::QUEEN_CASTLE: {
-        auto rank = move.from().rank();
-        auto rook = board[Square(rank, Position::kRookCastledQueenSideFile)];
-        auto king = board[Square(rank, Position::kKingCastledQueenSideFile)];
-
-        // Remove king and rook from their original squares
-        board[Square(rank, Position::kKingCastledQueenSideFile)] = Piece::NONE;
-        board[Square(rank, Position::kRookCastledQueenSideFile)] = Piece::NONE;
-
-        // Place king and rook on their new squares
-        board[Square(rank, Position::kKingFile)] = king;
-        board[Square(rank, Position::kQueenSideRookFile)] = rook;
-        break;
-    }
-    case MoveKind::EN_PASSANT:
-        // The pawns target is empty, so move the piece to capture en passant there.
-        std::swap(board[Square{move.from().rank(), move.to().file()}], captured);
-        board[move.from()] = board[move.to()];
-        board[move.to()] = captured;
-        break;
-    case MoveKind::KNIGHT_PROMOTION:
-    case MoveKind::BISHOP_PROMOTION:
-    case MoveKind::ROOK_PROMOTION:
-    case MoveKind::QUEEN_PROMOTION:
-    case MoveKind::KNIGHT_PROMOTION_CAPTURE:
-    case MoveKind::BISHOP_PROMOTION_CAPTURE:
-    case MoveKind::ROOK_PROMOTION_CAPTURE:
-    case MoveKind::QUEEN_PROMOTION_CAPTURE:
-        board[move.to()] = addColor(PieceType::PAWN, color(board[move.to()]));  // Demote the piece
-        [[fallthrough]];
-    case MoveKind::QUIET_MOVE:
-    case MoveKind::DOUBLE_PAWN_PUSH:
-    case MoveKind::CAPTURE:
-        board[move.from()] = board[move.to()];
-        board[move.to()] = captured;
-        break;
-    }
+void unmakeMove(Board& board, UndoMove undo) {
+    board[undo.second[1]] = Piece::NONE;
+    board[undo.second[0]] = undo.ours;
+    auto piece = undo.captured;
+    std::swap(piece, board[undo.first[1]]);
+    board[undo.first[0]] = piece;
 }
 
 CastlingMask castlingMask(Square from, Square to) {
@@ -878,16 +830,16 @@ void doMoveIfLegal(Board& board, SearchState& state, Piece piece, Move move, con
     }
 
     // Apply the move to the board
-    auto captured = makeMove(board, move);
+    auto undo = makeMove(board, move);
 
     // Update the occupancy
     auto delta = movesTable.occupancyDelta[noPromo(kind)][from.index()][to.index()];
 
     // Check if the move would result in our king being in check.
     if (!isAttacked(board, checkSquares, state.occupied ^ delta))
-        fun(board, MoveWithPieces{Move{from, to, kind}, piece, captured});
+        fun(board, MoveWithPieces{Move{from, to, kind}, piece, undo.captured});
 
-    unmakeMove(board, move, captured);
+    unmakeMove(board, undo);
 };
 }  // namespace
 
