@@ -83,24 +83,24 @@ constexpr Score operator"" _cp(unsigned long long value) {
     return Score(value);
 }
 
-using PieceSquareTable = std::array<Score, kNumSquares>;
-PieceSquareTable operator+(PieceSquareTable lhs, Score rhs);
-PieceSquareTable operator+(PieceSquareTable lhs, PieceSquareTable rhs);
-PieceSquareTable operator*(PieceSquareTable table, Score score);
+using SquareTable = std::array<Score, kNumSquares>;
+SquareTable operator+(SquareTable lhs, Score rhs);
+SquareTable operator+(SquareTable lhs, SquareTable rhs);
+SquareTable operator*(SquareTable table, Score score);
 
 /** Reverse the ranks in the table and negate the scores, so tables made from the viewpoint
  *  of one side can be used for the other side.
  */
-void flip(PieceSquareTable& table);
+void flip(SquareTable& table);
+
+using PieceSquareTable = std::array<SquareTable, kNumPieces>;
 struct EvalTable {
-    std::array<PieceSquareTable, kNumPieces> pieceSquareTables{};
+    PieceSquareTable pieceSquareTable{};
     EvalTable();
     EvalTable(const Board& board, bool usePieceSquareTables);
     EvalTable& operator=(const EvalTable& other) = default;
 
-    const PieceSquareTable& operator[](Piece piece) const {
-        return pieceSquareTables[index(piece)];
-    }
+    const SquareTable& operator[](Piece piece) const { return pieceSquareTable[index(piece)]; }
 };
 
 /**
@@ -147,6 +147,39 @@ Score evaluateBoard(const Board& board, bool usePieceSquareTables);
  * Same as above, but uses a pre-computed evaluation table.
  */
 Score evaluateBoard(const Board& board, const EvalTable& table);
+
+/**
+ * Return the delta in the Score as result of the move from white's perspective: positive scores
+ * indicate an advantage for white. The board past reflects the state before the move.
+ */
+inline Score evaluateMove(const Board& before, BoardChange move, const EvalTable& table) {
+    Score delta = 0_cp;
+    // Go over all changes in order, as we have the board before the move was made.
+
+    // The first move is a regular capture or move, so adjust delta accordingly.
+    Piece first = before[move.first[0]];
+    delta -= table[move.captured][move.first[1].index()];  // Remove captured piece
+    delta -= table[first][move.first[0].index()];          // Remove piece from original square
+    delta += table[first][move.first[1].index()];          // Add the piece to its target square
+
+    // The second move is either a quiet move for en passant or castling, or a promo move.
+    Piece second = first;
+    if (move.second[0] != move.first[1]) second = before[move.second[0]];  // Castling
+
+    delta -= table[second][move.second[0].index()];  // Remove piece before promotion
+    second = Piece(index(second) + move.promo);      // Apply any promotion
+    delta += table[second][move.second[1].index()];  // Add piece with any promotions
+
+    return delta;
+}
+
+inline Score evaluateMove(const Board& board,
+                          Color activePlayer,
+                          BoardChange move,
+                          EvalTable& table) {
+    Score eval = evaluateMove(board, move, table);
+    return activePlayer == Color::WHITE ? eval : -eval;
+}
 
 /**
  * Same as the two functions above, but with player-relative scores

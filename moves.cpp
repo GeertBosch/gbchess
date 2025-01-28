@@ -647,34 +647,47 @@ void addAvailableCastling(MoveVector& captures,
         board, occupancy, turn, [&](Piece piece, Move move) { addMove(captures, piece, move); });
 }
 
-UndoBoard makeMove(Board& board, Move move) {
+BoardChange prepareMove(Board& board, Move move) {
     // Lookup the compound move for the given move kind and target square. This breaks moves like
     // castling, en passant and promotion into a simple capture/move and a second move that can be a
     // no-op move, a quiet move or a promotion. The target square is taken from the compound move.
     auto compound = movesTable.compound[index(move.kind())][move.to().index()];
-
-    auto captured = Piece::NONE;
-    std::swap(captured, board[move.from()]);
-    std::swap(captured, board[compound.to]);
-
-    // The following 3 statements don't change the board for non-compound moves
-    auto piece = Piece::NONE;
-    std::swap(piece, board[compound.second[0]]);
-    UndoBoard undo = {captured, {move.from(), compound.to}, piece, compound.second};
-    piece = Piece(index(piece) + compound.promo);
-    board[compound.second[1]] = piece;
+    auto captured = board[compound.to];
+    BoardChange undo = {captured, {move.from(), compound.to}, compound.promo, compound.second};
     return undo;
 }
+BoardChange makeMove(Board& board, BoardChange change) {
+    Piece first = Piece::NONE;
+    std::swap(first, board[change.first[0]]);
+    board[change.first[1]] = first;
 
+    // The following statements don't change the board for non-compound moves
+    auto second = Piece::NONE;
+    std::swap(second, board[change.second[0]]);
+    second = Piece(index(second) + change.promo);
+    board[change.second[1]] = second;
+    return change;
+}
+
+BoardChange makeMove(Board& board, Move move) {
+    auto change = prepareMove(board, move);
+    return makeMove(board, change);
+}
+
+UndoPosition makeMove(Position& position, BoardChange change, Move move) {
+    auto ours = position.board[change.first[0]];
+    auto undo = UndoPosition{makeMove(position.board, change), position.turn};
+    position.turn = applyMove(position.turn, ours, move);
+    return undo;
+}
 UndoPosition makeMove(Position& position, Move move) {
-    auto undo = UndoPosition{makeMove(position.board, move), position.turn};
-    position.turn = applyMove(position.turn, undo.board.ours, move);
-    return undo;
+    return makeMove(position, prepareMove(position.board, move), move);
 }
-
-void unmakeMove(Board& board, UndoBoard undo) {
-    board[undo.second[1]] = Piece::NONE;
-    board[undo.second[0]] = undo.ours;
+void unmakeMove(Board& board, BoardChange undo) {
+    Piece ours = Piece::NONE;
+    std::swap(board[undo.second[1]], ours);
+    ours = Piece(index(ours) - undo.promo);
+    board[undo.second[0]] = ours;
     auto piece = undo.captured;
     std::swap(piece, board[undo.first[1]]);
     board[undo.first[0]] = piece;

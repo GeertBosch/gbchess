@@ -215,10 +215,10 @@ void sortMoves(const Position& position, MoveIt begin, MoveIt end) {
     Hash hash(position);
     sortMoves(position, hash, begin, end);
 }
-
-Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
+Score quiesce(Position& position, Score alpha, Score beta, int depthleft);
+Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depthleft) {
     ++evalCount;
-    Score stand_pat = evaluateBoard(position.board, position.activeColor(), evalTable);
+    Score stand_pat = eval;
 
     if (!depthleft) return stand_pat;
 
@@ -233,15 +233,25 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     sortMoves(position, moveList.begin(), moveList.end());
 
     for (auto move : moveList) {
+        // Compute the change to the board that results from the move
+        auto change = prepareMove(position.board, move);
+        auto newEval =
+            eval + evaluateMove(position.board, position.activeColor(), change, evalTable);
         // Apply the move to the board
         auto undo = makeMove(position, move);
-        auto score = -quiesce(position, -beta, -alpha, depthleft - 1);
+        assert(-newEval == evaluateBoard(position.board, position.activeColor(), evalTable));
+        auto score = -quiesce(position, -newEval, -beta, -alpha, depthleft - 1);
         unmakeMove(position, undo);
 
         if (score >= beta) return beta;
         if (score > alpha) alpha = score;
     }
     return alpha;
+}
+
+Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
+    auto eval = evaluateBoard(position.board, position.activeColor(), evalTable);
+    return quiesce(position, eval, alpha, beta, depthleft);
 }
 
 Score quiesce(Position& position, int depthleft) {

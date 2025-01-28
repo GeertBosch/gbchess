@@ -36,6 +36,7 @@ clean: .PHONY
 	rm -f *.o *-debug *-test perft core *.core puzzles.actual perf.data* *.ii *.bc *.s
 	rm -f perft-{clang,gcc}-{sse2,emul}
 	rm -f *.profraw *.profdata *.gcda *.gcno lcov.info
+	rm -f game.??? log.??? players.dat # XBoard outputs
 	rm -rf *.dSYM
 
 moves-test: moves_test.cpp moves.cpp moves.h common.h fen.h fen.cpp

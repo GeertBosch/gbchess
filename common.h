@@ -335,7 +335,7 @@ struct CastlingInfo {
           rookToQueenSide(Square(baseRank(color), 3)),
           kingFrom(Square(baseRank(color), kNumFiles / 2)),
           kingToKingSide(Square(baseRank(color), kNumFiles - 2)),
-          kingToQueenSide(Square(baseRank(color), 2)){};
+          kingToQueenSide(Square(baseRank(color), 2)) {};
 };
 
 static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::WHITE),
@@ -343,6 +343,34 @@ static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::WHITE),
 
 // Square to indicate no enpassant target
 static constexpr auto noEnPassantTarget = Square(0);
+
+using TwoSquares = std::array<Square, 2>;
+
+/**
+ * Succinct representation of data needed to make or unmake a move. It is sufficient to recreate a
+ * Board from before the move, starting from a board after the move was made and the other way
+ * around. The second and promo fields are needed for complex moves, such as castling, promotion and
+ * en passant.
+ */
+struct BoardChange {
+    Piece captured;
+    TwoSquares first = {0, 0};
+    uint8_t promo;
+    TwoSquares second = {0, 0};
+    operator std::string() {
+        auto piece2str = [](Piece piece) -> std::string {
+            return std::string(1, pieceChars[index(piece)]);
+        };
+        std::string promoChars = " nbrq";
+        auto promo2str = [&promoChars](uint8_t promo) -> std::string {
+            return promo ? std::string(1, promoChars[promo]) : "";
+        };
+
+        return "captured = " + piece2str(captured) + " " + std::string(first[0]) +
+            std::string(first[1]) + std::string(second[0]) + std::string(second[1]) +
+            promo2str(promo);
+    }
+};
 
 struct Turn {
     Color activeColor = Color::WHITE;

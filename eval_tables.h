@@ -10,7 +10,7 @@
 // See https://chessprogramming.wikispaces.com/Simplified+evaluation+function#Piece-SquareTables
 
 // Bill Jordan's piece-square value tables
-constexpr PieceSquareTable pawnScores = {
+constexpr SquareTable pawnScores = {
     0_cp,   0_cp,   0_cp,   0_cp,   0_cp,   0_cp,   0_cp,   0_cp,    // rank 1
     0_cp,   2_cp,   4_cp,   -12_cp, -12_cp, 4_cp,   2_cp,   0_cp,    // rank 2
     0_cp,   2_cp,   4_cp,   4_cp,   4_cp,   4_cp,   2_cp,   0_cp,    // rank 3
@@ -21,7 +21,7 @@ constexpr PieceSquareTable pawnScores = {
     0_cp,   0_cp,   0_cp,   0_cp,   0_cp,   0_cp,   0_cp,   0_cp,    // rank 8
 };
 
-constexpr PieceSquareTable knightScores = {
+constexpr SquareTable knightScores = {
     -30_cp,  -20_cp, -10_cp, -8_cp, -8_cp, -10_cp, -20_cp, -30_cp,   // rank 1
     -16_cp,  -6_cp,  -2_cp,  0_cp,  0_cp,  -2_cp,  -6_cp,  -16_cp,   // rank 2
     -8_cp,   -2_cp,  4_cp,   6_cp,  6_cp,  4_cp,   -2_cp,  -8_cp,    // rank 3
@@ -32,7 +32,7 @@ constexpr PieceSquareTable knightScores = {
     -150_cp, -20_cp, -10_cp, -5_cp, -5_cp, -10_cp, -20_cp, -150_cp,  // rank 8
 };
 
-constexpr PieceSquareTable bishopScores = {
+constexpr SquareTable bishopScores = {
     -10_cp, -10_cp, -12_cp, -10_cp, -10_cp, -12_cp, -10_cp, -10_cp,  // rank 1
     0_cp,   4_cp,   4_cp,   4_cp,   4_cp,   4_cp,   4_cp,   0_cp,    // rank 2
     2_cp,   4_cp,   6_cp,   6_cp,   6_cp,   6_cp,   4_cp,   2_cp,    // rank 3
@@ -43,7 +43,7 @@ constexpr PieceSquareTable bishopScores = {
     -10_cp, -10_cp, -10_cp, -10_cp, -10_cp, -10_cp, -10_cp, -10_cp,  // rank 8
 };
 
-constexpr PieceSquareTable rookScores = {
+constexpr SquareTable rookScores = {
     4_cp,  4_cp,  4_cp,  6_cp,  6_cp,  4_cp,  4_cp,  4_cp,   // rank 1
     0_cp,  0_cp,  0_cp,  0_cp,  0_cp,  0_cp,  0_cp,  0_cp,   // rank 2
     0_cp,  0_cp,  0_cp,  0_cp,  0_cp,  0_cp,  0_cp,  0_cp,   // rank 3
@@ -54,7 +54,7 @@ constexpr PieceSquareTable rookScores = {
     10_cp, 10_cp, 10_cp, 10_cp, 10_cp, 10_cp, 10_cp, 10_cp,  // rank 8
 };
 
-constexpr PieceSquareTable queenScores = {
+constexpr SquareTable queenScores = {
     -10_cp, -10_cp, -6_cp, -4_cp, -4_cp, -6_cp, -10_cp, -10_cp,  // rank 1
     -10_cp, 2_cp,   2_cp,  2_cp,  2_cp,  2_cp,  2_cp,   -10_cp,  // rank 2
     2_cp,   2_cp,   2_cp,  3_cp,  3_cp,  2_cp,  2_cp,   2_cp,    // rank 3
@@ -64,7 +64,7 @@ constexpr PieceSquareTable queenScores = {
     -10_cp, -10_cp, 2_cp,  2_cp,  2_cp,  2_cp,  -10_cp, -10_cp,  // rank 7
 };
 
-constexpr PieceSquareTable kingOpeningScores = {
+constexpr SquareTable kingOpeningScores = {
     20_cp,  20_cp,  20_cp,  -40_cp, 10_cp,  -60_cp, 20_cp,  20_cp,   // rank 1
     15_cp,  2_cp,   -25_cp, -30_cp, -30_cp, -45_cp, 20_cp,  15_cp,   // rank 2
     -48_cp, -48_cp, -48_cp, -48_cp, -48_cp, -48_cp, -48_cp, -48_cp,  // rank 3
@@ -75,7 +75,7 @@ constexpr PieceSquareTable kingOpeningScores = {
     -48_cp, -48_cp, -48_cp, -48_cp, -48_cp, -48_cp, -48_cp, -48_cp,  // rank 8
 };
 
-constexpr PieceSquareTable kingEndgameScore = {
+constexpr SquareTable kingEndgameScore = {
     0_cp,  8_cp,  16_cp, 18_cp, 18_cp, 16_cp, 8_cp,  0_cp,   // rank 1
     8_cp,  16_cp, 24_cp, 32_cp, 32_cp, 24_cp, 16_cp, 8_cp,   // rank 2
     16_cp, 24_cp, 32_cp, 40_cp, 40_cp, 32_cp, 24_cp, 16_cp,  // rank 3

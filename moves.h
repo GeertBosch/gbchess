@@ -230,35 +230,35 @@ MoveVector parseUCIMoves(Position position, const std::string& moves);
  */
 Position applyUCIMove(Position position, const std::string& move);
 
-using TwoSquares = std::array<Square, 2>;
-struct UndoBoard {
-    Piece captured;
-    TwoSquares first = {0, 0};
-    Piece ours;
-    TwoSquares second = {0, 0};
-};
 struct UndoPosition {
-    UndoBoard board;
+    BoardChange board;
     Turn turn;
 };
 
+/**
+ * Decompose a possibly complex move (castling, promotion, en passant) into two simpler moves
+ * that allow making and unmaking the change to the board without complex conditional logic.
+ */
+BoardChange prepareMove(Board& board, Move move);
 
 /**
  * Updates the board with the given move, which may be a capture.
  * Does not perform any legality checks. Any captured piece is returned.
  */
-UndoBoard makeMove(Board& board, Move move);
+BoardChange makeMove(Board& board, Move move);
+BoardChange makeMove(Board& board, BoardChange change);
 
 /**
  * Like the above, but also updates per turn state (active color, castling availability,
  * en passant target, halfmove clock, and fullmove number).
  */
 UndoPosition makeMove(Position& position, Move move);
+UndoPosition makeMove(Position& position, BoardChange change, Move move);
 
 /**
  * Undoes the given move, restoring the captured piece to the captured square.
  */
-void unmakeMove(Board& board, UndoBoard undo);
+void unmakeMove(Board& board, BoardChange undo);
 void unmakeMove(Position& position, UndoPosition undo);
 
 /**

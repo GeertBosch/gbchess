@@ -31,22 +31,22 @@ std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     return os;
 }
 
-PieceSquareTable operator+(PieceSquareTable lhs, Score rhs) {
+SquareTable operator+(SquareTable lhs, Score rhs) {
     for (auto& value : lhs) value += rhs;
     return lhs;
 }
 
-PieceSquareTable operator+(PieceSquareTable lhs, PieceSquareTable rhs) {
+SquareTable operator+(SquareTable lhs, SquareTable rhs) {
     for (size_t i = 0; i < lhs.size(); ++i) lhs[i] += rhs[i];
     return lhs;
 }
 
-PieceSquareTable operator*(PieceSquareTable table, Score score) {
+SquareTable operator*(SquareTable table, Score score) {
     for (auto& value : table) value *= score;
     return table;
 }
 
-void flip(PieceSquareTable& table) {
+void flip(SquareTable& table) {
     // Flip the table vertically (king side remains king side, queen side remains queen side)
     for (auto sq = Square(0); sq != kNumSquares / 2; ++sq) {
         auto other = Square(kNumRanks - 1 - sq.rank(), sq.file());
@@ -126,14 +126,14 @@ struct GamePhase {
         *this = GamePhase((std::max(material[0], material[1]) - 10) / 2);
     }
 
-    PieceSquareTable interpolate(PieceSquareTable opening, PieceSquareTable endgame) const {
+    SquareTable interpolate(SquareTable opening, SquareTable endgame) const {
         return opening * weights[phase] + endgame * (100_cp - weights[phase]);
     }
 };
 
 EvalTable::EvalTable() {
     for (auto piece : pieces) {
-        auto& table = pieceSquareTables[index(piece)];
+        auto& table = pieceSquareTable[index(piece)];
         table = {};
         table = table + pieceValues[index(piece)];
     }
@@ -142,7 +142,7 @@ EvalTable::EvalTable() {
 EvalTable::EvalTable(const Board& board, bool usePieceSquareTables) {
     auto phase = GamePhase(board);
     for (auto piece : pieces) {
-        auto& table = pieceSquareTables[index(piece)];
+        auto& table = pieceSquareTable[index(piece)];
         table = {};
         if (piece != Piece::NONE && usePieceSquareTables) {
             switch (type(piece)) {
