@@ -20,16 +20,34 @@ struct PrincipalVariation {
         if (move) moves.push_back(move);
         moves.insert(moves.end(), pv.moves.begin(), pv.moves.end());
     }
-    PrincipalVariation(Eval eval) : score(eval.score) {
-        if (eval.move) moves.push_back(eval.move);
-    }
     PrincipalVariation& operator=(const PrincipalVariation& other) = default;
     Move front() const { return moves.empty() ? Move() : moves.front(); }
     Move operator[](size_t i) const { return i < moves.size() ? moves[i] : Move(); }
 
+    operator std::string() {
+        std::string str;
+        auto depth = std::to_string(std::max(1, int(moves.size())));
+        if (score.mate() > 0)
+            str += "mate " + depth + " ";
+        else if (score.mate() < 0)
+            str += "mate -" + depth + " ";
+        else
+            str += "cp " + std::to_string(score.cp()) + " ";
+
+        // While adding moves the string remains ending with a space
+        for (const auto& move : moves)
+            if (move) str += std::string(move) + " ";
+
+        str.pop_back();  // Remove the final space
+        return str;
+    }
+
     operator MoveVector() const { return moves; }
-    operator Eval() const { return {front(), score}; }
     PrincipalVariation operator-() const { return {-score, moves}; }
+    bool operator<(const PrincipalVariation& other) const {
+        return score < other.score || (score == other.score && moves.size() > other.moves.size());
+    }
+    bool operator>(const PrincipalVariation& other) const { return other < *this; }
 
 private:
     PrincipalVariation(Score score, MoveVector moves) : score(score), moves(moves) {}

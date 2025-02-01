@@ -23,9 +23,6 @@ std::ostream& operator<<(std::ostream& os, Color color) {
 std::ostream& operator<<(std::ostream& os, Score score) {
     return os << std::string(score);
 }
-std::ostream& operator<<(std::ostream& os, const Eval& eval) {
-    return os << eval.move << " " << eval.score;
-}
 std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     for (const auto& move : moves) os << " " << std::string(move);
     return os;

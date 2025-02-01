@@ -28,9 +28,6 @@ std::ostream& operator<<(std::ostream& os, Color color) {
 std::ostream& operator<<(std::ostream& os, Score score) {
     return os << std::string(score);
 }
-std::ostream& operator<<(std::ostream& os, const Eval& eval) {
-    return os << eval.move << " " << eval.score;
-}
 
 std::string cmdName = "eval-test";
 
@@ -185,24 +182,6 @@ void testEvaluateBoard() {
     std::cout << "evaluateBoard tests passed" << std::endl;
 }
 
-void testEval() {
-    {
-        Eval none;
-        Eval mateIn1 = {Move("e7"_sq, "g7"_sq, Move::QUIET), Score::max()};
-        assert(std::string(none) == "0000@-M1");
-        assert(std::string(mateIn1) == "e7g7@M1");
-        assert(none < mateIn1);
-        assert(mateIn1.score == Score::max());
-    }
-    {
-        Eval stalemate = {Move("f6"_sq, "e5"_sq, Move::QUIET), 0_cp};
-        Eval upQueen = {Move("f7"_sq, "a2"_sq, Move::CAPTURE), 9'00_cp};
-        assert(stalemate < upQueen);
-        assert(stalemate.score == Score());
-    }
-    std::cout << "Eval tests passed" << std::endl;
-}
-
 void testCheckAndMate() {
     auto checkmate =
         fen::parsePosition("rn1qr3/pbppk1Q1/1p2p3/3nP1N1/1b1P4/2N5/PPP2PPP/R1B1K2R b KQ - 0 15");
@@ -227,7 +206,6 @@ int main(int argc, char* argv[]) {
     testScore();
     testMateScore();
     testEvaluateBoard();
-    testEval();
 
     std::string fen(argv[1]);
 

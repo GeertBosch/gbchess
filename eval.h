@@ -98,35 +98,6 @@ struct EvalTable {
 };
 
 /**
- * The evaluation is always from the perspective of the active color. Higher evaluations are better,
- * zero indicates a draw. Units of evaluation are roughly the value of a pawn.
- */
-struct Eval {
-    Move move = {};  // Defaults to an invalid move
-    Score score = Score::min();
-
-    Eval() = default;
-    Eval(Move move, Score score) : move(move), score(score) {}
-    Eval& operator=(const Eval& other) = default;
-    Eval operator-() const {
-        auto ret = *this;
-        ret.score = -ret.score;
-
-        return ret;
-    }
-    explicit operator bool() const { return move; }
-
-    bool operator==(const Eval& rhs) const { return move == rhs.move && score == rhs.score; }
-    bool operator!=(const Eval& rhs) const { return !(*this == rhs); }
-    bool operator<(const Eval& rhs) const { return score < rhs.score; }
-    bool operator>(const Eval& rhs) const { return score > rhs.score; }
-
-    operator std::string() const {
-        return static_cast<std::string>(move) + "@" + static_cast<std::string>(score);
-    }
-};
-
-/**
  * This function iterates over each square in the board, uses the pieceValues map to find
  * the value of the piece on that square, and adjusts the total value accordingly. White
  * pieces have positive values, and black pieces have negative values, so the returned value

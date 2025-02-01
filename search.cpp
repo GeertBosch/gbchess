@@ -32,10 +32,14 @@ struct TranspositionTable {
     static constexpr size_t kNumEntries = options::transpositionTableEntries;
 
     enum EntryType { EXACT, LOWERBOUND, UPPERBOUND };
+    struct Eval {
+        Move move;
+        Score score;
+    };
 
     struct Entry {
         Hash hash;
-        Eval move;
+        Eval eval;
         uint8_t generation = 0;
         uint8_t depth = 0;
         EntryType type = EXACT;
@@ -43,7 +47,7 @@ struct TranspositionTable {
         Entry& operator=(const Entry& other) = default;
 
         Entry(Hash hash, Eval move, uint8_t generation, uint8_t depth, EntryType type)
-            : hash(hash), move(move), generation(generation), depth(depth), type(type) {}
+            : hash(hash), eval(move), generation(generation), depth(depth), type(type) {}
     };
 
     std::vector<Entry> entries{kNumEntries};
@@ -66,7 +70,7 @@ struct TranspositionTable {
         if constexpr (kNumEntries == 0) return {Move(), Score()};
         ++numHits;
         auto& entry = entries[hash() % kNumEntries];
-        if (entry.hash() == hash() && entry.generation == generation) return entry.move;
+        if (entry.hash() == hash() && entry.generation == generation) return entry.eval;
         --numHits;
         ++numMisses;
         return {};  // no move found
@@ -96,9 +100,9 @@ struct TranspositionTable {
         ++numHits;
         ++cacheCount;
         switch (entry->type) {
-        case EXACT: alpha = beta = entry->move.score; break;
-        case LOWERBOUND: alpha = std::max(alpha, entry->move.score); break;
-        case UPPERBOUND: beta = std::min(beta, entry->move.score); break;
+        case EXACT: alpha = beta = entry->eval.score; break;
+        case LOWERBOUND: alpha = std::max(alpha, entry->eval.score); break;
+        case UPPERBOUND: beta = std::min(beta, entry->eval.score); break;
         }
     }
 
@@ -108,19 +112,19 @@ struct TranspositionTable {
         auto& entry = entries[idx];
         ++numInserted;
 
-        if (entry.generation != generation && entry.move) {
+        if (entry.generation != generation && entry.eval.move) {
             --numObsoleted;
-            entry.move = {};
+            entry.eval = {};
         }
 
-        if (entry.type == EXACT && entry.depth > depthleft && entry.move &&
-            (type != EXACT || entry.move.score >= move.score))
+        if (entry.type == EXACT && entry.depth > depthleft && entry.eval.move &&
+            (type != EXACT || entry.eval.score >= move.score))
             return;
 
         // 3 cases: improve existing entry, collision with unrelated entry, or occupy an empty slot
-        if (entry.move && entry.hash == hash)
+        if (entry.eval.move && entry.hash == hash)
             ++numImproved;
-        else if (entry.move)
+        else if (entry.eval.move)
             ++numCollisions;
         else
             ++numOccupied;
@@ -164,7 +168,7 @@ using MoveIt = MoveVector::iterator;
 MoveIt sortTransposition(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
     // See if the current position is a transposition of a previously seen one
     auto cachedMove = transpositionTable.find(hash);
-    if (!cachedMove) return begin;
+    if (!cachedMove.move) return begin;
 
     // If the move is not part of the current legal moves, nothing to do here.
     auto it = std::find(begin, end, cachedMove.move);
@@ -239,7 +243,8 @@ Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depth
             eval + evaluateMove(position.board, position.activeColor(), change, evalTable);
         // Apply the move to the board
         auto undo = makeMove(position, move);
-        assert(-newEval == evaluateBoard(position.board, position.activeColor(), evalTable));
+        if (debug)
+            assert(-newEval == evaluateBoard(position.board, position.activeColor(), evalTable));
         auto score = -quiesce(position, -newEval, -beta, -alpha, depthleft - 1);
         unmakeMove(position, undo);
 
@@ -299,7 +304,7 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
     TranspositionTable::EntryType type = TranspositionTable::EXACT;
     if (pv.score <= alpha) type = TranspositionTable::UPPERBOUND;
     if (pv.score >= beta) type = TranspositionTable::LOWERBOUND;
-    transpositionTable.insert(hash, pv, depthleft, type);
+    transpositionTable.insert(hash, {pv.front(), pv.score}, depthleft, type);
 
     return pv;
 }
@@ -352,12 +357,12 @@ PrincipalVariation toplevelAlphaBeta(
         if (currmoveInfo(info, maxdepth, currmove, ++currmovenumber)) break;
         auto newPosition = applyMove(position, currmove);
         auto newVar = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), maxdepth - 1);
-        if (newVar.score > pv.score) pv = {currmove, newVar};
+        if (newVar.score > pv.score || !pv.front()) pv = {currmove, newVar};
         if (pv.score >= beta) break;
     }
     if (moveList.empty() && !isInCheck(position)) pv = {Move(), Score()};
 
-    transpositionTable.insert(hash, pv, maxdepth, TranspositionTable::EXACT);
+    transpositionTable.insert(hash, {pv.front(), pv.score}, maxdepth, TranspositionTable::EXACT);
 
     return pv;
 }
@@ -410,7 +415,8 @@ PrincipalVariation computeBestMove(Position& position, int maxdepth, InfoFn info
     return options::iterativeDeepening ? iterativeDeepening(position, maxdepth, info)
                                        : toplevelAlphaBeta(position, maxdepth, info);
 } catch (SingleRunner::Stop&) {
-    return transpositionTable.find(Hash(position));
+    auto entry = transpositionTable.find(Hash(position));
+    return {entry.move, entry.score};
 }
 
 void stop() {

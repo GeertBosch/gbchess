@@ -11,6 +11,7 @@
 #include "fen.h"
 #include "moves.h"
 #include "options.h"
+#include "pv.h"
 #include "search.h"
 
 namespace {
@@ -33,9 +34,6 @@ std::ostream& operator<<(std::ostream& os, Color color) {
 }
 std::ostream& operator<<(std::ostream& os, Score score) {
     return os << std::string(score);
-}
-std::ostream& operator<<(std::ostream& os, const Eval& eval) {
-    return os << eval.move << " " << eval.score;
 }
 
 std::string cmdName = "search-test";
@@ -100,34 +98,34 @@ void usage(std::string cmdName, std::string errmsg) {
     std::exit(1);
 }
 
-Eval analyzePosition(Position position, int maxdepth) {
-    auto eval = search::computeBestMove(position, maxdepth);
-    std::cout << "        analyzePosition \"" << fen::to_string(position) << "\" as " << eval.score
-              << ", move " << std::string(eval.front()) << "\n";
-    return eval;
+PrincipalVariation analyzePosition(Position position, int maxdepth) {
+    auto pv = search::computeBestMove(position, maxdepth);
+    std::cout << "        analyzePosition \"" << fen::to_string(position) << "\" as " << pv.score
+              << ", move " << std::string(pv.front()) << "\n";
+    return pv;
 }
-Eval analyzeMoves(Position position, int maxdepth) {
+PrincipalVariation analyzeMoves(Position position, int maxdepth) {
     MoveVector moves;
-    Eval bestMove;
+    PrincipalVariation pv;
 
     if (maxdepth > 0) moves = allLegalMovesAndCaptures(position.turn, position.board);
 
     std::cout << "Analyzing " << moves.size() << " moves from " << fen::to_string(position) << "\n";
-    if (moves.empty()) bestMove = analyzePosition(position, 0);
+    if (moves.empty()) pv = analyzePosition(position, 0);
 
     for (auto move : moves) {
         std::cout << "    Considering " << move << " depth " << maxdepth - 1 << "\n";
         auto newPosition = applyMove(position, move);
-        auto newEval = -analyzePosition(newPosition, maxdepth - 1);
-        std::cout << "    Evaluated " << move << " as " << newEval.score << "\n";
+        auto newVariation = PrincipalVariation{move, -analyzePosition(newPosition, maxdepth - 1)};
+        std::cout << "    Evaluated " << move << " as " << newVariation.score << "\n";
 
-        if (newEval.score > bestMove.score) {
-            bestMove = {move, newEval.score};
-            std::cout << "    New best move: " << bestMove.move << " " << bestMove.score << "\n";
+        if (newVariation > pv) {
+            pv = newVariation;
+            std::cout << "    New best move: " << (std::string)pv << "\n";
         }
     }
 
-    return bestMove;
+    return pv;
 }
 
 template <typename F>
@@ -163,18 +161,19 @@ void printAvailableCaptures(const Position& position) {
 
 void printBestMove(Position position, int maxdepth) {
     auto bestMove = search::computeBestMove(position, maxdepth);
-    std::cout << "Best Move: " << Eval(bestMove) << " for " << fen::to_string(position)
-              << std::endl;
+    std::cout << "Best Move: " << bestMove << " for " << fen::to_string(position) << std::endl;
     std::cout << "pv " << bestMove.moves << "\n";
 }
 
 void printAnalysis(Position position, int maxdepth) {
     auto analyzed = analyzeMoves(position, maxdepth);
     std::cerr << "Analyzed: " << analyzed << std::endl;
-    Eval bestMove = search::computeBestMove(position, maxdepth);
+    auto bestMove = search::computeBestMove(position, maxdepth);
     if (bestMove.score != analyzed.score)
         std::cerr << "Mismatch: " << bestMove << " != " << analyzed << "\n";
-    assert(analyzed == bestMove);
+    if (bestMove.front() != analyzed.front())
+        std::cerr << "Mismatch: " << bestMove << " != " << analyzed << "\n";
+    assert(analyzed.front() == bestMove.front() && analyzed.score == bestMove.score);
 }
 
 /**
@@ -234,10 +233,6 @@ ScoreWithReason computeScore(Position position, MoveVector moves) {
     if (position.activeColor() != active) score = -score;
 
     return {score, " (" + side + " side) \"" + fen::to_string(position) + "\""};
-}
-
-bool sameMate(Eval expected, Eval got) {
-    return expected.score.mate() && got.score.mate() && expected.score == got.score;
 }
 
 enum PuzzleError { NO_ERROR, DEPTH_ERROR, EVAL_ERROR, SEARCH_ERROR, COUNT };
