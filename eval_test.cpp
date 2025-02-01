@@ -171,19 +171,6 @@ void testMateScore() {
     assert(m1 == Score::min());
     assert(std::string(m1) == "-M1");
 
-    Score M2 = M1.adjustDepth();
-    Score m2 = -((-m1).adjustDepth());
-
-    assert(M2.mate() == 2);
-    assert(m2.mate() == -2);
-    assert(M2 == -m2);
-    assert(std::string(M2) == "M2");
-    assert(std::string(m2) == "-M2");
-    assert(Score::mateIn(2) == M2);
-
-    Score M3 = M2.adjustDepth();
-    assert(Score::mateIn(3) == M3);
-
     std::cout << "Mate score tests passed" << std::endl;
 }
 
@@ -201,14 +188,9 @@ void testEvaluateBoard() {
 void testEval() {
     {
         Eval none;
-        Eval mateIn3 = {Move("f6"_sq, "e5"_sq, Move::QUIET),
-                        Score::max().adjustDepth().adjustDepth()};
         Eval mateIn1 = {Move("e7"_sq, "g7"_sq, Move::QUIET), Score::max()};
         assert(std::string(none) == "0000@-M1");
-        assert(std::string(mateIn3) == "f6e5@M3");
         assert(std::string(mateIn1) == "e7g7@M1");
-        assert(none < mateIn3);
-        assert(mateIn3 < mateIn1);
         assert(none < mateIn1);
         assert(mateIn1.score == Score::max());
     }

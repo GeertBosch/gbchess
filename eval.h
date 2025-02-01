@@ -50,12 +50,6 @@ public:
     int pawns() const { return value / 100; }
     int cp() const { return value; }
 
-    /**
-     *  For scores indicating an advantage, reduce the value by one for each additional ply, so that
-     *  a sooner achievement of the same advantage is preferred over a later one.
-     */
-    Score adjustDepth() const { return int16_t(value > 0 ? value - 1 : value); }
-
     operator std::string() const {
         value_type pawns = check(value) / 100;
         value_type cents = value % 100;
