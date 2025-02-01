@@ -31,7 +31,7 @@ uint64_t searchEvalCount = 0;  // copy of evalCount at the start of the search
 struct TranspositionTable {
     static constexpr size_t kNumEntries = options::transpositionTableEntries;
 
-    enum EntryType { EXACT, LOWERBOUND, UPPERBOUND };
+    enum EntryType : uint8_t { EXACT, LOWERBOUND, UPPERBOUND };
     struct Eval {
         Move move;
         Score score;
