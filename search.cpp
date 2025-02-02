@@ -378,7 +378,8 @@ PrincipalVariation aspirationWindows(Position position, Score expected, int maxd
     auto alphaIt = windows.begin();
     auto betaIt = windows.begin();
 
-    while (maxdepth > 3 && alphaIt != windows.end() && betaIt != windows.end()) {
+    while (maxdepth >= options::aspirationWindowMinDepth && alphaIt != windows.end() &&
+           betaIt != windows.end()) {
         auto alpha = expected - Score::fromCP(*alphaIt);
         auto beta = expected + Score::fromCP(*betaIt);
 
