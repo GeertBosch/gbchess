@@ -1,0 +1,5 @@
+uci
+position startpos d2d4
+d
+go depth 5 wait
+isready

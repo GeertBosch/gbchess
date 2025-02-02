@@ -141,7 +141,7 @@ test: fen-test moves-test elo-test eval-test search-test search-debug single_run
 	./single_runner-test
 	./search-test "r4rk1/p3ppbp/Pp3np1/3PpbB1/2q5/2N2P2/1PPQ2PP/3RR2K w - - 0 20" 1
 	./search-debug "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 5
-	./uci-test uci-test.in | grep "bestmove g5f6 ponder"
+	./uci-test ut1.in | grep "bestmove g5f6 ponder"
 
 coverage: test
 	${LLVM-MERGE}
