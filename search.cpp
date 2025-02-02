@@ -159,6 +159,32 @@ struct TranspositionTable {
     }
 
 } transpositionTable;
+
+/**
+ * The repetition table stores the hashes of all positions played so far in the game, so we can
+ * detect repetitions and apply the rule that a third repetition is a draw.
+ */
+struct Repetitions {
+    std::vector<Hash> hashes;
+    Repetitions() = default;
+    void push_back(Hash hash) { hashes.push_back(hash); }
+    void pop_back() { hashes.pop_back(); }
+
+    /**
+     * Returns the number of occurrences in the game of a position with the same hash. Only
+     * considers up to halfMoveClock moves, as any capture or pawn move prevents repetition.
+     */
+    int count(Hash hash, int halfMoveClock) {
+        // When starting with some FEN game positions, we may not have all move history.
+        halfMoveClock = std::min(halfMoveClock, int(hashes.size()));
+
+        int count = 0;
+        for (auto it = hashes.begin() + halfMoveClock; it != hashes.end(); ++it)
+            count += (*it == hash);
+        return count;
+    }
+} repetitions;
+
 using MoveIt = MoveVector::iterator;
 
 /**
@@ -288,6 +314,14 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
     //  Forced moves don't count towards depth, but avoid infinite recursion
     if (moveList.size() == 1 && position.turn.halfmoveClock < 50) ++depthleft;
 
+    // Need at least 4 half moves since the last irreversible move, to get to draw by repetition.
+    if (position.turn.halfmoveClock >= 4) {
+        if (position.turn.halfmoveClock >= 100) return {{}, Score()};  // Fifty-move rule
+        // Three-fold repetition, note that the current position is not included in the count
+        if (repetitions.count(hash, position.turn.halfmoveClock - 1) >= 2) return {{}, Score()};
+    }
+    repetitions.push_back(hash);
+
     sortMoves(position, hash, moveList.begin(), moveList.end());
 
     PrincipalVariation pv;
@@ -298,6 +332,7 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
         if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
         if (pv.score >= beta) break;
     }
+    repetitions.pop_back();
 
     if (moveList.empty() && !isInCheck(position)) pv.score = Score();  // Stalemate
 
@@ -407,14 +442,26 @@ PrincipalVariation iterativeDeepening(Position& position, int maxdepth, InfoFn i
     return pv;
 }
 
-PrincipalVariation computeBestMove(Position& position, int maxdepth, InfoFn info) try {
+PrincipalVariation computeBestMove(Position position,
+                                   int maxdepth,
+                                   MoveVector moves,
+                                   InfoFn info) try {
     SingleRunner search;
     evalTable = EvalTable{position.board, true};
     transpositionTable.clear();
     searchEvalCount = evalCount;
+    repetitions.hashes.clear();
 
-    return options::iterativeDeepening ? iterativeDeepening(position, maxdepth, info)
-                                       : toplevelAlphaBeta(position, maxdepth, info);
+    repetitions.push_back(Hash(position));
+    for (auto move : moves) {
+        position = applyMove(position, move);
+        repetitions.push_back(Hash(position));
+    }
+
+    auto pv = options::iterativeDeepening ? iterativeDeepening(position, maxdepth, info)
+                                          : toplevelAlphaBeta(position, maxdepth, info);
+    repetitions.pop_back();
+    return pv;
 } catch (SingleRunner::Stop&) {
     auto entry = transpositionTable.find(Hash(position));
     return {entry.move, entry.score};

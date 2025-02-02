@@ -2,6 +2,7 @@
 #include <cstring>
 #include <functional>
 #include <iterator>
+#include <string>
 #include <vector>
 
 #include "common.h"
@@ -222,6 +223,7 @@ struct ParseError : public std::exception {
  * legal move. Throws a ParseError if the string is not a legal move for the position.
  */
 Move parseUCIMove(Position position, const std::string& move);
+MoveVector parseUCIMoves(Position position, const std::vector<std::string>& moves);
 MoveVector parseUCIMoves(Position position, const std::string& moves);
 
 /**

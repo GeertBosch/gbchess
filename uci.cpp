@@ -1,4 +1,3 @@
-#include "options.h"
 #include <algorithm>
 #include <chrono>
 #include <ostream>
@@ -8,12 +7,28 @@
 #include "common.h"
 #include "fen.h"
 #include "moves.h"
+#include "options.h"
 #include "search.h"
 #include "uci.h"
 
 namespace {
 const char* const cmdName = "gbchess";
 const char* const authorName = "Geert Bosch";
+
+using UCIArguments = std::vector<std::string>;
+
+std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
+    for (const auto& move : moves) {
+        os << std::string(move) << " ";
+    }
+    return os;
+}
+std::ostream& operator<<(std::ostream& os, const UCIArguments& args) {
+    for (const auto& arg : args) {
+        os << arg << " ";
+    }
+    return os;
+}
 
 class UCIRunner {
 public:
@@ -23,10 +38,10 @@ public:
     void execute(std::string line);
 
 private:
-    using UCIArguments = std::vector<std::string>;
     using UCICommandHandler = std::function<void(std::ostream&, UCIArguments args)>;
 
     Position position = fen::parsePosition(fen::initialPosition);
+    MoveVector moves;
 
     void go(UCIArguments arguments) {
         auto depth = options::defaultDepth;
@@ -42,17 +57,18 @@ private:
             }
         }
         stop();
-        auto search = [this, depth, pos = position] {
+        auto search = [this, depth, pos = position, moves = moves] {
             auto position = pos;  // need to copy the position
-            auto pv = search::computeBestMove(position, depth, [this](std::string info) -> bool {
-                out << "info " << info << "\n";
-                std::flush(out);
-                if (&out != &log) {
-                    log << "info " << info << "\n";
-                    std::flush(log);
-                }
-                return false;
-            });
+            auto pv =
+                search::computeBestMove(position, depth, moves, [this](std::string info) -> bool {
+                    out << "info " << info << "\n";
+                    std::flush(out);
+                    if (&out != &log) {
+                        log << "info " << info << "\n";
+                        std::flush(log);
+                    }
+                    return false;
+                });
             std::stringstream ss;
             if (!pv.front()) {
                 ss << "resign\n";
@@ -63,6 +79,10 @@ private:
             ss << "\n";
             out << ss.str();
             std::flush(out);
+            if (&out != &log) {
+                log << ss.str();
+                std::flush(log);
+            }
         };
         if (wait) {
             search();
@@ -121,34 +141,35 @@ void UCIRunner::execute(std::string line) {
     } else if (command == "position") {
         std::string positionKind;
         in >> positionKind >> std::ws;
-        UCIArguments args;
-        UCIArguments moves;
-        std::copy(std::istream_iterator<std::string>(in), {}, std::back_inserter(args));
+        UCIArguments posArgs;
+        UCIArguments moveArgs;
+        Position position;
+        std::copy(std::istream_iterator<std::string>(in), {}, std::back_inserter(posArgs));
         if (positionKind == "startpos") {
             position = fen::parsePosition(fen::initialPosition);
-            moves = std::move(args);
-        } else if (positionKind == "fen" && args.size() >= 6) {
+            moveArgs = std::move(posArgs);
+        } else if (positionKind == "fen" && posArgs.size() >= 6) {
             std::string fen = "";
-            join(&args[0], &args[6], std::string(" "), std::back_inserter(fen));
+            join(&posArgs[0], &posArgs[6], std::string(" "), std::back_inserter(fen));
             if (fen.size() >= 2 && fen[0] == '"' && fen[fen.size() - 1] == '"')
                 fen = fen.substr(1, fen.size() - 2);
 
             position = fen::parsePosition(fen);
-            skip(args.begin(), args.end(), 6, std::back_inserter(moves));
+            skip(posArgs.begin(), posArgs.end(), 6, std::back_inserter(moveArgs));
 
         } else {
             out << "Unknown position kind: " << positionKind << "\n";
             return;
         }
-        if (!moves.size()) return;
-        if (moves[0] != "moves") {
-            out << "Expected moves, got: " << moves[0] << "\n";
+        if (!moveArgs.size()) {
+            this->moves = {};
+            this->position = position;
             return;
         }
-        moves.erase(moves.begin());
-        for (auto move : moves) {
-            position = applyMove(position, parseUCIMove(position, move));
-        }
+        if (moveArgs[0] == "moves") moveArgs.erase(moveArgs.begin());
+
+        this->moves = parseUCIMoves(position, moveArgs);
+        this->position = position;
     } else if (command == "go") {
         UCIArguments args;
         std::copy(std::istream_iterator<std::string>(in), {}, std::back_inserter(args));
@@ -165,6 +186,7 @@ void UCIRunner::execute(std::string line) {
     } else {
         out << "Unknown command: " << command << "\n";
     }
+    std::flush(log);
 }
 
 }  // namespace

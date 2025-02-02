@@ -12,12 +12,30 @@ extern uint64_t cacheCount;
 using InfoFn = std::function<bool(std::string info)>;
 
 /**
- * Evaluates the best moves from a given chess position up to a certain depth.
- * Each move is evaluated based on the static evaluation of the board or by recursive calls
- * to this function, decreasing the depth until it reaches zero. It also accounts for checkmate
- * and stalemate situations.
+ * Evaluates the best variation from a given chess position up to the given maxdepth number of half
+ * moves (plies). The evaluation of each position is done using a quiescense search, which aims to
+ * only evaluate positions where there are no captures, promotions or checks. Evaluations use the
+ * following approach:
+ *   - Static piece values
+ *   - Piece-square tables
+ *   - Tapered evaluation
+ *
+ * The search is done using the alpha-beta algorithm with fail-soft negamax search, using the
+ * following optimizations:
+ *   - Iterative deepening
+ *   - Aspiration windows
+ *   - Move ordering using Most Valuable Victim / Least Valuable Attacker (MVV/LVA)
+ *   - Transposition table
+ * For accurate game play regarding repeated moves and the fifty-move rule, the search should
+ * pass the start position and the moves played so far.
+ *
+ * The info function is called with UCI info strings, and should return true if the search should
+ * be abandoned.
  */
-PrincipalVariation computeBestMove(Position& position, int maxdepth, InfoFn info = nullptr);
+PrincipalVariation computeBestMove(Position position,
+                                   int maxdepth,
+                                   MoveVector moves = {},
+                                   InfoFn info = nullptr);
 
 /**
  * Interrupt computeBestMove and make it return the best move found sofar.

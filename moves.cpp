@@ -813,13 +813,17 @@ Move check(Move move, const std::string& uci) {
     return move;
 }
 
-MoveVector parseUCIMoves(Position position, const std::string& moves) {
+MoveVector parseUCIMoves(Position position, const std::vector<std::string>& moves) {
     MoveVector vector;
-    for (auto uci : split(moves, ' '))
+    for (auto uci : moves)
         position =
             applyMove(position, vector.emplace_back(check(parseUCIMove(position, uci), uci)));
 
     return vector;
+}
+
+MoveVector parseUCIMoves(Position position, const std::string& moves) {
+    return parseUCIMoves(position, split(moves, ' '));
 }
 
 Position applyUCIMove(Position position, const std::string& move) {
