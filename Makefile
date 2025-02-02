@@ -43,7 +43,6 @@ moves-test: moves_test.cpp moves.cpp moves.h common.h fen.h fen.cpp
 moves-debug: moves_test.cpp moves.cpp moves.h common.h fen.h fen.cpp
 
 fen-test: fen_test.cpp fen.cpp fen.h common.h
-single_runner-test: single_runner_test.cpp single_runner.cpp single_runner.h common.h
 
 # elo-test: elo_test.cpp elo.h
 #	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $(filter-out %.h, $^)
@@ -55,7 +54,7 @@ eval-test: eval_test.cpp ${EVAL_SRCS} *.h
 eval-debug: eval_test.cpp ${EVAL_SRCS} *.h
 	${GPP} ${CCFLAGS} ${DEBUGFLAGS} -o $@ $(filter-out %.h,$^)
 
-SEARCH_SRCS=${EVAL_SRCS} search.cpp single_runner.cpp
+SEARCH_SRCS=${EVAL_SRCS} search.cpp
 
 search-test: search_test.cpp ${SEARCH_SRCS} *.h
 	${GPP} ${CCFLAGS} -g -O2 -o $@ $(filter-out %.h,$^)
@@ -132,13 +131,12 @@ ${PUZZLES}:
 gouda: uci-test
 	cp uci-test gouda
 
-test: fen-test moves-test elo-test eval-test search-test search-debug single_runner-test uci-test
+test: fen-test moves-test elo-test eval-test search-test search-debug uci-test
 	rm -f coverage-*.profraw
 	./fen-test
 	./moves-test
 	./elo-test
 	./eval-test "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1"
-	./single_runner-test
 	./search-test "r4rk1/p3ppbp/Pp3np1/3PpbB1/2q5/2N2P2/1PPQ2PP/3RR2K w - - 0 20" 1
 	./search-debug "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 5
 	./uci-test ut1.in | grep "bestmove g5f6 ponder"
@@ -149,5 +147,4 @@ coverage: test
 	llvm-cov report ./moves-test -instr-profile=coverage.profdata
 	llvm-cov report ./elo-test -instr-profile=coverage.profdata
 	llvm-cov report ./eval-test -instr-profile=coverage.profdata
-	llvm-cov report ./single_runner-test -instr-profile=coverage.profdata
 	llvm-cov report ./search-debug -instr-profile=coverage.profdata

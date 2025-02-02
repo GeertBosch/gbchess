@@ -30,17 +30,12 @@ using InfoFn = std::function<bool(std::string info)>;
  * pass the start position and the moves played so far.
  *
  * The info function is called with UCI info strings, and should return true if the search should
- * be abandoned.
+ * be abandoned. This is the only way to interrupt the search.
  */
 PrincipalVariation computeBestMove(Position position,
                                    int maxdepth,
                                    MoveVector moves = {},
                                    InfoFn info = nullptr);
-
-/**
- * Interrupt computeBestMove and make it return the best move found sofar.
- */
-void stop();
 
 /**
  * Search all tactical moves necessary to achieve a quiet position and return the best score

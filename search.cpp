@@ -9,7 +9,6 @@
 #include "moves.h"
 #include "options.h"
 #include "search.h"
-#include "single_runner.h"
 
 namespace search {
 EvalTable evalTable;
@@ -286,8 +285,6 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
 }
 
 Score quiesce(Position& position, int depthleft) {
-    SingleRunner quiesce;
-
     return search::quiesce(position, Score::min(), Score::max(), depthleft);
 }
 
@@ -305,9 +302,6 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
     // Check the transposition table, which may tighten one or both search bounds
     transpositionTable.refineAlphaBeta(hash, depthleft, alpha, beta);
     if (alpha >= beta) return {{}, alpha};
-
-    // Check for interrupts
-    SingleRunner::checkStop();
 
     auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
 
@@ -352,7 +346,6 @@ bool currmoveInfo(InfoFn info, int depthleft, Move currmove, int currmovenumber)
        << " currmove " << std::string(currmove)     //
        << " currmovenumber " + std::to_string(currmovenumber);
     auto stop = info(ss.str());
-    if (stop) SingleRunner::stop();
     return stop;
 }
 
@@ -370,7 +363,6 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
         pvString += " " + std::string(move);
     }
     auto stop = info(pvString);
-    if (stop) SingleRunner::stop();
     return stop;
 }
 
@@ -437,16 +429,12 @@ PrincipalVariation iterativeDeepening(Position& position, int maxdepth, InfoFn i
         transpositionTable.newGeneration();
         pv = aspirationWindows(position, pv.score, depth, info);
         if (pvInfo(info, depth, pv.score, pv.moves)) break;
-        if (pv.score.mate() || SingleRunner::stopping()) break;
+        if (pv.score.mate()) break;
     }
     return pv;
 }
 
-PrincipalVariation computeBestMove(Position position,
-                                   int maxdepth,
-                                   MoveVector moves,
-                                   InfoFn info) try {
-    SingleRunner search;
+PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector moves, InfoFn info) {
     evalTable = EvalTable{position.board, true};
     transpositionTable.clear();
     searchEvalCount = evalCount;
@@ -462,12 +450,6 @@ PrincipalVariation computeBestMove(Position position,
                                           : toplevelAlphaBeta(position, maxdepth, info);
     repetitions.pop_back();
     return pv;
-} catch (SingleRunner::Stop&) {
-    auto entry = transpositionTable.find(Hash(position));
-    return {entry.move, entry.score};
 }
 
-void stop() {
-    SingleRunner::stop();
-}
 }  // namespace search

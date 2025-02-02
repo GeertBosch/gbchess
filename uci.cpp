@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <ostream>
 #include <sstream>
@@ -42,6 +43,7 @@ private:
 
     Position position = fen::parsePosition(fen::initialPosition);
     MoveVector moves;
+    std::atomic_bool stopping = false;
 
     void go(UCIArguments arguments) {
         auto depth = options::defaultDepth;
@@ -67,7 +69,7 @@ private:
                         log << "info " << info << "\n";
                         std::flush(log);
                     }
-                    return false;
+                    return stopping;
                 });
             std::stringstream ss;
             if (!pv.front()) {
@@ -93,9 +95,10 @@ private:
 
     void stop() {
         if (thread.joinable()) {
-            search::stop();
+            stopping = true;
             std::flush(out);
             thread.join();
+            stopping = false;
         }
     }
 
