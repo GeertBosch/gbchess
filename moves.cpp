@@ -168,13 +168,13 @@ void MovesTable::initializeCompound() {
 
     // Initialize en passant capture for white
     for (auto to : SquareSet::ipath("a6"_sq, "h6"_sq)) {
-        auto capture = Square(to.rank() - 1, to.file());
+        auto capture = Square(to.file(), to.rank() - 1);
         compound[index(MK::EN_PASSANT)][to.index()] = {capture, 0, {capture, to}};
     }
 
     // Initialize en passant capture for black
     for (auto to : SquareSet::ipath("a3"_sq, "h3"_sq)) {
-        auto capture = Square(to.rank() + 1, to.file());
+        auto capture = Square(to.file(), to.rank() + 1);
         compound[index(MK::EN_PASSANT)][to.index()] = {capture, 0, {capture, to}};
     }
 
@@ -325,10 +325,10 @@ SquareSet SquareSet::find(const Board& board, Piece piece) {
 SquareSet rookMoves(Square from) {
     SquareSet moves;
     for (int rank = 0; rank < kNumRanks; ++rank)
-        if (rank != from.rank()) moves.insert(Square(rank, from.file()));
+        if (rank != from.rank()) moves.insert(Square(from.file(), rank));
 
     for (int file = 0; file < kNumFiles; ++file)
-        if (file != from.file()) moves.insert(Square(from.rank(), file));
+        if (file != from.file()) moves.insert(Square(file, from.rank()));
 
     return moves;
 }
@@ -439,7 +439,7 @@ SquareSet SquareSet::path(Square from, Square to) {
     int filePos = from.file() + fileStep;
 
     while (rankPos != to.rank() || filePos != to.file()) {
-        path.insert(Square{rankPos, filePos});
+        path.insert(Square{filePos, rankPos});
         rankPos += rankStep;
         filePos += fileStep;
     }
@@ -452,22 +452,22 @@ SquareSet castlingPath(Color color, MoveKind side) {
 
     if (side == MoveKind::QUEEN_CASTLE) {
         // Note the paths are reversed, so the start point is excluded and the endpoint included.
-        path |= SquareSet::path(Square(rank, Position::kKingCastledQueenSideFile),
-                                Square(rank, Position::kKingFile));
-        path |= SquareSet::path(Square(rank, Position::kRookCastledQueenSideFile),
-                                Square(rank, Position::kQueenSideRookFile));
+        path |= SquareSet::path(Square(Position::kKingCastledQueenSideFile, rank),
+                                Square(Position::kKingFile, rank));
+        path |= SquareSet::path(Square(Position::kRookCastledQueenSideFile, rank),
+                                Square(Position::kQueenSideRookFile, rank));
     } else {
         assert(side == MoveKind::KING_CASTLE);
         // Note the paths are reversed, so the start point is excluded and the endpoint included.
-        path |= SquareSet::path(Square(rank, Position::kKingCastledKingSideFile),
-                                Square(rank, Position::kKingFile));
-        path |= SquareSet::path(Square(rank, Position::kRookCastledKingSideFile),
-                                Square(rank, Position::kKingSideRookFile));
+        path |= SquareSet::path(Square(Position::kKingCastledKingSideFile, rank),
+                                Square(Position::kKingFile, rank));
+        path |= SquareSet::path(Square(Position::kRookCastledKingSideFile, rank),
+                                Square(Position::kKingSideRookFile, rank));
     }
 
     // Explicitly exclude the king's and rook's starting square for chess960
-    path.erase(Square(rank, Position::kKingFile));
-    path.erase(Square(rank, Position::kKingSideRookFile));
+    path.erase(Square(Position::kKingFile, rank));
+    path.erase(Square(Position::kKingSideRookFile, rank));
     return path;
 }
 
@@ -484,19 +484,19 @@ Occupancy occupancyDelta(Move move) {
     SquareSet theirs;
     switch (kind) {
     case MoveKind::KING_CASTLE:
-        ours.insert(Square(from.rank(), Position::kRookCastledKingSideFile));
-        ours.insert(Square(from.rank(), Position::kKingSideRookFile));
+        ours.insert(Square(Position::kRookCastledKingSideFile, from.rank()));
+        ours.insert(Square(Position::kKingSideRookFile, from.rank()));
         break;
     case MoveKind::QUEEN_CASTLE:
-        ours.insert(Square(from.rank(), Position::kRookCastledQueenSideFile));
-        ours.insert(Square(from.rank(), Position::kQueenSideRookFile));
+        ours.insert(Square(Position::kRookCastledQueenSideFile, from.rank()));
+        ours.insert(Square(Position::kQueenSideRookFile, from.rank()));
         break;
     case MoveKind::CAPTURE:
     case MoveKind::KNIGHT_PROMOTION_CAPTURE:
     case MoveKind::BISHOP_PROMOTION_CAPTURE:
     case MoveKind::ROOK_PROMOTION_CAPTURE:
     case MoveKind::QUEEN_PROMOTION_CAPTURE: theirs.insert(to); break;
-    case MoveKind::EN_PASSANT: theirs.insert(Square(from.rank(), to.file())); break;
+    case MoveKind::EN_PASSANT: theirs.insert(Square(to.file(), from.rank())); break;
     default: break;
     }
     return {theirs, ours};
@@ -723,7 +723,7 @@ Turn applyMove(Turn turn, Piece piece, Move move) {
     // Set the en passant target if a pawn moves two squares forward, otherwise reset it.
     turn.enPassantTarget = noEnPassantTarget;
     if (move.kind() == MoveKind::DOUBLE_PAWN_PUSH) {
-        turn.enPassantTarget = {(move.from().rank() + move.to().rank()) / 2, move.from().file()};
+        turn.enPassantTarget = {move.from().file(), (move.from().rank() + move.to().rank()) / 2};
     }
     // Update castlingAvailability
     turn.castlingAvailability &= ~castlingMask(move.from(), move.to());

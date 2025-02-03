@@ -67,8 +67,8 @@ bool maybeMove(const std::string& str) {
 
 Move parseMove(const Board& board, const std::string& str) {
     assert(str.length() >= 4);
-    auto from = Square(str[1] - '1', str[0] - 'a');
-    auto to = Square(str[3] - '1', str[2] - 'a');
+    auto from = Square(str[0] - 'a', str[1] - '1');
+    auto to = Square(str[2] - 'a', str[3] - '1');
     auto piece = board[from];
     auto kind = MoveKind::QUIET_MOVE;
 
@@ -87,7 +87,7 @@ Move parseMove(const Board& board, const std::string& str) {
             kind = MoveKind::QUEEN_CASTLE;
     }
 
-    return Move(Square(str[1] - '1', str[0] - 'a'), Square(str[3] - '1', str[2] - 'a'), kind);
+    return Move(from, to, kind);
 }
 
 int main(int argc, char** argv) {

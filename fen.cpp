@@ -17,7 +17,7 @@ Board parsePiecePlacement(const std::string& piecePlacement) {
         } else if (std::isdigit(ch)) {
             file += ch - '0';  // Move the file by the number of empty squares
         } else {
-            Square sq{7 - rank, file};  // Adjust the rank based on how it's stored in the Board
+            Square sq{file, 7 - rank};  // Adjust the rank based on how it's stored in the Board
             board[sq] = toPiece(ch);
             file++;
         }
@@ -52,7 +52,7 @@ Turn parseTurn(std::stringstream ss) {
     if (enPassantTargetStr != "-") {
         int file = enPassantTargetStr[0] - 'a';
         int rank = enPassantTargetStr[1] - '1';
-        turn.enPassantTarget = Square{rank, file};
+        turn.enPassantTarget = Square{file, rank};
     }
 
     turn.halfmoveClock = std::stoi(halfmoveClockStr);
@@ -80,7 +80,7 @@ std::string to_string(const Board& board) {
     for (int rank = 7; rank >= 0; --rank) {  // Start from the 8th rank and go downwards
         int emptyCount = 0;                  // Count of consecutive empty squares
         for (int file = 0; file < 8; ++file) {
-            Square sq{rank, file};  // Adjust the rank based on how it's stored in the Board
+            Square sq{file, rank};  // Adjust the rank based on how it's stored in the Board
             auto piece = board[sq];
             if (piece == Piece::NONE) {  // Empty square
                 ++emptyCount;

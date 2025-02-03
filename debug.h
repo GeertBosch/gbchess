@@ -18,7 +18,7 @@ inline void printBoard(std::ostream& os, const Board& board) {
     for (int rank = 7; rank >= 0; --rank) {
         os << rank + 1 << "  ";
         for (int file = 0; file < 8; ++file) {
-            auto piece = board[Square(rank, file)];
+            auto piece = board[Square(file, rank)];
             os << ' ' << to_char(piece);
         }
         os << std::endl;

@@ -23,7 +23,7 @@ class Square {
 
 public:
     // rank and file range from 0 to 7
-    constexpr Square(int rank, int file) : square(rank * kNumFiles + file) {}
+    constexpr Square(int file, int rank) : square(rank * kNumFiles + file) {}
     constexpr Square(int index) : square(index) {}
 
     int rank() const { return square / kNumFiles; }
@@ -47,7 +47,7 @@ constexpr Square operator"" _sq(const char* str, size_t len) {
     assert(len == 2);
     assert(str[0] >= 'a' && str[0] - 'a' < kNumFiles);
     assert(str[1] >= '1' && str[1] - '1' < kNumRanks);
-    return Square(str[1] - '1', str[0] - 'a');
+    return Square(str[0] - 'a', str[1] - '1');
 }
 
 enum class Color : uint8_t { WHITE, BLACK };
@@ -325,17 +325,13 @@ struct CastlingInfo {
     constexpr CastlingInfo(Color color)
         : rook(addColor(PieceType::ROOK, color)),
           king(addColor(PieceType::KING, color)),
-          kingSideMask(color == Color::WHITE ? CastlingMask::WHITE_KINGSIDE
-                                             : CastlingMask::BLACK_KINGSIDE),
-          queenSideMask(color == Color::WHITE ? CastlingMask::WHITE_QUEENSIDE
-                                              : CastlingMask::BLACK_QUEENSIDE),
-          rookFromKingSide(Square(baseRank(color), kNumFiles - 1)),
-          rookToKingSide(Square(baseRank(color), kNumFiles - 3)),
-          rookFromQueenSide(Square(baseRank(color), 0)),
-          rookToQueenSide(Square(baseRank(color), 3)),
-          kingFrom(Square(baseRank(color), kNumFiles / 2)),
-          kingToKingSide(Square(baseRank(color), kNumFiles - 2)),
-          kingToQueenSide(Square(baseRank(color), 2)) {};
+          rookFromKingSide(Square(kNumFiles - 1, baseRank(color))),
+          rookToKingSide(Square(kNumFiles - 3, baseRank(color))),
+          rookFromQueenSide(Square(0, baseRank(color))),
+          rookToQueenSide(Square(3, baseRank(color))),
+          kingFrom(Square(kNumFiles / 2, baseRank(color))),
+          kingToKingSide(Square(kNumFiles - 2, baseRank(color))),
+          kingToQueenSide(Square(2, baseRank(color))) {};
 };
 
 static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::WHITE),

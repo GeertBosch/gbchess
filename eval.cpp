@@ -46,7 +46,7 @@ SquareTable operator*(SquareTable table, Score score) {
 void flip(SquareTable& table) {
     // Flip the table vertically (king side remains king side, queen side remains queen side)
     for (auto sq = Square(0); sq != kNumSquares / 2; ++sq) {
-        auto other = Square(kNumRanks - 1 - sq.rank(), sq.file());
+        auto other = Square(sq.file(), kNumRanks - 1 - sq.rank());
         std::swap(table[sq.index()], table[other.index()]);
     };
     // Invert the values

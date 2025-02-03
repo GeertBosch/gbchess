@@ -166,19 +166,19 @@ void testPossibleMoves() {
 void testPossibleCaptures() {
     // Knight tests
     auto moves = possibleCaptures(Piece::WHITE_KNIGHT, {4, 4});
-    assert(moves.contains({2, 3}));
-    assert(moves.contains({2, 5}));
-    assert(moves.contains({6, 3}));
-    assert(moves.contains({6, 5}));
     assert(moves.contains({3, 2}));
-    assert(moves.contains({3, 6}));
     assert(moves.contains({5, 2}));
+    assert(moves.contains({3, 6}));
     assert(moves.contains({5, 6}));
+    assert(moves.contains({2, 3}));
+    assert(moves.contains({6, 3}));
+    assert(moves.contains({2, 5}));
+    assert(moves.contains({6, 5}));
 
     // Edge cases for knight
     moves = possibleCaptures(Piece::BLACK_KNIGHT, {7, 7});
-    assert(moves.contains({5, 6}));
     assert(moves.contains({6, 5}));
+    assert(moves.contains({5, 6}));
 
     // Bishop tests
     moves = possibleCaptures(Piece::WHITE_BISHOP, {4, 4});
@@ -188,33 +188,33 @@ void testPossibleCaptures() {
 
     // Rook tests
     moves = possibleCaptures(Piece::BLACK_ROOK, {4, 4});
-    assert(moves.contains({4, 0}));
-    assert(moves.contains({4, 1}));
-    assert(moves.contains({4, 2}));
-    assert(moves.contains({4, 3}));
+    assert(moves.contains({0, 4}));
+    assert(moves.contains({1, 4}));
+    assert(moves.contains({2, 4}));
+    assert(moves.contains({3, 4}));
     // ... Add more assertions for all possible squares
 
     // Queen tests (combination of Rook and Bishop)
     moves = possibleCaptures(Piece::WHITE_QUEEN, {4, 4});
     assert(moves.contains({3, 3}));
-    assert(moves.contains({4, 0}));
+    assert(moves.contains({0, 4}));
     // ... Add more assertions for all possible squares
 
     // King tests
     moves = possibleCaptures(Piece::BLACK_KING, {4, 4});
-    assert(moves.contains({3, 4}));
     assert(moves.contains({4, 3}));
+    assert(moves.contains({3, 4}));
     // ... Add more assertions for all possible squares
 
     // Pawn tests (White Pawn)
     moves = possibleCaptures(Piece::WHITE_PAWN, {4, 4});
-    assert(moves.contains({5, 3}));
+    assert(moves.contains({3, 5}));
     assert(moves.contains({5, 5}));
 
     // Pawn tests (Black Pawn)
     moves = possibleCaptures(Piece::BLACK_PAWN, {4, 4});
     assert(moves.contains({3, 3}));
-    assert(moves.contains({3, 5}));
+    assert(moves.contains({5, 3}));
 
     std::cout << "All possibleCaptures tests passed!" << std::endl;
 }
@@ -239,7 +239,7 @@ void testMove() {
 }
 void testSquare() {
     // Test constructor with rank and file
-    Square square1(2, 3);
+    Square square1(3, 2);
     assert(square1.rank() == 2);
     assert(square1.file() == 3);
     assert(square1.index() == 19);

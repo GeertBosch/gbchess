@@ -46,7 +46,7 @@ public:
 
     static SquareSet valid(int rank, int file) {
         return rank >= 0 && rank < kNumRanks && file >= 0 && file < kNumFiles
-            ? SquareSet(Square(rank, file))
+            ? SquareSet(Square(file, rank))
             : SquareSet();
     }
 
