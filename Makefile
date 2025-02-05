@@ -20,6 +20,7 @@ ifeq ($(_system_type),Darwin)
 endif
 
 all: test gouda perft-test mate123 mate45 puzzles
+	@echo "All tests passed!"
 
 %.h: common.h
 
