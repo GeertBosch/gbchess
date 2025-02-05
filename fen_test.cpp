@@ -23,18 +23,18 @@ int testparse() {
 
 void testInitialPosition() {
     Board board(fen::parsePiecePlacement(fen::initialPiecePlacement));
-    assert(board[Position::whiteKing] == Piece::WHITE_KING);
-    assert(board[Position::whiteKingSideRook] == Piece::WHITE_ROOK);
-    assert(board[Position::whiteQueenSideRook] == Piece::WHITE_ROOK);
-    assert(board[Position::blackKing] == Piece::BLACK_KING);
-    assert(board[Position::blackKingSideRook] == Piece::BLACK_ROOK);
-    assert(board[Position::blackQueenSideRook] == Piece::BLACK_ROOK);
+    assert(board[Position::whiteKing] == Piece::K);
+    assert(board[Position::whiteKingSideRook] == Piece::R);
+    assert(board[Position::whiteQueenSideRook] == Piece::R);
+    assert(board[Position::blackKing] == Piece::k);
+    assert(board[Position::blackKingSideRook] == Piece::r);
+    assert(board[Position::blackQueenSideRook] == Piece::r);
 
     Position position = fen::parsePosition(fen::initialPosition);
     assert(position.board == board);
     Turn turn = position.turn;
     assert(turn.activeColor == Color::WHITE);
-    assert(turn.castlingAvailability == CastlingMask::ALL);
+    assert(turn.castlingAvailability == CastlingMask::KQkq);
     assert(turn.enPassantTarget == Square(0));
     assert(turn.halfmoveClock == 0);
     assert(turn.fullmoveNumber == 1);

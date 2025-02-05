@@ -141,7 +141,7 @@ EvalTable::EvalTable(const Board& board, bool usePieceSquareTables) {
     for (auto piece : pieces) {
         auto& table = pieceSquareTable[index(piece)];
         table = {};
-        if (piece != Piece::NONE && usePieceSquareTables) {
+        if (piece != Piece::_ && usePieceSquareTables) {
             switch (type(piece)) {
             case PieceType::PAWN: table = pawnScores; break;
             case PieceType::KNIGHT: table = knightScores; break;

@@ -19,7 +19,6 @@ static constexpr uint8_t kNumFiles = 8, kNumRanks = 8;
 static constexpr uint8_t kNumSquares = kNumFiles * kNumRanks;
 
 class Square {
-    uint8_t square = 0;
 
 public:
     // rank and file range from 0 to 7
@@ -42,8 +41,27 @@ public:
         str += '1' + rank();
         return str;
     }
+
+private:
+    // lldb summary-string "${var.rep}"
+    enum Rep : uint8_t {
+        // clang-format off
+        a1, b1, c1, d1, e1, f1, g1, h1,
+        a2, b2, c2, d2, e2, f2, g2, h2,
+        a3, b3, c3, d3, e3, f3, g3, h3,
+        a4, b4, c4, d4, e4, f4, g4, h4,
+        a5, b5, c5, d5, e5, f5, g5, h5,
+        a6, b6, c6, d6, e6, f6, g6, h6,
+        a7, b7, c7, d7, e7, f7, g7, h7,
+        a8, b8, c8, d8, e8, f8, g8, h8,
+        // clang-format on
+    };
+    union {
+        uint8_t square = 0;
+        Rep rep;
+    };
 };
-constexpr Square operator"" _sq(const char* str, size_t len) {
+constexpr Square operator""_sq(const char* str, size_t len) {
     assert(len == 2);
     assert(str[0] >= 'a' && str[0] - 'a' < kNumFiles);
     assert(str[1] >= '1' && str[1] - '1' < kNumRanks);
@@ -78,22 +96,8 @@ inline constexpr char to_char(PieceType type) {
 }
 static constexpr uint8_t kNumPiecesTypes = index(PieceType::KING) + 1;
 
-enum class Piece : uint8_t {
-    WHITE_PAWN,
-    WHITE_KNIGHT,
-    WHITE_BISHOP,
-    WHITE_ROOK,
-    WHITE_QUEEN,
-    WHITE_KING,
-    NONE,
-    BLACK_PAWN,
-    BLACK_KNIGHT,
-    BLACK_BISHOP,
-    BLACK_ROOK,
-    BLACK_QUEEN,
-    BLACK_KING
-};
-static constexpr uint8_t kNumPieces = static_cast<uint8_t>(Piece::BLACK_KING) + 1;
+enum class Piece : uint8_t { P, N, B, R, Q, K, _, p, n, b, r, q, k };
+static constexpr uint8_t kNumPieces = static_cast<uint8_t>(Piece::k) + 1;
 
 template <typename T>
 class Range {
@@ -121,7 +125,7 @@ private:
     const iterator _begin;
     const iterator _end;
 };
-static constexpr Range pieces(Piece::WHITE_PAWN, Piece::BLACK_KING);
+static constexpr Range pieces(Piece::P, Piece::k);
 
 inline constexpr uint8_t index(Piece piece) {
     return static_cast<uint8_t>(piece);
@@ -138,7 +142,7 @@ constexpr Piece addColor(PieceType type, Color color) {
 }
 
 constexpr Color color(Piece piece) {
-    return piece <= Piece::WHITE_KING ? Color::WHITE : Color::BLACK;
+    return piece <= Piece::K ? Color::WHITE : Color::BLACK;
 }
 
 inline char to_char(Piece piece) {
@@ -147,7 +151,7 @@ inline char to_char(Piece piece) {
 
 inline Piece toPiece(char piece) {
     auto pieceIndex = pieceChars.find(piece);
-    return pieceIndex == std::string::npos ? Piece::NONE : static_cast<Piece>(pieceIndex);
+    return pieceIndex == std::string::npos ? Piece::_ : static_cast<Piece>(pieceIndex);
 }
 
 enum class MoveKind : uint8_t {
@@ -215,8 +219,44 @@ inline PieceType promotionType(MoveKind kind) {
 }
 
 class Move {
-    uint16_t move = 0;
+    // lldb summary-string
+    // "${var.rep.fromFile}${var.rep.fromRank} ${var.rep.toFile}${var.rep.toRank}${var.rep.kind}"
+
     static_assert(kNumSquares * kNumSquares * kNumMoveKinds <= (1u << 16));
+    struct Rep {
+        // lldb summary-string: "${var.from}${var.to} ${var.kind}"
+
+        // Square needs to be derived from uint16_t to allow proper packing
+        enum Square : uint16_t {
+            // clang-format off
+            a1, b1, c1, d1, e1, f1, g1, h1,
+            a2, b2, c2, d2, e2, f2, g2, h2,
+            a3, b3, c3, d3, e3, f3, g3, h3,
+            a4, b4, c4, d4, e4, f4, g4, h4,
+            a5, b5, c5, d5, e5, f5, g5, h5,
+            a6, b6, c6, d6, e6, f6, g6, h6,
+            a7, b7, c7, d7, e7, f7, g7, h7,
+            a8, b8, c8, d8, e8, f8, g8, h8,
+            // clang-format on
+        };
+
+        enum Kind : uint16_t {
+            // clang-format off
+            quiet_move, double_push, o_o, o_o_o,
+            capture, en_passant,
+            N_promo = 8, B_promo, R_promo, Q_promo,
+            N_promo_capture, B_promo_capture, R_promo_capture, Q_promo_capture
+            // clang-format on
+        };
+
+        Square from : 6;
+        Square to : 6;
+        Kind kind : 4;
+    };
+    union {
+        uint16_t move = 0;
+        Rep rep;
+    };
 
 public:
     static constexpr MoveKind QUIET = MoveKind::QUIET_MOVE;
@@ -261,7 +301,7 @@ class Board {
     // the bit twiddling to get the piece type and color.
 
 public:
-    Board() { _squares.fill(Piece::NONE); }
+    Board() { _squares.fill(Piece::_); }
 
     Piece& operator[](Square sq) { return _squares[sq.index()]; }
     const Piece& operator[](Square sq) const { return _squares[sq.index()]; }
@@ -275,14 +315,22 @@ public:
 };
 
 enum class CastlingMask : uint8_t {
-    NONE = 0,
-    WHITE_KINGSIDE = 1,
-    WHITE_QUEENSIDE = 2,
-    WHITE = WHITE_KINGSIDE | WHITE_QUEENSIDE,
-    BLACK_KINGSIDE = 4,
-    BLACK_QUEENSIDE = 8,
-    BLACK = BLACK_KINGSIDE | BLACK_QUEENSIDE,
-    ALL = WHITE | BLACK,
+    _ = 0,
+    K = 1,
+    Q = 2,
+    KQ = K | Q,  // 3
+    k = 4,
+    Kk = K | k,       // 5
+    Qk = Q | k,       // 6
+    KQk = K | Q | k,  // 7
+    q = 8,
+    Kq = K | q,       // 9
+    Qq = Q | q,       // 10
+    KQq = K | Q | q,  // 11
+    kq = k | q,       // 12
+    Kkq = K | k | q,  // 13
+    Qkq = Q | k | q,  // 14
+    KQkq = KQ | kq,   // 15
 };
 inline CastlingMask operator&(CastlingMask lhs, CastlingMask rhs) {
     return CastlingMask(uint8_t(lhs) & uint8_t(rhs));
@@ -301,10 +349,10 @@ inline CastlingMask operator~(CastlingMask lhs) {
 }
 inline std::string to_string(CastlingMask mask) {
     std::string str = "";
-    if ((mask & CastlingMask::WHITE_KINGSIDE) != CastlingMask::NONE) str += "K";
-    if ((mask & CastlingMask::WHITE_QUEENSIDE) != CastlingMask::NONE) str += "Q";
-    if ((mask & CastlingMask::BLACK_KINGSIDE) != CastlingMask::NONE) str += "k";
-    if ((mask & CastlingMask::BLACK_QUEENSIDE) != CastlingMask::NONE) str += "q";
+    if ((mask & CastlingMask::K) != CastlingMask::_) str += "K";
+    if ((mask & CastlingMask::Q) != CastlingMask::_) str += "Q";
+    if ((mask & CastlingMask::k) != CastlingMask::_) str += "k";
+    if ((mask & CastlingMask::q) != CastlingMask::_) str += "q";
     if (str == "") str = "-";
     return str;
 }
@@ -325,6 +373,8 @@ struct CastlingInfo {
     constexpr CastlingInfo(Color color)
         : rook(addColor(PieceType::ROOK, color)),
           king(addColor(PieceType::KING, color)),
+          kingSideMask(color == Color::WHITE ? CastlingMask::K : CastlingMask::k),
+          queenSideMask(color == Color::WHITE ? CastlingMask::Q : CastlingMask::q),
           rookFromKingSide(Square(kNumFiles - 1, baseRank(color))),
           rookToKingSide(Square(kNumFiles - 3, baseRank(color))),
           rookFromQueenSide(Square(0, baseRank(color))),
@@ -370,7 +420,7 @@ struct BoardChange {
 
 struct Turn {
     Color activeColor = Color::WHITE;
-    CastlingMask castlingAvailability = CastlingMask::ALL;  // Bitmask of CastlingMask
+    CastlingMask castlingAvailability = CastlingMask::KQkq;  // Bitmask of CastlingMask
     Square enPassantTarget = noEnPassantTarget;
     uint8_t halfmoveClock = 0;  // If the clock is used, we'll draw at 100, well before it overflows
     uint16_t fullmoveNumber = 1;  // >65,535 moves is a lot of moves

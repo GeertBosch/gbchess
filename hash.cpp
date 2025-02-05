@@ -14,7 +14,7 @@ Hash::Hash(Position position) {
     for (auto square : SquareSet::occupancy(position.board))
         toggle(position.board[square], square.index());
     if (position.activeColor() == Color::BLACK) toggle(BLACK_TO_MOVE);
-    if (position.turn.castlingAvailability != CastlingMask::NONE)
+    if (position.turn.castlingAvailability != CastlingMask::_)
         toggle(ExtraVectors(CASTLING_1 - 1 + uint8_t(position.turn.castlingAvailability)));
     if (position.turn.enPassantTarget.index())
         toggle(ExtraVectors(position.turn.enPassantTarget.file() + EN_PASSANT_A));

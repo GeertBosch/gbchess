@@ -77,14 +77,14 @@ void MovesTable::initializePieceMoveAndCaptureKinds() {
                 MoveKind moveKind = MoveKind::QUIET_MOVE;
                 MoveKind captureKind = MoveKind::CAPTURE;
                 switch (piece) {
-                case Piece::WHITE_PAWN:
+                case Piece::P:
                     if (fromRank == 1 && toRank == 3) moveKind = MoveKind::DOUBLE_PAWN_PUSH;
                     if (toRank == kNumRanks - 1) {
                         moveKind = MoveKind::QUEEN_PROMOTION;
                         captureKind = MoveKind::QUEEN_PROMOTION_CAPTURE;
                     }
                     break;
-                case Piece::BLACK_PAWN:
+                case Piece::p:
                     if (fromRank == kNumRanks - 2 && toRank == kNumRanks - 4)
                         moveKind = MoveKind::DOUBLE_PAWN_PUSH;
                     if (toRank == 0) {
@@ -310,12 +310,12 @@ uint64_t lessSet(std::array<Piece, 64> squares, Piece piece, bool invert) {
 }
 
 SquareSet SquareSet::occupancy(const Board& board) {
-    return equalSet(board.squares(), Piece::NONE, true);
+    return equalSet(board.squares(), Piece::_, true);
 }
 
 SquareSet SquareSet::occupancy(const Board& board, Color color) {
     bool black = color == Color::BLACK;
-    return lessSet(board.squares(), black ? Piece::BLACK_PAWN : Piece::NONE, black);
+    return lessSet(board.squares(), black ? Piece::p : Piece::_, black);
 }
 
 SquareSet SquareSet::find(const Board& board, Piece piece) {
@@ -381,42 +381,42 @@ SquareSet blackPawnMoves(Square from) {
 
 SquareSet possibleMoves(Piece piece, Square from) {
     switch (piece) {
-    case Piece::NONE: break;
-    case Piece::WHITE_PAWN: return whitePawnMoves(from);
-    case Piece::BLACK_PAWN: return blackPawnMoves(from);
-    case Piece::WHITE_KNIGHT:
-    case Piece::BLACK_KNIGHT: return knightMoves(from);
-    case Piece::WHITE_BISHOP:
-    case Piece::BLACK_BISHOP: return bishopMoves(from);
-    case Piece::WHITE_ROOK:
-    case Piece::BLACK_ROOK: return rookMoves(from);
-    case Piece::WHITE_QUEEN:
-    case Piece::BLACK_QUEEN: return queenMoves(from);
-    case Piece::WHITE_KING:
-    case Piece::BLACK_KING: return kingMoves(from);
+    case Piece::_: break;
+    case Piece::P: return whitePawnMoves(from);
+    case Piece::p: return blackPawnMoves(from);
+    case Piece::N:
+    case Piece::n: return knightMoves(from);
+    case Piece::B:
+    case Piece::b: return bishopMoves(from);
+    case Piece::R:
+    case Piece::r: return rookMoves(from);
+    case Piece::Q:
+    case Piece::q: return queenMoves(from);
+    case Piece::K:
+    case Piece::k: return kingMoves(from);
     }
     return {};
 }
 
 SquareSet possibleCaptures(Piece piece, Square from) {
     switch (piece) {
-    case Piece::NONE: break;
-    case Piece::WHITE_PAWN:                                        // White Pawn
+    case Piece::_: break;
+    case Piece::P:                                                 // White Pawn
         return SquareSet::valid(from.rank() + 1, from.file() - 1)  // Diagonal left
             | SquareSet::valid(from.rank() + 1, from.file() + 1);  // Diagonal right
-    case Piece::BLACK_PAWN:                                        // Black Pawn
+    case Piece::p:                                                 // Black Pawn
         return SquareSet::valid(from.rank() - 1, from.file() - 1)  // Diagonal left
             | SquareSet::valid(from.rank() - 1, from.file() + 1);  // Diagonal right
-    case Piece::WHITE_KNIGHT:
-    case Piece::BLACK_KNIGHT: return knightMoves(from);
-    case Piece::WHITE_BISHOP:
-    case Piece::BLACK_BISHOP: return bishopMoves(from);
-    case Piece::WHITE_ROOK:
-    case Piece::BLACK_ROOK: return rookMoves(from);
-    case Piece::WHITE_QUEEN:
-    case Piece::BLACK_QUEEN: return queenMoves(from);
-    case Piece::WHITE_KING:
-    case Piece::BLACK_KING: return kingMoves(from);
+    case Piece::N:
+    case Piece::n: return knightMoves(from);
+    case Piece::B:
+    case Piece::b: return bishopMoves(from);
+    case Piece::R:
+    case Piece::r: return rookMoves(from);
+    case Piece::Q:
+    case Piece::q: return queenMoves(from);
+    case Piece::K:
+    case Piece::k: return kingMoves(from);
     }
     return {};
 }
@@ -573,13 +573,14 @@ void findCastles(const Board& board, Occupancy occupied, Turn turn, const F& fun
     auto color = int(turn.activeColor);
     auto& info = castlingInfo[color];
     // Check for king side castling
-    if ((turn.castlingAvailability & info.kingSideMask) != CastlingMask::NONE) {
+
+    if ((turn.castlingAvailability & info.kingSideMask) != CastlingMask::_) {
         auto path = movesTable.castlingClear[color][index(MoveKind::KING_CASTLE)];
         if ((occupied() & path).empty())
             fun(info.king, {info.kingFrom, info.kingToKingSide, MoveKind::KING_CASTLE});
     }
     // Check for queen side castling
-    if ((turn.castlingAvailability & info.queenSideMask) != CastlingMask::NONE) {
+    if ((turn.castlingAvailability & info.queenSideMask) != CastlingMask::_) {
         auto path = movesTable.castlingClear[color][index(MoveKind::QUEEN_CASTLE)];
         if ((occupied() & path).empty())
             fun(info.king, Move{info.kingFrom, info.kingToQueenSide, MoveKind::QUEEN_CASTLE});
@@ -657,12 +658,12 @@ BoardChange prepareMove(Board& board, Move move) {
     return undo;
 }
 BoardChange makeMove(Board& board, BoardChange change) {
-    Piece first = Piece::NONE;
+    Piece first = Piece::_;
     std::swap(first, board[change.first[0]]);
     board[change.first[1]] = first;
 
     // The following statements don't change the board for non-compound moves
-    auto second = Piece::NONE;
+    auto second = Piece::_;
     std::swap(second, board[change.second[0]]);
     second = Piece(index(second) + change.promo);
     board[change.second[1]] = second;
@@ -684,7 +685,7 @@ UndoPosition makeMove(Position& position, Move move) {
     return makeMove(position, prepareMove(position.board, move), move);
 }
 void unmakeMove(Board& board, BoardChange undo) {
-    Piece ours = Piece::NONE;
+    Piece ours = Piece::_;
     std::swap(board[undo.second[1]], ours);
     ours = Piece(index(ours) - undo.promo);
     board[undo.second[0]] = ours;
@@ -705,12 +706,12 @@ CastlingMask castlingMask(Square from, Square to) {
     const struct MaskTable {
         std::array<CM, kNumSquares> mask;
         constexpr MaskTable() : mask{} {
-            mask[P::whiteQueenSideRook.index()] = CM::WHITE_QUEENSIDE;
-            mask[P::whiteKingSideRook.index()] = CM::WHITE_KINGSIDE;
-            mask[P::blackQueenSideRook.index()] = CM::BLACK_QUEENSIDE;
-            mask[P::blackKingSideRook.index()] = CM::BLACK_KINGSIDE;
-            mask[P::whiteKing.index()] = CM::WHITE;
-            mask[P::blackKing.index()] = CM::BLACK;
+            mask[P::whiteQueenSideRook.index()] = CM::Q;
+            mask[P::whiteKingSideRook.index()] = CM::K;
+            mask[P::blackQueenSideRook.index()] = CM::q;
+            mask[P::blackKingSideRook.index()] = CM::k;
+            mask[P::whiteKing.index()] = CM::KQ;
+            mask[P::blackKing.index()] = CM::kq;
         }
         CM operator[](Square sq) const { return mask[sq.index()]; }
     } maskTable;
@@ -858,16 +859,16 @@ void doMoveIfLegal(Board& board, SearchState& state, Piece piece, Move move, con
     }
 
     // Apply the move to the board
-    auto undo = makeMove(board, move);
+    auto change = makeMove(board, move);
 
     // Update the occupancy
     auto delta = movesTable.occupancyDelta[noPromo(kind)][from.index()][to.index()];
 
     // Check if the move would result in our king being in check.
     if (!isAttacked(board, checkSquares, state.occupied ^ delta))
-        fun(board, MoveWithPieces{Move{from, to, kind}, piece, undo.captured});
+        fun(board, MoveWithPieces{Move{from, to, kind}, piece, change.captured});
 
-    unmakeMove(board, undo);
+    unmakeMove(board, change);
 };
 }  // namespace
 

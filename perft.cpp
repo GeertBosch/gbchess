@@ -72,15 +72,15 @@ Move parseMove(const Board& board, const std::string& str) {
     auto piece = board[from];
     auto kind = MoveKind::QUIET_MOVE;
 
-    if (board[to] != Piece::NONE) {
+    if (board[to] != Piece::_) {
         kind = MoveKind::CAPTURE;
     }
 
-    if (piece == Piece::WHITE_PAWN || piece == Piece::BLACK_PAWN) {
+    if (piece == Piece::P || piece == Piece::p) {
         if (std::abs(to.rank() - from.rank()) == 2) kind = MoveKind::DOUBLE_PAWN_PUSH;
-        if (to.file() != from.file() && board[to] == Piece::NONE) kind = MoveKind::EN_PASSANT;
+        if (to.file() != from.file() && board[to] == Piece::_) kind = MoveKind::EN_PASSANT;
     }
-    if (piece == Piece::WHITE_KING || piece == Piece::BLACK_KING) {
+    if (piece == Piece::K || piece == Piece::k) {
         if (to.file() - from.file() == 2)
             kind = MoveKind::KING_CASTLE;
         else if (from.file() - to.file() == 2)

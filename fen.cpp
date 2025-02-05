@@ -39,13 +39,13 @@ Turn parseTurn(std::stringstream ss) {
 
     Turn turn;
     turn.activeColor = activeColorStr == "b" ? Color::BLACK : Color::WHITE;
-    turn.castlingAvailability = CastlingMask::NONE;
+    turn.castlingAvailability = CastlingMask::_;
     for (char ch : castlingAvailabilityStr) {
         switch (ch) {
-        case 'K': turn.castlingAvailability |= CastlingMask::WHITE_KINGSIDE; break;
-        case 'Q': turn.castlingAvailability |= CastlingMask::WHITE_QUEENSIDE; break;
-        case 'k': turn.castlingAvailability |= CastlingMask::BLACK_KINGSIDE; break;
-        case 'q': turn.castlingAvailability |= CastlingMask::BLACK_QUEENSIDE; break;
+        case 'K': turn.castlingAvailability |= CastlingMask::K; break;
+        case 'Q': turn.castlingAvailability |= CastlingMask::Q; break;
+        case 'k': turn.castlingAvailability |= CastlingMask::k; break;
+        case 'q': turn.castlingAvailability |= CastlingMask::q; break;
         }
     }
 
@@ -82,7 +82,7 @@ std::string to_string(const Board& board) {
         for (int file = 0; file < 8; ++file) {
             Square sq{file, rank};  // Adjust the rank based on how it's stored in the Board
             auto piece = board[sq];
-            if (piece == Piece::NONE) {  // Empty square
+            if (piece == Piece::_) {  // Empty square
                 ++emptyCount;
             } else {
                 if (emptyCount > 0) {
@@ -93,9 +93,8 @@ std::string to_string(const Board& board) {
             }
         }
         if (emptyCount > 0)
-            fen << emptyCount;  // Add remaining empty squares at the end of the rank
-        if (rank > 0)
-            fen << '/';  // Separate ranks by '/'
+            fen << emptyCount;     // Add remaining empty squares at the end of the rank
+        if (rank > 0) fen << '/';  // Separate ranks by '/'
     }
     return fen.str();
 }
