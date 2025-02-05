@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "moves.h"
+#include "options.h"
 #include "sse2.h"
 
 // Unconditionally use actual SSE2 or emulated SSE2: it turns out that the emulated CPU has more
@@ -880,7 +881,8 @@ void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun a
         doMoveIfLegal(board, state, piece, move, action);
     };
     findCaptures(board, state.occupied, doMove);
-    if (depthleft > 3)  // Avoid horizon effect by not promoting in the last few plies
+    // Avoid horizon effect: don't promote in the last plies
+    if (depthleft > options::promotionMinDepthLeft)
         findPromotionMoves(board, state.occupied, doMove);
     findEnPassant(board, turn, doMove);
     if (inCheck) findMoves(board, state.occupied, doMove);  // In check is not a quiet position
