@@ -1,0 +1,60 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "search-debug",
+            "type": "lldb-dap",
+            "request": "launch",
+            "initCommands": [
+                "command source ${workspaceRoot}/lldbinit"
+            ],
+            "program": "${workspaceFolder}/search-debug",
+            "args": [
+                "5r1k/pp4pp/5p2/1BbQp1r1/7K/7P/1PP3P1/3R3R b - - 3 26",
+                // "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1",
+                // "8/8/8/8/8/4bk1p/2R2Np1/6K1 b - - 7 62",
+                5,
+                // "8/1N3k2/6p1/8/2P3P1/pr6/R7/5K2 b - - 2 56",
+                // "3r2k1/1p3ppp/pq1Q1b2/8/8/1P3N2/P4PPP/3R2K1 w - - 4 28",
+            ],
+        },
+        {
+            "name": "moves-debug",
+            "type": "lldb-dap",
+            "request": "launch",
+            "initCommands": [
+                "command source ${workspaceRoot}/lldbinit"
+            ],
+            "program": "${workspaceFolder}/moves-debug",
+            "args": [],
+        },
+        {
+            "name": "perft-debug",
+            "type": "lldb-dap",
+            "request": "launch",
+            "initCommands": [
+                "command source ${workspaceRoot}/lldbinit"
+            ],
+            "program": "${workspaceFolder}/perft-debug",
+            "args": [
+                "r3kr2/7R/1q1pb1n1/8/3pP3/3B1P2/4K3/R7 w q - 1 30",
+                2
+            ],
+        },
+        {
+            "name": "uci-debug",
+            "type": "lldb-dap",
+            "request": "launch",
+            "initCommands": [
+                "command source ${workspaceFolder}/lldbinit"
+            ],
+            "program": "${workspaceFolder}/uci-debug",
+            "args": [
+                "${workspaceFolder}/ut2.in",
+            ],
+        }
+    ]
+}
