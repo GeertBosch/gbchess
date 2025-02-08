@@ -119,27 +119,21 @@ EvalTable::EvalTable() {
 
 EvalTable::EvalTable(const Board& board, bool usePieceSquareTables) {
     auto phase = GamePhase(board);
+    auto tapered = Bill_Jordan::tapered;
+    auto pieceValues = Bill_Jordan::pieceValues;
+
     for (auto piece : pieces) {
         auto& table = pieceSquareTable[index(piece)];
         table = {};
         if (piece != Piece::_ && usePieceSquareTables) {
-            switch (type(piece)) {
-            case PieceType::PAWN: table = pawnScores; break;
-            case PieceType::KNIGHT: table = knightScores; break;
-            case PieceType::BISHOP: table = bishopScores; break;
-            case PieceType::ROOK: table = rookScores; break;
-            case PieceType::QUEEN: table = queenScores; break;
-            case PieceType::KING:
-                table = phase.interpolate(kingOpeningScores, kingEndgameScore);
-                break;
-            default: break;
-            }
-            if (color(piece) == Color::BLACK) flip(table);
+            auto middlegame = tapered[0][index(type(piece))];
+            auto endgame = tapered[1][index(type(piece))];
+            table = phase.interpolate(middlegame, endgame);
         }
-        table = table + pieceValues[index(piece)];
+        table = table + pieceValues[index(type(piece))];
+        if (color(piece) == Color::BLACK) flip(table);
     }
 }
-
 
 Score evaluateBoard(const Board& board, const EvalTable& table) {
     Score value = 0_cp;

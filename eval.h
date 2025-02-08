@@ -42,6 +42,7 @@ public:
     bool operator>(Score rhs) const { return value > rhs.value; }
     bool operator<=(Score rhs) const { return value <= rhs.value; }
     bool operator>=(Score rhs) const { return value >= rhs.value; }
+
     // The mate score is the number of moves to mate, with the sign indicating the winner.
     int mate() const {
         return value < 0 ? -operator-().mate()
@@ -87,7 +88,9 @@ SquareTable operator*(SquareTable table, Score score);
  */
 void flip(SquareTable& table);
 
+using PieceValueTable = std::array<Score, kNumPieceTypes>;
 using PieceSquareTable = std::array<SquareTable, kNumPieces>;
+using TaperedPieceSquareTable = std::array<PieceSquareTable, 2>;  // Middle game and end game
 struct EvalTable {
     PieceSquareTable pieceSquareTable{};
     EvalTable();
