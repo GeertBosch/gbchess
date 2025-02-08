@@ -94,7 +94,7 @@ inline constexpr uint8_t index(PieceType type) {
 inline constexpr char to_char(PieceType type) {
     return "pnbrqk"[index(type)];
 }
-static constexpr uint8_t kNumPiecesTypes = index(PieceType::KING) + 1;
+static constexpr uint8_t kNumPieceTypes = index(PieceType::KING) + 1;
 
 enum class Piece : uint8_t { P, N, B, R, Q, K, _, p, n, b, r, q, k };
 static constexpr uint8_t kNumPieces = static_cast<uint8_t>(Piece::k) + 1;
@@ -133,12 +133,12 @@ inline constexpr uint8_t index(Piece piece) {
 static const std::string pieceChars = "PNBRQK.pnbrqk";
 
 constexpr PieceType type(Piece piece) {
-    return static_cast<PieceType>(index(piece) % (kNumPiecesTypes + 1));
+    return static_cast<PieceType>(index(piece) % (kNumPieceTypes + 1));
 }
 
 constexpr Piece addColor(PieceType type, Color color) {
     return static_cast<Piece>(static_cast<uint8_t>(type) +
-                              (color == Color::WHITE ? 0 : kNumPiecesTypes + 1));
+                              (color == Color::WHITE ? 0 : kNumPieceTypes + 1));
 }
 
 constexpr Color color(Piece piece) {
