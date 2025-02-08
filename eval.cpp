@@ -69,25 +69,6 @@ static std::array<Score, kNumPieces> pieceValues = {
     -900_cp,  // Black queen
     0_cp,     // Not counting the black king
 };
-// Values of moves, in addition to the value of the piece captured, in centipawns
-static std::array<Score, kNumMoveKinds> moveValues = {
-    0_cp,    //  0 Quiet move
-    0_cp,    //  1 Double pawn push
-    0_cp,    //  2 King castle
-    0_cp,    //  3 Queen castle
-    0_cp,    //  4 Capture
-    0_cp,    //  5 En passant
-    0_cp,    //  6 (unused)
-    0_cp,    //  7 (unused)
-    200_cp,  //  8 Knight promotion
-    200_cp,  //  9 Bishop promotion
-    400_cp,  // 10 Rook promotion
-    800_cp,  // 11 Queen promotion
-    200_cp,  // 12 Knight promotion capture
-    200_cp,  // 13 Bishop promotion capture
-    400_cp,  // 14 Rook promotion capture
-    800_cp,  // 15 Queen promotion capture
-};
 
 /** The GamePhase reflects the current phase of the game, ranging from opening to endgame.
  * The phase is used to adjust the evaluation function based on the amount of material left on the
