@@ -2,6 +2,7 @@
 #include <cstdlib>  // For std::exit
 #include <iostream>
 #include <numeric>
+#include <ostream>
 #include <sstream>
 #include <string>
 
@@ -23,6 +24,7 @@ std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     os << "]";
     return os;
 }
+
 std::ostream& operator<<(std::ostream& os, Move mv) {
     return os << std::string(mv);
 }
@@ -34,6 +36,9 @@ std::ostream& operator<<(std::ostream& os, Color color) {
 }
 std::ostream& operator<<(std::ostream& os, Score score) {
     return os << std::string(score);
+}
+std::ostream& operator<<(std::ostream& os, const PrincipalVariation& pv) {
+    return os << std::string(pv);
 }
 
 std::string cmdName = "search-test";

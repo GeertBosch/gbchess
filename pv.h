@@ -24,7 +24,7 @@ struct PrincipalVariation {
     Move front() const { return moves.empty() ? Move() : moves.front(); }
     Move operator[](size_t i) const { return i < moves.size() ? moves[i] : Move(); }
 
-    operator std::string() {
+    operator std::string() const {
         std::string str;
         auto depth = std::to_string(std::max(1, int(moves.size())));
         if (score.mate() > 0)
@@ -34,6 +34,8 @@ struct PrincipalVariation {
         else
             str += "cp " + std::to_string(score.cp()) + " ";
 
+        if (moves.size()) str += "pv ";
+
         // While adding moves the string remains ending with a space
         for (const auto& move : moves)
             if (move) str += std::string(move) + " ";
@@ -42,7 +44,7 @@ struct PrincipalVariation {
         return str;
     }
 
-    operator MoveVector() const { return moves; }
+    explicit operator MoveVector() const { return moves; }
     PrincipalVariation operator-() const { return {-score, moves}; }
     bool operator<(const PrincipalVariation& other) const {
         return score < other.score || (score == other.score && moves.size() > other.moves.size());
