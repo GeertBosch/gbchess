@@ -93,10 +93,10 @@ mate123: search-test ${PUZZLES} .PHONY
 	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -1001 | ./search-test 5
 
 mate45: search-test ${PUZZLES} .PHONY
-	egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -31 | ./search-test 9
+	egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -51 | ./search-test 9
 
 puzzles: search-test ${PUZZLES} .PHONY
-	egrep -v "mateIn[12345]" ${PUZZLES} | head -61| ./search-test 5
+	egrep -v "mateIn[12345]" ${PUZZLES} | head -61| ./search-test 6
 
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:
