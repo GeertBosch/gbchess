@@ -125,7 +125,8 @@ EvalTable::EvalTable(const Board& board, bool usePieceSquareTables) {
     for (auto piece : pieces) {
         auto& table = pieceSquareTable[index(piece)];
         table = {};
-        if (piece != Piece::_ && usePieceSquareTables) {
+        if (piece == Piece::_) continue;
+        if (usePieceSquareTables) {
             auto middlegame = tapered[0][index(type(piece))];
             auto endgame = tapered[1][index(type(piece))];
             table = phase.interpolate(middlegame, endgame);
