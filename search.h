@@ -13,7 +13,7 @@ using InfoFn = std::function<bool(std::string info)>;
 
 /**
  * Evaluates the best variation from a given chess position up to the given maxdepth number of half
- * moves (plies). The evaluation of each position is done using a quiescense search, which aims to
+ * moves (plies). The evaluation of each position is done using a quiescence search, which aims to
  * only evaluate positions where there are no captures, promotions or checks. Evaluations use the
  * following approach:
  *   - Static piece values

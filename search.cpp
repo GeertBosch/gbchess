@@ -111,10 +111,7 @@ struct TranspositionTable {
         auto& entry = entries[idx];
         ++numInserted;
 
-        if (entry.generation != generation && entry.eval.move) {
-            --numObsoleted;
-            entry.eval = {};
-        }
+        if (entry.generation != generation && entry.eval.move) entry.eval = {};
 
         if (entry.type == EXACT && entry.depth > depthleft && entry.eval.move &&
             (type != EXACT || entry.eval.score >= move.score))
@@ -139,18 +136,12 @@ struct TranspositionTable {
         *this = {};
     };
 
-    void newGeneration() {
-        ++generation;
-        numObsoleted += numOccupied;
-        numOccupied = 0;
-    }
 
     void printStats() {
         std::cout << "Transposition table stats:\n";
         std::cout << "  Inserted: " << numInserted << "\n";
         std::cout << "  Collisions: " << numCollisions << "\n";
         std::cout << "  Occupied: " << numOccupied << "\n";
-        std::cout << "  Obsoleted: " << numObsoleted << "\n";
         std::cout << "  Improved: " << numImproved << "\n";
         std::cout << "  Hits: " << numHits << "\n";
         std::cout << "  Stale: " << numStale << "\n";
@@ -264,12 +255,20 @@ Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depth
     for (auto move : moveList) {
         // Compute the change to the board that results from the move
         auto change = prepareMove(position.board, move);
-        auto newEval =
-            eval + evaluateMove(position.board, position.activeColor(), change, evalTable);
-        // Apply the move to the board
-        auto undo = makeMove(position, move);
-        if (debug)
-            assert(-newEval == evaluateBoard(position.board, position.activeColor(), evalTable));
+        auto newEval = eval;
+        UndoPosition undo;
+
+        // Make the move and evaluate it, either incrementally or from scratch
+        if (options::incrementalEvaluation) {
+            newEval += evaluateMove(position.board, position.activeColor(), change, evalTable);
+            undo = makeMove(position, change, move);
+            assert(!debug ||
+                   -newEval == evaluateBoard(position.board, position.activeColor(), evalTable));
+        } else {
+            undo = makeMove(position, change, move);
+            newEval = evaluateBoard(position.board, !position.activeColor(), evalTable);
+        }
+
         auto score = -quiesce(position, -newEval, -beta, -alpha, depthleft - 1);
         unmakeMove(position, undo);
 
@@ -389,8 +388,6 @@ PrincipalVariation toplevelAlphaBeta(
     }
     if (moveList.empty() && !isInCheck(position)) pv = {Move(), Score()};
 
-    transpositionTable.insert(hash, {pv.front(), pv.score}, maxdepth, TranspositionTable::EXACT);
-
     return pv;
 }
 
@@ -405,28 +402,32 @@ PrincipalVariation aspirationWindows(Position position, Score expected, int maxd
     auto alphaIt = windows.begin();
     auto betaIt = windows.begin();
 
+    PrincipalVariation pv;
     while (maxdepth >= options::aspirationWindowMinDepth && alphaIt != windows.end() &&
            betaIt != windows.end()) {
         auto alpha = expected - Score::fromCP(*alphaIt);
         auto beta = expected + Score::fromCP(*betaIt);
 
-        auto pv = toplevelAlphaBeta(position, alpha, beta, maxdepth, info);
+        pv = toplevelAlphaBeta(position, alpha, beta, maxdepth, info);
 
         if (pv.score <= alpha)
             ++alphaIt;
         else if (pv.score >= beta)
             ++betaIt;
         else
-            return pv;
-        transpositionTable.newGeneration();
+            break;
     }
-    return toplevelAlphaBeta(position, maxdepth, info);
+    if (!pv) pv = toplevelAlphaBeta(position, maxdepth, info);
+    if (pv)
+        transpositionTable.insert(
+            Hash{position}, {pv.front(), pv.score}, maxdepth, TranspositionTable::EXACT);
+
+    return pv;
 }
 
 PrincipalVariation iterativeDeepening(Position& position, int maxdepth, InfoFn info) {
     PrincipalVariation pv = toplevelAlphaBeta(position, 0, info);
     for (auto depth = 1; depth <= maxdepth; ++depth) {
-        transpositionTable.newGeneration();
         pv = aspirationWindows(position, pv.score, depth, info);
         if (pvInfo(info, depth, pv.score, pv.moves)) break;
         if (pv.score.mate()) break;

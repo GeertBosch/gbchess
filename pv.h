@@ -51,6 +51,8 @@ struct PrincipalVariation {
     }
     bool operator>(const PrincipalVariation& other) const { return other < *this; }
 
+    operator bool() { return !moves.empty(); }
+
 private:
     PrincipalVariation(Score score, MoveVector moves) : score(score), moves(moves) {}
 };
