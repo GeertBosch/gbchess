@@ -197,29 +197,38 @@ void testCheckAndMate() {
     assert(!isInCheck(stalemate));
 }
 
-int main(int argc, char* argv[]) {
-    cmdName = argv[0];
+int parseMoves(Position& position, int* argc, char** argv[]) {
+    int moves = 0;
+    for (; *argc > 0; ++moves, --*argc, ++*argv) {
+        auto move = parseUCIMove(position, **argv);
+        if (!move) usage(cmdName, std::string(**argv) + " is not a valid move");
+        position = applyMove(position, move);
+    }
+    return moves;
+}
 
-    // Need at least one argument
-    if (argc < 2) usage(argv[0], "missing argument");
+bool parseFEN(Position& position, int* argc, char** argv[]) {
+    if (*argc < 1) return false;
+    position = fen::parsePosition(**argv);
+    --*argc;
+    ++*argv;
+    return true;
+}
+
+int main(int argc, char* argv[]) {
+    cmdName = *argv++;
+    --argc;
 
     testScore();
     testMateScore();
     testEvaluateBoard();
 
-    std::string fen(argv[1]);
+    // Default FEN string to analyze
+    auto position = fen::parsePosition("6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1");
 
-    // Parse the FEN string into a Position
-    Position position = fen::parsePosition(fen);
-
-    MoveVector moves;
-    for (int j = 2; j < argc; ++j) {
-        moves.push_back(parseUCIMove(position, argv[j]));
-        if (!moves.back()) usage(argv[0], std::string(argv[j]) + " is not a valid move");
-        position = applyMove(position, moves.back());
-    }
-
-    if (moves.size()) std::cout << "New position: " << fen::to_string(position) << "\n";
+    // Parse any FEN string and moves from the command line
+    if (parseFEN(position, &argc, &argv) && parseMoves(position, &argc, &argv))
+        std::cout << "New position: " << fen::to_string(position) << "\n";
 
     // Print the board in grid notation
     printBoard(std::cout, position.board);

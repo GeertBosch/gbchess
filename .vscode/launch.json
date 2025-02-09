@@ -39,9 +39,7 @@
                 "command source ${workspaceRoot}/lldbinit"
             ],
             "program": "${workspaceFolder}/eval-debug",
-            "args": [
-                "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1"
-            ],
+            "args": [],
         },
         {
             "name": "perft-debug",
