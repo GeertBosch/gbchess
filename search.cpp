@@ -22,10 +22,6 @@ uint64_t searchEvalCount = 0;  // copy of evalCount at the start of the search
  * the best move found so far, along with the evaluation of the position after that move.
  * Evaluations are always from the perspective of the player to move. Higher evaluations are better,
  * zero indicates a draw. Units of evaluation are roughly the value of a pawn.
- *
- * Generations are used to be able to tell stale entries from fresh ones. When a new search is
- * started, the generation is incremented, and all new entries are marked with the new generation.
- * This allows us to still use the old entries for things like move ordering, but prefer new ones.
  */
 struct TranspositionTable {
     static constexpr size_t kNumEntries = options::transpositionTableEntries;
@@ -39,27 +35,23 @@ struct TranspositionTable {
     struct Entry {
         Hash hash;
         Eval eval;
-        uint8_t generation = 0;
         uint8_t depth = 0;
         EntryType type = EXACT;
         Entry() = default;
         Entry& operator=(const Entry& other) = default;
 
-        Entry(Hash hash, Eval move, uint8_t generation, uint8_t depth, EntryType type)
-            : hash(hash), eval(move), generation(generation), depth(depth), type(type) {}
+        Entry(Hash hash, Eval move, uint8_t depth, EntryType type)
+            : hash(hash), eval(move), depth(depth), type(type) {}
     };
 
     std::vector<Entry> entries{kNumEntries};
     uint64_t numInserted = 0;
-    uint64_t numOccupied = 0;   // Number of non-obsolete entries
-    uint64_t numObsoleted = 0;  // Number of entries in the table from previous generations
+    uint64_t numOccupied = 0;  // Number of non-obsolete entries
     uint64_t numCollisions = 0;
     uint64_t numImproved = 0;
     uint64_t numHits = 0;
     uint64_t numStale = 0;  // Hits on entries from previous generations
     uint64_t numMisses = 0;
-
-    uint8_t generation = 0;
 
     ~TranspositionTable() {
         if (debug && numInserted) printStats();
@@ -69,7 +61,7 @@ struct TranspositionTable {
         if constexpr (kNumEntries == 0) return {Move(), Score()};
         ++numHits;
         auto& entry = entries[hash() % kNumEntries];
-        if (entry.hash() == hash() && entry.generation == generation) return entry.eval;
+        if (entry.hash() == hash()) return entry.eval;
         --numHits;
         ++numMisses;
         return {};  // no move found
@@ -81,7 +73,7 @@ struct TranspositionTable {
         auto idx = hash() % kNumEntries;
         auto& entry = entries[idx];
         ++numHits;
-        if (entry.hash == hash && entry.generation == generation && entry.depth >= depth) {
+        if (entry.hash == hash && entry.depth >= depth) {
             return &entry;
         }
         --numHits;
@@ -111,8 +103,6 @@ struct TranspositionTable {
         auto& entry = entries[idx];
         ++numInserted;
 
-        if (entry.generation != generation && entry.eval.move) entry.eval = {};
-
         if (entry.type == EXACT && entry.depth > depthleft && entry.eval.move &&
             (type != EXACT || entry.eval.score >= move.score))
             return;
@@ -125,7 +115,7 @@ struct TranspositionTable {
         else
             ++numOccupied;
 
-        entry = Entry{hash, move, generation, depthleft, type};
+        entry = Entry{hash, move, depthleft, type};
     }
 
     void clear() {
