@@ -225,6 +225,21 @@ void sortMoves(const Position& position, MoveIt begin, MoveIt end) {
     Hash hash(position);
     sortMoves(position, hash, begin, end);
 }
+
+std::pair<UndoPosition, Score> makeMoveWithEval(Position& position, Move move, Score eval) {
+    auto change = prepareMove(position.board, move);
+    UndoPosition undo;
+    if (options::incrementalEvaluation) {
+        eval += evaluateMove(position.board, position.activeColor(), change, evalTable);
+        undo = makeMove(position, change, move);
+        assert(!debug || -eval == evaluateBoard(position.board, position.activeColor(), evalTable));
+    } else {
+        undo = makeMove(position, change, move);
+        eval = evaluateBoard(position.board, !position.activeColor(), evalTable);
+    }
+    return {undo, eval};
+}
+
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft);
 Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depthleft) {
     ++evalCount;
@@ -243,22 +258,8 @@ Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depth
     sortMoves(position, moveList.begin(), moveList.end());
 
     for (auto move : moveList) {
-        // Compute the change to the board that results from the move
-        auto change = prepareMove(position.board, move);
-        auto newEval = eval;
-        UndoPosition undo;
-
-        // Make the move and evaluate it, either incrementally or from scratch
-        if (options::incrementalEvaluation) {
-            newEval += evaluateMove(position.board, position.activeColor(), change, evalTable);
-            undo = makeMove(position, change, move);
-            assert(!debug ||
-                   -newEval == evaluateBoard(position.board, position.activeColor(), evalTable));
-        } else {
-            undo = makeMove(position, change, move);
-            newEval = evaluateBoard(position.board, !position.activeColor(), evalTable);
-        }
-
+        // Compute the change to the board and evaluation that results from the move
+        auto [undo, newEval] = makeMoveWithEval(position, move, eval);
         auto score = -quiesce(position, -newEval, -beta, -alpha, depthleft - 1);
         unmakeMove(position, undo);
 
