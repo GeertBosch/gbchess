@@ -109,6 +109,24 @@ struct GamePhase {
     }
 };
 
+struct EvalTables {
+    struct Entry {
+        TaperedPieceSquareTable tapered;
+        PieceValueTable pieceValues;
+    };
+    std::map<std::string, Entry> entries;
+    EvalTables() {
+        entries.insert({"Bill Jordan", {Bill_Jordan::tapered, Bill_Jordan::pieceValues}});
+        entries.insert(
+            {"Tomasz Michniewski", {Tomasz_Michniewski::tapered, Tomasz_Michniewski::pieceValues}});
+    }
+    const Entry& operator[](std::string name) const {
+        auto it = entries.find(name);
+        if (it != entries.end()) return it->second;
+        throw std::invalid_argument("Unknown eval table set: " + name);
+    }
+} evalTables;
+
 EvalTable::EvalTable() {
     for (auto piece : pieces) {
         auto& table = pieceSquareTable[index(piece)];
@@ -119,8 +137,9 @@ EvalTable::EvalTable() {
 
 EvalTable::EvalTable(const Board& board, bool usePieceSquareTables) {
     auto phase = GamePhase(board);
-    auto tapered = Bill_Jordan::tapered;
-    auto pieceValues = Bill_Jordan::pieceValues;
+    auto entry = evalTables["Bill Jordan"];
+    auto tapered = entry.tapered;
+    auto pieceValues = entry.pieceValues;
 
     for (auto piece : pieces) {
         auto& table = pieceSquareTable[index(piece)];
