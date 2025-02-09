@@ -3,7 +3,6 @@
 #include <iostream>
 
 #include "common.h"
-#include "debug.h"
 #include "fen.h"
 #include "moves.h"
 
@@ -25,6 +24,22 @@ std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     }
     os << "]";
     return os;
+}
+
+void printBoard(std::ostream& os, const Board& board) {
+    for (int rank = 7; rank >= 0; --rank) {
+        os << rank + 1 << "  ";
+        for (int file = 0; file < 8; ++file) {
+            auto piece = board[Square(file, rank)];
+            os << ' ' << to_char(piece);
+        }
+        os << std::endl;
+    }
+    os << "   ";
+    for (char file = 'a'; file <= 'h'; ++file) {
+        os << ' ' << file;
+    }
+    os << std::endl;
 }
 
 void testPiece() {

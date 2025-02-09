@@ -7,10 +7,6 @@
 #include "hash.h"
 #include "moves.h"
 
-#ifdef DEBUG
-#include "debug.h"
-#endif
-
 std::ostream& operator<<(std::ostream& os, Move mv) {
     return os << std::string(mv);
 }
