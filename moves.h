@@ -94,6 +94,34 @@ public:
 
     iterator begin() { return {*this}; }
     iterator end() { return SquareSet(); }
+
+    class reverse_iterator {
+        friend class SquareSet;
+        uint64_t _squares;
+        reverse_iterator(SquareSet squares) : _squares(squares._squares) {}
+        using iterator_category = std::forward_iterator_tag;
+
+    public:
+        reverse_iterator operator++() {
+            uint64_t leadingBit = (1ull << 63) >> __builtin_clzll(_squares);  // clear leading bit
+            _squares ^= leadingBit;
+            return *this;
+        }
+        Square operator*() {
+            return Square(63 - __builtin_clzll(_squares));  // Count leading zeros
+        }
+        bool operator==(const reverse_iterator& other) { return _squares == other._squares; }
+        bool operator!=(const reverse_iterator& other) { return !(_squares == other._squares); }
+    };
+
+    reverse_iterator rbegin() { return {*this}; }
+    reverse_iterator rend() { return SquareSet(); }
+
+    Square operator*() {
+        return Square(__builtin_ctzll(_squares));  // Count trailing zeros
+    }
+    bool operator==(const reverse_iterator& other) { return _squares == other._squares; }
+    bool operator!=(const reverse_iterator& other) { return !(_squares == other._squares); }
 };
 
 struct Occupancy {
