@@ -550,6 +550,15 @@ void findMoves(const Board& board, Occupancy occupied, const F& fun) {
     }
 }
 
+template <typename F>
+void findCheckingMoves(const Board& board, Occupancy occupied, const F& fun) {
+    Square theirKing = std::find_if(occupied.theirs.begin(), occupied.theirs.end(), [&](Square sq) {
+        return type(board[sq]) == PieceType::KING;
+    });
+
+
+}
+
 /** For use in quiescent search: allow pawn moves that promote or near promotion */
 template <typename F>
 void findPromotionMoves(const Board& board, Occupancy occupied, const F& fun) {
