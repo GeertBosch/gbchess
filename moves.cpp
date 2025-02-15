@@ -2,9 +2,10 @@
 #include <cassert>
 #include <cstring>
 
-#include "moves.h"
 #include "options.h"
 #include "sse2.h"
+
+#include "moves.h"
 
 // Unconditionally use actual SSE2 or emulated SSE2: it turns out that the emulated CPU has more
 // benefits for ARM (on at least Apple Silicon M1) than real SSE2 has for x86.

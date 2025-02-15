@@ -5,9 +5,21 @@ CCFLAGS=-std=c++17
 CLANGPP=clang++
 GPP=g++
 # DEBUGFLAGS=-fsanitize=address -DDEBUG -O0 -g --coverage
-DEBUGFLAGS=-DDEBUG -O0 -g
+DEBUGFLAGS=-DDEBUG -O0 -g -fsanitize=address
 # DEBUGFLAGS=-O2
 # -fprofile-instr-generate -fcoverage-mapping
+OPTOBJ=build/opt
+DBGOBJ=build/dbg
+
+# First argument is DBG or OPT, second is list of source files
+calc_objs=$(patsubst %.cpp,${$(1)OBJ}/%.o,$(2))
+calc_deps=${calc_objs:.o=.d}
+
+all: test perft-test mate123 mate45 evals puzzles
+	@echo "All tests passed!"
+
+-include $(call calc_deps,OPT,$(wildcard *.cpp))
+-include $(call calc_deps,DBG,$(wildcard *.cpp))
 
 export LLVM_PROFILE_FILE=coverage-%m.profraw
 LLVM-MERGE=llvm-profdata merge -sparse coverage-*.profraw -o coverage.profdata
@@ -18,61 +30,69 @@ ifeq ($(_system_type),Darwin)
     sdk=$(shell xcrun --sdk macosx --show-sdk-path)
     arch=$(shell uname -m)
     CLANGPP:=/usr/bin/clang++
-    CCFLAGS:=${CCFLAGS} -isysroot ${sdk} -mmacosx-version-min=11.0 -target darwin17.0.0 -arch ${arch} -stdlib=libc++ -Wl,-syslibroot,${sdk} -mmacosx-version-min=11.0 -target darwin17.0.0 -arch ${arch}
+    CCFLAGS:=${CCFLAGS} -isysroot ${sdk} -mmacosx-version-min=11.0 -target darwin17.0.0 -arch ${arch} -stdlib=libc++
+    LINKFLAGS:=${LINKFLAGS} -stdlib=libc++ -Wl,-syslibroot,${sdk} -mmacosx-version-min=11.0 -target darwin17.0.0 -arch ${arch}
 endif
 
-all: test gouda perft-test mate123 mate45 puzzles
-	@echo "All tests passed!"
+${OPTOBJ}/%.d: %.cpp
+	@mkdir -p ${OPTOBJ}
+	${GPP} -MT $(subst .d,.o,$@) -MM ${CCFLAGS} -o $@ $< > $@
+${OPTOBJ}/%.o: %.cpp ${OPTOBJ}/%.d
+	@mkdir -p ${OPTOBJ} 
+	${GPP} -c ${CCFLAGS} -O2 -o $@ $<
 
-%.h: common.h
+${DBGOBJ}/%.d: %.cpp
+	@mkdir -p ${DBGOBJ}
+	${GPP} -MM ${CCFLAGS} -o $@ $< > $@
 
-%-test: %_test.cpp %.h common.h
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $(filter-out %.h, $^)
+${DBGOBJ}/%.o: %.cpp
+	@mkdir -p ${DBGOBJ}
+	${CLANGPP} -MMD -c ${CCFLAGS} ${DEBUGFLAGS} -o $@ $<
 
-%-debug: %_test.cpp %.h common.h
-	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $(filter-out %.h, $^)
+%-test: ${OPTOBJ}/%_test.o
+	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
+%-debug: ${DBGOBJ}/%_test.o
+	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+
+ALLSRCS=$(wildcard *.cpp)
+
+.deps: $(call calc_deps,OPT,${ALLSRCS}) $(call calc_deps,DBG,${ALLSRCS})
 .PHONY:
-.PHONY.h: .PHONY
 
 clean: .PHONY
-	rm -f *.o *-debug *-test perft core *.core puzzles.actual perf.data* *.ii *.bc *.s
+	rm -fr build
+	rm -f *-debug *-test perft
+	rm -f core *.core puzzles.actual perf.data* *.ii *.bc *.s
 	rm -f perft-{clang,gcc}-{sse2,emul}
 	rm -f *.profraw *.profdata *.gcda *.gcno lcov.info
 	rm -f game.??? log.??? players.dat # XBoard outputs
 	rm -rf *.dSYM
 
-moves-test: moves_test.cpp moves.cpp moves.h common.h fen.h fen.cpp
-moves-debug: moves_test.cpp moves.cpp moves.h common.h fen.h fen.cpp
+moves-test: ${OPTOBJ}/moves.o ${OPTOBJ}/fen.o
+moves-debug: ${DBGOBJ}/moves.o ${DBGOBJ}/fen.o
 
-fen-test: fen_test.cpp fen.cpp fen.h common.h
-
-# elo-test: elo_test.cpp elo.h
-#	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $(filter-out %.h, $^)
+fen-test: ${OPTOBJ}/fen_test.o ${OPTOBJ}/fen.o
 
 EVAL_SRCS=eval.cpp hash.cpp fen.cpp moves.cpp
 
-eval-test: eval_test.cpp ${EVAL_SRCS} *.h
-	${GPP} ${CCFLAGS} -g -O2 -o $@ $(filter-out %.h,$^)
-eval-debug: eval_test.cpp ${EVAL_SRCS} *.h
-	${GPP} ${CCFLAGS} ${DEBUGFLAGS} -o $@ $(filter-out %.h,$^)
+eval-test: $(call calc_objs,OPT,${EVAL_SRCS})
+eval-debug: $(call calc_objs,DBG,${EVAL_SRCS})
 
 SEARCH_SRCS=${EVAL_SRCS} search.cpp
 
-search-test: search_test.cpp ${SEARCH_SRCS} *.h
-	${GPP} ${CCFLAGS} -g -O2 -o $@ $(filter-out %.h,$^)
-search-debug: search_test.cpp ${SEARCH_SRCS} *.h
-	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} -o $@ $(filter-out %.h,$^)
+search-test: $(call calc_objs,OPT,${SEARCH_SRCS})
+search-debug: $(call calc_objs,DBG,${SEARCH_SRCS})
 
-uci-test: uci_test.cpp uci.cpp ${SEARCH_SRCS} *.h
-uci-debug: uci_test.cpp uci.cpp ${SEARCH_SRCS} *.h
+uci-test: $(call calc_objs,OPT,uci.cpp ${SEARCH_SRCS})
+uci-debug: $(call calc_objs,DBG,uci.cpp ${SEARCH_SRCS})
 
-PERFT_SRCS=perft.cpp moves.h moves.cpp fen.h fen.cpp
+PERFT_SRCS=perft.cpp moves.cpp fen.cpp
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
-perft: ${PERFT_SRCS}
-	${CLANGPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
-perft-debug: ${PERFT_SRCS}
-	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} -o $@ $(filter-out %.h,$^)
+perft: $(call calc_objs,OPT,${PERFT_SRCS})
+	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+perft-debug: $(call calc_objs,DBG,${PERFT_SRCS})
+	${GPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
 # Compare the perft tool with some different compilation options for speed comparison
 perft-clang-sse2: perft.cpp moves.cpp fen.cpp *.h
@@ -84,11 +104,12 @@ perft-gcc-sse2: perft.cpp  moves.cpp fen.cpp *.h
 perft-gcc-emul: perft.cpp  moves.cpp fen.cpp *.h
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
 
-perft-sse2: perft-clang-sse2 perft-clang-emul perft-gcc-sse2 perft-gcc-emul .PHONY
-	./perft-clang-sse2 5 4865609
+perft-emul:perft-clang-emul perft-gcc-emul .PHONY
 	./perft-clang-emul 5 4865609
-	./perft-gcc-sse2 5 4865609
 	./perft-gcc-emul 5 4865609
+perft-sse2: perft-clang-sse2 perft-gcc-sse2 .PHONY
+	./perft-clang-sse2 5 4865609
+	./perft-gcc-sse2 5 4865609
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
 mate123: search-test ${PUZZLES} .PHONY
@@ -119,7 +140,7 @@ position5="rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8"
 position6="r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10"
 
 # Verify well-known perft results. Great for checking correct move generation.
-perft-test: perft perft-debug perft-sse2
+perft-test: perft perft-debug perft-sse2 perft-emul
 	./perft-debug 4 197281
 	./perft 5 4865609
 	./perft "rnbqkbnr/1ppppppp/B7/p7/4P3/8/PPPP1PPP/RNBQK1NR b KQkq - 1 2" 4 509448
@@ -137,7 +158,10 @@ ${PUZZLES}:
 evals/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
 	mkdir -p $(dir $@) && ./$< $(@:evals/lichess_%_evals.csv=%) > $@
 
-test: fen-test moves-test elo-test eval-test search-test search-debug uci-test
+debug: eval-debug moves-debug perft-debug search-debug
+build: fen-test moves-test elo-test eval-test search-test uci-test
+
+test: build debug
 	rm -f coverage-*.profraw
 	./fen-test
 	./moves-test

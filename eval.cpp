@@ -1,11 +1,12 @@
 #include <iostream>
 #include <string>
 
-#include "eval.h"
 #include "eval_tables.h"
 #include "fen.h"
 #include "hash.h"
 #include "moves.h"
+
+#include "eval.h"
 
 std::ostream& operator<<(std::ostream& os, Move mv) {
     return os << std::string(mv);

@@ -3,6 +3,7 @@
 #include <string>
 
 #include "common.h"
+#include "fen.h"
 
 namespace fen {
 Board parsePiecePlacement(const std::string& piecePlacement) {
