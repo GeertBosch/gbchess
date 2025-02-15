@@ -22,6 +22,8 @@ std::string to_string(const Board& board);
  */
 std::string to_string(const Position& position);
 
+bool maybeFEN(std::string fen);
+
 /**
  * Parses a FEN string and returns the corresponding Position object.
  *

@@ -361,11 +361,6 @@ bool isAllDigits(std::string number) {
     return !number.empty() && std::all_of(number.begin(), number.end(), ::isdigit);
 }
 
-bool maybeFEN(std::string fen) {
-    std::string startChars = "rnbqkpRNBQKP12345678";
-    return fen != "" && startChars.find(fen[0]) != std::string::npos &&
-        std::count(fen.begin(), fen.end(), '/') == 7;
-}
 
 }  // namespace
 
@@ -377,7 +372,7 @@ int main(int argc, char* argv[]) {
     if (argc < 2) return 0;
 
     // Need at least one argument
-    if (!isAllDigits(argv[1]) && !maybeFEN(argv[1])) usage(argv[0], "invalid argument");
+    if (!isAllDigits(argv[1]) && !fen::maybeFEN(argv[1])) usage(argv[0], "invalid argument");
 
     // If the last argument is a number, it's the search depth
     int depth = 0;
