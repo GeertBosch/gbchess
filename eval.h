@@ -100,6 +100,9 @@ struct EvalTable {
     const SquareTable& operator[](Piece piece) const { return pieceSquareTable[index(piece)]; }
 };
 
+// Returns the phase (7 for opening, 0 for endgame) based on the material on the board.
+int computePhase(const Board& board);
+
 /**
  * This function iterates over each square in the board, uses the pieceValues map to find
  * the value of the piece on that square, and adjusts the total value accordingly. White

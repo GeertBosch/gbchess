@@ -105,6 +105,10 @@ struct GamePhase {
     }
 };
 
+int computePhase(const Board& board) {
+    return GamePhase(board).phase;
+}
+
 struct EvalTables {
     struct Entry {
         TaperedPieceSquareTable tapered;

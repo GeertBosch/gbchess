@@ -2,13 +2,14 @@
 *-debug
 *.swp
 *.dSYM
+.DS_Store
 *.gcda
 *.gcno
 log.*
 *.log
 *.out
+evals
 game.*
-.vscode
 perft
 perft-*
 puzzles

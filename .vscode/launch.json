@@ -39,7 +39,11 @@
                 "command source ${workspaceRoot}/lldbinit"
             ],
             "program": "${workspaceFolder}/eval-debug",
-            "args": [],
+            "args": [
+                "evals/lichess_opening_evals.csv",
+                "evals/lichess_middlegame_evals.csv",
+                "evals/lichess_endgame_evals.csv"
+            ],
         },
         {
             "name": "perft-debug",

@@ -1,4 +1,6 @@
 PUZZLES=puzzles/lichess_db_puzzle.csv
+PHASES=opening middlegame endgame
+EVALS=$(foreach phase,${PHASES},evals/lichess_${phase}_evals.csv)
 CCFLAGS=-std=c++17
 CLANGPP=clang++
 GPP=g++
@@ -98,6 +100,9 @@ mate45: search-test ${PUZZLES} .PHONY
 puzzles: search-test ${PUZZLES} .PHONY
 	egrep -v "mateIn[12345]" ${PUZZLES} | head -61| ./search-test 6
 
+evals: eval-test ${EVALS} .PHONY
+	./eval-test ${EVALS}
+
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:
 	@echo Excluding Tests
@@ -129,8 +134,8 @@ ${PUZZLES}:
 	mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) && wget https://database.lichess.org/$(notdir ${PUZZLES}).zst
 	zstd -d ${PUZZLES}.zst
 
-gouda: uci-test
-	cp uci-test gouda
+evals/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
+	mkdir -p $(dir $@) && ./$< $(@:evals/lichess_%_evals.csv=%) > $@
 
 test: fen-test moves-test elo-test eval-test search-test search-debug uci-test
 	rm -f coverage-*.profraw

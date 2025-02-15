@@ -1,4 +1,5 @@
 #include <cstdlib>  // For std::exit
+#include <fstream>
 #include <iostream>
 #include <string>
 
@@ -207,12 +208,76 @@ int parseMoves(Position& position, int* argc, char** argv[]) {
     return moves;
 }
 
+
+template <typename T>
+int find(T t, std::string what) {
+    auto it = std::find(t.begin(), t.end(), what);
+    if (it == t.end()) usage(cmdName, "Missing field \"" + what + "\"");
+    return it - t.begin();
+}
+
+std::string computeStatistics(const std::vector<float>& diffs) {
+    if (diffs.empty()) return "No data";
+    double sum = 0;
+    double sum2 = 0;
+    for (auto diff : diffs) {
+        sum += diff;
+        sum2 += diff * diff;
+    }
+    double mean = sum / diffs.size();
+    double variance = sum2 / diffs.size() - mean * mean;
+    double stddev = std::sqrt(variance);
+    return "Mean: " + std::to_string(mean) + ", Standard Deviation: " + std::to_string(stddev);
+}
+
+void testFromStream(std::ifstream& stream) {
+    std::string line;
+    std::getline(stream, line);
+    auto columns = split(line, ',');
+    auto cpCol = find(columns, "cp");
+    auto fenCol = find(columns, "fen");
+
+    std::vector<float> diffs;
+
+    if (debug) std::cout << "Expected,Score,Diff,Phase,FEN\n";
+
+    while (std::getline(stream, line)) {
+        auto columns = split(line, ',');
+        if (columns.size() < 2) continue;
+        int expected = 100.0f * std::stof(columns[cpCol]);
+        auto fen = columns[fenCol];
+        auto position = fen::parsePosition(fen);
+        auto score = evaluateBoard(position.board, true).cp();
+        auto phase = computePhase(position.board);
+        auto diff = expected - score;
+        diffs.push_back(diff * 0.01);
+        if (debug)
+            std::cout << expected << "," << score << "," << diff << "," << phase << "," << fen
+                      << "\n";
+    }
+    std::cout << "Error stats: " << computeStatistics(diffs) << "\n";
+}
+
 bool parseFEN(Position& position, int* argc, char** argv[]) {
     if (*argc < 1) return false;
     position = fen::parsePosition(**argv);
     --*argc;
     ++*argv;
     return true;
+}
+
+int testFromFiles(int argc, char* argv[]) {
+    for (; argc; --argc, ++argv) {
+        std::string name = *argv;
+        std::ifstream stream(name);
+        if (!stream) {
+            std::cerr << "Error: could not open file " << name << std::endl;
+            return 1;
+        }
+        std::cout << "Testing " << name << std::endl;
+        testFromStream(stream);
+    }
+    return 0;
 }
 
 int main(int argc, char* argv[]) {
@@ -222,6 +287,8 @@ int main(int argc, char* argv[]) {
     testScore();
     testMateScore();
     testEvaluateBoard();
+
+    if (argc && !fen::maybeFEN(*argv)) return testFromFiles(argc, argv);
 
     // Default FEN string to analyze
     auto position = fen::parsePosition("6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1");
