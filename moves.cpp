@@ -872,6 +872,42 @@ void doMoveIfLegal(Board& board, SearchState& state, Piece piece, Move move, con
 
     unmakeMove(board, change);
 };
+template <typename F>
+void doMoveIfCheck(Board& board, SearchState& state, Piece piece, Move move, const F& fun) {
+    // TODO: Make this actually efficient
+    auto [from, to, kind] = Move::Tuple(move);
+    // If we move the king, reflect that in the king squares to check for checks
+    auto checkSquares = state.kingSquares;
+    if (state.kingSquares.contains(from)) {
+        if (kind == MoveKind::KING_CASTLE || kind == MoveKind::QUEEN_CASTLE)
+            checkSquares |= movesTable.paths[from.index()][to.index()];
+        else
+            checkSquares.erase(from);
+        checkSquares.insert(to);
+    }
+
+    // Apply the move to the board
+    auto change = makeMove(board, move);
+
+    auto theirKing = addColor(PieceType::KING, !color(piece));
+    Square theirKingSquare(std::find_if(board.squares().begin(),
+                                        board.squares().end(),
+                                        [theirKing](Piece piece) { return piece == theirKing; }) -
+                           board.squares().begin());
+    assert(board[theirKingSquare] == theirKing);
+
+    // Update the occupancy
+    auto delta = movesTable.occupancyDelta[noPromo(kind)][from.index()][to.index()];
+    auto newOccupancy = state.occupied ^ delta;
+
+    // Only do moves that check the opponent and don't leave our king in check
+    if (isAttacked(board, theirKingSquare, !newOccupancy) &&
+        !isAttacked(board, checkSquares, newOccupancy)) {
+
+        fun(board, MoveWithPieces{Move{from, to, kind}, piece, change.captured});
+    }
+    unmakeMove(board, change);
+}
 }  // namespace
 
 void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun action) {
@@ -881,12 +917,19 @@ void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun a
     auto doMove = [&](Piece piece, Move move) {
         doMoveIfLegal(board, state, piece, move, action);
     };
+    auto doCheck = [&](Piece piece, Move move) {
+        doMoveIfCheck(board, state, piece, move, action);
+    };
     findCaptures(board, state.occupied, doMove);
     // Avoid horizon effect: don't promote in the last plies
     if (depthleft > options::promotionMinDepthLeft)
         findPromotionMoves(board, state.occupied, doMove);
+
     findEnPassant(board, turn, doMove);
     if (inCheck) findMoves(board, state.occupied, doMove);  // In check is not a quiet position
+    else if (depthleft >= options::quiescenceDepth - 2) {
+        findMoves(board, state.occupied, doCheck);
+    }
 }
 
 MoveVector allLegalQuiescentMoves(Turn turn, Board& board, int depthleft) {
