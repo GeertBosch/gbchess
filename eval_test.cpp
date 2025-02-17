@@ -141,6 +141,33 @@ std::vector<std::string> split(std::string line, char delim) {
     return res;
 }
 
+Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
+    Score stand_pat = evaluateBoard(position.board, true);
+    if (position.activeColor() == Color::BLACK) stand_pat = -stand_pat;
+
+    if (!depthleft) return stand_pat;
+
+    if (stand_pat >= beta && !isInCheck(position)) return beta;
+
+    if (alpha < stand_pat) alpha = stand_pat;
+
+    // The moveList includes moves needed to get out of check; an empty list means mate
+    auto moveList = allLegalQuiescentMoves(position.turn, position.board, depthleft);
+    if (moveList.empty() && isInCheck(position)) return Score::min();
+
+
+    for (auto move : moveList) {
+        // Compute the change to the board and evaluation that results from the move
+        auto change = makeMove(position, move);
+        auto score = -quiesce(position, -beta, -alpha, depthleft - 1);
+        unmakeMove(position, change);
+
+        if (score >= beta) return beta;
+        if (score > alpha) alpha = score;
+    }
+    return alpha;
+}
+
 void testScore() {
     Score zero;
     Score q = -9'00_cp;
@@ -247,7 +274,8 @@ void testFromStream(std::ifstream& stream) {
         int expected = 100.0f * std::stof(columns[cpCol]);
         auto fen = columns[fenCol];
         auto position = fen::parsePosition(fen);
-        auto score = evaluateBoard(position.board, true).cp();
+        auto score = quiesce(position, Score::min(), Score::max(), 4).cp();
+        if (position.activeColor() == Color::BLACK) score = -score;
         auto phase = computePhase(position.board);
         auto diff = expected - score;
         diffs.push_back(diff * 0.01);
