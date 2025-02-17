@@ -38,7 +38,7 @@ ${OPTOBJ}/%.d: %.cpp
 	@mkdir -p ${OPTOBJ}
 	${GPP} -MT $(subst .d,.o,$@) -MM ${CCFLAGS} -o $@ $< > $@
 ${OPTOBJ}/%.o: %.cpp ${OPTOBJ}/%.d
-	@mkdir -p ${OPTOBJ} 
+	@mkdir -p ${OPTOBJ}
 	${GPP} -c ${CCFLAGS} -O2 -o $@ $<
 
 ${DBGOBJ}/%.d: %.cpp
@@ -58,6 +58,8 @@ ${DBGOBJ}/%.o: %.cpp
 ALLSRCS=$(wildcard *.cpp)
 
 .deps: $(call calc_deps,OPT,${ALLSRCS}) $(call calc_deps,DBG,${ALLSRCS})
+
+.SUFFIXES: # Delete the default suffix rules
 .PHONY:
 
 clean: .PHONY
