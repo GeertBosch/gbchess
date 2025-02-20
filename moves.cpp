@@ -638,18 +638,6 @@ void addAvailableEnPassant(MoveVector& captures,
     findEnPassant(board, turn, [&](Piece piece, Move move) { addMove(captures, piece, move); });
 }
 
-void addAvailableCastling(MoveVector& captures,
-                          const Board& board,
-                          Color activeColor,
-                          CastlingMask mask) {
-    Turn turn;
-    turn.activeColor = activeColor;
-    turn.castlingAvailability = mask;
-    auto occupancy = Occupancy(board, activeColor);
-    findCastles(
-        board, occupancy, turn, [&](Piece piece, Move move) { addMove(captures, piece, move); });
-}
-
 BoardChange prepareMove(Board& board, Move move) {
     // Lookup the compound move for the given move kind and target square. This breaks moves like
     // castling, en passant and promotion into a simple capture/move and a second move that can be a

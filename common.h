@@ -188,7 +188,7 @@ inline constexpr bool isCapture(MoveKind kind) {
 inline constexpr bool isPromotion(MoveKind kind) {
     return (static_cast<uint8_t>(kind) & static_cast<uint8_t>(MoveKind::PROMOTION_MASK)) != 0;
 }
-inline constexpr bool isCastle(MoveKind kind) {
+inline constexpr bool isCastles(MoveKind kind) {
     return kind == MoveKind::KING_CASTLE || kind == MoveKind::QUEEN_CASTLE;
 }
 static constexpr uint8_t kNumMoveKinds = index(MoveKind::QUEEN_PROMOTION_CAPTURE) + 1;

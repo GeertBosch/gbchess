@@ -426,31 +426,40 @@ void testAddAvailableEnPassant() {
     std::cout << "All addAvailableEnPassant tests passed!" << std::endl;
 }
 
-void testAddAvailableCastling() {
+MoveVector allLegalCastling(std::string piecePlacement,
+                            Color activeColor,
+                            CastlingMask castlingAvailability) {
+    Board board = fen ::parsePiecePlacement(piecePlacement);
+    Turn turn;
+    MoveVector moves;
+    turn.activeColor = activeColor;
+    turn.castlingAvailability = castlingAvailability;
+    forAllLegalMovesAndCaptures(turn, board, [&moves](Board&, MoveWithPieces mwp) {
+        if (isCastles(mwp.move.kind())) moves.emplace_back(mwp.move);
+    });
+    return moves;
+}
+
+void testAllLegalCastling() {
     {
-        Board board = fen::parsePiecePlacement("r3k2r/8/8/8/8/8/8/R3K2R");
-        MoveVector moves;
-        addAvailableCastling(moves, board, Color::WHITE, CastlingMask::KQkq);
+        auto moves = allLegalCastling("r3k2r/8/8/8/8/8/8/R3K2R", Color::WHITE, CastlingMask::KQkq);
         assert(moves.size() == 2);
         assert(moves[0] == Move("e1"_sq, "g1"_sq, MoveKind::KING_CASTLE));
         assert(moves[1] == Move("e1"_sq, "c1"_sq, MoveKind::QUEEN_CASTLE));
     }
     {
-        Board board = fen::parsePiecePlacement("rn1qkbnr/2pppppp/bp6/p7/4P3/5N2/PPPP1PPP/RNBQK2R");
-        MoveVector moves;
-        addAvailableCastling(moves, board, Color::WHITE, CastlingMask::KQkq);
-        assert(moves.size() == 1);  // We'll still find the castling move, even though it's illegal
-        assert(moves[0] == Move("e1"_sq, "g1"_sq, MoveKind::KING_CASTLE));
+        auto moves = allLegalCastling(
+            "rn1qkbnr/2pppppp/bp6/p7/4P3/5N2/PPPP1PPP/RNBQK2R", Color::WHITE, CastlingMask::KQkq);
+        assert(moves.size() == 0);  // There is one castling move (e1g1), but it's illegal
     }
     {
-        Board board = fen::parsePiecePlacement(
-            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/1R2K2R b Kkq - 1 1");
-        MoveVector moves;
-        addAvailableCastling(moves, board, Color::BLACK, CastlingMask::KQ | CastlingMask::q);
+        auto moves = allLegalCastling("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/1R2K2R",
+                                      Color::BLACK,
+                                      CastlingMask::KQq);
         assert(moves.size() == 1);
         assert(moves[0] == Move("e8"_sq, "c8"_sq, MoveKind::QUEEN_CASTLE));
     }
-    std::cout << "All addAvailableCastling tests passed!" << std::endl;
+    std::cout << "All legal castling tests passed!" << std::endl;
 }
 
 void testMakeAndUnmakeMove(Board& board, Move move) {
@@ -852,7 +861,7 @@ int main() {
     testAddAvailableMoves();
     testAddAvailableCaptures();
     testAddAvailableEnPassant();
-    testAddAvailableCastling();
+    testAllLegalCastling();
     testMakeAndUnmakeMove();
     testCastlingMask();
     testApplyMove();

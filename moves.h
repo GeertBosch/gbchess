@@ -147,15 +147,6 @@ void addAvailableEnPassant(MoveVector& captures,
                            Color activeColor,
                            Square enPassantTarget);
 
-/**
- * This function adds castling moves to the result set. It checks if the active color has
- * castling rights, and if so, whether the path for castling is unobstructed. It does not check
- * for legality in terms of check conditions.
- */
-void addAvailableCastling(MoveVector& moves,
-                          const Board& board,
-                          Color activeColor,
-                          CastlingMask castlingAvailability);
 
 /**
  * Calculates all possible moves for a given chess piece on the board.
