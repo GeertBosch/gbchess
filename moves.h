@@ -14,8 +14,9 @@
  * uses a bitset represented by a uint64_t to store the squares, which is more efficient.
  */
 class SquareSet {
-    uint64_t _squares = 0;
-    static_assert(kNumSquares <= sizeof(uint64_t) * CHAR_BIT);
+    using T = uint64_t;
+    T _squares = 0;
+    static_assert(kNumSquares <= sizeof(T) * CHAR_BIT);
 
 public:
     SquareSet(uint64_t squares) : _squares(squares) {}

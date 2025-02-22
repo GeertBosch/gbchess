@@ -9,7 +9,7 @@
             "type": "lldb-dap",
             "request": "launch",
             "initCommands": [
-                "command source ${workspaceRoot}/lldbinit"
+                "command source ${workspaceRoot}/chess.lldbinit"
             ],
             "program": "${workspaceFolder}/search-debug",
             "args": [
@@ -26,7 +26,7 @@
             "type": "lldb-dap",
             "request": "launch",
             "initCommands": [
-                "command source ${workspaceRoot}/lldbinit"
+                "command source ${workspaceRoot}/chess.lldbinit"
             ],
             "program": "${workspaceFolder}/moves-debug",
             "args": [],
@@ -36,7 +36,7 @@
             "type": "lldb-dap",
             "request": "launch",
             "initCommands": [
-                "command source ${workspaceRoot}/lldbinit"
+                "command source ${workspaceRoot}/chess.lldbinit"
             ],
             "program": "${workspaceFolder}/eval-debug",
             "args": [
@@ -50,7 +50,7 @@
             "type": "lldb-dap",
             "request": "launch",
             "initCommands": [
-                "command source ${workspaceRoot}/lldbinit"
+                "command source ${workspaceRoot}/chess.lldbinit"
             ],
             "program": "${workspaceFolder}/perft-debug",
             "args": [
@@ -63,7 +63,7 @@
             "type": "lldb-dap",
             "request": "launch",
             "initCommands": [
-                "command source ${workspaceFolder}/lldbinit"
+                "command source ${workspaceFolder}/chess.lldbinit"
             ],
             "program": "${workspaceFolder}/uci-debug",
             "args": [
