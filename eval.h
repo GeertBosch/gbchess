@@ -65,6 +65,8 @@ public:
         return result;
     }
     static constexpr Score mateIn(int moves) {
+        if (moves < 0) return mateIn(-moves);
+
         assert(moves > 0 && moves < 100);
         return Score(value_type(Score::max().cp() - moves + 1));
     }
