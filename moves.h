@@ -68,10 +68,14 @@ public:
     SquareSet operator|(SquareSet other) const { return _squares | other._squares; }
     SquareSet operator^(SquareSet other) const { return _squares ^ other._squares; }
     SquareSet operator!(void) const { return ~_squares; }
+    SquareSet operator>>(int shift) const { return _squares >> shift; }
+    SquareSet operator<<(int shift) const { return _squares << shift; }
 
     SquareSet operator|=(SquareSet other) { return _squares |= other._squares; }
     SquareSet operator&=(SquareSet other) { return _squares &= other._squares; }
     SquareSet operator^=(SquareSet other) { return _squares ^= other._squares; }
+    SquareSet operator>>=(int shift) { return _squares >>= shift; }
+    SquareSet operator<<=(int shift) { return _squares <<= shift; }
 
     bool operator==(SquareSet other) const { return _squares == other._squares; }
 
@@ -181,6 +185,12 @@ SquareSet possibleCaptures(Piece piece, Square from);
  * case of castling.
  */
 MoveVector allLegalMovesAndCaptures(Turn turn, Board& board);
+
+/**
+ * Returns true if the given side has a pawn that may promote on the next move.
+ * Does not check for legality of the promotion move.
+ */
+bool mayHavePromoMove(Color side, Board& board, Occupancy occupancy);
 
 struct MoveWithPieces {
     Move move;

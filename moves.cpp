@@ -554,7 +554,7 @@ void findMoves(const Board& board, Occupancy occupied, const F& fun) {
 template <typename F>
 void findPromotionMoves(const Board& board, Occupancy occupied, const F& fun) {
     auto fromSquares = occupied.ours & SquareSet(0x00ff'ff00'00ff'ff00ull);  // Rank 2, 3, 6 and 7
-    auto ToSquares = SquareSet(0xffff'0000'0000'ffffull);                    // Rank 1 and 8
+    auto ToSquares = SquareSet(0xffff'0000'0000'ffffull);                    // Rank 1, 2, 7 and 8
     for (auto from : fromSquares) {
         auto piece = board[from];
         if (type(piece) != PieceType::PAWN) continue;
@@ -898,6 +898,25 @@ void doMoveIfCheck(Board& board, SearchState& state, Piece piece, Move move, con
 }
 }  // namespace
 
+bool mayHavePromoMove(Color side, Board& board, Occupancy occupancy) {
+    Piece pawn;
+    SquareSet from;
+    if (side == Color::WHITE) {
+        from = SquareSet(0x00ff'0000'0000'0000ull) & occupancy.ours;
+        auto to = SquareSet(0xff00'0000'0000'0000ull) & !occupancy();
+        from &= to >> 8;
+        pawn = Piece::P;
+    } else {
+        from = SquareSet(0x0000'0000'0000'ff00ull) & occupancy.ours;
+        auto to = SquareSet(0x0000'0000'0000'00ffull) & !occupancy();
+        from &= to << 8;
+        pawn = Piece::p;
+    }
+    for (auto square : from)
+        if (board[square] == pawn) return true;
+    return false;
+}
+
 void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun action) {
     // Iterate over all moves and captures
     auto state = SearchState(board, turn.activeColor);
@@ -909,13 +928,19 @@ void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun a
         doMoveIfCheck(board, state, piece, move, action);
     };
     findCaptures(board, state.occupied, doMove);
+
+    // Check if the opponent may promote
+    bool otherMayPromote = depthleft > options::promotionMinDepthLeft &&
+        mayHavePromoMove(!turn.activeColor, board, !state.occupied);
+
     // Avoid horizon effect: don't promote in the last plies
-    if (depthleft > options::promotionMinDepthLeft)
+    if (depthleft >= options::promotionMinDepthLeft)
         findPromotionMoves(board, state.occupied, doMove);
 
     findEnPassant(board, turn, doMove);
-    if (inCheck) findMoves(board, state.occupied, doMove);  // In check is not a quiet position
-    else if (depthleft >= options::quiescenceDepth - 2) {
+    if (inCheck || otherMayPromote)
+        findMoves(board, state.occupied, doMove);
+    else if (depthleft >= options::quiescenceDepth + 2) {
         findMoves(board, state.occupied, doCheck);
     }
 }

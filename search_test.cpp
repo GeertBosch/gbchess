@@ -167,7 +167,6 @@ void printAvailableCaptures(const Position& position) {
 void printBestMove(Position position, int maxdepth) {
     auto bestMove = search::computeBestMove(position, maxdepth);
     std::cout << "Best Move: " << bestMove << " for " << fen::to_string(position) << std::endl;
-    std::cout << "pv " << bestMove.moves << "\n";
 }
 
 void printAnalysis(Position position, int maxdepth) {
@@ -392,9 +391,9 @@ int main(int argc, char* argv[]) {
     // Parse the FEN string into a Position
     Position position = fen::parsePosition(fen);
 
-    Score quiescenceEval = search::quiesce(position, 4);
+    Score quiescenceEval = search::quiesce(position, options::quiescenceDepth);
     if (position.turn.activeColor == Color::BLACK) quiescenceEval = -quiescenceEval;
-    std::cout << "Quiescence search: " << std::string(quiescenceEval) << std::endl;
+    std::cout << "Quiescence search: " << std::string(quiescenceEval) << " (white side)\n";
 
     if (depth) {
         printEvalRate([&]() { printBestMove(position, depth); });

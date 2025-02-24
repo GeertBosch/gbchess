@@ -240,6 +240,16 @@ std::pair<UndoPosition, Score> makeMoveWithEval(Position& position, Move move, S
     return {undo, eval};
 }
 
+bool isQuiet(Position& position, int depthleft) {
+    if (isInCheck(position)) return false;
+    if (depthleft <= options::promotionMinDepthLeft) return true;
+    if (mayHavePromoMove(!position.activeColor(),
+                         position.board,
+                         Occupancy(position.board, !position.activeColor())))
+        return false;
+    return true;
+}
+
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft);
 Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depthleft) {
     ++evalCount;
@@ -247,9 +257,9 @@ Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depth
 
     if (!depthleft) return stand_pat;
 
-    if (stand_pat >= beta && !isInCheck(position)) return beta;
+    if (stand_pat >= beta && isQuiet(position, depthleft)) return beta;
 
-    if (alpha < stand_pat) alpha = stand_pat;
+    if (alpha < stand_pat && isQuiet(position, depthleft)) alpha = stand_pat;
 
     // The moveList includes moves needed to get out of check; an empty list means mate
     auto moveList = allLegalQuiescentMoves(position.turn, position.board, depthleft);
@@ -271,7 +281,9 @@ Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depth
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     auto eval = evaluateBoard(position.board, position.activeColor(), evalTable);
-    return quiesce(position, eval, alpha, beta, depthleft);
+    eval = quiesce(position, eval, alpha, beta, depthleft);
+    if (eval.mate() && !isCheckmate(position)) eval = std::clamp(eval, -1000_cp, 1000_cp);
+    return eval;
 }
 
 Score quiesce(Position& position, int depthleft) {
@@ -291,7 +303,9 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
 
     // Check the transposition table, which may tighten one or both search bounds
     transpositionTable.refineAlphaBeta(hash, depthleft, alpha, beta);
-    if (alpha >= beta) return {{}, alpha};
+
+    // TODO: Figure out if we can early return, but still get a PV
+    // if (alpha >= beta) return {{}, alpha};
 
     auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
 
@@ -388,7 +402,7 @@ PrincipalVariation toplevelAlphaBeta(Position& position, int maxdepth, InfoFn in
 
 PrincipalVariation aspirationWindows(Position position, Score expected, int maxdepth, InfoFn info) {
     auto windows = options::aspirationWindows;
-    auto maxWindow = Score::fromCP(windows.back());
+    auto maxWindow = windows.empty() ? 0_cp : Score::fromCP(windows.back());
     expected = std::clamp(expected, Score::min() + maxWindow, Score::max() - maxWindow);
     auto alphaIt = windows.begin();
     auto betaIt = windows.begin();
@@ -407,6 +421,7 @@ PrincipalVariation aspirationWindows(Position position, Score expected, int maxd
             ++betaIt;
         else
             break;
+        pv = {};
     }
     if (!pv) pv = toplevelAlphaBeta(position, maxdepth, info);
     if (pv)

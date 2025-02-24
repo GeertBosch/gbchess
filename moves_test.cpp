@@ -5,6 +5,7 @@
 #include "common.h"
 #include "fen.h"
 #include "moves.h"
+#include "options.h"
 
 std::string toString(SquareSet squares) {
     std::string str;
@@ -847,6 +848,25 @@ void testCastlingMask() {
     }
 }
 
+void testAllLegalQuiescentMoves() {
+    {
+        std::string fen = "8/1N3k2/6p1/8/2P3P1/p7/1R2K3/8 b - - 0 58";
+        auto position = fen::parsePosition(fen);
+        auto moves =
+            allLegalQuiescentMoves(position.turn, position.board, options::promotionMinDepthLeft);
+        assert(moves.size() == 2);
+    }
+    {
+        // This position is not quiet for white, as black may promote a pawn
+        std::string fen = "8/1N3k2/6p1/8/2P3P1/8/1p2K3/8 w - - 0 59";
+        auto position = fen::parsePosition(fen);
+        auto moves = allLegalQuiescentMoves(
+            position.turn, position.board, options::promotionMinDepthLeft + 1);
+        assert(moves.size() == 14);
+    }
+    std::cout << "All allLegalQuiescentMoves tests passed!\n";
+}
+
 int main() {
     testSquare();
     testMove();
@@ -867,6 +887,7 @@ int main() {
     testApplyMove();
     testIsAttacked();
     testAllLegalMoves();
+    testAllLegalQuiescentMoves();
     std::cout << "All move tests passed!" << std::endl;
     return 0;
 }
