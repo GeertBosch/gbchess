@@ -163,14 +163,24 @@ evals/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
 debug: eval-debug moves-debug perft-debug search-debug
 build: fen-test moves-test elo-test eval-test search-test uci-test
 
-test: build debug
+searches1: search-debug
+	./search-debug "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 5
+	./search-debug "5r1k/pp4pp/5p2/1BbQp1r1/7K/7P/1PP3P1/3R3R b - - 3 26" 3
+	./search-debug "8/8/8/8/8/4bk1p/2R2Np1/6K1 b - - 7 62" 3
+	./search-debug "3r2k1/1p3ppp/pq1Q1b2/8/8/1P3N2/P4PPP/3R2K1 w - - 4 28" 3
+
+searches2: search-debug
+	./search-debug "8/1N3k2/6p1/8/2P3P1/pr6/R7/5K2 b - - 2 56" 5
+
+searches: search-test search-debug searches1 searches2
+	./search-test "r4rk1/p3ppbp/Pp3np1/3PpbB1/2q5/2N2P2/1PPQ2PP/3RR2K w - - 0 20" 1
+
+test: build debug searches evals
 	rm -f coverage-*.profraw
 	./fen-test
 	./moves-test
 	./elo-test
 	./eval-test "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1"
-	./search-test "r4rk1/p3ppbp/Pp3np1/3PpbB1/2q5/2N2P2/1PPQ2PP/3RR2K w - - 0 20" 1
-	./search-debug "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 5
 	./uci-test ut1.in | grep "bestmove g5f6 ponder"
 
 coverage: test
