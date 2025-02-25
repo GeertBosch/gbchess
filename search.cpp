@@ -16,6 +16,8 @@ uint64_t evalCount = 0;
 uint64_t cacheCount = 0;
 uint64_t searchEvalCount = 0;  // copy of evalCount at the start of the search
 
+namespace {
+
 /**
  * The transposition table is a hash table that stores the best move found for a position, so it can
  * be reused in subsequent searches. The table is indexed by the hash of the position, and stores
@@ -140,6 +142,8 @@ struct TranspositionTable {
 
 } transpositionTable;
 
+size_t history[2][kNumSquares][kNumSquares] = {0};
+
 /**
  * The repetition table stores the hashes of all positions played so far in the game, so we can
  * detect repetitions and apply the rule that a third repetition is a draw.
@@ -166,6 +170,52 @@ struct Repetitions {
 } repetitions;
 
 using MoveIt = MoveVector::iterator;
+
+// Scores for sorting moves are not meant to be related to pawn values, but just as relative
+// precedence for maximum chance of a beta cut-off.
+int kCapturePromoScore = 2'100'000'000;  // a bit below INT_MAX
+int kEnPassantScore = 2'050'000'000;     // a bit below kCapturePromoScore
+int kCaptureScore = 2'000'000'000;       // a bit below kEnPassantScore
+int kPromoScore = 1'950'000'000;         // a bit below kCaptureScore
+int K = 1'000;                           // a thousand
+int kind[16] = {
+    0,                           // QUIET
+    0,                           // DOUBLE_PAWN_PUSH
+    3 * K,                       // KING_CASTLE
+    2 * K,                       // QUEEN_CASTLE
+    kCaptureScore,               // CAPTURE
+    kEnPassantScore,             // EN_PASSANT, close to promo
+    0,                           // unused (6)
+    0,                           // unused (7)
+    kPromoScore + 7 * K,         // KNIGHT_PROMO, second most useful after queen
+    kPromoScore + 3 * K,         // BISHOP_PROMO
+    kPromoScore + 5 * K,         // ROOK_PROMO
+    kPromoScore + 9 * K,         // QUEEN_PROMO
+    kCapturePromoScore + 7 * K,  // KNIGHT_PROMO_CAPTURE
+    kCapturePromoScore + 3 * K,  // BISHOP_PROMO_CAPTURE
+    kCapturePromoScore + 5 * K,  // ROOK_PROMO_CAPTURE
+    kCapturePromoScore + 9 * K,  // QUEEN_PROMO_CAPTURE
+};
+// Capture scores for piece capturing piece to achieve MVV/LVA
+int xx[6][6] = {
+    {0, 10, 20, 30, 40, 0},  // pawn captures
+    {-3, 7, 17, 27, 37, 0},  // knight captures
+    {-3, 7, 17, 27, 37, 0},  // bishop captures
+    {-5, 5, 15, 25, 35, 0},  // rook captures
+    {-9, 1, 11, 21, 31, 0},  // queen captures
+    {0, 10, 20, 30, 40, 0},  // king captures
+};
+
+int score(const Board& board, Move move) {
+    int base = kind[int(move.kind())];
+    auto piece = board[move.from()];
+    auto side = color(piece);
+
+    return base +
+        (isCapture(move.kind()) ? xx[index(type(piece))][int(type(board[move.to()]))]
+                                : history[int(side)][move.from().index()][move.to().index()]);
+}
+}  // namespace
 
 /**
  * Sorts the moves (including captures) in the range [begin, end) in place, so that the move or
@@ -195,6 +245,8 @@ MoveIt sortTransposition(const Position& position, Hash hash, MoveIt begin, Move
  */
 MoveIt sortCaptures(const Position& position, MoveIt begin, MoveIt end) {
     std::sort(begin, end, [&board = position.board](Move a, Move b) {
+        if (options::historyStore) return score(board, a) > score(board, b);
+
         if (!isCapture(a.kind())) return false;
 
         // Most valuable victims first
@@ -328,7 +380,12 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
         auto newVar = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), depthleft - 1);
 
         if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
-        if (pv.score >= beta) break;
+        if (pv.score >= beta) {
+            int side = int(position.activeColor());
+            if (!isCapture(move.kind()))
+                history[side][move.from().index()][move.to().index()] += depthleft * depthleft;
+            break;
+        }
     }
     repetitions.pop_back();
 
@@ -371,8 +428,8 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
 }
 
 PrincipalVariation toplevelAlphaBeta(
-    Position& position, Score alpha, Score beta, int maxdepth, InfoFn info) {
-    if (maxdepth <= 0)
+    Position& position, Score alpha, Score beta, int depthleft, InfoFn info) {
+    if (depthleft <= 0)
         return {{}, quiesce(position, Score::min(), Score::max(), options::quiescenceDepth)};
 
     // No need to check the transposition table here, as we're at the top level
@@ -384,12 +441,16 @@ PrincipalVariation toplevelAlphaBeta(
     PrincipalVariation pv;
 
     int currmovenumber = 0;
-    for (auto currmove : moveList) {
-        if (currmoveInfo(info, maxdepth, currmove, ++currmovenumber)) break;
-        auto newPosition = applyMove(position, currmove);
-        auto newVar = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), maxdepth - 1);
-        if (newVar.score > pv.score || !pv.front()) pv = {currmove, newVar};
-        if (pv.score >= beta) break;
+    for (auto move : moveList) {
+        if (currmoveInfo(info, depthleft, move, ++currmovenumber)) break;
+        auto newPosition = applyMove(position, move);
+        auto newVar = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), depthleft - 1);
+        if (newVar.score > pv.score || !pv.front()) pv = {move, newVar};
+        if (pv.score >= beta) {
+            int side = int(position.activeColor());
+            history[side][move.from().index()][move.to().index()] += depthleft * depthleft;
+            break;
+        }
     }
     if (moveList.empty() && !isInCheck(position)) pv = {Move(), Score()};
 
@@ -446,6 +507,7 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
     transpositionTable.clear();
     searchEvalCount = evalCount;
     repetitions.hashes.clear();
+    std::fill(&history[0][0][0], &history[0][0][0] + sizeof(history) / sizeof(history[0][0][0]), 0);
 
     repetitions.push_back(Hash(position));
     for (auto move : moves) {
