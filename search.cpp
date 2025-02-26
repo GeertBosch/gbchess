@@ -174,27 +174,27 @@ using MoveIt = MoveVector::iterator;
 // Scores for sorting moves are not meant to be related to pawn values, but just as relative
 // precedence for maximum chance of a beta cut-off.
 int kCapturePromoScore = 2'100'000'000;  // a bit below INT_MAX
-int kEnPassantScore = 2'050'000'000;     // a bit below kCapturePromoScore
+int kEnPassantScore = 2'099'999'999;     // a bit below kCapturePromoScore
 int kCaptureScore = 2'000'000'000;       // a bit below kEnPassantScore
 int kPromoScore = 1'950'000'000;         // a bit below kCaptureScore
 int K = 1'000;                           // a thousand
 int kind[16] = {
-    0,                           // QUIET
-    0,                           // DOUBLE_PAWN_PUSH
-    3 * K,                       // KING_CASTLE
-    2 * K,                       // QUEEN_CASTLE
-    kCaptureScore,               // CAPTURE
-    kEnPassantScore,             // EN_PASSANT, close to promo
-    0,                           // unused (6)
-    0,                           // unused (7)
-    kPromoScore + 7 * K,         // KNIGHT_PROMO, second most useful after queen
-    kPromoScore + 3 * K,         // BISHOP_PROMO
-    kPromoScore + 5 * K,         // ROOK_PROMO
-    kPromoScore + 9 * K,         // QUEEN_PROMO
-    kCapturePromoScore + 7 * K,  // KNIGHT_PROMO_CAPTURE
-    kCapturePromoScore + 3 * K,  // BISHOP_PROMO_CAPTURE
-    kCapturePromoScore + 5 * K,  // ROOK_PROMO_CAPTURE
-    kCapturePromoScore + 9 * K,  // QUEEN_PROMO_CAPTURE
+    0,                       // QUIET
+    -3,                      // DOUBLE_PAWN_PUSH
+    -1,                      // KING_CASTLE
+    -2,                      // QUEEN_CASTLE
+    kCaptureScore,           // CAPTURE
+    kEnPassantScore,         // EN_PASSANT, close to promo
+    0,                       // unused (6)
+    0,                       // unused (7)
+    kPromoScore + 7,         // KNIGHT_PROMO, second most useful after queen
+    kPromoScore + 3,         // BISHOP_PROMO
+    kPromoScore + 5,         // ROOK_PROMO
+    kPromoScore + 9,         // QUEEN_PROMO
+    kCapturePromoScore + 7,  // KNIGHT_PROMO_CAPTURE
+    kCapturePromoScore + 3,  // BISHOP_PROMO_CAPTURE
+    kCapturePromoScore + 5,  // ROOK_PROMO_CAPTURE
+    kCapturePromoScore + 9,  // QUEEN_PROMO_CAPTURE
 };
 // Capture scores for piece capturing piece to achieve MVV/LVA
 int xx[6][6] = {
