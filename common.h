@@ -287,6 +287,12 @@ public:
     bool isPromotion() const { return kind() >= MoveKind::PROMOTION_MASK; }
 };
 using MoveVector = std::vector<Move>;
+inline std::string to_string(MoveVector moves) {
+    std::string str = "";
+    for (auto&& move : moves) str += std::string(move) + " ";
+    if (!str.empty()) str.pop_back();
+    return str;
+}
 
 class Board {
     using Squares = std::array<Piece, kNumSquares>;

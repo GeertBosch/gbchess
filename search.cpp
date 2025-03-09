@@ -1,3 +1,4 @@
+#include <chrono>
 #include <iostream>
 #include <sstream>
 #include <vector>
@@ -14,9 +15,13 @@ namespace search {
 EvalTable evalTable;
 uint64_t evalCount = 0;
 uint64_t cacheCount = 0;
-uint64_t searchEvalCount = 0;  // copy of evalCount at the start of the search
 
 namespace {
+using namespace std::chrono;
+using clock = high_resolution_clock;
+using timepoint = clock::time_point;
+uint64_t searchEvalCount = 0;  // copy of evalCount at the start of the search
+timepoint searchStartTime = {};
 
 /**
  * The transposition table is a hash table that stores the best move found for a position, so it can
@@ -31,7 +36,8 @@ struct TranspositionTable {
     enum EntryType : uint8_t { EXACT, LOWERBOUND, UPPERBOUND };
     struct Eval {
         Move move;
-        Score score;
+        Score score = Score::min();
+        operator bool() const { return move; }
     };
 
     struct Entry {
@@ -173,12 +179,12 @@ using MoveIt = MoveVector::iterator;
 
 // Scores for sorting moves are not meant to be related to pawn values, but just as relative
 // precedence for maximum chance of a beta cut-off.
-int kCapturePromoScore = 2'100'000'000;  // a bit below INT_MAX
-int kEnPassantScore = 2'099'999'999;     // a bit below kCapturePromoScore
-int kCaptureScore = 2'000'000'000;       // a bit below kEnPassantScore
-int kPromoScore = 1'950'000'000;         // a bit below kCaptureScore
-int K = 1'000;                           // a thousand
-int kind[16] = {
+const int kCapturePromoScore = 2'100'000'000;  // a bit below INT_MAX
+const int kEnPassantScore = 2'099'999'999;     // a bit below kCapturePromoScore
+const int kCaptureScore = 2'000'000'000;       // a bit below kEnPassantScore
+const int kPromoScore = 1'950'000'000;         // a bit below kCaptureScore
+const int K = 1'000;                           // a thousand
+constexpr int kind[16] = {
     0,                       // QUIET
     -3,                      // DOUBLE_PAWN_PUSH
     -1,                      // KING_CASTLE
@@ -187,7 +193,7 @@ int kind[16] = {
     kEnPassantScore,         // EN_PASSANT, close to promo
     0,                       // unused (6)
     0,                       // unused (7)
-    kPromoScore + 7,         // KNIGHT_PROMO, second most useful after queen
+    kPromoScore + 7,         // KNIGHT_PROMO, second most common after queen
     kPromoScore + 3,         // BISHOP_PROMO
     kPromoScore + 5,         // ROOK_PROMO
     kPromoScore + 9,         // QUEEN_PROMO
@@ -198,6 +204,7 @@ int kind[16] = {
 };
 // Capture scores for piece capturing piece to achieve MVV/LVA
 int xx[6][6] = {
+    // P, N, B, R, Q, K
     {0, 10, 20, 30, 40, 0},  // pawn captures
     {-3, 7, 17, 27, 37, 0},  // knight captures
     {-3, 7, 17, 27, 37, 0},  // bishop captures
@@ -212,7 +219,7 @@ int score(const Board& board, Move move) {
     auto side = color(piece);
 
     return base +
-        (isCapture(move.kind()) ? xx[index(type(piece))][int(type(board[move.to()]))]
+        (isCapture(move.kind()) ? xx[index(type(piece))][index(type(board[move.to()]))]
                                 : history[int(side)][move.from().index()][move.to().index()]);
 }
 }  // namespace
@@ -227,16 +234,13 @@ MoveIt sortTransposition(const Position& position, Hash hash, MoveIt begin, Move
     if (!cachedMove.move) return begin;
 
     // If the move is not part of the current legal moves, nothing to do here.
-    auto it = std::find(begin, end, cachedMove.move);
-    if (it == end) return begin;
+    auto it = cachedMove.move ? std::find(begin, end, cachedMove.move) : end;
 
-    // If the transposition is not at the beginning, shift preceeding moves to the right
-    if (it != begin) {
-        std::swap(*begin, *it);
-    }
+    // If the move was part of a pv for this position, move it to the beginning of the list
+    if (it != end) std::swap(*begin++, *it);
 
-    // The transposition is now in the beginning, so return an iterator to the next move
-    return std::next(begin);
+    // begin now points past the transposition move, or the beginning of the list
+    return begin;
 }
 
 /**
@@ -245,9 +249,9 @@ MoveIt sortTransposition(const Position& position, Hash hash, MoveIt begin, Move
  */
 MoveIt sortCaptures(const Position& position, MoveIt begin, MoveIt end) {
     std::sort(begin, end, [&board = position.board](Move a, Move b) {
-        if (options::historyStore) return score(board, a) > score(board, b);
-
-        if (!isCapture(a.kind())) return false;
+        // For non-captures, sort by history score
+        if (!isCapture(a.kind()))
+            return options::historyStore ? score(board, a) > score(board, b) : false;
 
         // Most valuable victims first
         auto ato = board[a.to()];
@@ -356,8 +360,9 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
     // Check the transposition table, which may tighten one or both search bounds
     transpositionTable.refineAlphaBeta(hash, depthleft, alpha, beta);
 
-    // TODO: Figure out if we can early return, but still get a PV
-    // if (alpha >= beta) return {{}, alpha};
+    // TODO: Figure out if we can return more of a PV here
+    if (alpha >= beta)
+        if (auto eval = transpositionTable.find(hash)) return {{eval.move}, alpha};
 
     auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
 
@@ -419,18 +424,23 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
     else
         pvString += " score cp " + std::to_string(score.cp());
 
-    pvString += " pv";
-    for (Move move : pv) {
-        pvString += " " + std::string(move);
-    }
+    auto nodes = evalCount - searchEvalCount;
+    pvString += " nodes " + std::to_string(nodes);
+
+    auto millis = duration_cast<milliseconds>(clock::now() - searchStartTime).count();
+    pvString += " time " + std::to_string(millis);
+
+    if (millis) pvString += " nps " + std::to_string(nodes * 1000 / millis);
+
+    if (pv.size()) pvString += " pv " + to_string(pv);
+
     auto stop = info(pvString);
     return stop;
 }
 
 PrincipalVariation toplevelAlphaBeta(
     Position& position, Score alpha, Score beta, int depthleft, InfoFn info) {
-    if (depthleft <= 0)
-        return {{}, quiesce(position, Score::min(), Score::max(), options::quiescenceDepth)};
+    if (depthleft <= 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
 
     // No need to check the transposition table here, as we're at the top level
 
@@ -493,7 +503,7 @@ PrincipalVariation aspirationWindows(Position position, Score expected, int maxd
 }
 
 PrincipalVariation iterativeDeepening(Position& position, int maxdepth, InfoFn info) {
-    PrincipalVariation pv = toplevelAlphaBeta(position, 0, info);
+    PrincipalVariation pv = {{}, quiesce(position, options::quiescenceDepth)};
     for (auto depth = 1; depth <= maxdepth; ++depth) {
         pv = aspirationWindows(position, pv.score, depth, info);
         if (pvInfo(info, depth, pv.score, pv.moves)) break;
@@ -505,9 +515,10 @@ PrincipalVariation iterativeDeepening(Position& position, int maxdepth, InfoFn i
 PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector moves, InfoFn info) {
     evalTable = EvalTable{position.board, true};
     transpositionTable.clear();
-    searchEvalCount = evalCount;
     repetitions.hashes.clear();
     std::fill(&history[0][0][0], &history[0][0][0] + sizeof(history) / sizeof(history[0][0][0]), 0);
+    searchEvalCount = evalCount;
+    searchStartTime = clock::now();
 
     repetitions.push_back(Hash(position));
     for (auto move : moves) {
