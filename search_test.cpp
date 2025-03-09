@@ -173,11 +173,14 @@ void printAnalysis(Position position, int maxdepth) {
     auto analyzed = analyzeMoves(position, maxdepth);
     std::cerr << "Analyzed: " << analyzed << std::endl;
     auto bestMove = search::computeBestMove(position, maxdepth);
+    std::cerr << "Computed: " << bestMove << std::endl;
+
+    // In the case of identical scores, there may be multiple best moves.
     if (bestMove.score != analyzed.score)
-        std::cerr << "Mismatch: " << bestMove << " != " << analyzed << "\n";
-    if (bestMove.front() != analyzed.front())
-        std::cerr << "Mismatch: " << bestMove << " != " << analyzed << "\n";
-    assert(analyzed.front() == bestMove.front() && analyzed.score == bestMove.score);
+        std::cerr << "Mismatch: " << bestMove.score << " != " << analyzed.score << "\n";
+    else if (bestMove.front() != analyzed.front())
+        std::cerr << "Mismatch: " << bestMove.front() << " != " << analyzed.front() << "\n";
+    assert(analyzed.score == bestMove.score);
 }
 
 /**
@@ -295,8 +298,10 @@ PuzzleError doPuzzle(std::string puzzle, Position position, MoveVector moves, in
                   << " (skipped)\n";
         return DEPTH_ERROR;  // Skip puzzles that are too deep
     }
-    auto best = search::computeBestMove(position, maxdepth);
-    return analyzePuzzleSolution(puzzle, position, moves, best.moves);
+    std::cerr << puzzle << ": ";
+    PrincipalVariation pv;
+    printEvalRate([&]() { pv = search::computeBestMove(position, maxdepth); });
+    return analyzePuzzleSolution(puzzle, position, moves, pv.moves);
 }
 
 void testFromStdIn(int depth) {
