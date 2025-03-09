@@ -400,7 +400,7 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
 }
 
 bool currmoveInfo(InfoFn info, int depthleft, Move currmove, int currmovenumber) {
-    if (!info) return false;
+    if (!info || depthleft < options::currmoveMinDepthLeft) return false;
     std::stringstream ss;
     ss << "depth " << std::to_string(depthleft)     //
        << " nodes " << evalCount - searchEvalCount  //
