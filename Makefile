@@ -71,6 +71,9 @@ clean: .PHONY
 	rm -f game.??? log.??? players.dat # XBoard outputs
 	rm -rf *.dSYM
 
+fen-test: ${OPTOBJ}/fen.o
+fen-debug: ${DBGOBJ}/fen.o
+
 moves-test: ${OPTOBJ}/moves.o ${OPTOBJ}/fen.o
 moves-debug: ${DBGOBJ}/moves.o ${DBGOBJ}/fen.o
 
@@ -160,8 +163,16 @@ ${PUZZLES}:
 evals/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
 	mkdir -p $(dir $@) && ./$< $(@:evals/lichess_%_evals.csv=%) > $@
 
-debug: eval-debug moves-debug perft-debug search-debug
-build: fen-test moves-test elo-test eval-test search-test uci-test
+# debug: eval-debug moves-debug perft-debug search-debug uci-debug
+# Automatically generate debug targets from *_test.cpp files
+TEST_SRCS=$(wildcard *_test.cpp)
+DEBUG_TARGETS=$(patsubst %_test.cpp,%-debug,$(TEST_SRCS))
+BUILD_TARGETS=$(patsubst %_test.cpp,%-test,$(TEST_SRCS))
+
+debug: $(DEBUG_TARGETS)
+build: $(BUILD_TARGETS)
+
+#build: fen-test moves-test elo-test eval-test search-test uci-test
 
 searches1: search-debug
 	./search-debug "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 5
