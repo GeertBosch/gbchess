@@ -304,7 +304,6 @@ bool isQuiet(Position& position, int depthleft) {
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft);
 Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depthleft) {
-    ++evalCount;
     Score stand_pat = eval;
 
     if (!depthleft) return stand_pat;
@@ -332,6 +331,7 @@ Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depth
 }
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
+    ++evalCount;
     auto eval = evaluateBoard(position.board, position.activeColor(), evalTable);
     eval = quiesce(position, eval, alpha, beta, depthleft);
     if (eval.mate() && !isCheckmate(position)) eval = std::clamp(eval, -1000_cp, 1000_cp);
