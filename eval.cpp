@@ -158,23 +158,14 @@ EvalTable::EvalTable(const Board& board, bool usePieceSquareTables) {
 
 Score evaluateBoard(const Board& board, const EvalTable& table) {
     Score value = 0_cp;
-    auto occupied = SquareSet::occupancy(board);
-
-    for (auto square : occupied) value += table[board[square]][square.index()];
+    for (auto sq : SquareSet::occupancy(board)) value += table[board[sq]][sq.index()];
 
     return value;
 }
 
 Score evaluateBoard(const Board& board, bool usePieceSquareTables) {
     auto table = EvalTable(board, usePieceSquareTables);
-    auto occupancy = SquareSet::occupancy(board);
-    Score value = 0_cp;
-    for (auto sq : occupancy) {
-        auto piece = board[sq];
-        auto score = table[piece][sq.index()];
-        value += score;
-    }
-    return value;
+    return evaluateBoard(board, table);
 }
 
 bool isInCheck(const Position& position) {
@@ -185,7 +176,7 @@ bool isInCheck(const Position& position) {
 
 bool isMate(const Position& position) {
     auto board = position.board;
-    return allLegalMovesAndCaptures(position.turn, board).size() == 0;
+    return countLegalMovesAndCaptures(position.turn, board) == 0;
 }
 
 bool isCheckmate(const Position& position) {
