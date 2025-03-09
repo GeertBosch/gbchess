@@ -154,6 +154,7 @@ void UCIRunner::execute(std::string line) {
         } else if (positionKind == "fen" && posArgs.size() >= 6) {
             std::string fen = "";
             join(&posArgs[0], &posArgs[6], std::string(" "), std::back_inserter(fen));
+            while (fen.size() && fen[fen.size() - 1] == ' ') fen.pop_back();
             if (fen.size() >= 2 && fen[0] == '"' && fen[fen.size() - 1] == '"')
                 fen = fen.substr(1, fen.size() - 2);
 
