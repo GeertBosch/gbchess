@@ -324,6 +324,8 @@ int main(int argc, char* argv[]) {
     // Parse any FEN string and moves from the command line
     if (parseFEN(position, &argc, &argv) && parseMoves(position, &argc, &argv))
         std::cout << "New position: " << fen::to_string(position) << "\n";
+    else
+        std::cout << "Position: " << fen::to_string(position) << "\n";
 
     // Print the board in grid notation
     printBoard(std::cout, position.board);
@@ -334,6 +336,10 @@ int main(int argc, char* argv[]) {
 
     Score pieceSquareEval = evaluateBoard(position.board, true);
     std::cout << "Piece-Square Board Evaluation: " << std::string(pieceSquareEval) << std::endl;
+
+    auto quiesceEval = quiesce(position, Score::min(), Score::max(), 4);
+    if (position.activeColor() == Color::BLACK) quiesceEval = -quiesceEval;
+    std::cout << "Quiescence Evaluation: " << std::string(quiesceEval) << std::endl;
 
     printAvailableCaptures(position);
     printAvailableMoves(position);
