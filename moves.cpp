@@ -156,6 +156,7 @@ void MovesTable::initializeEnPassantFrom() {
 void MovesTable::initializeCompound() {
     using MK = MoveKind;
     using PT = PieceType;
+    using CM = CompoundMove;
 
     // Initialize non-compound moves
     for (auto kind = 0; kind < kNumMoveKinds; ++kind)
@@ -168,27 +169,21 @@ void MovesTable::initializeCompound() {
     compound[index(MK::QUEEN_CASTLE)]["c1"_sq.index()] = {"c1"_sq, 0, {"a1"_sq, "d1"_sq}};
     compound[index(MK::QUEEN_CASTLE)]["c8"_sq.index()] = {"c8"_sq, 0, {"a8"_sq, "d8"_sq}};
 
-    // Initialize en passant capture for white
-    for (auto to : SquareSet::ipath("a6"_sq, "h6"_sq)) {
-        auto capture = Square(to.file(), to.rank() - 1);
-        compound[index(MK::EN_PASSANT)][to.index()] = {capture, 0, {capture, to}};
-    }
+    // En passant helper functions
+    auto epRank = [](int rank) -> int { return rank < kNumRanks / 2 ? rank + 1 : rank - 1; };
+    auto epTarget = [=](Square to) -> Square { return Square(to.file(), epRank(to.rank())); };
+    auto epCompound = [=](Square to) -> CM { return {epTarget(to), 0, {epTarget(to), to}}; };
 
-    // Initialize en passant capture for black
-    for (auto to : SquareSet::ipath("a3"_sq, "h3"_sq)) {
-        auto capture = Square(to.file(), to.rank() + 1);
-        compound[index(MK::EN_PASSANT)][to.index()] = {capture, 0, {capture, to}};
-    }
+    // Initialize en passant capture for white
+    for (auto to : SquareSet::ipath("a6"_sq, "h6"_sq) | SquareSet::ipath("a3"_sq, "h3"_sq))
+        compound[index(MK::EN_PASSANT)][to.index()] = epCompound(to);
 
     // Initialize promotion moves
-    auto mk = index(MK::KNIGHT_PROMOTION);
-    auto ck = index(MK::KNIGHT_PROMOTION_CAPTURE);
-    for (auto promo = index(PT::KNIGHT); promo <= index(PT::QUEEN); ++promo, ++mk, ++ck) {
-        for (auto to : SquareSet::ipath("a8"_sq, "h8"_sq) | SquareSet::ipath("a1"_sq, "h1"_sq)) {
-            compound[mk][to.index()] = {to, promo, {to, to}};
-            compound[ck][to.index()] = {to, promo, {to, to}};
-        }
-    }
+    auto pm = index(MK::KNIGHT_PROMOTION);
+    auto pc = index(MK::KNIGHT_PROMOTION_CAPTURE);
+    for (auto promo = index(PT::KNIGHT); promo <= index(PT::QUEEN); ++promo, ++pm, ++pc)
+        for (auto to : SquareSet::ipath("a8"_sq, "h8"_sq) | SquareSet::ipath("a1"_sq, "h1"_sq))
+            compound[pc][to.index()] = compound[pm][to.index()] = {to, promo, {to, to}};
 }
 
 MovesTable::MovesTable() {
@@ -574,8 +569,8 @@ template <typename F>
 void findCastles(const Board& board, Occupancy occupied, Turn turn, const F& fun) {
     auto color = int(turn.activeColor);
     auto& info = castlingInfo[color];
-    // Check for king side castling
 
+    // Check for king side castling
     if ((turn.castlingAvailability & info.kingSideMask) != CastlingMask::_) {
         auto path = movesTable.castlingClear[color][index(MoveKind::KING_CASTLE)];
         if ((occupied() & path).empty())
@@ -921,9 +916,7 @@ void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun a
     // Iterate over all moves and captures
     auto state = SearchState(board, turn.activeColor);
     auto inCheck = isAttacked(board, state.kingSquares, state.occupied);
-    auto doMove = [&](Piece piece, Move move) {
-        doMoveIfLegal(board, state, piece, move, action);
-    };
+    auto doMove = [&](Piece piece, Move move) { doMoveIfLegal(board, state, piece, move, action); };
     auto doCheck = [&](Piece piece, Move move) {
         doMoveIfCheck(board, state, piece, move, action);
     };
@@ -956,9 +949,7 @@ MoveVector allLegalQuiescentMoves(Turn turn, Board& board, int depthleft) {
 void forAllLegalMovesAndCaptures(Turn turn, Board& board, MoveFun action) {
     // Iterate over all moves and captures
     auto state = SearchState(board, turn.activeColor);
-    auto doMove = [&](Piece piece, Move move) {
-        doMoveIfLegal(board, state, piece, move, action);
-    };
+    auto doMove = [&](Piece piece, Move move) { doMoveIfLegal(board, state, piece, move, action); };
     findCaptures(board, state.occupied, doMove);
     findEnPassant(board, turn, doMove);
     findMoves(board, state.occupied, doMove);
