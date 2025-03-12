@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cassert>
+#include <iomanip>
 #include <iostream>
 
 #include "common.h"
@@ -26,6 +27,19 @@ std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     os << "]";
     return os;
 }
+bool lesssq(Square left, Square right) {
+    return left.file() < right.file() ||
+        (left.file() == right.file() && left.rank() < right.rank());
+}
+bool less(Move left, Move right) {
+    return lesssq(left.from(), right.from()) ||
+        (left.from() == right.from() && lesssq(left.to(), right.to()));
+}
+
+MoveVector sort(MoveVector moves) {
+    std::sort(moves.begin(), moves.end(), less);
+    return moves;
+}
 
 void printBoard(std::ostream& os, const Board& board) {
     for (int rank = 7; rank >= 0; --rank) {
@@ -33,6 +47,22 @@ void printBoard(std::ostream& os, const Board& board) {
         for (int file = 0; file < 8; ++file) {
             auto piece = board[Square(file, rank)];
             os << ' ' << to_char(piece);
+        }
+        os << std::endl;
+    }
+    os << "   ";
+    for (char file = 'a'; file <= 'h'; ++file) {
+        os << ' ' << file;
+    }
+    os << std::endl;
+}
+
+// Print the SquareSet in a grid format to the output stream with . for empty and X for set squares
+void printSquareSet(std::ostream& os, const SquareSet& squares) {
+    for (int rank = 7; rank >= 0; --rank) {
+        os << rank + 1 << "  ";
+        for (int file = 0; file < 8; ++file) {
+            os << (squares.contains(Square(file, rank)) ? " X" : " .");
         }
         os << std::endl;
     }
@@ -801,7 +831,7 @@ void testIsAttacked() {
     std::cout << "All isAttacked tests passed!" << std::endl;
 }
 
-void testAllLegalMoves() {
+void testAllLegalMovesAndCaptures() {
     {
         auto position =
             fen::parsePosition("rnbqkbnr/pppppp1p/8/6p1/7P/8/PPPPPPP1/RNBQKBNR w KQkq - 0 2");
@@ -868,8 +898,114 @@ void testAllLegalQuiescentMoves() {
     std::cout << "All allLegalQuiescentMoves tests passed!\n";
 }
 
-<<<<<<< HEAD
-int main() {
+Piece flip(Piece piece) {
+    return piece == Piece::_ ? piece : addColor(type(piece), !color(piece));
+}
+Square flip(Square square) {
+    return Square(square.file(), kNumRanks - 1 - square.rank());
+}
+
+SquareSet flip(SquareSet squares) {
+    SquareSet result;
+    for (auto sq : SquareSet::all())
+        if (squares.contains(sq)) result.insert(flip(sq));
+    return result;
+}
+
+Board flip(Board board) {
+    Board result;
+    for (int i = 0; i < kNumSquares; i++) result[flip(Square(i))] = flip(board[Square(i)]);
+    return result;
+}
+Turn flip(Turn turn) {
+    turn.activeColor = !turn.activeColor;
+    auto castling = turn.castlingAvailability;
+    turn.castlingAvailability = CastlingMask(
+        uint8_t(castling & CastlingMask::K) << 3 | uint8_t(castling & CastlingMask::Q) << 1 |
+        uint8_t(castling & CastlingMask::k) >> 1 | uint8_t(castling & CastlingMask::q) >> 3);
+    return turn;
+}
+Position flip(Position position) {
+    position.board = flip(position.board);
+    position.turn = flip(position.turn);
+    return position;
+}
+
+template <Color color>
+void printPawnTargets(PawnTargets<color> targets) {
+    std::cout << "Single pawn push targets:\n";
+    printSquareSet(std::cout, targets.moves.single);
+    std::cout << "Double pawn push targets:\n";
+    printSquareSet(std::cout, targets.moves.double_);
+    std::cout << "Left pawn capture targets:\n";
+    printSquareSet(std::cout, targets.captures.left);
+    std::cout << "Right pawn capture targets:\n";
+    printSquareSet(std::cout, targets.captures.right);
+}
+
+MoveVector pawnMoves(Color color, Board board) {
+    auto occupancy = Occupancy(board, color);
+    auto pawns = SquareSet::find(board, addColor(PieceType::PAWN, color));
+    if (color == Color::WHITE)
+        return PawnTargets<Color::WHITE>(occupancy, pawns);
+    else
+        return PawnTargets<Color::BLACK>(occupancy, pawns);
+}
+
+void testSWAR(Position position) {
+    std::cout << "FEN: " << fen::to_string(position) << "\n";
+    // auto flipped = flip(position);
+    // std::cout << "Flipped FEN: " << fen::to_string(flipped) << "\n";
+    auto moves = allLegalMovesAndCaptures(position.turn, position.board);
+    // Remove all moves that are not pawn moves or captures
+    moves.erase(std::remove_if(moves.begin(),
+                               moves.end(),
+                               [board = position.board](Move move) {
+                                   return type(board[move.from()]) != PieceType::PAWN &&
+                                       move.kind() != MoveKind::CAPTURE;
+                               }),
+                moves.end());
+    moves = sort(moves);
+    std::cout << "Pawn moves and captures: " << moves.size() << "\n";
+
+    for (auto move : moves) std::cout << static_cast<std::string>(move) << " ";
+    std::cout << "\n";
+
+    auto color = position.activeColor();
+    auto occupancy = Occupancy(position.board, color);
+    auto ours = occupancy.ours().bits();
+    auto theirs = occupancy.theirs().bits();
+    std::cout << "Occupancy: {" << std::hex << std::setfill('0') << std::setw(16) << ours << ", "
+              << std::setw(16) << theirs << "}\n"
+              << std::dec;
+    auto pawns = SquareSet::find(position.board, addColor(PieceType::PAWN, color));
+    std::cout << "Our pawns:\n";
+    printSquareSet(std::cout, pawns);
+
+    MoveVector pawnMoves;
+    if (color == Color::WHITE) {
+        auto targets = PawnTargets<Color::WHITE>(position.board);
+        if (debug) printPawnTargets(targets);
+        pawnMoves = targets;
+    } else {
+        auto targets = PawnTargets<Color::BLACK>(position.board);
+        if (debug) printPawnTargets(targets);
+        pawnMoves = targets;
+    }
+    pawnMoves = sort(pawnMoves);
+    std::cout << "SWAR pawn moves: " << pawnMoves.size() << "\n";
+    for (auto move : pawnMoves) std::cout << static_cast<std::string>(move) << " ";
+    std::cout << "\n";
+    assert(moves == pawnMoves);
+}
+
+int main(int argc, char* argv[]) {
+    if (argc == 2) {
+        std::string fen = argv[1];
+        auto position = fen::parsePosition(fen);
+        testSWAR(position);
+        return 0;
+    }
     testSquare();
     testMove();
     testSquareSet();
@@ -888,7 +1024,7 @@ int main() {
     testCastlingMask();
     testApplyMove();
     testIsAttacked();
-    testAllLegalMoves();
+    testAllLegalMovesAndCaptures();
     testAllLegalQuiescentMoves();
     std::cout << "All move tests passed!" << std::endl;
     return 0;

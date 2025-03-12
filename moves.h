@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "common.h"
+#include "sse2.h"
 
 #pragma once
 
@@ -44,12 +45,20 @@ public:
     static SquareSet occupancy(const Board& board, Color color);
 
     static SquareSet find(const Board& board, Piece piece);
+    static SquareSet rank(int rank) {  //
+        int shift = rank * 8;
+        uint64_t ret = 0xffull;
+        ret <<= shift;
+        return SquareSet(ret);
+    }
+    static SquareSet file(int file) { return SquareSet(0x0101010101010101ull << file); }
 
     static SquareSet valid(int rank, int file) {
         return rank >= 0 && rank < kNumRanks && file >= 0 && file < kNumFiles
             ? SquareSet(Square(file, rank))
             : SquareSet();
     }
+    static SquareSet all() { return SquareSet(0xffff'ffff'ffff'ffffull); }
 
     void erase(Square square) { _squares &= ~(1ull << square.index()); }
     void insert(Square square) { _squares |= (1ull << square.index()); }
@@ -59,10 +68,11 @@ public:
         for (auto it = begin; it != end; ++it) insert(*it);
     }
 
-    operator bool() const { return _squares; }
+    explicit operator bool() const { return _squares; }
+    T bits() const { return _squares; }
     bool empty() const { return _squares == 0; }
     size_t size() const { return __builtin_popcountll(_squares); }
-    bool contains(Square square) const { return *this & SquareSet(square); }
+    bool contains(Square square) const { return bool(*this & SquareSet(square)); }
 
     SquareSet operator&(SquareSet other) const { return _squares & other._squares; }
     SquareSet operator|(SquareSet other) const { return _squares | other._squares; }
@@ -81,7 +91,7 @@ public:
 
     class iterator {
         friend class SquareSet;
-        uint64_t _squares;
+        SquareSet::T _squares;
         iterator(SquareSet squares) : _squares(squares._squares) {}
         using iterator_category = std::forward_iterator_tag;
 
@@ -97,8 +107,8 @@ public:
         bool operator!=(const iterator& other) { return !(_squares == other._squares); }
     };
 
-    iterator begin() { return {*this}; }
-    iterator end() { return SquareSet(); }
+    iterator begin() const { return {*this}; }
+    iterator end() const { return SquareSet(); }
 };
 
 class Occupancy {
@@ -124,6 +134,89 @@ public:
         return _theirs == other._theirs && _ours == other._ours;
     }
     bool operator!=(Occupancy other) const { return !(*this == other); }
+};
+
+template <Color color>
+struct PawnPushTargets {
+    SquareSet single;
+    SquareSet double_;
+
+    PawnPushTargets(SquareSet theirs, SquareSet ours, SquareSet pawns) {
+        const bool white = color == Color::WHITE;
+        const auto doublePushRank = white ? SquareSet::rank(3) : SquareSet::rank(kNumRanks - 1 - 3);
+        auto free = !ours & !theirs;
+        single = (white ? pawns << kNumRanks : pawns >> kNumRanks) & free;
+        double_ = (white ? single << kNumRanks : single >> kNumRanks) & free & doublePushRank;
+    }
+    template <typename F>
+    void genMoves(const F& fun) const {
+        const bool white = color == Color::WHITE;
+        const auto promo = white ? SquareSet::rank(kNumRanks - 1) : SquareSet::rank(0);
+        for (auto to : single & !promo)
+            fun(Move{{to.file(), white ? to.rank() - 1 : to.rank() + 1}, to, MoveKind::QUIET_MOVE});
+        for (auto to : single& promo)
+            fun(Move{
+                {to.file(), white ? to.rank() - 1 : to.rank() + 1}, to, MoveKind::QUEEN_PROMOTION});
+        for (auto to : double_)
+            fun(Move{{to.file(), white ? to.rank() - 2 : to.rank() + 2},
+                     to,
+                     MoveKind::DOUBLE_PAWN_PUSH});
+    }
+};
+template <Color color>
+struct PawnCaptureTargets {
+    SquareSet left;  // left- and right-captures are from the perspective of the white side
+    SquareSet right;
+    PawnCaptureTargets(SquareSet theirs, SquareSet ours, SquareSet pawns) {
+        const bool white = color == Color::WHITE;
+        auto free = !ours & !theirs;
+        auto leftPawns = pawns & !SquareSet::file(0);
+        auto rightPawns = pawns & !SquareSet::file(7);
+        left = (white ? leftPawns << 7 : leftPawns >> 9) & theirs;
+        right = (white ? rightPawns << 9 : rightPawns >> 7) & theirs;
+    }
+    template <typename F>
+    void genMoves(const F& fun) const {
+        const bool white = color == Color::WHITE;
+        const auto promo = white ? SquareSet::rank(kNumRanks - 1) : SquareSet::rank(0);
+        for (auto to : left & !promo)
+            fun(Move{
+                {to.file() + 1, white ? to.rank() - 1 : to.rank() + 1}, to, MoveKind::CAPTURE});
+        for (auto to : left& promo)
+            fun(Move{{to.file() + 1, white ? to.rank() - 1 : to.rank() + 1},
+                     to,
+                     MoveKind::QUEEN_PROMOTION_CAPTURE});
+        for (auto to : right & !promo)
+            fun(Move{
+                {to.file() - 1, white ? to.rank() - 1 : to.rank() + 1}, to, MoveKind::CAPTURE});
+        for (auto to : right& promo)
+            fun(Move{{to.file() - 1, white ? to.rank() - 1 : to.rank() + 1},
+                     to,
+                     MoveKind::QUEEN_PROMOTION_CAPTURE});
+    }
+};
+template <Color color>
+struct PawnTargets {
+    PawnPushTargets<color> moves;
+    PawnCaptureTargets<color> captures;
+    PawnTargets(SquareSet theirs, SquareSet ours, SquareSet pawns)
+        : moves(theirs, ours, pawns), captures(theirs, ours, pawns) {}
+    PawnTargets(Occupancy occupancy, SquareSet pawns)
+        : moves(occupancy.theirs(), occupancy.ours(), pawns),
+          captures(occupancy.theirs(), occupancy.ours(), pawns) {}
+    PawnTargets(Board board)
+        : PawnTargets(Occupancy(board, color),
+                      SquareSet::find(board, addColor(PieceType::PAWN, color))) {}
+    operator MoveVector() const {
+        MoveVector moves;
+        genMoves([&moves](Move move) { moves.emplace_back(move); });
+        return moves;
+    }
+    template <typename F>
+    void genMoves(const F& fun) const {
+        moves.genMoves(fun);
+        captures.genMoves(fun);
+    }
 };
 
 /**
