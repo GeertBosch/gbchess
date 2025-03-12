@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cassert>
+#include <iomanip>
 #include <iostream>
 
 #include "common.h"
@@ -33,6 +34,22 @@ void printBoard(std::ostream& os, const Board& board) {
         for (int file = 0; file < 8; ++file) {
             auto piece = board[Square(file, rank)];
             os << ' ' << to_char(piece);
+        }
+        os << std::endl;
+    }
+    os << "   ";
+    for (char file = 'a'; file <= 'h'; ++file) {
+        os << ' ' << file;
+    }
+    os << std::endl;
+}
+
+// Print the SquareSet in a grid format to the output stream with . for empty and X for set squares
+void printSquareSet(std::ostream& os, const SquareSet& squares) {
+    for (int rank = 7; rank >= 0; --rank) {
+        os << rank + 1 << "  ";
+        for (int file = 0; file < 8; ++file) {
+            os << (squares.contains(Square(file, rank)) ? " X" : " .");
         }
         os << std::endl;
     }
@@ -800,7 +817,7 @@ void testIsAttacked() {
     std::cout << "All isAttacked tests passed!" << std::endl;
 }
 
-void testAllLegalMoves() {
+void testAllLegalMovesAndCaptures() {
     {
         auto position =
             fen::parsePosition("rnbqkbnr/pppppp1p/8/6p1/7P/8/PPPPPPP1/RNBQKBNR w KQkq - 0 2");
@@ -867,7 +884,39 @@ void testAllLegalQuiescentMoves() {
     std::cout << "All allLegalQuiescentMoves tests passed!\n";
 }
 
-int main() {
+void testSWAR(const char* fen) {
+    std::cout << "FEN: " << fen << "\n";
+    auto position = fen::parsePosition(fen);
+    auto moves = allLegalMovesAndCaptures(position.turn, position.board);
+    std::cout << "Moves: " << moves.size() << "\n";
+
+    for (auto move : moves) std::cout << static_cast<std::string>(move) << "\n";
+
+    auto occupancy = Occupancy(position.board, position.turn.activeColor);
+    auto ours = occupancy.ours.bits();
+    auto theirs = occupancy.theirs.bits();
+    std::cout << "Occupancy: {" << std::hex << std::setfill('0') << std::setw(16) << ours << ", "
+              << std::setw(16) << theirs << "}\n";
+    auto pawns = SquareSet::find(position.board, Piece::P).bits();
+    assert(position.activeColor() == Color::WHITE);  // TODO: Implement this for black
+    std::cout << "Our pawns: " << pawns << "\n";
+
+    auto freeSquares = ~ours & ~theirs;
+    auto single_push_targets = (pawns << 8) & freeSquares;
+    auto possible_single_pawn_push = single_push_targets >> 8;
+    auto double_push_targets = (single_push_targets << 8) & freeSquares;
+    auto possible_double_pawn_push = double_push_targets >> 16;
+    std::cout << "Possible single pawn push: ";
+    printSquareSet(std::cout, SquareSet(possible_single_pawn_push));
+    std::cout << "Possible double pawn push: ";
+    printSquareSet(std::cout, SquareSet(possible_double_pawn_push));
+}
+
+int main(int argc, char* argv[]) {
+    if (argc == 2) {
+        testSWAR(argv[1]);
+        return 0;
+    }
     testSquare();
     testMove();
     testSquareSet();
@@ -886,7 +935,7 @@ int main() {
     testCastlingMask();
     testApplyMove();
     testIsAttacked();
-    testAllLegalMoves();
+    testAllLegalMovesAndCaptures();
     testAllLegalQuiescentMoves();
     std::cout << "All move tests passed!" << std::endl;
     return 0;

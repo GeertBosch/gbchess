@@ -60,6 +60,7 @@ public:
     }
 
     operator bool() const { return _squares; }
+    T bits() const { return _squares; }
     bool empty() const { return _squares == 0; }
     size_t size() const { return __builtin_popcountll(_squares); }
     bool contains(Square square) const { return *this & SquareSet(square); }
@@ -81,7 +82,7 @@ public:
 
     class iterator {
         friend class SquareSet;
-        uint64_t _squares;
+        SquareSet::T _squares;
         iterator(SquareSet squares) : _squares(squares._squares) {}
         using iterator_category = std::forward_iterator_tag;
 
@@ -97,8 +98,8 @@ public:
         bool operator!=(const iterator& other) { return !(_squares == other._squares); }
     };
 
-    iterator begin() { return {*this}; }
-    iterator end() { return SquareSet(); }
+    iterator begin() const { return {*this}; }
+    iterator end() const { return SquareSet(); }
 };
 
 struct Occupancy {
