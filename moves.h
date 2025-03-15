@@ -101,22 +101,28 @@ public:
     iterator end() { return SquareSet(); }
 };
 
-struct Occupancy {
-    SquareSet theirs;
-    SquareSet ours;
-    constexpr Occupancy() = default;
-    constexpr Occupancy(const Board& board, Color activeColor) {
-        theirs = SquareSet::occupancy(board, !activeColor);
-        ours = SquareSet::occupancy(board, activeColor);
-    }
-    constexpr Occupancy(SquareSet theirs, SquareSet ours) : theirs(theirs), ours(ours) {}
+class Occupancy {
+    SquareSet _theirs;
+    SquareSet _ours;
 
-    SquareSet operator()(void) const { return SquareSet{theirs | ours}; }
-    Occupancy operator!() const { return {ours, theirs}; }
+public:
+    constexpr Occupancy() = default;
+    constexpr Occupancy(SquareSet theirs, SquareSet ours) : _theirs(theirs), _ours(ours) {}
+    constexpr Occupancy(const Board& board, Color activeColor)
+        : Occupancy(SquareSet::occupancy(board, !activeColor),
+                    SquareSet::occupancy(board, activeColor)) {}
+
+    SquareSet theirs() const { return _theirs; }
+    SquareSet ours() const { return _ours; }
+
+    SquareSet operator()(void) const { return SquareSet{_theirs | _ours}; }
+    Occupancy operator!() const { return {_ours, _theirs}; }
     Occupancy operator^(Occupancy other) const {
-        return {theirs ^ other.theirs, ours ^ other.ours};
+        return {_theirs ^ other._theirs, _ours ^ other._ours};
     }
-    bool operator==(Occupancy other) const { return theirs == other.theirs && ours == other.ours; }
+    bool operator==(Occupancy other) const {
+        return _theirs == other._theirs && _ours == other._ours;
+    }
     bool operator!=(Occupancy other) const { return !(*this == other); }
 };
 

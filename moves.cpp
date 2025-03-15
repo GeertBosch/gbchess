@@ -499,7 +499,6 @@ Occupancy occupancyDelta(Move move) {
     return {theirs, ours};
 }
 
-
 void addMove(MoveVector& moves, Piece piece, Move move) {
     moves.emplace_back(move);
 }
@@ -532,7 +531,7 @@ void expandCapturePromotions(Piece piece, Move move, const F& fun) {
 
 template <typename F>
 void findMoves(const Board& board, Occupancy occupied, const F& fun) {
-    for (auto from : occupied.ours) {
+    for (auto from : occupied.ours()) {
         auto piece = board[from];
         auto possibleSquares = movesTable.moves[index(piece)][from.index()] & !occupied();
         for (auto to : possibleSquares) {
@@ -548,8 +547,8 @@ void findMoves(const Board& board, Occupancy occupied, const F& fun) {
 /** For use in quiescent search: allow pawn moves that promote or near promotion */
 template <typename F>
 void findPromotionMoves(const Board& board, Occupancy occupied, const F& fun) {
-    auto fromSquares = occupied.ours & SquareSet(0x00ff'ff00'00ff'ff00ull);  // Rank 2, 3, 6 and 7
-    auto ToSquares = SquareSet(0xffff'0000'0000'ffffull);                    // Rank 1, 2, 7 and 8
+    auto fromSquares = occupied.ours() & SquareSet(0x00ff'ff00'00ff'ff00ull);  // Rank 2, 3, 6 and 7
+    auto ToSquares = SquareSet(0xffff'0000'0000'ffffull);                      // Rank 1, 2, 7 and 8
     for (auto from : fromSquares) {
         auto piece = board[from];
         if (type(piece) != PieceType::PAWN) continue;
@@ -586,10 +585,10 @@ void findCastles(const Board& board, Occupancy occupied, Turn turn, const F& fun
 
 template <typename F>
 void findCaptures(const Board& board, Occupancy occupied, const F& fun) {
-    for (auto from : occupied.ours) {
+    for (auto from : occupied.ours()) {
         auto piece = board[from];
 
-        auto possibleSquares = movesTable.captures[index(piece)][from.index()] & occupied.theirs;
+        auto possibleSquares = movesTable.captures[index(piece)][from.index()] & occupied.theirs();
         for (auto to : possibleSquares) {
             // Exclude captures that move through pieces
             if (clearPath(occupied(), from, to)) {
@@ -746,7 +745,7 @@ Position applyMoves(Position position, MoveVector const& moves) {
 bool isAttacked(const Board& board, Square square, Occupancy occupancy) {
     // We're using this function to find out if empty squares are attacked for determining
     // legality of castling, so we can't assume that the capture square is occupied.
-    auto attackers = occupancy.theirs & movesTable.attackers[square.index()];
+    auto attackers = occupancy.theirs() & movesTable.attackers[square.index()];
     for (auto from : attackers)
         if (clearPath(occupancy(), from, square) &&
             movesTable.captures[index(board[from])][from.index()].contains(square))
@@ -827,7 +826,7 @@ std::string toString(SquareSet squares) {
     return str;
 }
 std::string toString(Occupancy occupancy) {
-    return "{ " + toString(occupancy.ours) + ", " + toString(occupancy.theirs) + " }";
+    return "{ " + toString(occupancy.ours()) + ", " + toString(occupancy.theirs()) + " }";
 }
 
 template <typename F>
@@ -897,12 +896,12 @@ bool mayHavePromoMove(Color side, Board& board, Occupancy occupancy) {
     Piece pawn;
     SquareSet from;
     if (side == Color::WHITE) {
-        from = SquareSet(0x00ff'0000'0000'0000ull) & occupancy.ours;
+        from = SquareSet(0x00ff'0000'0000'0000ull) & occupancy.ours();
         auto to = SquareSet(0xff00'0000'0000'0000ull) & !occupancy();
         from &= to >> 8;
         pawn = Piece::P;
     } else {
-        from = SquareSet(0x0000'0000'0000'ff00ull) & occupancy.ours;
+        from = SquareSet(0x0000'0000'0000'ff00ull) & occupancy.ours();
         auto to = SquareSet(0x0000'0000'0000'00ffull) & !occupancy();
         from &= to << 8;
         pawn = Piece::p;

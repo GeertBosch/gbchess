@@ -474,13 +474,14 @@ void testMakeAndUnmakeMove(Board& board, Move move) {
     if (actual != expected) {
         std::cout << "Move: " << static_cast<std::string>(move) << ", kind " << (int)move.kind()
                   << "\n";
-        std::cout << "Occupancy: {" << toString(occupancy.ours) << ", "
-                  << toString(occupancy.theirs) << "}\n";
-        std::cout << "Delta: { " << toString(delta.ours) << ", " << toString(delta.theirs) << "}\n";
-        std::cout << "Expected occupancy: { " << toString(expected.ours) << ", "
-                  << toString(expected.theirs) << "}\n";
-        std::cout << "Actual occupancy: { " << toString(actual.ours) << ", "
-                  << toString(actual.theirs) << "}\n";
+        std::cout << "Occupancy: {" << toString(occupancy.ours()) << ", "
+                  << toString(occupancy.theirs()) << "}\n";
+        std::cout << "Delta: { " << toString(delta.ours()) << ", " << toString(delta.theirs())
+                  << "}\n";
+        std::cout << "Expected occupancy: { " << toString(expected.ours()) << ", "
+                  << toString(expected.theirs()) << "}\n";
+        std::cout << "Actual occupancy: { " << toString(actual.ours()) << ", "
+                  << toString(actual.theirs()) << "}\n";
         std::cout << "Original board:\n";
         printBoard(std::cout, originalBoard);
         std::cout << "Board after makeMove:\n";
@@ -867,6 +868,7 @@ void testAllLegalQuiescentMoves() {
     std::cout << "All allLegalQuiescentMoves tests passed!\n";
 }
 
+<<<<<<< HEAD
 int main() {
     testSquare();
     testMove();
