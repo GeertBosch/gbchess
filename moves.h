@@ -141,10 +141,10 @@ struct PawnPushTargets {
     SquareSet single;
     SquareSet double_;
 
-    PawnPushTargets(SquareSet theirs, SquareSet ours, SquareSet pawns) {
+    PawnPushTargets(Occupancy occupancy, SquareSet pawns) {
         const bool white = color == Color::WHITE;
         const auto doublePushRank = white ? SquareSet::rank(3) : SquareSet::rank(kNumRanks - 1 - 3);
-        auto free = !ours & !theirs;
+        auto free = !occupancy();
         single = (white ? pawns << kNumRanks : pawns >> kNumRanks) & free;
         double_ = (white ? single << kNumRanks : single >> kNumRanks) & free & doublePushRank;
     }
@@ -167,13 +167,13 @@ template <Color color>
 struct PawnCaptureTargets {
     SquareSet left;  // left- and right-captures are from the perspective of the white side
     SquareSet right;
-    PawnCaptureTargets(SquareSet theirs, SquareSet ours, SquareSet pawns) {
+    PawnCaptureTargets(Occupancy occupancy, SquareSet pawns) {
         const bool white = color == Color::WHITE;
-        auto free = !ours & !theirs;
+        auto free = !occupancy.ours() & !occupancy.theirs();
         auto leftPawns = pawns & !SquareSet::file(0);
         auto rightPawns = pawns & !SquareSet::file(7);
-        left = (white ? leftPawns << 7 : leftPawns >> 9) & theirs;
-        right = (white ? rightPawns << 9 : rightPawns >> 7) & theirs;
+        left = (white ? leftPawns << 7 : leftPawns >> 9) & occupancy.theirs();
+        right = (white ? rightPawns << 9 : rightPawns >> 7) & occupancy.theirs();
     }
     template <typename F>
     void genMoves(const F& fun) const {
@@ -199,11 +199,8 @@ template <Color color>
 struct PawnTargets {
     PawnPushTargets<color> moves;
     PawnCaptureTargets<color> captures;
-    PawnTargets(SquareSet theirs, SquareSet ours, SquareSet pawns)
-        : moves(theirs, ours, pawns), captures(theirs, ours, pawns) {}
     PawnTargets(Occupancy occupancy, SquareSet pawns)
-        : moves(occupancy.theirs(), occupancy.ours(), pawns),
-          captures(occupancy.theirs(), occupancy.ours(), pawns) {}
+        : moves(occupancy, pawns), captures(occupancy, pawns) {}
     PawnTargets(Board board)
         : PawnTargets(Occupancy(board, color),
                       SquareSet::find(board, addColor(PieceType::PAWN, color))) {}

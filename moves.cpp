@@ -11,8 +11,6 @@
 // benefits for ARM (on at least Apple Silicon M1) than real SSE2 has for x86.
 constexpr bool haveSSE2 = true;
 
-constexpr bool pawnSWAR = true;
-
 struct CompoundMove {
     Square to = 0;
     uint8_t promo = 0;
@@ -534,30 +532,21 @@ void expandCapturePromotions(Piece piece, Move move, const F& fun) {
 template <typename F>
 void findMoves(const Board& board, Occupancy occupied, const F& fun) {
     bool white = color(board[*occupied.ours().begin()]) == Color::WHITE;
-    SquareSet pawns = {};
-    if (pawnSWAR) {
-        pawns = SquareSet::find(board, white ? Piece::P : Piece::p);
-        if (white)
-            PawnPushTargets<Color::WHITE>(occupied.theirs(), occupied.ours(), pawns)
-                .genMoves([&fun](Move move) { expandMovePromotions(Piece::P, move, fun); });
-        else
-            PawnPushTargets<Color::BLACK>(occupied.theirs(), occupied.ours(), pawns)
-                .genMoves([&fun](Move move) { expandMovePromotions(Piece::p, move, fun); });
-    }
+    auto pawns = SquareSet::find(board, white ? Piece::P : Piece::p);
+    if (white)
+        PawnPushTargets<Color::WHITE>(occupied, pawns).genMoves([&fun](Move move) {
+            expandMovePromotions(Piece::P, move, fun);
+        });
+    else
+        PawnPushTargets<Color::BLACK>(occupied, pawns).genMoves([&fun](Move move) {
+            expandMovePromotions(Piece::p, move, fun);
+        });
     for (auto from : occupied.ours() & !pawns) {
         auto piece = board[from];
         auto possibleSquares = movesTable.moves[index(piece)][from.index()] & !occupied();
         for (auto to : possibleSquares) {
             // Check for moving through pieces
-            if (clearPath(occupied(), from, to)) {
-                if (pawnSWAR)
-                    fun(piece, Move{from, to, Move::QUIET});
-                else
-                    expandMovePromotions(
-                        piece,
-                        Move{from, to, movesTable.moveKinds[index(piece)][from.rank()][to.rank()]},
-                        fun);
-            }
+            if (clearPath(occupied(), from, to)) fun(piece, Move{from, to, Move::QUIET});
         }
     }
 }
@@ -581,7 +570,6 @@ void findPromotionMoves(const Board& board, Occupancy occupied, const F& fun) {
     }
 }
 
-
 template <typename F>
 void findCastles(const Board& board, Occupancy occupied, Turn turn, const F& fun) {
     auto color = int(turn.activeColor);
@@ -603,35 +591,25 @@ void findCastles(const Board& board, Occupancy occupied, Turn turn, const F& fun
 
 template <typename F>
 void findCaptures(const Board& board, Occupancy occupied, const F& fun) {
-    SquareSet pawns = {};
-    if (pawnSWAR) {
-        bool white = color(board[*occupied.ours().begin()]) == Color::WHITE;
-        auto p = white ? Piece::P : Piece::p;
-        pawns = SquareSet::find(board, p);
+    bool white = color(board[*occupied.ours().begin()]) == Color::WHITE;
+    auto p = white ? Piece::P : Piece::p;
+    auto pawns = SquareSet::find(board, p);
 
-        if (white) {
-            auto targets =
-                PawnCaptureTargets<Color::WHITE>(occupied.theirs(), occupied.ours(), pawns);
-            targets.genMoves([fun](Move move) { expandCapturePromotions(Piece::P, move, fun); });
-        } else {
-            auto targets =
-                PawnCaptureTargets<Color::BLACK>(occupied.theirs(), occupied.ours(), pawns);
-            targets.genMoves([fun](Move move) { expandCapturePromotions(Piece::p, move, fun); });
-        }
+    if (white) {
+        PawnCaptureTargets<Color::WHITE>(occupied, pawns).genMoves([fun](Move move) {
+            expandCapturePromotions(Piece::P, move, fun);
+        });
+    } else {
+        PawnCaptureTargets<Color::BLACK>(occupied, pawns).genMoves([fun](Move move) {
+            expandCapturePromotions(Piece::p, move, fun);
+        });
     }
     for (auto from : occupied.ours() & !pawns) {
         auto piece = board[from];
-
         auto possibleSquares = movesTable.captures[index(piece)][from.index()] & occupied.theirs();
         for (auto to : possibleSquares) {
             // Exclude captures that move through pieces
-            if (clearPath(occupied(), from, to)) {
-                auto kind = movesTable.captureKinds[index(piece)][from.rank()][to.rank()];
-                if (pawnSWAR)
-                    fun(piece, Move{from, to, kind});
-                else
-                    expandCapturePromotions(piece, Move{from, to, kind}, fun);
-            }
+            if (clearPath(occupied(), from, to)) fun(piece, Move{from, to, MoveKind::CAPTURE});
         }
     }
 }
