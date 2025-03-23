@@ -937,27 +937,6 @@ Position flip(Position position) {
     return position;
 }
 
-// template <Color color>
-// void printPawnTargets(PawnTargets<color> targets) {
-//     std::cout << "Single pawn push targets:\n";
-//     printSquareSet(std::cout, targets.moves.single);
-//     std::cout << "Double pawn push targets:\n";
-//     printSquareSet(std::cout, targets.moves.double_);
-//     std::cout << "Left pawn capture targets:\n";
-//     printSquareSet(std::cout, targets.captures.left);
-//     std::cout << "Right pawn capture targets:\n";
-//     printSquareSet(std::cout, targets.captures.right);
-// }
-
-// MoveVector pawnMoves(Color color, Board board) {
-//     auto occupancy = Occupancy(board, color);
-//     auto pawns = SquareSet::find(board, addColor(PieceType::PAWN, color));
-//     if (color == Color::WHITE)
-//         return PawnTargets<Color::WHITE>(occupancy, pawns);
-//     else
-//         return PawnTargets<Color::BLACK>(occupancy, pawns);
-// }
-
 void testSWAR(Position position) {
     std::cout << "FEN: " << fen::to_string(position) << "\n";
     // auto flipped = flip(position);

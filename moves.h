@@ -80,10 +80,12 @@ public:
     SquareSet operator!(void) const { return ~_squares; }
     SquareSet operator>>(int shift) const { return _squares >> shift; }
     SquareSet operator<<(int shift) const { return _squares << shift; }
+    SquareSet operator-(SquareSet other) const { return _squares & ~other._squares; }
 
     SquareSet operator|=(SquareSet other) { return _squares |= other._squares; }
     SquareSet operator&=(SquareSet other) { return _squares &= other._squares; }
     SquareSet operator^=(SquareSet other) { return _squares ^= other._squares; }
+    SquareSet operator-=(SquareSet other) { return _squares &= ~other._squares; }
     SquareSet operator>>=(int shift) { return _squares >>= shift; }
     SquareSet operator<<=(int shift) { return _squares <<= shift; }
 
@@ -115,12 +117,17 @@ class Occupancy {
     SquareSet _theirs;
     SquareSet _ours;
 
+    // Private constructor to prevent creation of invalid occupancies
+    constexpr Occupancy(SquareSet theirs, SquareSet ours) : _theirs(theirs), _ours(ours) {}
+
 public:
     constexpr Occupancy() = default;
-    constexpr Occupancy(SquareSet theirs, SquareSet ours) : _theirs(theirs), _ours(ours) {}
     constexpr Occupancy(const Board& board, Color activeColor)
         : Occupancy(SquareSet::occupancy(board, !activeColor),
                     SquareSet::occupancy(board, activeColor)) {}
+
+    // Deltas may have corresponding elements set in both theirs and ourss
+    static Occupancy delta(SquareSet theirs, SquareSet ours) { return Occupancy(theirs, ours); }
 
     SquareSet theirs() const { return _theirs; }
     SquareSet ours() const { return _ours; }

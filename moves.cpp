@@ -57,7 +57,7 @@ private:
     void initializePieceMovesAndCaptures();
     void initializePieceMoveAndCaptureKinds();
     void initializeAttackers();
-    void initializeOccupancyChanges();
+    void initializeOccupancyDeltas();
     void initializePaths();
     void initializeCastlingMasks();
     void initializeEnPassantFrom();
@@ -114,7 +114,7 @@ void MovesTable::initializeAttackers() {
     }
 }
 
-void MovesTable::initializeOccupancyChanges() {
+void MovesTable::initializeOccupancyDeltas() {
     // Initialize occupancy changes
     for (int moveKind = 0; moveKind < kNumNoPromoMoveKinds; ++moveKind)
         for (int from = 0; from < kNumSquares; ++from)
@@ -190,7 +190,7 @@ MovesTable::MovesTable() {
     initializePieceMovesAndCaptures();
     initializePieceMoveAndCaptureKinds();
     initializeAttackers();
-    initializeOccupancyChanges();
+    initializeOccupancyDeltas();
     initializePaths();
     initializeCastlingMasks();
     initializeEnPassantFrom();
@@ -496,7 +496,7 @@ Occupancy occupancyDelta(Move move) {
     case MoveKind::EN_PASSANT: theirs.insert(Square(to.file(), from.rank())); break;
     default: break;
     }
-    return {theirs, ours};
+    return Occupancy::delta(theirs, ours);
 }
 
 void addMove(MoveVector& moves, Piece piece, Move move) {
@@ -505,116 +505,77 @@ void addMove(MoveVector& moves, Piece piece, Move move) {
 
 struct SearchState {
     SearchState(const Board& board, Color activeColor)
-        : kingSquare(*SquareSet::find(board, addColor(PieceType::KING, activeColor)).begin()),
+        : occupied(Occupancy(board, activeColor)),
+          kingSquare(*SquareSet::find(board, addColor(PieceType::KING, activeColor)).begin()),
           activeColor(activeColor),
-          pawns(SquareSet::find(board, addColor(PieceType::PAWN, activeColor))),
-          occupied(Occupancy(board, activeColor)) {}
+          inCheck(isAttacked(board, kingSquare, occupied)),
+          pawns(SquareSet::find(board, addColor(PieceType::PAWN, activeColor))) {}
+    Occupancy occupied;
     Square kingSquare;
     Color activeColor;
+    bool inCheck;
     SquareSet pawns;
-    Occupancy occupied;
 };
 
 template <typename F>
-inline void genPromos(const F& fun, Move move) {
-    for (int i = 0; i < 4; ++i) fun(Move{move.from(), move.to(), MoveKind(index(move.kind()) - i)});
+void expandPromos(const F& fun, Piece piece, Move move) {
+    for (int i = 0; i < 4; ++i)
+        fun(piece, Move{move.from(), move.to(), MoveKind(index(move.kind()) - i)});
 }
 
-template <Color color>
-struct PawnPushTargets {
-    SquareSet single;
-    SquareSet double_;
-
-    PawnPushTargets(Occupancy occupancy, SquareSet pawns) {
-        const bool white = color == Color::WHITE;
-        const auto doublePushRank = white ? SquareSet::rank(3) : SquareSet::rank(kNumRanks - 1 - 3);
-        auto free = !occupancy();
-        single = (white ? pawns << kNumRanks : pawns >> kNumRanks) & free;
-        double_ = (white ? single << kNumRanks : single >> kNumRanks) & free & doublePushRank;
-    }
-    template <typename F>
-    void genMoves(const F& fun) const {
-        const bool white = color == Color::WHITE;
-        const auto promo = white ? SquareSet::rank(kNumRanks - 1) : SquareSet::rank(0);
-        for (auto to : single & !promo)
-            fun(Move{{to.file(), white ? to.rank() - 1 : to.rank() + 1}, to, MoveKind::QUIET_MOVE});
-        for (auto to : single& promo)
-            genPromos(fun,
-                      Move{{to.file(), white ? to.rank() - 1 : to.rank() + 1},
-                           to,
-                           MoveKind::QUEEN_PROMOTION});
-        for (auto to : double_)
-            fun(Move{{to.file(), white ? to.rank() - 2 : to.rank() + 2},
-                     to,
-                     MoveKind::DOUBLE_PAWN_PUSH});
-    }
-};
-template <Color color>
-struct PawnCaptureTargets {
-    SquareSet left;  // left- and right-captures are from the perspective of the white side
-    SquareSet right;
-    PawnCaptureTargets(Occupancy occupancy, SquareSet pawns) {
-        const bool white = color == Color::WHITE;
-        auto free = !occupancy.ours() & !occupancy.theirs();
-        auto leftPawns = pawns & !SquareSet::file(0);
-        auto rightPawns = pawns & !SquareSet::file(7);
-        left = (white ? leftPawns << 7 : leftPawns >> 9) & occupancy.theirs();
-        right = (white ? rightPawns << 9 : rightPawns >> 7) & occupancy.theirs();
-    }
-    template <typename F>
-    void genMoves(const F& fun) const {
-        const bool white = color == Color::WHITE;
-        const auto promo = white ? SquareSet::rank(kNumRanks - 1) : SquareSet::rank(0);
-        for (auto to : left & !promo)
-            fun(Move{
-                {to.file() + 1, white ? to.rank() - 1 : to.rank() + 1}, to, MoveKind::CAPTURE});
-        for (auto to : left& promo)
-            genPromos(fun,
-                      Move{{to.file() + 1, white ? to.rank() - 1 : to.rank() + 1},
-                           to,
-                           MoveKind::QUEEN_PROMOTION_CAPTURE});
-        for (auto to : right & !promo)
-            fun(Move{
-                {to.file() - 1, white ? to.rank() - 1 : to.rank() + 1}, to, MoveKind::CAPTURE});
-        for (auto to : right& promo)
-            genPromos(fun,
-                      Move{{to.file() - 1, white ? to.rank() - 1 : to.rank() + 1},
-                           to,
-                           MoveKind::QUEEN_PROMOTION_CAPTURE});
-    }
-};
-template <Color color>
-struct PawnTargets {
-    PawnPushTargets<color> moves;
-    PawnCaptureTargets<color> captures;
-    PawnTargets(Occupancy occupancy, SquareSet pawns)
-        : moves(occupancy, pawns), captures(occupancy, pawns) {}
-    PawnTargets(Board board)
-        : PawnTargets(Occupancy(board, color),
-                      SquareSet::find(board, addColor(PieceType::PAWN, color))) {}
-    operator MoveVector() const {
-        MoveVector moves;
-        genMoves([&moves](Move move) { moves.emplace_back(move); });
-        return moves;
-    }
-    template <typename F>
-    void genMoves(const F& fun) const {
-        moves.genMoves(fun);
-        captures.genMoves(fun);
-    }
-};
+template <typename F>
+void findPawnPushes(SearchState& state, const F& fun) {
+    bool white = state.activeColor == Color::WHITE;
+    const auto doublePushRank = white ? SquareSet::rank(3) : SquareSet::rank(kNumRanks - 1 - 3);
+    const auto promo = white ? SquareSet::rank(kNumRanks - 1) : SquareSet::rank(0);
+    auto free = !state.occupied();
+    auto single = (white ? state.pawns << kNumRanks : state.pawns >> kNumRanks) & free;
+    auto double_ = (white ? single << kNumRanks : single >> kNumRanks) & free & doublePushRank;
+    auto piece = white ? Piece::P : Piece::p;
+    for (auto to : single - promo)
+        fun(piece,
+            Move{{to.file(), white ? to.rank() - 1 : to.rank() + 1}, to, MoveKind::QUIET_MOVE});
+    for (auto to : single& promo)
+        expandPromos(fun,
+                     piece,
+                     Move{{to.file(), white ? to.rank() - 1 : to.rank() + 1},
+                          to,
+                          MoveKind::QUEEN_PROMOTION});
+    for (auto to : double_)
+        fun(piece,
+            Move{{to.file(), white ? to.rank() - 2 : to.rank() + 2},
+                 to,
+                 MoveKind::DOUBLE_PAWN_PUSH});
+}
 
 template <typename F>
-void findPawnMoves(const Board& board, SearchState& state, const F& fun) {
+void findPawnCaptures(SearchState& state, const F& fun) {
     bool white = state.activeColor == Color::WHITE;
-    if (white)
-        PawnPushTargets<Color::WHITE>(state.occupied, state.pawns).genMoves([fun](Move move) {
-            fun(Piece::P, move);
-        });
-    else
-        PawnPushTargets<Color::BLACK>(state.occupied, state.pawns).genMoves([fun](Move move) {
-            fun(Piece::p, move);
-        });
+    const auto promo = white ? SquareSet::rank(kNumRanks - 1) : SquareSet::rank(0);
+    auto free = !state.occupied();
+    auto leftPawns = state.pawns & !SquareSet::file(0);
+    auto rightPawns = state.pawns & !SquareSet::file(7);
+    auto left = (white ? leftPawns << 7 : leftPawns >> 9) & state.occupied.theirs();
+    auto right = (white ? rightPawns << 9 : rightPawns >> 7) & state.occupied.theirs();
+    auto piece = white ? Piece::P : Piece::p;
+    for (auto to : left - promo)
+        fun(piece,
+            Move{{to.file() + 1, white ? to.rank() - 1 : to.rank() + 1}, to, MoveKind::CAPTURE});
+    for (auto to : left& promo)
+        expandPromos(fun,
+                     piece,
+                     Move{{to.file() + 1, white ? to.rank() - 1 : to.rank() + 1},
+                          to,
+                          MoveKind::QUEEN_PROMOTION_CAPTURE});
+    for (auto to : right - promo)
+        fun(piece,
+            Move{{to.file() - 1, white ? to.rank() - 1 : to.rank() + 1}, to, MoveKind::CAPTURE});
+    for (auto to : right& promo)
+        expandPromos(fun,
+                     piece,
+                     Move{{to.file() - 1, white ? to.rank() - 1 : to.rank() + 1},
+                          to,
+                          MoveKind::QUEEN_PROMOTION_CAPTURE});
 }
 
 template <typename F>
@@ -631,7 +592,7 @@ void findNonPawnMoves(const Board& board, SearchState& state, const F& fun) {
 
 template <typename F>
 void findMoves(const Board& board, SearchState& state, const F& fun) {
-    findPawnMoves(board, state, fun);
+    findPawnPushes(state, fun);
     findNonPawnMoves(board, state, fun);
 }
 
@@ -643,7 +604,7 @@ void findPromotionMoves(const Board& board, SearchState& state, const F& fun) {
                         : SquareSet::rank(1) | SquareSet::rank(2);
     auto pawns = state.pawns;
     state.pawns &= masked;
-    findPawnMoves(board, state, fun);
+    findPawnPushes(state, fun);
     state.pawns = pawns;
 }
 
@@ -667,18 +628,6 @@ void findCastles(const Board& board, Occupancy occupied, Turn turn, const F& fun
 }
 
 template <typename F>
-void findPawnCaptures(const Board& board, SearchState& state, const F& fun) {
-    if (state.activeColor == Color::WHITE)
-        PawnCaptureTargets<Color::WHITE>(state.occupied, state.pawns).genMoves([fun](Move move) {
-            fun(Piece::P, move);
-        });
-    else
-        PawnCaptureTargets<Color::BLACK>(state.occupied, state.pawns).genMoves([fun](Move move) {
-            fun(Piece::p, move);
-        });
-}
-
-template <typename F>
 void findNonPawnCaptures(const Board& board, SearchState& state, const F& fun) {
     for (auto from : state.occupied.ours() & !state.pawns) {
         auto piece = board[from];
@@ -694,7 +643,7 @@ void findNonPawnCaptures(const Board& board, SearchState& state, const F& fun) {
 
 template <typename F>
 void findCaptures(const Board& board, SearchState& state, const F& fun) {
-    findPawnCaptures(board, state, fun);
+    findPawnCaptures(state, fun);
     findNonPawnCaptures(board, state, fun);
 }
 
@@ -927,27 +876,21 @@ std::string toString(SquareSet squares) {
 std::string toString(Occupancy occupancy) {
     return "{ " + toString(occupancy.ours()) + ", " + toString(occupancy.theirs()) + " }";
 }
-
-template <typename F>
-void doMoveIfLegal(Board& board, SearchState& state, Piece piece, Move move, const F& fun) {
+SquareSet queensMove(Square from) {
+    return movesTable.moves[index(Piece::Q)][from.index()];
+}
+bool doesNotCheck(Board& board, SearchState& state, Move move) {
     auto [from, to, kind] = Move::Tuple(move);
-    // If we move the king, reflect that in the king squares to check for checks
+
     SquareSet checkSquares = state.kingSquare;
-    if (state.kingSquare == from)
-        checkSquares = isCastles(kind) ? checkSquares = SquareSet::ipath(from, to) : to;
+    if (from == state.kingSquare)
+        checkSquares = isCastles(kind) ? SquareSet::ipath(from, to) : to;
+    else if (!queensMove(state.kingSquare).contains(from) && !state.inCheck)
+        return true;
 
-    // Apply the move to the board
-    auto change = makeMove(board, move);
-
-    // Update the occupancy
     auto delta = movesTable.occupancyDelta[noPromo(kind)][from.index()][to.index()];
-
-    // Check if the move would result in our king being in check.
-    if (!isAttacked(board, checkSquares, state.occupied ^ delta))
-        fun(board, MoveWithPieces{Move{from, to, kind}, piece, change.captured});
-
-    unmakeMove(board, change);
-};
+    return !isAttacked(board, checkSquares, state.occupied ^ delta);
+}
 }  // namespace
 
 bool mayHavePromoMove(Color side, Board& board, Occupancy occupancy) {
@@ -972,8 +915,14 @@ bool mayHavePromoMove(Color side, Board& board, Occupancy occupancy) {
 void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun action) {
     // Iterate over all moves and captures
     auto state = SearchState(board, turn.activeColor);
-    auto inCheck = isAttacked(board, state.kingSquare, state.occupied);
-    auto doMove = [&](Piece piece, Move move) { doMoveIfLegal(board, state, piece, move, action); };
+    auto doMove = [&](Piece piece, Move move) {
+        auto change = makeMove(board, move);
+
+        if (doesNotCheck(board, state, move))
+            action(board, MoveWithPieces{move, piece, change.captured});
+
+        unmakeMove(board, change);
+    };
     findCaptures(board, state, doMove);
 
     // Check if the opponent may promote
@@ -984,7 +933,7 @@ void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun a
     if (depthleft >= options::promotionMinDepthLeft) findPromotionMoves(board, state, doMove);
 
     findEnPassant(board, turn, doMove);
-    if (inCheck || otherMayPromote) findMoves(board, state, doMove);
+    if (state.inCheck || otherMayPromote) findMoves(board, state, doMove);
 }
 
 MoveVector allLegalQuiescentMoves(Turn turn, Board& board, int depthleft) {
@@ -998,16 +947,21 @@ MoveVector allLegalQuiescentMoves(Turn turn, Board& board, int depthleft) {
 void forAllLegalMovesAndCaptures(Turn turn, Board& board, MoveFun action) {
     // Iterate over all moves and captures
     auto state = SearchState(board, turn.activeColor);
-    auto doMove = [&](Piece piece, Move move) { doMoveIfLegal(board, state, piece, move, action); };
+    auto doMove = [&](Piece piece, Move move) {
+        auto change = makeMove(board, move);
+        if (doesNotCheck(board, state, move))
+            action(board, MoveWithPieces{move, piece, change.captured});
+        unmakeMove(board, change);
+    };
     findCaptures(board, state, doMove);
     findEnPassant(board, turn, doMove);
     findMoves(board, state, doMove);
-    findCastles(board, state.occupied, turn, doMove);
+    if (!state.inCheck) findCastles(board, state.occupied, turn, doMove);
 }
 
 size_t countLegalMovesAndCaptures(Turn turn, Board& board) {
     size_t count = 0;
-    forAllLegalMovesAndCaptures(turn, board, [&](Board&, MoveWithPieces) { ++count; });
+    forAllLegalMovesAndCaptures(turn, board, [&count](Board&, MoveWithPieces) { ++count; });
     return count;
 }
 
