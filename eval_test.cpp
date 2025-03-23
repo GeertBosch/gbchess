@@ -93,13 +93,13 @@ void usage(std::string cmdName, std::string errmsg) {
 
 void printAvailableMoves(const Position& position) {
     MoveVector moves;
-    addAvailableMoves(moves, position.board, position.activeColor());
+    addAvailableMoves(moves, position.board, position.turn);
     std::cout << "Moves: " << moves << std::endl;
 }
 
 void printAvailableCaptures(const Position& position) {
     MoveVector captures;
-    addAvailableCaptures(captures, position.board, position.activeColor());
+    addAvailableCaptures(captures, position.board, position.turn);
     std::cout << "Captures: " << captures << std::endl;
 }
 

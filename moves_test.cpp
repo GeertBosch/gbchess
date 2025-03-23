@@ -416,7 +416,9 @@ void testAddAvailableMoves() {
         board["a2"_sq] = Piece::P;
         board["a4"_sq] = Piece::P;  // Block the pawn, so there's no two-square move
         MoveVector moves;
-        addAvailableMoves(moves, board, Color::WHITE);
+        Turn turn;
+        turn.activeColor = Color::WHITE;
+        addAvailableMoves(moves, board, turn);
         assert(moves.size() == 2);
         assert(find(moves, Move("a2"_sq, "a3"_sq, Move::QUIET)));
         assert(find(moves, Move("a4"_sq, "a5"_sq, Move::QUIET)));
@@ -434,7 +436,9 @@ void testAddAvailableCaptures() {
     {
         Board board = fen::parsePiecePlacement("r3kbnr/pP1qpppp/3p4/4N3/4P3/8/PPP2PPP/RNB1K2R");
         MoveVector captures;
-        addAvailableCaptures(captures, board, Color::WHITE);
+        Turn turn;
+        turn.activeColor = Color::WHITE;
+        addAvailableCaptures(captures, board, turn);
         assert(captures.size() == 6);
         assert(find(captures, Move("e5"_sq, "d7"_sq, Move::CAPTURE)));
         assert(find(captures, Move("e5"_sq, "f7"_sq, Move::CAPTURE)));
@@ -450,7 +454,11 @@ void testAddAvailableEnPassant() {
     {
         Board board = fen::parsePiecePlacement("rnbqkbnr/1ppppppp/8/8/pP6/P1P5/3PPPPP/RNBQKBNR");
         MoveVector moves;
-        addAvailableEnPassant(moves, board, Color::BLACK, "b3"_sq);
+        Turn turn;
+        turn.activeColor = Color::BLACK;
+        turn.enPassantTarget = "b3"_sq;
+
+        addAvailableEnPassant(moves, board, turn);
         assert(moves.size() == 1);
         assert(moves[0] == Move("a4"_sq, "b3"_sq, MoveKind::EN_PASSANT));
     }
@@ -465,7 +473,8 @@ MoveVector allLegalCastling(std::string piecePlacement,
     MoveVector moves;
     turn.activeColor = activeColor;
     turn.castlingAvailability = castlingAvailability;
-    forAllLegalMovesAndCaptures(turn, board, [&moves](Board&, MoveWithPieces mwp) {
+    SearchState state(board, turn);
+    forAllLegalMovesAndCaptures(board, state, [&moves](Board&, MoveWithPieces mwp) {
         if (isCastles(mwp.move.kind())) moves.emplace_back(mwp.move);
     });
     return moves;

@@ -113,6 +113,7 @@ public:
     iterator end() const { return SquareSet(); }
 };
 
+
 class Occupancy {
     SquareSet _theirs;
     SquareSet _ours;
@@ -137,10 +138,38 @@ public:
     Occupancy operator^(Occupancy other) const {
         return {_theirs ^ other._theirs, _ours ^ other._ours};
     }
+    Occupancy operator^=(Occupancy other) {
+        _theirs ^= other._theirs;
+        _ours ^= other._ours;
+        return *this;
+    }
     bool operator==(Occupancy other) const {
         return _theirs == other._theirs && _ours == other._ours;
     }
     bool operator!=(Occupancy other) const { return !(*this == other); }
+};
+
+/**
+ * Returns true if the given square is attacked by a piece of the given opponent color.
+ */
+bool isAttacked(const Board& board, Square square, Occupancy occupancy);
+bool isAttacked(const Board& board, SquareSet squares, Occupancy occupancy);
+bool isAttacked(const Board& board, SquareSet squares, Color opponentColor);
+
+struct SearchState {
+    SearchState(const Board& board, Turn turn)
+        : occupancy(Occupancy(board, turn.activeColor)),
+          pawns(SquareSet::find(board, addColor(PieceType::PAWN, turn.activeColor))),
+          turn(turn),
+          kingSquare(*SquareSet::find(board, addColor(PieceType::KING, turn.activeColor)).begin()),
+          inCheck(isAttacked(board, kingSquare, occupancy)) {}
+    Color active() const { return turn.activeColor; }
+
+    Occupancy occupancy;
+    SquareSet pawns;
+    Turn turn;
+    Square kingSquare;
+    bool inCheck;
 };
 
 /**
@@ -159,7 +188,7 @@ Occupancy occupancyDelta(Move move);
  * have. For each possible destination square, it checks if the move would target an occupied square
  * or move through other pieces. If neither condition is true, the move is added to the set.
  */
-void addAvailableMoves(MoveVector& moves, const Board& board, Color activeColor);
+void addAvailableMoves(MoveVector& moves, const Board& board, Turn turn);
 
 /**
  * This function follows the same structure as availableMoves but focuses on captures. It
@@ -168,12 +197,9 @@ void addAvailableMoves(MoveVector& moves, const Board& board, Color activeColor)
  * captures, and those that move through other pieces, adding valid captures to the result
  * set.
  */
-void addAvailableCaptures(MoveVector& captures, const Board& board, Color activeColor);
+void addAvailableCaptures(MoveVector& captures, const Board& board, Turn turn);
 
-void addAvailableEnPassant(MoveVector& captures,
-                           const Board& board,
-                           Color activeColor,
-                           Square enPassantTarget);
+void addAvailableEnPassant(MoveVector& captures, const Board& board, Turn turn);
 
 
 /**
@@ -223,17 +249,15 @@ struct MoveWithPieces {
 
 using MoveFun = std::function<void(Board&, MoveWithPieces)>;
 void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun action);
-void forAllLegalMovesAndCaptures(Turn turn, Board& board, MoveFun action);
-size_t countLegalMovesAndCaptures(Turn turn, Board& board);
+void forAllLegalMovesAndCaptures(Board& board, SearchState& state, MoveFun action);
+inline void forAllLegalMovesAndCaptures(Turn turn, Board& board, MoveFun action) {
+    auto state = SearchState(board, turn);
+    forAllLegalMovesAndCaptures(board, state, action);
+}
+
+size_t countLegalMovesAndCaptures(Board& board, SearchState& state);
 
 MoveVector allLegalQuiescentMoves(Turn turn, Board& board, int depthleft);
-
-/**
- * Returns true if the given square is attacked by a piece of the given opponent color.
- */
-bool isAttacked(const Board& board, Square square, Occupancy occupancy);
-bool isAttacked(const Board& board, SquareSet squares, Occupancy occupancy);
-bool isAttacked(const Board& board, SquareSet squares, Color opponentColor);
 
 struct ParseError : public std::exception {
     std::string message;
@@ -295,7 +319,8 @@ void unmakeMove(Position& position, UndoPosition undo);
 [[nodiscard]] Position applyMove(Position position, Move move);
 [[nodiscard]] Position applyMoves(Position position, MoveVector const& moves);
 
-Turn applyMove(Turn turn, Piece piece, Move move);
+Turn applyMove(Turn turn, MoveWithPieces mwp);
+void applyMove(SearchState& state, MoveWithPieces mwp);
 
 /**
  *  Returns the castling mask for the castling rights cancelled by the given move.

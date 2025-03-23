@@ -11,13 +11,20 @@
  *  leaf nodes of a certain depth, which can be compared to predetermined values and used to isolate
  *  bugs. (See https://www.chessprogramming.org/Perft)
  */
-uint64_t perft(Turn turn, Board& board, int depth) {
-    if (--depth <= 0) return depth ? 1 : countLegalMovesAndCaptures(turn, board);
+uint64_t perft(Board& board, SearchState& state, int depth) {
+    if (--depth <= 0) return depth ? 1 : countLegalMovesAndCaptures(board, state);
 
     uint64_t nodes = 0;
-    forAllLegalMovesAndCaptures(turn, board, [&](Board& board, MoveWithPieces mwp) {
-        auto newTurn = applyMove(turn, mwp.piece, mwp.move);
-        nodes += perft(newTurn, board, depth);
+    auto newState = state;
+    forAllLegalMovesAndCaptures(board, state, [&](Board& board, MoveWithPieces mwp) {
+        auto delta = occupancyDelta(mwp.move);
+        newState.occupancy = !(state.occupancy ^ delta);
+        newState.pawns = SquareSet::find(board, addColor(PieceType::PAWN, !state.active()));
+        newState.turn = applyMove(state.turn, mwp);
+        newState.kingSquare =
+            *SquareSet::find(board, addColor(PieceType::KING, !state.active())).begin();
+        newState.inCheck = isAttacked(board, newState.kingSquare, newState.occupancy);
+        nodes += perft(board, newState, depth);
     });
     return nodes;
 }
@@ -33,11 +40,13 @@ void perftWithDivide(Position position, int depth, int expectedCount) {
     auto startTime = std::chrono::high_resolution_clock::now();
     for (auto move : allLegalMovesAndCaptures(position.turn, position.board)) {
         auto newPosition = applyMove(position, move);
-        auto count = perft(newPosition.turn, newPosition.board, depth - 1);
+        auto state = SearchState(newPosition.board, newPosition.turn);
+        auto count = perft(newPosition.board, state, depth - 1);
         if (debug) std::cout << static_cast<std::string>(move) << ": " << count << std::endl;
         divisions.push_back({move, count});
     }
-    auto count = perft(position.turn, position.board, depth);
+    auto state = SearchState(position.board, position.turn);
+    auto count = perft(position.board, state, depth);
     auto endTime = std::chrono::high_resolution_clock::now();
 
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
