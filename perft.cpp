@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>  // For std::exit
 #include <iostream>
 #include <string>
@@ -38,17 +39,17 @@ void perftWithDivide(Position position, int depth, int expectedCount) {
     std::cout << "Fen: " << fen::to_string(position) << std::endl;
 
     auto startTime = std::chrono::high_resolution_clock::now();
+    uint64_t count = 0;
     for (auto move : allLegalMovesAndCaptures(position.turn, position.board)) {
         auto newPosition = applyMove(position, move);
-        auto state = SearchState(newPosition.board, newPosition.turn);
-        auto count = perft(newPosition.board, state, depth - 1);
-        if (debug) std::cout << static_cast<std::string>(move) << ": " << count << std::endl;
-        divisions.push_back({move, count});
+        auto newState = SearchState(newPosition.board, newPosition.turn);
+        auto newCount = perft(newPosition.board, newState, depth - 1);
+        if (debug) std::cout << static_cast<std::string>(move) << ": " << newCount << std::endl;
+        divisions.push_back({move, newCount});
+        count += newCount;
     }
-    auto state = SearchState(position.board, position.turn);
-    auto count = perft(position.board, state, depth);
-    auto endTime = std::chrono::high_resolution_clock::now();
 
+    auto endTime = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
     auto rate = count / (duration.count() / 1000'000.0);  // evals per second
 
