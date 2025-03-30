@@ -457,15 +457,15 @@ class Turn {
     CastlingMask castlingAvailability : 4;
 
     enum Active : uint16_t {
-        WHITE = 0,
-        BLACK = 1,
+        w = 0,
+        b = 1,
     };
 
     // Rather than using a separate full move number and active color bit, we can just use the
     // number of half moves to both determine the active side (white on even, black on odd) and
     // the full move number (half moves / 2 + 1).
     uint16_t fullmoveNumber : 15;
-    uint16_t active : 1;
+    Active active : 1;
 
 public:
     Turn(Color active,
@@ -477,7 +477,7 @@ public:
           halfmoveClock(halfmoveClock),
           castlingAvailability(castlingAvailability),
           fullmoveNumber(fullmoveNumber),
-          active(active == Color::BLACK) {
+          active(static_cast<Active>(active)) {
         // This code path is suprisingly hot, so only assert in debug mode
         dassert(halfmoveClock >= 0 && halfmoveClock < 128);
         dassert(fullmoveNumber > 0 && fullmoveNumber < 32768);
@@ -486,7 +486,7 @@ public:
     Turn(Color color) : Turn(color, CastlingMask::KQkq, noEnPassantTarget, 0, 1) {}
 
     Color activeColor() const { return static_cast<Color>(active); };
-    void setActive(Color color) { active = color == Color::BLACK; };
+    void setActive(Color color) { active = static_cast<Active>(color); };
 
     CastlingMask castling() const { return castlingAvailability; }
     void setCastling(CastlingMask castling) { castlingAvailability = castling; }
@@ -502,7 +502,7 @@ public:
     void tick() {
         ++halfmoveClock;
         // Flip active color and increment fullmove number if active color was black
-        active = !active;
+        active = static_cast<Active>(!active);
         fullmoveNumber += !active;
     }
 };
