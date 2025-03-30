@@ -452,7 +452,7 @@ void testAddAvailableEnPassant() {
     {
         Board board = fen::parsePiecePlacement("rnbqkbnr/1ppppppp/8/8/pP6/P1P5/3PPPPP/RNBQKBNR");
         MoveVector moves;
-        Turn turn(Color::BLACK, "b3"_sq);
+        Turn turn(Color::BLACK, CastlingMask::_, "b3"_sq);
 
         addAvailableEnPassant(moves, board, turn);
         assert(moves.size() == 1);
@@ -465,7 +465,7 @@ MoveVector allLegalCastling(std::string piecePlacement,
                             Color activeColor,
                             CastlingMask castlingAvailability) {
     Board board = fen ::parsePiecePlacement(piecePlacement);
-    Turn turn(activeColor, castlingAvailability);
+    Turn turn(activeColor, castlingAvailability, noEnPassantTarget);
     MoveVector moves;
     SearchState state(board, turn);
     forAllLegalMovesAndCaptures(board, state, [&moves](Board&, MoveWithPieces mwp) {
@@ -680,10 +680,7 @@ void testApplyMove() {
     {
         Position position;
         position.board["a2"_sq] = Piece::P;
-        Turn turn = position.turn;
 
-        assert(position.turn.activeColor() == Color::WHITE);
-        position.turn.setHalfmove(1);
         position = applyMove(position, Move("a2"_sq, "a3"_sq, Move::QUIET));
         assert(position.board["a3"_sq] == Piece::P);
         assert(position.board["a2"_sq] == Piece::_);
@@ -696,7 +693,7 @@ void testApplyMove() {
         Position position;
         position.board["a2"_sq] = Piece::P;
         position.board["b3"_sq] = Piece::r;  // White pawn captures black rook
-        position.turn.setHalfmove(1);
+        position.turn = {Color::WHITE, CastlingMask::_, noEnPassantTarget, 1, 1};
         position = applyMove(position, Move("a2"_sq, "b3"_sq, Move::CAPTURE));
         assert(position.board["b3"_sq] == Piece::P);
         assert(position.board["a2"_sq] == Piece::_);
@@ -708,9 +705,7 @@ void testApplyMove() {
     {
         Position position;
         position.board["a2"_sq] = Piece::p;
-        position.turn.setActive(!position.turn.activeColor());
-        position.turn.setHalfmove(1);
-        position.turn.setFullmove(1);
+        position.turn = Turn(Color::BLACK, CastlingMask::_, noEnPassantTarget, 1, 1);
         position = applyMove(position, Move("a2"_sq, "a3"_sq, Move::QUIET));
         assert(position.board["a3"_sq] == Piece::p);
         assert(position.board["a2"_sq] == Piece::_);
@@ -724,8 +719,7 @@ void testApplyMove() {
         Position position;
         position.board["a2"_sq] = Piece::P;
         position.board["b3"_sq] = Piece::r;  // White pawn captures black rook
-        position.turn.setFullmove(1);
-        position.turn.setHalfmove(1);
+        position.turn = Turn(Color::WHITE, CastlingMask::_, noEnPassantTarget, 1, 1);
         position = applyMove(position, Move("a2"_sq, "b3"_sq, Move::CAPTURE));
         assert(position.board["b3"_sq] == Piece::P);
         assert(position.board["a2"_sq] == Piece::_);
@@ -738,8 +732,8 @@ void testApplyMove() {
     {
         Position position;
         position.board["b1"_sq] = Piece::N;
-        position.turn.setHalfmove(1);
-        ;
+        position.turn = {Color::WHITE, CastlingMask::_, noEnPassantTarget, 1, 1};
+
         position = applyMove(position, Move("b1"_sq, "c3"_sq, Move::QUIET));
         assert(position.board["c3"_sq] == Piece::N);
         assert(position.board["b1"_sq] == Piece::_);
@@ -752,8 +746,8 @@ void testApplyMove() {
         Position position;
         position.board["a5"_sq] = Piece::P;
         position.board["b5"_sq] = Piece::p;
-        position.turn.setEnPassant("b6"_sq);
-        position.turn.setHalfmove(1);
+        position.turn = {Color::WHITE, CastlingMask::_, "b6"_sq, 1, 1};
+
         position = applyMove(position, Move("a5"_sq, "b6"_sq, MoveKind::EN_PASSANT));
         assert(position.board["b6"_sq] == Piece::P);
         assert(position.board["b5"_sq] == Piece::_);

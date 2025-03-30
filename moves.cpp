@@ -761,7 +761,7 @@ Turn applyMove(Turn turn, MoveWithPieces mwp) {
     // Update halfmoveClock and halfmoveNumber, and switch the active side.
     turn.tick();
     // Reset halfmove clock on pawn advance or capture
-    if (type(mwp.piece) == PieceType::PAWN || isCapture(move.kind())) turn.setHalfmove(0);
+    if (type(mwp.piece) == PieceType::PAWN || isCapture(move.kind())) turn.resetHalfmove();
 
     return turn;
 }

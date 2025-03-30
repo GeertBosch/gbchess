@@ -48,7 +48,11 @@ Turn parseTurn(std::stringstream ss) {
         case 'q': castling |= CastlingMask::q; break;
         }
     }
-    Turn turn(active, castling);
+    Turn turn(active,
+              castling,
+              noEnPassantTarget,
+              std::stoi(halfmoveClockStr),
+              std::stoi(fullmoveNumberStr));
 
     if (enPassantTargetStr != "-") {
         int file = enPassantTargetStr[0] - 'a';
@@ -56,8 +60,6 @@ Turn parseTurn(std::stringstream ss) {
         turn.setEnPassant(Square{file, rank});
     }
 
-    turn.setHalfmove(std::stoi(halfmoveClockStr));
-    turn.setFullmove(std::stoi(fullmoveNumberStr));
     return turn;
 }
 

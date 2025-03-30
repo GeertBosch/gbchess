@@ -15,6 +15,11 @@ constexpr bool debug = 1;
 constexpr bool debug = 0;
 #endif
 
+#define dassert(condition) \
+    if constexpr (debug) { \
+        assert(condition); \
+    }
+
 static constexpr uint8_t kNumFiles = 8, kNumRanks = 8;
 static constexpr uint8_t kNumSquares = kNumFiles * kNumRanks;
 
@@ -463,24 +468,22 @@ class Turn {
     uint16_t active : 1;
 
 public:
-    Turn(Color color)
-        : enPassantTarget(EnPassantTarget::_),
-          halfmoveClock(0),
-          castlingAvailability(CastlingMask::KQkq),
-          fullmoveNumber(0),
-          active(color == Color::BLACK) {}
-    Turn(Color color, CastlingMask castlingAvailability)
-        : enPassantTarget(EnPassantTarget::_),
-          halfmoveClock(0),
-          castlingAvailability(castlingAvailability),
-          fullmoveNumber(0),
-          active(color == Color::BLACK) {}
-    Turn(Color active, Square enPassantTarget)
+    Turn(Color active,
+         CastlingMask castlingAvailability,
+         Square enPassantTarget,
+         int halfmoveClock = 0,
+         int fullmoveNumber = 1)
         : enPassantTarget(toEnPassantTarget(enPassantTarget)),
-          halfmoveClock(0),
-          castlingAvailability(CastlingMask::KQkq),
-          fullmoveNumber(0),
-          active(active == Color::BLACK) {}
+          halfmoveClock(halfmoveClock),
+          castlingAvailability(castlingAvailability),
+          fullmoveNumber(fullmoveNumber),
+          active(active == Color::BLACK) {
+        // This code path is suprisingly hot, so only assert in debug mode
+        dassert(halfmoveClock >= 0 && halfmoveClock < 128);
+        dassert(fullmoveNumber > 0 && fullmoveNumber < 32768);
+    }
+
+    Turn(Color color) : Turn(color, CastlingMask::KQkq, noEnPassantTarget, 0, 1) {}
 
     Color activeColor() const { return static_cast<Color>(active); };
     void setActive(Color color) { active = color == Color::BLACK; };
@@ -492,10 +495,9 @@ public:
     void setEnPassant(Square enPassant) { enPassantTarget = toEnPassantTarget(enPassant); }
 
     uint8_t halfmove() const { return halfmoveClock; }
-    void setHalfmove(uint8_t halfmove) { halfmoveClock = halfmove; }
+    void resetHalfmove() { halfmoveClock = 0; }
 
-    uint16_t fullmove() const { return fullmoveNumber + 1; }
-    void setFullmove(uint16_t fullmove) { fullmoveNumber = fullmove - 1; }
+    uint16_t fullmove() const { return fullmoveNumber; }
 
     void tick() {
         ++halfmoveClock;
