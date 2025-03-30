@@ -108,7 +108,7 @@ std::string to_string(const Board& board) {
 
 std::string to_string(const Turn& turn) {
     std::stringstream str;
-    str << to_string(turn.active()) << " ";
+    str << to_string(turn.activeColor()) << " ";
     str << to_string(turn.castling()) << " ";
     str << (turn.enPassant().index() ? std::string(turn.enPassant()) : "-") << " ";
     str << (int)turn.halfmove() << " ";

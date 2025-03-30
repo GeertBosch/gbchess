@@ -682,12 +682,12 @@ void testApplyMove() {
         position.board["a2"_sq] = Piece::P;
         Turn turn = position.turn;
 
-        assert(position.turn.active() == Color::WHITE);
+        assert(position.turn.activeColor() == Color::WHITE);
         position.turn.setHalfmove(1);
         position = applyMove(position, Move("a2"_sq, "a3"_sq, Move::QUIET));
         assert(position.board["a3"_sq] == Piece::P);
         assert(position.board["a2"_sq] == Piece::_);
-        assert(position.turn.active() == Color::BLACK);
+        assert(position.turn.activeColor() == Color::BLACK);
         assert(position.turn.halfmove() == 0);
     }
 
@@ -700,7 +700,7 @@ void testApplyMove() {
         position = applyMove(position, Move("a2"_sq, "b3"_sq, Move::CAPTURE));
         assert(position.board["b3"_sq] == Piece::P);
         assert(position.board["a2"_sq] == Piece::_);
-        assert(position.turn.active() == Color::BLACK);
+        assert(position.turn.activeColor() == Color::BLACK);
         assert(position.turn.halfmove() == 0);
     }
 
@@ -708,13 +708,13 @@ void testApplyMove() {
     {
         Position position;
         position.board["a2"_sq] = Piece::p;
-        position.turn.setActive(!position.turn.active());
+        position.turn.setActive(!position.turn.activeColor());
         position.turn.setHalfmove(1);
         position.turn.setFullmove(1);
         position = applyMove(position, Move("a2"_sq, "a3"_sq, Move::QUIET));
         assert(position.board["a3"_sq] == Piece::p);
         assert(position.board["a2"_sq] == Piece::_);
-        assert(position.turn.active() == Color::WHITE);
+        assert(position.turn.activeColor() == Color::WHITE);
         assert(position.turn.halfmove() == 0);
         assert(position.turn.fullmove() == 2);
     }
@@ -729,7 +729,7 @@ void testApplyMove() {
         position = applyMove(position, Move("a2"_sq, "b3"_sq, Move::CAPTURE));
         assert(position.board["b3"_sq] == Piece::P);
         assert(position.board["a2"_sq] == Piece::_);
-        assert(position.turn.active() == Color::BLACK);
+        assert(position.turn.activeColor() == Color::BLACK);
         assert(position.turn.halfmove() == 0);  // reset due to capture
         assert(position.turn.fullmove() == 1);  // not updated on white move
     }
@@ -743,7 +743,7 @@ void testApplyMove() {
         position = applyMove(position, Move("b1"_sq, "c3"_sq, Move::QUIET));
         assert(position.board["c3"_sq] == Piece::N);
         assert(position.board["b1"_sq] == Piece::_);
-        assert(position.turn.active() == Color::BLACK);
+        assert(position.turn.activeColor() == Color::BLACK);
         assert(position.turn.halfmove() == 2);
     }
 
@@ -757,7 +757,7 @@ void testApplyMove() {
         position = applyMove(position, Move("a5"_sq, "b6"_sq, MoveKind::EN_PASSANT));
         assert(position.board["b6"_sq] == Piece::P);
         assert(position.board["b5"_sq] == Piece::_);
-        assert(position.turn.active() == Color::BLACK);
+        assert(position.turn.activeColor() == Color::BLACK);
         assert(position.turn.halfmove() == 0);
     }
 
@@ -925,7 +925,7 @@ Board flip(Board board) {
     return result;
 }
 Turn flip(Turn turn) {
-    turn.setActive(!turn.active());
+    turn.setActive(!turn.activeColor());
     auto castling = turn.castling();
     turn.setCastling(CastlingMask(
         uint8_t(castling & CastlingMask::K) << 3 | uint8_t(castling & CastlingMask::Q) << 1 |

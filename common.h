@@ -425,33 +425,84 @@ struct BoardChange {
 };
 
 class Turn {
-    Color activeColor = Color::WHITE;
-    CastlingMask castlingAvailability = CastlingMask::KQkq;  // Bitmask of CastlingMask
-    Square enPassantTarget = noEnPassantTarget;
-    uint8_t halfmoveClock = 0;  // If the clock is used, we'll draw at 100, well before it overflows
-    uint16_t fullmoveNumber = 1;  // >65,535 moves is a lot of moves
+    enum EnPassantTarget : uint16_t {
+        _ = 0,
+        // clang-format off
+        a3 = 16, b3 = 17, c3 = 18, d3 = 19, e3 = 20, f3 = 21, g3 = 22, h3 = 23,
+        a6 = 24, b6 = 25, c6 = 26, d6 = 27, e6 = 28, f6 = 29, g6 = 30, h6 = 31,
+        // clang-format on
+    };
+    static constexpr auto noEnPassantTarget = EnPassantTarget::_;
+    static Square toSquare(EnPassantTarget target) {
+        uint16_t value = static_cast<uint16_t>(target);
+        value += (value & 8) * 2;  // Shift rank 4 to rank 6, not affecting rank 3 or value 0.
+        return Square(value);
+    }
+    static EnPassantTarget toEnPassantTarget(Square square) {
+        uint16_t value = square.index();
+        value -= (value & 32) / 2;  // Shift rank 6 to rank 4, not affecting rank 3 or value 0.
+        return EnPassantTarget(value);
+    }
+
+    // EnPassant target square (5 bits)
+    EnPassantTarget enPassantTarget : 5;
+    // Halfmove clock (7 bits)
+    uint16_t halfmoveClock : 7;
+    // Castling availability (4 bits)
+    CastlingMask castlingAvailability : 4;
+
+    enum Active : uint16_t {
+        WHITE = 0,
+        BLACK = 1,
+    };
+
+    // Rather than using a separate full move number and active color bit, we can just use the
+    // number of half moves to both determine the active side (white on even, black on odd) and
+    // the full move number (half moves / 2 + 1).
+    uint16_t fullmoveNumber : 15;
+    uint16_t active : 1;
 
 public:
-    Turn(Color active) : activeColor(active) {}
-    Turn(Color active, CastlingMask castlingAvailability)
-        : activeColor(active), castlingAvailability(castlingAvailability) {}
+    Turn(Color color)
+        : enPassantTarget(EnPassantTarget::_),
+          halfmoveClock(0),
+          castlingAvailability(CastlingMask::KQkq),
+          fullmoveNumber(0),
+          active(color == Color::BLACK) {}
+    Turn(Color color, CastlingMask castlingAvailability)
+        : enPassantTarget(EnPassantTarget::_),
+          halfmoveClock(0),
+          castlingAvailability(castlingAvailability),
+          fullmoveNumber(0),
+          active(color == Color::BLACK) {}
     Turn(Color active, Square enPassantTarget)
-        : activeColor(active), enPassantTarget(enPassantTarget) {}
+        : enPassantTarget(toEnPassantTarget(enPassantTarget)),
+          halfmoveClock(0),
+          castlingAvailability(CastlingMask::KQkq),
+          fullmoveNumber(0),
+          active(active == Color::BLACK) {}
 
-    Color active() const { return activeColor; };
-    void setActive(Color active) { activeColor = active; };
+    Color activeColor() const { return static_cast<Color>(active); };
+    void setActive(Color color) { active = color == Color::BLACK; };
 
     CastlingMask castling() const { return castlingAvailability; }
     void setCastling(CastlingMask castling) { castlingAvailability = castling; }
 
-    Square enPassant() const { return enPassantTarget; }
-    void setEnPassant(Square enPassant) { enPassantTarget = enPassant; }
+    Square enPassant() const { return toSquare(enPassantTarget); }
+    void setEnPassant(Square enPassant) { enPassantTarget = toEnPassantTarget(enPassant); }
 
     uint8_t halfmove() const { return halfmoveClock; }
     void setHalfmove(uint8_t halfmove) { halfmoveClock = halfmove; }
 
-    uint16_t fullmove() const { return fullmoveNumber; }
-    void setFullmove(uint16_t fullmove) { fullmoveNumber = fullmove; }
+    uint16_t fullmove() const { return fullmoveNumber + 1; }
+    void setFullmove(uint16_t fullmove) { fullmoveNumber = fullmove - 1; }
+
+    void tick() {
+        ++halfmoveClock;
+        // Flip active color and increment fullmove number if active color was black
+        active = !active;
+        fullmoveNumber += !active;
+    }
 };
 
 struct Position {
@@ -485,5 +536,5 @@ struct Position {
 
     Board board;
     Turn turn = {Color::WHITE};
-    Color active() const { return turn.active(); }
+    Color active() const { return turn.activeColor(); }
 };

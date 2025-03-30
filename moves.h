@@ -158,12 +158,13 @@ bool isAttacked(const Board& board, SquareSet squares, Color opponentColor);
 
 struct SearchState {
     SearchState(const Board& board, Turn turn)
-        : occupancy(Occupancy(board, turn.active())),
-          pawns(SquareSet::find(board, addColor(PieceType::PAWN, turn.active()))),
+        : occupancy(Occupancy(board, turn.activeColor())),
+          pawns(SquareSet::find(board, addColor(PieceType::PAWN, turn.activeColor()))),
           turn(turn),
-          kingSquare(*SquareSet::find(board, addColor(PieceType::KING, turn.active())).begin()),
+          kingSquare(
+              *SquareSet::find(board, addColor(PieceType::KING, turn.activeColor())).begin()),
           inCheck(isAttacked(board, kingSquare, occupancy)) {}
-    Color active() const { return turn.active(); }
+    Color active() const { return turn.activeColor(); }
 
     Occupancy occupancy;
     SquareSet pawns;

@@ -11,7 +11,7 @@ int testparse() {
     Turn turn = position.turn;
 
     std::cout << "Piece Placement: " << fen::to_string(position.board) << "\n";
-    std::cout << "Active Color: " << to_string(turn.active()) << "\n";
+    std::cout << "Active Color: " << to_string(turn.activeColor()) << "\n";
     std::cout << "Castling Availability: " << (int)turn.castling() << "\n";
     std::cout << "En Passant Target: "
               << (turn.enPassant().index() ? std::string(turn.enPassant()) : "-") << "\n";
@@ -33,7 +33,7 @@ void testInitialPosition() {
     Position position = fen::parsePosition(fen::initialPosition);
     assert(position.board == board);
     Turn turn = position.turn;
-    assert(turn.active() == Color::WHITE);
+    assert(turn.activeColor() == Color::WHITE);
     assert(turn.castling() == CastlingMask::KQkq);
     assert(turn.enPassant() == Square(0));
     assert(turn.halfmove() == 0);

@@ -610,7 +610,7 @@ void findPromotionMoves(const Board& board, SearchState& state, const F& fun) {
 
 template <typename F>
 void findCastles(const Board& board, Occupancy occupancy, Turn turn, const F& fun) {
-    auto color = int(turn.active());
+    auto color = int(turn.activeColor());
     auto& info = castlingInfo[color];
 
     // Check for king side castling
@@ -654,7 +654,7 @@ void findEnPassant(const Board& board, Turn turn, const F& fun) {
 
     // For a given en passant target, there are two potential from squares. If either or
     // both have a pawn of the active color, then capture is possible.
-    auto active = turn.active();
+    auto active = turn.activeColor();
     auto pawn = addColor(PieceType::PAWN, active);
 
     for (auto from : movesTable.enPassantFrom[int(active)][enPassantTarget.file()])
@@ -758,15 +758,11 @@ Turn applyMove(Turn turn, MoveWithPieces mwp) {
     // Update castlingAvailability
     turn.setCastling(turn.castling() & ~castlingMask(move.from(), move.to()));
 
-    // Update halfMoveClock: reset on pawn advance or capture, else increment
-    turn.setHalfmove(turn.halfmove() + 1);
+    // Update halfmoveClock and halfmoveNumber, and switch the active side.
+    turn.tick();
+    // Reset halfmove clock on pawn advance or capture
     if (type(mwp.piece) == PieceType::PAWN || isCapture(move.kind())) turn.setHalfmove(0);
 
-    // Update fullMoveNumber: increment after black's move
-    if (turn.active() == Color::BLACK) turn.setFullmove(turn.fullmove() + 1);
-
-    // Update activeColorc
-    turn.setActive(!turn.active());
     return turn;
 }
 
@@ -925,7 +921,7 @@ void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun a
 
     // Check if the opponent may promote
     bool otherMayPromote = depthleft > options::promotionMinDepthLeft &&
-        mayHavePromoMove(!turn.active(), board, !state.occupancy);
+        mayHavePromoMove(!turn.activeColor(), board, !state.occupancy);
 
     // Avoid horizon effect: don't promote in the last plies
     if (depthleft >= options::promotionMinDepthLeft) findPromotionMoves(board, state, doMove);
