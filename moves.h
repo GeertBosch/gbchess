@@ -158,12 +158,12 @@ bool isAttacked(const Board& board, SquareSet squares, Color opponentColor);
 
 struct SearchState {
     SearchState(const Board& board, Turn turn)
-        : occupancy(Occupancy(board, turn.activeColor)),
-          pawns(SquareSet::find(board, addColor(PieceType::PAWN, turn.activeColor))),
+        : occupancy(Occupancy(board, turn.active())),
+          pawns(SquareSet::find(board, addColor(PieceType::PAWN, turn.active()))),
           turn(turn),
-          kingSquare(*SquareSet::find(board, addColor(PieceType::KING, turn.activeColor)).begin()),
+          kingSquare(*SquareSet::find(board, addColor(PieceType::KING, turn.active())).begin()),
           inCheck(isAttacked(board, kingSquare, occupancy)) {}
-    Color active() const { return turn.activeColor; }
+    Color active() const { return turn.active(); }
 
     Occupancy occupancy;
     SquareSet pawns;
@@ -282,6 +282,8 @@ MoveVector parseUCIMoves(Position position, const std::string& moves);
 Position applyUCIMove(Position position, const std::string& move);
 
 struct UndoPosition {
+    UndoPosition() : board(), turn(Color::WHITE) {}
+    UndoPosition(BoardChange board, Turn turn) : board(board), turn(turn) {}
     BoardChange board;
     Turn turn;
 };

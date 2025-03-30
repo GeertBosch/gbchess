@@ -13,11 +13,11 @@ Hash::Hash(Position position) {
     int location = 0;
     for (auto square : SquareSet::occupancy(position.board))
         toggle(position.board[square], square.index());
-    if (position.activeColor() == Color::BLACK) toggle(BLACK_TO_MOVE);
-    if (position.turn.castlingAvailability != CastlingMask::_)
-        toggle(ExtraVectors(CASTLING_1 - 1 + uint8_t(position.turn.castlingAvailability)));
-    if (position.turn.enPassantTarget.index())
-        toggle(ExtraVectors(position.turn.enPassantTarget.file() + EN_PASSANT_A));
+    if (position.active() == Color::BLACK) toggle(BLACK_TO_MOVE);
+    if (position.turn.castling() != CastlingMask::_)
+        toggle(ExtraVectors(CASTLING_1 - 1 + uint8_t(position.turn.castling())));
+    if (position.turn.enPassant().index())
+        toggle(ExtraVectors(position.turn.enPassant().file() + EN_PASSANT_A));
 }
 
 void Hash::applyMove(const Board& board, Move mv) {

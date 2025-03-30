@@ -424,12 +424,34 @@ struct BoardChange {
     }
 };
 
-struct Turn {
+class Turn {
     Color activeColor = Color::WHITE;
     CastlingMask castlingAvailability = CastlingMask::KQkq;  // Bitmask of CastlingMask
     Square enPassantTarget = noEnPassantTarget;
     uint8_t halfmoveClock = 0;  // If the clock is used, we'll draw at 100, well before it overflows
     uint16_t fullmoveNumber = 1;  // >65,535 moves is a lot of moves
+
+public:
+    Turn(Color active) : activeColor(active) {}
+    Turn(Color active, CastlingMask castlingAvailability)
+        : activeColor(active), castlingAvailability(castlingAvailability) {}
+    Turn(Color active, Square enPassantTarget)
+        : activeColor(active), enPassantTarget(enPassantTarget) {}
+
+    Color active() const { return activeColor; };
+    void setActive(Color active) { activeColor = active; };
+
+    CastlingMask castling() const { return castlingAvailability; }
+    void setCastling(CastlingMask castling) { castlingAvailability = castling; }
+
+    Square enPassant() const { return enPassantTarget; }
+    void setEnPassant(Square enPassant) { enPassantTarget = enPassant; }
+
+    uint8_t halfmove() const { return halfmoveClock; }
+    void setHalfmove(uint8_t halfmove) { halfmoveClock = halfmove; }
+
+    uint16_t fullmove() const { return fullmoveNumber; }
+    void setFullmove(uint16_t fullmove) { fullmoveNumber = fullmove; }
 };
 
 struct Position {
@@ -462,6 +484,6 @@ struct Position {
     static constexpr auto blackKingCastledKingSide = "g8"_sq;
 
     Board board;
-    Turn turn;
-    Color activeColor() const { return turn.activeColor; }
+    Turn turn = {Color::WHITE};
+    Color active() const { return turn.active(); }
 };

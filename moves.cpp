@@ -553,8 +553,8 @@ void findPawnCaptures(SearchState& state, const F& fun) {
     bool white = state.active() == Color::WHITE;
     const auto promo = white ? SquareSet::rank(kNumRanks - 1) : SquareSet::rank(0);
     auto free = !state.occupancy();
-    auto leftPawns = state.pawns & !SquareSet::file(0);
-    auto rightPawns = state.pawns & !SquareSet::file(7);
+    auto leftPawns = state.pawns - SquareSet::file(0);
+    auto rightPawns = state.pawns - SquareSet::file(7);
     auto left = (white ? leftPawns << 7 : leftPawns >> 9) & state.occupancy.theirs();
     auto right = (white ? rightPawns << 9 : rightPawns >> 7) & state.occupancy.theirs();
     auto piece = white ? Piece::P : Piece::p;
@@ -580,9 +580,9 @@ void findPawnCaptures(SearchState& state, const F& fun) {
 
 template <typename F>
 void findNonPawnMoves(const Board& board, SearchState& state, const F& fun) {
-    for (auto from : state.occupancy.ours() & !state.pawns) {
+    for (auto from : state.occupancy.ours() - state.pawns) {
         auto piece = board[from];
-        auto possibleSquares = movesTable.moves[index(piece)][from.index()] & !state.occupancy();
+        auto possibleSquares = movesTable.moves[index(piece)][from.index()] - state.occupancy();
         for (auto to : possibleSquares) {
             // Check for moving through pieces
             if (clearPath(state.occupancy(), from, to)) fun(piece, Move{from, to, Move::QUIET});
@@ -610,17 +610,17 @@ void findPromotionMoves(const Board& board, SearchState& state, const F& fun) {
 
 template <typename F>
 void findCastles(const Board& board, Occupancy occupancy, Turn turn, const F& fun) {
-    auto color = int(turn.activeColor);
+    auto color = int(turn.active());
     auto& info = castlingInfo[color];
 
     // Check for king side castling
-    if ((turn.castlingAvailability & info.kingSideMask) != CastlingMask::_) {
+    if ((turn.castling() & info.kingSideMask) != CastlingMask::_) {
         auto path = movesTable.castlingClear[color][index(MoveKind::KING_CASTLE)];
         if ((occupancy() & path).empty())
             fun(info.king, {info.kingFrom, info.kingToKingSide, MoveKind::KING_CASTLE});
     }
     // Check for queen side castling
-    if ((turn.castlingAvailability & info.queenSideMask) != CastlingMask::_) {
+    if ((turn.castling() & info.queenSideMask) != CastlingMask::_) {
         auto path = movesTable.castlingClear[color][index(MoveKind::QUEEN_CASTLE)];
         if ((occupancy() & path).empty())
             fun(info.king, Move{info.kingFrom, info.kingToQueenSide, MoveKind::QUEEN_CASTLE});
@@ -629,7 +629,7 @@ void findCastles(const Board& board, Occupancy occupancy, Turn turn, const F& fu
 
 template <typename F>
 void findNonPawnCaptures(const Board& board, SearchState& state, const F& fun) {
-    for (auto from : state.occupancy.ours() & !state.pawns) {
+    for (auto from : state.occupancy.ours() - state.pawns) {
         auto piece = board[from];
         auto possibleSquares =
             movesTable.captures[index(piece)][from.index()] & state.occupancy.theirs();
@@ -649,14 +649,15 @@ void findCaptures(const Board& board, SearchState& state, const F& fun) {
 
 template <typename F>
 void findEnPassant(const Board& board, Turn turn, const F& fun) {
-    auto enPassantTarget = turn.enPassantTarget;
-    if (turn.enPassantTarget == noEnPassantTarget) return;
+    auto enPassantTarget = turn.enPassant();
+    if (turn.enPassant() == noEnPassantTarget) return;
 
     // For a given en passant target, there are two potential from squares. If either or
     // both have a pawn of the active color, then capture is possible.
-    auto activeColor = turn.activeColor;
-    auto pawn = addColor(PieceType::PAWN, activeColor);
-    for (auto from : movesTable.enPassantFrom[int(activeColor)][enPassantTarget.file()])
+    auto active = turn.active();
+    auto pawn = addColor(PieceType::PAWN, active);
+
+    for (auto from : movesTable.enPassantFrom[int(active)][enPassantTarget.file()])
         if (board[from] == pawn) fun(pawn, {from, enPassantTarget, MoveKind::EN_PASSANT});
 }
 
@@ -749,23 +750,23 @@ CastlingMask castlingMask(Square from, Square to) {
 Turn applyMove(Turn turn, MoveWithPieces mwp) {
     // Update enPassantTarget
     // Set the en passant target if a pawn moves two squares forward, otherwise reset it.
-    turn.enPassantTarget = noEnPassantTarget;
+    turn.setEnPassant(noEnPassantTarget);
     auto move = mwp.move;
     if (move.kind() == MoveKind::DOUBLE_PAWN_PUSH) {
-        turn.enPassantTarget = {move.from().file(), (move.from().rank() + move.to().rank()) / 2};
+        turn.setEnPassant({move.from().file(), (move.from().rank() + move.to().rank()) / 2});
     }
     // Update castlingAvailability
-    turn.castlingAvailability &= ~castlingMask(move.from(), move.to());
+    turn.setCastling(turn.castling() & ~castlingMask(move.from(), move.to()));
 
     // Update halfMoveClock: reset on pawn advance or capture, else increment
-    ++turn.halfmoveClock;
-    if (type(mwp.piece) == PieceType::PAWN || isCapture(move.kind())) turn.halfmoveClock = 0;
+    turn.setHalfmove(turn.halfmove() + 1);
+    if (type(mwp.piece) == PieceType::PAWN || isCapture(move.kind())) turn.setHalfmove(0);
 
     // Update fullMoveNumber: increment after black's move
-    if (turn.activeColor == Color::BLACK) ++turn.fullmoveNumber;
+    if (turn.active() == Color::BLACK) turn.setFullmove(turn.fullmove() + 1);
 
-    // Update activeColor
-    turn.activeColor = !turn.activeColor;
+    // Update activeColorc
+    turn.setActive(!turn.active());
     return turn;
 }
 
@@ -895,12 +896,12 @@ bool mayHavePromoMove(Color side, Board& board, Occupancy occupancy) {
     SquareSet from;
     if (side == Color::WHITE) {
         from = SquareSet(0x00ff'0000'0000'0000ull) & occupancy.ours();
-        auto to = SquareSet(0xff00'0000'0000'0000ull) & !occupancy();
+        auto to = SquareSet(0xff00'0000'0000'0000ull) - occupancy();
         from &= to >> 8;
         pawn = Piece::P;
     } else {
         from = SquareSet(0x0000'0000'0000'ff00ull) & occupancy.ours();
-        auto to = SquareSet(0x0000'0000'0000'00ffull) & !occupancy();
+        auto to = SquareSet(0x0000'0000'0000'00ffull) - occupancy();
         from &= to << 8;
         pawn = Piece::p;
     }
@@ -924,7 +925,7 @@ void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun a
 
     // Check if the opponent may promote
     bool otherMayPromote = depthleft > options::promotionMinDepthLeft &&
-        mayHavePromoMove(!turn.activeColor, board, !state.occupancy);
+        mayHavePromoMove(!turn.active(), board, !state.occupancy);
 
     // Avoid horizon effect: don't promote in the last plies
     if (depthleft >= options::promotionMinDepthLeft) findPromotionMoves(board, state, doMove);

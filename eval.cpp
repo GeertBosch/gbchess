@@ -169,9 +169,8 @@ Score evaluateBoard(const Board& board, bool usePieceSquareTables) {
 }
 
 bool isInCheck(const Position& position) {
-    auto kingPos =
-        SquareSet::find(position.board, addColor(PieceType::KING, position.activeColor()));
-    return isAttacked(position.board, kingPos, Occupancy(position.board, position.activeColor()));
+    auto kingPos = SquareSet::find(position.board, addColor(PieceType::KING, position.active()));
+    return isAttacked(position.board, kingPos, Occupancy(position.board, position.active()));
 }
 
 bool isMate(const Position& position) {

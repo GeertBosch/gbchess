@@ -38,26 +38,26 @@ Turn parseTurn(std::stringstream ss) {
     ss >> activeColorStr >> castlingAvailabilityStr >> enPassantTargetStr >> halfmoveClockStr >>
         fullmoveNumberStr;
 
-    Turn turn;
-    turn.activeColor = activeColorStr == "b" ? Color::BLACK : Color::WHITE;
-    turn.castlingAvailability = CastlingMask::_;
+    Color active = activeColorStr == "b" ? Color::BLACK : Color::WHITE;
+    CastlingMask castling = CastlingMask::_;
     for (char ch : castlingAvailabilityStr) {
         switch (ch) {
-        case 'K': turn.castlingAvailability |= CastlingMask::K; break;
-        case 'Q': turn.castlingAvailability |= CastlingMask::Q; break;
-        case 'k': turn.castlingAvailability |= CastlingMask::k; break;
-        case 'q': turn.castlingAvailability |= CastlingMask::q; break;
+        case 'K': castling |= CastlingMask::K; break;
+        case 'Q': castling |= CastlingMask::Q; break;
+        case 'k': castling |= CastlingMask::k; break;
+        case 'q': castling |= CastlingMask::q; break;
         }
     }
+    Turn turn(active, castling);
 
     if (enPassantTargetStr != "-") {
         int file = enPassantTargetStr[0] - 'a';
         int rank = enPassantTargetStr[1] - '1';
-        turn.enPassantTarget = Square{file, rank};
+        turn.setEnPassant(Square{file, rank});
     }
 
-    turn.halfmoveClock = std::stoi(halfmoveClockStr);
-    turn.fullmoveNumber = std::stoi(fullmoveNumberStr);
+    turn.setHalfmove(std::stoi(halfmoveClockStr));
+    turn.setFullmove(std::stoi(fullmoveNumberStr));
     return turn;
 }
 
@@ -108,11 +108,11 @@ std::string to_string(const Board& board) {
 
 std::string to_string(const Turn& turn) {
     std::stringstream str;
-    str << to_string(turn.activeColor) << " ";
-    str << to_string(turn.castlingAvailability) << " ";
-    str << (turn.enPassantTarget.index() ? std::string(turn.enPassantTarget) : "-") << " ";
-    str << (int)turn.halfmoveClock << " ";
-    str << turn.fullmoveNumber;
+    str << to_string(turn.active()) << " ";
+    str << to_string(turn.castling()) << " ";
+    str << (turn.enPassant().index() ? std::string(turn.enPassant()) : "-") << " ";
+    str << (int)turn.halfmove() << " ";
+    str << turn.fullmove();
     return str.str();
 }
 

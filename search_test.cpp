@@ -230,14 +230,14 @@ int find(T t, std::string what) {
 
 using ScoreWithReason = std::pair<Score, std::string>;
 ScoreWithReason computeScore(Position position, MoveVector moves) {
-    Color active = position.activeColor();
+    Color active = position.active();
     std::string side = active == Color::WHITE ? "white" : "black";
     position = applyMoves(position, moves);
     auto score = search::quiesce(position, options::quiescenceDepth);
     assert(!isStalemate(position) || score == 0_cp);
     assert(!isCheckmate(position) || score == Score::min());
     if (isCheckmate(position)) score = -Score::mateIn((moves.size() + 1) / 2);
-    if (position.activeColor() != active) score = -score;
+    if (position.active() != active) score = -score;
 
     return {score, " (" + side + " side) \"" + fen::to_string(position) + "\""};
 }
@@ -397,7 +397,7 @@ int main(int argc, char* argv[]) {
     Position position = fen::parsePosition(fen);
 
     Score quiescenceEval = search::quiesce(position, options::quiescenceDepth);
-    if (position.turn.activeColor == Color::BLACK) quiescenceEval = -quiescenceEval;
+    if (position.active() == Color::BLACK) quiescenceEval = -quiescenceEval;
     std::cout << "Quiescence search: " << std::string(quiescenceEval) << " (white side)\n";
 
     if (depth) {

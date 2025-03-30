@@ -286,12 +286,12 @@ std::pair<UndoPosition, Score> makeMoveWithEval(Position& position, Move move, S
     auto change = prepareMove(position.board, move);
     UndoPosition undo;
     if (options::incrementalEvaluation) {
-        eval += evaluateMove(position.board, position.activeColor(), change, evalTable);
+        eval += evaluateMove(position.board, position.active(), change, evalTable);
         undo = makeMove(position, change, move);
-        assert(!debug || -eval == evaluateBoard(position.board, position.activeColor(), evalTable));
+        assert(!debug || -eval == evaluateBoard(position.board, position.active(), evalTable));
     } else {
         undo = makeMove(position, change, move);
-        eval = evaluateBoard(position.board, !position.activeColor(), evalTable);
+        eval = evaluateBoard(position.board, !position.active(), evalTable);
     }
     return {undo, eval};
 }
@@ -299,9 +299,8 @@ std::pair<UndoPosition, Score> makeMoveWithEval(Position& position, Move move, S
 bool isQuiet(Position& position, int depthleft) {
     if (isInCheck(position)) return false;
     if (depthleft <= options::promotionMinDepthLeft) return true;
-    if (mayHavePromoMove(!position.activeColor(),
-                         position.board,
-                         Occupancy(position.board, !position.activeColor())))
+    if (mayHavePromoMove(
+            !position.active(), position.board, Occupancy(position.board, !position.active())))
         return false;
     return true;
 }
@@ -336,7 +335,7 @@ Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depth
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     ++evalCount;
-    auto eval = evaluateBoard(position.board, position.activeColor(), evalTable);
+    auto eval = evaluateBoard(position.board, position.active(), evalTable);
     eval = quiesce(position, eval, alpha, beta, depthleft);
     if (eval.mate() && !isCheckmate(position)) eval = std::clamp(eval, -1000_cp, 1000_cp);
     return eval;
@@ -367,13 +366,13 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
     auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
 
     //  Forced moves don't count towards depth, but avoid infinite recursion
-    if (moveList.size() == 1 && position.turn.halfmoveClock < 50) ++depthleft;
+    if (moveList.size() == 1 && position.turn.halfmove() < 50) ++depthleft;
 
     // Need at least 4 half moves since the last irreversible move, to get to draw by repetition.
-    if (position.turn.halfmoveClock >= 4) {
-        if (position.turn.halfmoveClock >= 100) return {{}, Score()};  // Fifty-move rule
+    if (position.turn.halfmove() >= 4) {
+        if (position.turn.halfmove() >= 100) return {{}, Score()};  // Fifty-move rule
         // Three-fold repetition, note that the current position is not included in the count
-        if (repetitions.count(hash, position.turn.halfmoveClock - 1) >= 2) return {{}, Score()};
+        if (repetitions.count(hash, position.turn.halfmove() - 1) >= 2) return {{}, Score()};
     }
     repetitions.push_back(hash);
 
@@ -386,7 +385,7 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
 
         if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
         if (pv.score >= beta) {
-            int side = int(position.activeColor());
+            int side = int(position.active());
             if (!isCapture(move.kind()))
                 history[side][move.from().index()][move.to().index()] += depthleft * depthleft;
             break;
@@ -457,7 +456,7 @@ PrincipalVariation toplevelAlphaBeta(
         auto newVar = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), depthleft - 1);
         if (newVar.score > pv.score || !pv.front()) pv = {move, newVar};
         if (pv.score >= beta) {
-            int side = int(position.activeColor());
+            int side = int(position.active());
             history[side][move.from().index()][move.to().index()] += depthleft * depthleft;
             break;
         }
