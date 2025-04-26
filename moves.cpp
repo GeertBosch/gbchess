@@ -583,19 +583,19 @@ void findPawnPushes(SearchState& state, const F& fun) {
     const auto doublePushRank = white ? SquareSet::rank(3) : SquareSet::rank(kNumRanks - 1 - 3);
     const auto promo = white ? SquareSet::rank(kNumRanks - 1) : SquareSet::rank(0);
     auto free = !state.occupancy();
-    auto single = (white ? state.pawns << kNumRanks : state.pawns >> kNumRanks) & free;
-    auto double_ = (white ? single << kNumRanks : single >> kNumRanks) & free & doublePushRank;
+    auto singles = (white ? state.pawns << kNumRanks : state.pawns >> kNumRanks) & free;
+    auto doubles = (white ? singles << kNumRanks : singles >> kNumRanks) & free & doublePushRank;
     auto piece = white ? Piece::P : Piece::p;
-    for (auto to : single - promo)
+    for (auto to : singles - promo)
         fun(piece,
             Move{{to.file(), white ? to.rank() - 1 : to.rank() + 1}, to, MoveKind::QUIET_MOVE});
-    for (auto to : single& promo)
+    for (auto to : singles& promo)
         expandPromos(fun,
                      piece,
                      Move{{to.file(), white ? to.rank() - 1 : to.rank() + 1},
                           to,
                           MoveKind::QUEEN_PROMOTION});
-    for (auto to : double_)
+    for (auto to : doubles)
         fun(piece,
             Move{{to.file(), white ? to.rank() - 2 : to.rank() + 2},
                  to,
