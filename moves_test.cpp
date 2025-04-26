@@ -496,6 +496,28 @@ void testAllLegalCastling() {
     std::cout << "All legal castling tests passed!" << std::endl;
 }
 
+void testPinnedPieces() {
+    {
+        Board board = fen::parsePiecePlacement("rnb1kbnr/pp1ppppp/2p5/q7/8/PP6/2PPPPPP/RNBQKBNR");
+        Turn turn = Color::WHITE;
+        SearchState state(board, turn);
+        assert(state.pinned == "d2"_sq);
+    }
+    std::cout << "All pinned pieces tests passed!" << std::endl;
+}
+
+void testDoesNotCheck() {
+    {
+        // We may indicate en passent capture is available, even if it results in check.
+        // So test that we reject the move in this case.
+        Board board = fen::parsePiecePlacement("8/8/3p4/KPp4r/5R2/4P1k1/6P1/8");
+        Turn turn = {Color::WHITE, CastlingMask::_, "c6"_sq};
+        SearchState state(board, turn);
+        assert(!doesNotCheck(board, state, Move("b5"_sq, "c6"_sq, MoveKind::EN_PASSANT)));
+    }
+    std::cout << "All doesNotCheck tests passed!" << std::endl;
+}
+
 void testMakeAndUnmakeMove(Board& board, Move move) {
     auto originalBoard = board;
     auto activeColor = color(board[move.from()]);
@@ -996,6 +1018,8 @@ int main(int argc, char* argv[]) {
     testPossibleMoves();
     testPossibleCaptures();
     testOccupancy();
+    testDoesNotCheck();
+    testPinnedPieces();
     testAddAvailableMoves();
     testAddAvailableCaptures();
     testAddAvailableEnPassant();

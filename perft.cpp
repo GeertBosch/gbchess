@@ -25,6 +25,7 @@ uint64_t perft(Board& board, SearchState& state, int depth) {
         newState.kingSquare =
             *SquareSet::find(board, addColor(PieceType::KING, !state.active())).begin();
         newState.inCheck = isAttacked(board, newState.kingSquare, newState.occupancy);
+        newState.pinned = pinnedPieces(board, newState.occupancy, newState.kingSquare);
         nodes += perft(board, newState, depth);
     });
     return nodes;

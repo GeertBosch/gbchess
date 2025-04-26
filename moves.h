@@ -156,14 +156,12 @@ bool isAttacked(const Board& board, Square square, Occupancy occupancy);
 bool isAttacked(const Board& board, SquareSet squares, Occupancy occupancy);
 bool isAttacked(const Board& board, SquareSet squares, Color opponentColor);
 
+/** Returns the set of pieces that would result in the king being checked,
+    if the piece where to be removed from the board. */
+SquareSet pinnedPieces(const Board& board, Occupancy occupancy, Square kingSquare);
+
 struct SearchState {
-    SearchState(const Board& board, Turn turn)
-        : occupancy(Occupancy(board, turn.activeColor())),
-          pawns(SquareSet::find(board, addColor(PieceType::PAWN, turn.activeColor()))),
-          turn(turn),
-          kingSquare(
-              *SquareSet::find(board, addColor(PieceType::KING, turn.activeColor())).begin()),
-          inCheck(isAttacked(board, kingSquare, occupancy)) {}
+    SearchState(const Board& board, Turn turn);
     Color active() const { return turn.activeColor(); }
 
     Occupancy occupancy;
@@ -171,7 +169,13 @@ struct SearchState {
     Turn turn;
     Square kingSquare;
     bool inCheck;
+    SquareSet pinned;
 };
+
+/**
+ * Returns true if the given move does not leave the king in check.
+ */
+bool doesNotCheck(Board& board, const SearchState& state, Move move);
 
 /**
  * Returns the set of squares that needs to be empty for castling to be legal.

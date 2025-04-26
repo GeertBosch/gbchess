@@ -305,7 +305,7 @@ void MovesTable::initializePaths() {
     for (int from = 0; from < kNumSquares; ++from)
         for (int to = 0; to < kNumSquares; ++to)
             paths[from][to] = init::path(Square(from), Square(to));
-        }
+}
 
 void MovesTable::initializeCastlingMasks() {
     // Initialize castling masks and en passant from squares
@@ -324,8 +324,8 @@ void MovesTable::initializeEnPassantFrom() {
         for (int fromFile = 0; fromFile < kNumFiles; ++fromFile)
             enPassantFrom[color][fromFile] = {SquareSet::valid(fromRank, fromFile - 1) |
                                               SquareSet::valid(fromRank, fromFile + 1)};
-        }
     }
+}
 
 void MovesTable::initializeCompound() {
     using MK = MoveKind;
@@ -492,6 +492,64 @@ SquareSet SquareSet::occupancy(const Board& board, Color color) {
 SquareSet SquareSet::find(const Board& board, Piece piece) {
     return equalSet(board.squares(), piece, false);
 }
+
+struct PieceSet {
+    uint16_t pieces = 0;
+    PieceSet() = default;
+    PieceSet(Piece piece) : pieces(1 << index(piece)) {}
+    PieceSet(PieceType pieceType)
+        : pieces((1 << index(addColor(pieceType, Color::WHITE))) |
+                 (1 << index(addColor(pieceType, Color::BLACK)))) {}
+    constexpr PieceSet(uint16_t pieces) : pieces(pieces) {}
+    constexpr PieceSet operator|(PieceSet other) const { return PieceSet(pieces | other.pieces); }
+    bool has(Piece piece) const { return pieces & (1 << index(piece)); }
+};
+
+struct PinData {
+    SquareSet captures;
+    PieceSet pinningPieces;
+};
+
+SquareSet pinnedPieces(const Board& board,
+                       Occupancy occupancy,
+                       Square kingSquare,
+                       const PinData& pinData) {
+    SquareSet pinned;
+    for (auto pinner : pinData.captures & occupancy.theirs()) {
+        // Check if the pin is a valid sliding piece
+        if (!pinData.pinningPieces.has(board[pinner])) continue;
+
+        auto path = movesTable.paths[kingSquare.index()][pinner.index()];
+        auto pieces = occupancy() & path;
+        if (pieces.size() == 1) pinned.insert(pieces);
+    }
+    return pinned & occupancy.ours();
+}
+
+SquareSet pinnedPieces(const Board& board, Occupancy occupancy, Square kingSquare) {
+    // For the purpose of pinning, we only consider sliding pieces, not knights.
+    auto myColor = color(board[kingSquare]);
+
+    // Define pinning piece sets and corresponding capture sets
+    PinData pinData[] = {{movesTable.captures[index(Piece::R)][kingSquare.index()],
+                          PieceSet(PieceType::ROOK) | PieceSet(PieceType::QUEEN)},
+                         {movesTable.captures[index(Piece::B)][kingSquare.index()],
+                          PieceSet(PieceType::BISHOP) | PieceSet(PieceType::QUEEN)}};
+
+    auto pinned = SquareSet();
+
+    for (const auto& data : pinData) pinned |= pinnedPieces(board, occupancy, kingSquare, data);
+
+    return pinned;
+}
+
+SearchState::SearchState(const Board& board, Turn turn)
+    : occupancy(Occupancy(board, turn.activeColor())),
+      pawns(SquareSet::find(board, addColor(PieceType::PAWN, turn.activeColor()))),
+      turn(turn),
+      kingSquare(*SquareSet::find(board, addColor(PieceType::KING, turn.activeColor())).begin()),
+      inCheck(isAttacked(board, kingSquare, occupancy)),
+      pinned(pinnedPieces(board, occupancy, kingSquare)) {}
 
 bool clearPath(SquareSet occupancy, Square from, Square to) {
     auto path = movesTable.paths[from.index()][to.index()];
@@ -855,19 +913,19 @@ std::string toString(Occupancy occupancy) {
 SquareSet queensMove(Square from) {
     return movesTable.moves[index(Piece::Q)][from.index()];
 }
+}  // namespace
 bool doesNotCheck(Board& board, const SearchState& state, Move move) {
     auto [from, to, kind] = Move::Tuple(move);
 
     SquareSet checkSquares = state.kingSquare;
     if (from == state.kingSquare)
         checkSquares = isCastles(kind) ? SquareSet::ipath(from, to) : to;
-    else if (!queensMove(state.kingSquare).contains(from) && !state.inCheck)
+    else if (!state.pinned.contains(from) && !state.inCheck && kind != MoveKind::EN_PASSANT)
         return true;
-
     auto delta = movesTable.occupancyDelta[noPromo(kind)][from.index()][to.index()];
-    return !isAttacked(board, checkSquares, state.occupancy ^ delta);
+    auto check = isAttacked(board, checkSquares, state.occupancy ^ delta);
+    return !check;
 }
-}  // namespace
 
 bool mayHavePromoMove(Color side, Board& board, Occupancy occupancy) {
     Piece pawn;
