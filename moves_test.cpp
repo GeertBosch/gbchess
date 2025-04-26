@@ -417,7 +417,7 @@ void testAddAvailableMoves() {
         board["a4"_sq] = Piece::P;  // Block the pawn, so there's no two-square move
         MoveVector moves;
         Turn turn(Color::WHITE);
-        addAvailableMoves(moves, board, turn);
+        for_test::addAvailableMoves(moves, board, turn);
         assert(moves.size() == 2);
         assert(find(moves, Move("a2"_sq, "a3"_sq, Move::QUIET)));
         assert(find(moves, Move("a4"_sq, "a5"_sq, Move::QUIET)));
@@ -436,7 +436,7 @@ void testAddAvailableCaptures() {
         Board board = fen::parsePiecePlacement("r3kbnr/pP1qpppp/3p4/4N3/4P3/8/PPP2PPP/RNB1K2R");
         MoveVector captures;
         Turn turn(Color::WHITE);
-        addAvailableCaptures(captures, board, turn);
+        for_test::addAvailableCaptures(captures, board, turn);
         assert(captures.size() == 6);
         assert(find(captures, Move("e5"_sq, "d7"_sq, Move::CAPTURE)));
         assert(find(captures, Move("e5"_sq, "f7"_sq, Move::CAPTURE)));
@@ -454,7 +454,7 @@ void testAddAvailableEnPassant() {
         MoveVector moves;
         Turn turn(Color::BLACK, CastlingMask::_, "b3"_sq);
 
-        addAvailableEnPassant(moves, board, turn);
+        for_test::addAvailableEnPassant(moves, board, turn);
         assert(moves.size() == 1);
         assert(moves[0] == Move("a4"_sq, "b3"_sq, MoveKind::EN_PASSANT));
     }

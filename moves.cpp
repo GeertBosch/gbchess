@@ -661,20 +661,6 @@ void findEnPassant(const Board& board, Turn turn, const F& fun) {
         if (board[from] == pawn) fun(pawn, {from, enPassantTarget, MoveKind::EN_PASSANT});
 }
 
-void addAvailableMoves(MoveVector& moves, const Board& board, Turn turn) {
-    auto state = SearchState(board, turn);
-    findMoves(board, state, [&](Piece piece, Move move) { addMove(moves, piece, move); });
-}
-
-void addAvailableCaptures(MoveVector& captures, const Board& board, Turn turn) {
-    auto state = SearchState(board, turn);
-    findCaptures(board, state, [&](Piece piece, Move move) { addMove(captures, piece, move); });
-}
-
-void addAvailableEnPassant(MoveVector& captures, const Board& board, Turn turn) {
-    findEnPassant(board, turn, [&](Piece piece, Move move) { addMove(captures, piece, move); });
-}
-
 BoardChange prepareMove(Board& board, Move move) {
     // Lookup the compound move for the given move kind and target square. This breaks moves like
     // castling, en passant and promotion into a simple capture/move and a second move that can be a
@@ -971,3 +957,19 @@ MoveVector allLegalMovesAndCaptures(Turn turn, Board& board) {
         turn, board, [&](Board&, MoveWithPieces move) { legalMoves.emplace_back(move.move); });
     return legalMoves;
 }
+
+namespace for_test {
+void addAvailableMoves(MoveVector& moves, const Board& board, Turn turn) {
+    auto state = SearchState(board, turn);
+    findMoves(board, state, [&](Piece piece, Move move) { addMove(moves, piece, move); });
+}
+
+void addAvailableCaptures(MoveVector& captures, const Board& board, Turn turn) {
+    auto state = SearchState(board, turn);
+    findCaptures(board, state, [&](Piece piece, Move move) { addMove(captures, piece, move); });
+}
+
+void addAvailableEnPassant(MoveVector& captures, const Board& board, Turn turn) {
+    findEnPassant(board, turn, [&](Piece piece, Move move) { addMove(captures, piece, move); });
+}
+}  // namespace for_test
