@@ -217,14 +217,13 @@ SquareSet path(Square from, Square to) {
     int rankDiff = to.rank() - from.rank();
     int fileDiff = to.file() - from.file();
 
-    // Check if the move isn't horizontal, vertical, or diagonal
-    if (rankDiff != 0 && fileDiff != 0 && abs(rankDiff) != abs(fileDiff)) {
-        return path;  // It's not in straight line, thus no need to check further
-    }
+    // Check that the move is horizontal, vertical, or diagonal. If not, no path.
+    if (rankDiff && fileDiff && abs(rankDiff) != abs(fileDiff))
+        return {};  // It's not in straight line, thus no need to check further
 
     // Calculate the direction of movement for rank and file
-    int rankStep = (rankDiff != 0) ? rankDiff / abs(rankDiff) : 0;
-    int fileStep = (fileDiff != 0) ? fileDiff / abs(fileDiff) : 0;
+    int rankStep = rankDiff ? rankDiff / abs(rankDiff) : 0;
+    int fileStep = fileDiff ? fileDiff / abs(fileDiff) : 0;
 
     int rankPos = from.rank() + rankStep;
     int filePos = from.file() + fileStep;
@@ -303,12 +302,10 @@ void MovesTable::initializeOccupancyDeltas() {
 
 void MovesTable::initializePaths() {
     // Initialize paths
-    for (int from = 0; from < kNumSquares; ++from) {
-        for (int to = 0; to < kNumSquares; ++to) {
+    for (int from = 0; from < kNumSquares; ++from)
+        for (int to = 0; to < kNumSquares; ++to)
             paths[from][to] = init::path(Square(from), Square(to));
         }
-    }
-}
 
 void MovesTable::initializeCastlingMasks() {
     // Initialize castling masks and en passant from squares
@@ -324,12 +321,11 @@ void MovesTable::initializeEnPassantFrom() {
     // Initialize en passant from squares
     for (int color = 0; color < 2; ++color) {
         int fromRank = color == 0 ? kNumRanks - 4 : 3;  // skipping 3 ranks from either side
-        for (int fromFile = 0; fromFile < kNumFiles; ++fromFile) {
+        for (int fromFile = 0; fromFile < kNumFiles; ++fromFile)
             enPassantFrom[color][fromFile] = {SquareSet::valid(fromRank, fromFile - 1) |
                                               SquareSet::valid(fromRank, fromFile + 1)};
         }
     }
-}
 
 void MovesTable::initializeCompound() {
     using MK = MoveKind;
