@@ -46,8 +46,8 @@ public:
 
     static SquareSet find(const Board& board, Piece piece);
     static SquareSet rank(int rank) {  //
-        int shift = rank * 8;
-        uint64_t ret = 0xffull;
+        int shift = rank * kNumFiles;
+        uint64_t ret = (1ull << kNumFiles) - 1;
         ret <<= shift;
         return SquareSet(ret);
     }
@@ -188,32 +188,6 @@ SquareSet castlingPath(Color color, MoveKind side);
 Occupancy occupancyDelta(Move move);
 
 /**
- * Calculates all possible moves for a given chess piece on the board.
- * This function does not account for the legality of the move in terms of check conditions,
- * but merely provides possible moves based on the movement rules for each piece type.
- *
- * @param piece The type of the chess piece ('R', 'N', 'B', 'Q', 'K', or 'P' for white,
- *              'r', 'n', 'b', 'q', 'k', or 'p' for black).
- * @param from The starting square of the piece for which to calculate possible moves.
- * @return A set of squares to which the piece can potentially move.
- */
-SquareSet possibleMoves(Piece piece, Square from);
-
-/**
- * Calculates all possible capture moves for a given chess piece on the board.
- * This function focuses on the potential captures a piece can make, including pawn's
- * diagonal captures. It does not take into account en passant or legality in terms of
- * check conditions.
- *
- * @param piece The type of the chess piece ('R', 'N', 'B', 'Q', 'K', or 'P' for white,
- *              'r', 'n', 'b', 'q', 'k', or 'p' for black).
- * @param from The starting square of the piece for which to calculate possible capture moves.
- * @return A set of squares from which the piece can potentially make a capture.
- */
-
-SquareSet possibleCaptures(Piece piece, Square from);
-
-/**
  * Computes all legal moves from a given chess position. This function checks for moves
  * that do not leave or place the king of the active color in check, including the special
  * case of castling.
@@ -253,12 +227,10 @@ struct ParseError : public std::exception {
 /**
  * Parses a move string in UCI notation and returns a Move or MoveVector of the appropriate kind.
  * The UCI string is a 4 or 5 character string representing from/to squares and promotion piece, if
- * any. Returns the corresponding Move object, or an empty move if the string does not specify a
- * legal move. Throws a ParseError if the string is not a legal move for the position.
+ * any. Returns the corresponding Move object. Throws a ParseError if the string is not a legal move
+ * for the position.
  */
 Move parseUCIMove(Position position, const std::string& move);
-MoveVector parseUCIMoves(Position position, const std::vector<std::string>& moves);
-MoveVector parseUCIMoves(Position position, const std::string& moves);
 
 /**
  * Similar to above, but applies the move to a position and returns the updated position.
@@ -315,6 +287,21 @@ void applyMove(SearchState& state, MoveWithPieces mwp);
 CastlingMask castlingMask(Square from, Square to);
 
 namespace for_test {
+
+/**
+ * Returns a set of squares to which a piece can potentially move. This function does not account
+ * for the legality of the move in terms of check conditions and such, but merely provides possible
+ * moves based on the movement rules for each piece type.
+ */
+SquareSet possibleMoves(Piece piece, Square from);
+
+/**
+ * Returns a set of squares on which a piece can potentially make a capture. It does not take into
+ * account en passant or legality in terms of check conditions and such.
+ */
+
+SquareSet possibleCaptures(Piece piece, Square from);
+
 /**
  * This availableMoves function iterates over each square on the board. If a piece of the active
  * color is found, it calculates its possible moves using the possibleMoves function you already

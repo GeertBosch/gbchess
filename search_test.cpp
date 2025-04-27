@@ -350,10 +350,11 @@ void testFromStdIn(int depth) {
 
 void testBasicPuzzles() {
     {
-        auto puzfen = "4r3/1k6/pp3r2/1b2P2p/3R1p2/P1R2P2/1P4PP/6K1 w - - 0 35";
+        auto puzfen = "4r3/1k6/pp3P2/1b5p/3R1p2/P1R2P2/1P4PP/6K1 b - - 0 35";
         auto puzpos = fen::parsePosition(puzfen);
-        puzpos = applyUCIMove(puzpos, "e5f6");
-        auto puzmoves = parseUCIMoves(puzpos, "e8e1 g1f2 e1f1");
+        auto puzmoves = MoveVector{{"e8"_sq, "e1"_sq, MoveKind::QUIET_MOVE},
+                                   {"g1"_sq, "f2"_sq, MoveKind::QUIET_MOVE},
+                                   {"e1"_sq, "f1"_sq, MoveKind::QUIET_MOVE}};
         assert(doPuzzle("000Zo, ranking 1311", puzpos, puzmoves, 5) == NO_ERROR);
     }
 
@@ -364,7 +365,6 @@ void testBasicPuzzles() {
 bool isAllDigits(std::string number) {
     return !number.empty() && std::all_of(number.begin(), number.end(), ::isdigit);
 }
-
 
 }  // namespace
 

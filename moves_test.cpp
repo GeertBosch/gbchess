@@ -8,6 +8,8 @@
 #include "moves.h"
 #include "options.h"
 
+using namespace for_test;
+
 std::string toString(SquareSet squares) {
     std::string str;
     for (Square sq : squares) {

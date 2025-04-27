@@ -15,7 +15,7 @@ DBGOBJ=build/dbg
 calc_objs=$(patsubst %.cpp,${$(1)OBJ}/%.o,$(2))
 calc_deps=${calc_objs:.o=.d}
 
-all: test perft-test mate123 mate45 evals puzzles
+all: debug test build perft-test mate123 mate45 puzzles evals
 	@echo "All tests passed!"
 
 -include $(call calc_deps,OPT,$(wildcard *.cpp))

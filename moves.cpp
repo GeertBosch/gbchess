@@ -560,13 +560,6 @@ void addMove(MoveVector& moves, Piece piece, Move move) {
     moves.emplace_back(move);
 }
 
-SquareSet possibleMoves(Piece piece, Square from) {
-    return movesTable.moves[index(piece)][from.index()];
-}
-SquareSet possibleCaptures(Piece piece, Square from) {
-    return movesTable.captures[index(piece)][from.index()];
-}
-
 Occupancy occupancyDelta(Move move) {
     return movesTable.occupancyDelta[noPromo(move.kind())][move.from().index()][move.to().index()];
 }
@@ -858,56 +851,9 @@ Move parseUCIMove(Position position, const std::string& move) {
     throw ParseError("Invalid UCI move: " + move);
 }
 
-namespace {
-std::vector<std::string> split(std::string line, char delim) {
-    std::vector<std::string> res;
-    std::string word;
-    for (auto c : line) {
-        if (c == delim) {
-            res.emplace_back(std::move(word));
-            word = "";
-        } else {
-            word.push_back(c);
-        }
-    }
-    if (word.size()) res.emplace_back(std::move(word));
-    return res;
-}
-}  // namespace
-
-MoveVector parseUCIMoves(Position position, const std::vector<std::string>& moves) {
-    MoveVector vector;
-    for (auto uci : moves)
-        position = applyMove(position, vector.emplace_back(parseUCIMove(position, uci)));
-
-    return vector;
-}
-
-MoveVector parseUCIMoves(Position position, const std::string& moves) {
-    return parseUCIMoves(position, split(moves, ' '));
-}
-
 Position applyUCIMove(Position position, const std::string& move) {
     return applyMove(position, parseUCIMove(position, move));
 }
-
-namespace {
-std::string toString(SquareSet squares) {
-    std::string str;
-    for (Square sq : squares) {
-        str += static_cast<std::string>(sq);
-        str += " ";
-    }
-    if (!squares.empty()) str.pop_back();  // Remove the last space
-    return str;
-}
-std::string toString(Occupancy occupancy) {
-    return "{ " + toString(occupancy.ours()) + ", " + toString(occupancy.theirs()) + " }";
-}
-SquareSet queensMove(Square from) {
-    return movesTable.moves[index(Piece::Q)][from.index()];
-}
-}  // namespace
 
 bool doesNotCheck(Board& board, const SearchState& state, Move move) {
     auto [from, to, kind] = Move::Tuple(move);
@@ -1008,6 +954,13 @@ MoveVector allLegalMovesAndCaptures(Turn turn, Board& board) {
 }
 
 namespace for_test {
+SquareSet possibleMoves(Piece piece, Square from) {
+    return movesTable.moves[index(piece)][from.index()];
+}
+SquareSet possibleCaptures(Piece piece, Square from) {
+    return movesTable.captures[index(piece)][from.index()];
+}
+
 void addAvailableMoves(MoveVector& moves, const Board& board, Turn turn) {
     auto state = SearchState(board, turn);
     findMoves(board, state, [&](Piece piece, Move move) { addMove(moves, piece, move); });

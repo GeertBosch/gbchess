@@ -15,10 +15,10 @@ constexpr bool debug = 1;
 constexpr bool debug = 0;
 #endif
 
-#define dassert(condition) \
-    if constexpr (debug) { \
-        assert(condition); \
-    }
+#define dassert(condition)                      \
+    {                                           \
+        if constexpr (debug) assert(condition); \
+    };
 
 static constexpr uint8_t kNumFiles = 8, kNumRanks = 8;
 static constexpr uint8_t kNumSquares = kNumFiles * kNumRanks;
