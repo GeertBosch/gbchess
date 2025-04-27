@@ -1,0 +1,12 @@
+{
+    "svg.preview.background": "white",
+    "makefile.configureOnOpen": false,
+    "sarif-viewer.connectToGithubCodeScanning": "off",
+    "makefile.launchConfigurations": [
+        {
+            "cwd": "/Users/bosch/gbchess",
+            "binaryPath": "/Users/bosch/gbchess/uci-test",
+            "binaryArgs": []
+        }
+    ]
+}

@@ -1,0 +1,2 @@
+position fen "5r1k/5rp1/p7/1b2B2p/1P1P1Pq1/2R3Q1/P3p1P1/2R3K1 b - - 1 41"
+go depth 3 wait

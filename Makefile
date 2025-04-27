@@ -131,9 +131,9 @@ evals: eval-test ${EVALS} .PHONY
 
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:
-	@echo Excluding Tests
+	@echo "\n*** Excluding Tests ***\n"
 	cloc --by-percent cmb `find . -name \*.cpp -o -name \*.h | egrep -v '_test[.]|debug'`
-	@echo Just Tests
+	@echo "\n*** Just Tests ***\n"
 	cloc --by-percent cmb `find . -name \*.cpp -o -name \*.h | egrep '_test[.]|debug'`
 
 # The following are well known perft positions, see https://www.chessprogramming.org/Perft_Results

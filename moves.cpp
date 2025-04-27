@@ -855,7 +855,7 @@ Move parseUCIMove(Position position, const std::string& move) {
     for (auto m : moves)
         if (std::string(m) == move) return m;
 
-    return Move();
+    throw ParseError("Invalid UCI move: " + move);
 }
 
 namespace {
@@ -875,16 +875,10 @@ std::vector<std::string> split(std::string line, char delim) {
 }
 }  // namespace
 
-Move check(Move move, const std::string& uci) {
-    if (!move) throw ParseError("Invalid UCI move: " + uci);
-    return move;
-}
-
 MoveVector parseUCIMoves(Position position, const std::vector<std::string>& moves) {
     MoveVector vector;
     for (auto uci : moves)
-        position =
-            applyMove(position, vector.emplace_back(check(parseUCIMove(position, uci), uci)));
+        position = applyMove(position, vector.emplace_back(parseUCIMove(position, uci)));
 
     return vector;
 }
@@ -894,7 +888,7 @@ MoveVector parseUCIMoves(Position position, const std::string& moves) {
 }
 
 Position applyUCIMove(Position position, const std::string& move) {
-    return applyMove(position, check(parseUCIMove(position, move), move));
+    return applyMove(position, parseUCIMove(position, move));
 }
 
 namespace {
@@ -914,6 +908,7 @@ SquareSet queensMove(Square from) {
     return movesTable.moves[index(Piece::Q)][from.index()];
 }
 }  // namespace
+
 bool doesNotCheck(Board& board, const SearchState& state, Move move) {
     auto [from, to, kind] = Move::Tuple(move);
 
