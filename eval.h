@@ -14,11 +14,16 @@
  *  position is even.
  */
 class Score {
+protected:
     using value_type = int16_t;
-    value_type value = 0;  // centipawns
     constexpr Score(unsigned long long value) : value(value) {
         assert(value <= std::numeric_limits<value_type>::max());
     }
+
+    constexpr value_type operator()() const { return value; }
+
+private:
+    value_type value = 0;  // centipawns
     constexpr Score(value_type value) : value(value) { this->value = check(value); }
 
     static constexpr value_type check(value_type value) {
@@ -79,6 +84,46 @@ public:
 constexpr Score operator"" _cp(unsigned long long value) {
     return Score(value);
 }
+
+class OptionalScore {
+    struct Optional : public Score {
+        static constexpr value_type None = std::numeric_limits<Score::value_type>::max();
+        Optional() : Score(static_cast<unsigned long long>(None)) {}  // None is the max value
+        Optional(Score value) : Score(value) {}
+        operator bool() const { return (*this)() != None; }
+    };
+    Optional value;
+
+public:
+    OptionalScore() = default;
+    OptionalScore(Score value) : value(value) {}
+    Score operator*() const {
+        assert(value);
+        return value;
+    }
+    // Add arrow operator to access the value
+    Score* operator->() {
+        assert(value);
+        return &value;
+    }
+    const Score* operator->() const {
+        assert(value);
+        return &value;
+    }
+    operator bool() const { return value; }
+    OptionalScore& operator=(Score rhs) {
+        value = rhs;
+        return *this;
+    }
+    OptionalScore& operator=(OptionalScore rhs) {
+        value = rhs.value;
+        return *this;
+    }
+    OptionalScore& operator=(std::nullptr_t) {
+        value = Optional();
+        return *this;
+    }
+};
 
 using SquareTable = std::array<Score, kNumSquares>;
 SquareTable operator+(SquareTable lhs, Score rhs);
