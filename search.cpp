@@ -1,6 +1,8 @@
+#include "common.h"
 #include <chrono>
 #include <iostream>
 #include <sstream>
+#include <sys/types.h>
 #include <vector>
 
 #include "eval.h"
@@ -22,6 +24,10 @@ using clock = high_resolution_clock;
 using timepoint = clock::time_point;
 uint64_t searchEvalCount = 0;  // copy of evalCount at the start of the search
 timepoint searchStartTime = {};
+
+std::string pct(uint64_t some, uint64_t all) {
+    return " " + std::to_string((some * 100) / all) + "%";
+}
 
 /**
  * The transposition table is a hash table that stores the best move found for a position, so it can
@@ -150,6 +156,77 @@ struct TranspositionTable {
 
 size_t history[2][kNumSquares][kNumSquares] = {0};
 
+struct QuiescenceCache {
+    using Counter = uint64_t;
+    using Hash = uint64_t;
+    constexpr static size_t kQsCacheSize = options::quiescenceCacheSize;
+    using Entry = std::pair<Hash, Score>;
+    Entry entries[kQsCacheSize];
+    Counter count = 0;
+    Counter collisions = 0;
+    mutable Counter calls = 0;
+    mutable Counter hits = 0;
+    mutable Counter misses = 0;
+
+    constexpr QuiescenceCache() : entries{} {
+        for (auto& entry : entries) entry = {0, Score::min()};
+        count = collisions = calls = hits = misses = 0;
+    }
+    static constexpr size_t size() { return kQsCacheSize; }
+    static Hash hash(const Position& position) {
+        if constexpr (size() == 0) return 0;
+        return ::Hash(position)();
+    }
+
+    void reset() { QuiescenceCache(); }
+
+    void insert(Hash hash, Score score) {
+        if constexpr (size()) {
+            ++count;
+            auto& entry = entries[hash % kQsCacheSize];
+            if (entry.first == hash) {
+                ++hits;
+                return;
+            }
+            ++collisions;
+            entry = {hash, score};
+        }
+    }
+
+    OptionalScore operator[](Hash hash) {
+        if constexpr (size() == 0) return {};
+
+        ++calls;
+        ++hits;
+        auto& entry = entries[hash % size()];
+        if (entry.first == hash) return entry.second;
+
+        --hits;
+        ++misses;
+        return {};
+    }
+
+    void printStats() {
+        if constexpr (size() == 0) return;
+        std::cout << "\nQuiescence cache stats:\n";
+
+        uint64_t used = 0;
+        for (auto entry : entries)
+            if (entry.first) ++used;
+
+        assert(calls == hits + misses);
+
+        if (options::quiescenceCacheDebug) {
+            std::cout << "  entries: " << count << "\n";
+            std::cout << "  used: " << used << "\n";
+            std::cout << "  collisions: " << collisions << "\n";
+            std::cout << "  calls: " << calls << "\n";
+            std::cout << "  hits: " << hits << "\n";
+            std::cout << "  misses: " << misses << "\n";
+        }
+    }
+} quiescenceCache;
+
 /**
  * The repetition table stores the hashes of all positions played so far in the game, so we can
  * detect repetitions and apply the rule that a third repetition is a draw.
@@ -243,31 +320,33 @@ MoveIt sortTransposition(const Position& position, Hash hash, MoveIt begin, Move
     return begin;
 }
 
+bool less(const Board& board, Move a, Move b) {
+    // For non-captures, sort by history score
+    if (!isCapture(a.kind()))
+        return options::historyStore ? score(board, a) > score(board, b) : false;
+
+    // Most valuable victims first
+    auto ato = board[a.to()];
+    auto bto = board[b.to()];
+    if (bto < ato) return true;
+    if (ato < bto) return false;
+
+    // Least valuable attackers next
+    auto afrom = board[a.from()];
+    auto bfrom = board[b.from()];
+    if (afrom < bfrom) return true;
+    if (bfrom < afrom) return false;
+
+    // Otherwise, sort by move kind, highest first
+    return b.kind() < a.kind();
+}
+
 /**
  * Sorts the moves in the range [begin, end) in place, so that the capture come before
  * non-captures, and captures are sorted by victim value, attacker value, and move kind.
  */
 MoveIt sortCaptures(const Position& position, MoveIt begin, MoveIt end) {
-    std::sort(begin, end, [&board = position.board](Move a, Move b) {
-        // For non-captures, sort by history score
-        if (!isCapture(a.kind()))
-            return options::historyStore ? score(board, a) > score(board, b) : false;
-
-        // Most valuable victims first
-        auto ato = board[a.to()];
-        auto bto = board[b.to()];
-        if (bto < ato) return true;
-        if (ato < bto) return false;
-
-        // Least valuable attackers next
-        auto afrom = board[a.from()];
-        auto bfrom = board[b.from()];
-        if (afrom < bfrom) return true;
-        if (bfrom < afrom) return false;
-
-        // Otherwise, sort by move kind, highest first
-        return b.kind() < a.kind();
-    });
+    std::sort(begin, end, [&board = position.board](Move a, Move b) { return less(board, a, b); });
 
     return begin;
 }
@@ -305,7 +384,7 @@ bool isQuiet(Position& position, int depthleft) {
     return true;
 }
 
-Score quiesce(Position& position, Score alpha, Score beta, int depthleft);
+
 Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depthleft) {
     Score stand_pat = eval;
 
@@ -318,9 +397,7 @@ Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depth
     // The moveList includes moves needed to get out of check; an empty list means mate
     auto moveList = allLegalQuiescentMoves(position.turn, position.board, depthleft);
     if (moveList.empty() && isInCheck(position)) return Score::min();
-
-    sortMoves(position, moveList.begin(), moveList.end());
-
+    sortCaptures(position, moveList.begin(), moveList.end());
     for (auto move : moveList) {
         // Compute the change to the board and evaluation that results from the move
         auto [undo, newEval] = makeMoveWithEval(position, move, eval);
@@ -335,9 +412,14 @@ Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depth
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     ++evalCount;
+    auto hash = QuiescenceCache::hash(position);
+    if (auto score = quiescenceCache[hash]) return *score;
+
     auto eval = evaluateBoard(position.board, position.active(), evalTable);
     eval = quiesce(position, eval, alpha, beta, depthleft);
     if (eval.mate() && !isCheckmate(position)) eval = std::clamp(eval, -1000_cp, 1000_cp);
+
+    quiescenceCache.insert(hash, eval);
     return eval;
 }
 
@@ -515,6 +597,7 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
     evalTable = EvalTable{position.board, true};
     transpositionTable.clear();
     repetitions.hashes.clear();
+    quiescenceCache.reset();
     std::fill(&history[0][0][0], &history[0][0][0] + sizeof(history) / sizeof(history[0][0][0]), 0);
     searchEvalCount = evalCount;
     searchStartTime = clock::now();
@@ -528,6 +611,9 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
     auto pv = options::iterativeDeepening ? iterativeDeepening(position, maxdepth, info)
                                           : toplevelAlphaBeta(position, maxdepth, info);
     repetitions.pop_back();
+
+    if (options::quiescenceCacheDebug) quiescenceCache.printStats();
+
     return pv;
 }
 
