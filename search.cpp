@@ -475,7 +475,19 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, Depth 
         ++totalMovesEvaluated;  // Increment total moves evaluated
         ++moveCount;
         auto newPosition = applyMove(position, move);
-        auto newVar = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), depth + 1);
+        auto newAlpha = std::max(alpha, pv.score);
+
+        // Apply Late Move Reduction (LMR)
+        bool applyLMR = options::lateMoveReductions && depth.current > 1 && depth.left > 2 &&
+            moveCount > 2 && isQuiet(newPosition, depth.left);
+
+        // Perform a reduced-depth search
+        auto newVar = -alphaBeta(
+            newPosition, -beta, -newAlpha, {depth.current + 1, depth.left - 1 - applyLMR});
+
+        // Re-search at full depth if the reduced search fails high
+        if (applyLMR && newVar.score > alpha)
+            newVar = -alphaBeta(newPosition, -beta, -newAlpha, {depth.current + 1, depth.left - 1});
 
         if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
         if (pv.score >= beta) {
