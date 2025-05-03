@@ -429,19 +429,25 @@ Score quiesce(Position& position, int depthleft) {
     return search::quiesce(position, Score::min(), Score::max(), depthleft);
 }
 
+struct Depth {
+    int current;
+    int left;
+    Depth operator+(int i) const { return {current + i, left - i}; }
+};
+
 /**
  * The alpha-beta search algorithm with fail-soft negamax search.
  * The alpha represents the best score that the maximizing player can guarantee at the current
  * level, and beta the best score that the minimizing player can guarantee. The function returns
  * the best score that the current player can guarantee, assuming the opponent plays optimally.
  */
-PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
-    if (depthleft == 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
+PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, Depth depth) {
+    if (depth.left <= 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
 
     Hash hash(position);
 
     // Check the transposition table, which may tighten one or both search bounds
-    transpositionTable.refineAlphaBeta(hash, depthleft, alpha, beta);
+    transpositionTable.refineAlphaBeta(hash, depth.left, alpha, beta);
 
     // TODO: Figure out if we can return more of a PV here
     if (alpha >= beta)
@@ -449,8 +455,8 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
 
     auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
 
-    //  Forced moves don't count towards depth, but avoid infinite recursion
-    if (moveList.size() == 1 && position.turn.halfmove() < 50) ++depthleft;
+    // Forced moves don't count towards depth, but avoid infinite recursion
+    if (moveList.size() == 1 && position.turn.halfmove() < 50) ++depth.left;
 
     // Need at least 4 half moves since the last irreversible move, to get to draw by repetition.
     if (position.turn.halfmove() >= 4) {
@@ -469,13 +475,14 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
         ++totalMovesEvaluated;  // Increment total moves evaluated
         ++moveCount;
         auto newPosition = applyMove(position, move);
-        auto newVar = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), depthleft - 1);
+        auto newVar = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), depth + 1);
 
         if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
         if (pv.score >= beta) {
+            ++betaCutoffMoves;  // Increment beta cutoff moves
             int side = int(position.active());
             if (!isCapture(move.kind()))
-                history[side][move.from().index()][move.to().index()] += depthleft * depthleft;
+                history[side][move.from().index()][move.to().index()] += depth.left * depth.left;
             break;
         }
     }
@@ -486,7 +493,7 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
     TranspositionTable::EntryType type = TranspositionTable::EXACT;
     if (pv.score <= alpha) type = TranspositionTable::UPPERBOUND;
     if (pv.score >= beta) type = TranspositionTable::LOWERBOUND;
-    transpositionTable.insert(hash, {pv.front(), pv.score}, depthleft, type);
+    transpositionTable.insert(hash, {pv.front(), pv.score}, depth.left, type);
 
     return pv;
 }
@@ -528,6 +535,7 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
 PrincipalVariation toplevelAlphaBeta(
     Position& position, Score alpha, Score beta, int depthleft, InfoFn info) {
     if (depthleft <= 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
+    Depth depth = {0, depthleft};
 
     // No need to check the transposition table here, as we're at the top level
 
@@ -541,7 +549,7 @@ PrincipalVariation toplevelAlphaBeta(
     for (auto move : moveList) {
         if (currmoveInfo(info, depthleft, move, ++currmovenumber)) break;
         auto newPosition = applyMove(position, move);
-        auto newVar = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), depthleft - 1);
+        auto newVar = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), depth + 1);
         if (newVar.score > pv.score || !pv.front()) pv = {move, newVar};
         if (pv.score >= beta) {
             int side = int(position.active());
