@@ -299,6 +299,8 @@ int score(const Board& board, Move move) {
         (isCapture(move.kind()) ? xx[index(type(piece))][index(type(board[move.to()]))]
                                 : history[int(side)][move.from().index()][move.to().index()]);
 }
+uint64_t totalMovesEvaluated = 0;
+uint64_t betaCutoffMoves = 0;
 }  // namespace
 
 /**
@@ -461,7 +463,11 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, int de
     sortMoves(position, hash, moveList.begin(), moveList.end());
 
     PrincipalVariation pv;
+    int moveCount = 0;
+
     for (auto move : moveList) {
+        ++totalMovesEvaluated;  // Increment total moves evaluated
+        ++moveCount;
         auto newPosition = applyMove(position, move);
         auto newVar = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), depthleft - 1);
 
@@ -613,6 +619,11 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
     repetitions.pop_back();
 
     if (options::quiescenceCacheDebug) quiescenceCache.printStats();
+
+    // Print beta cutoff statistics
+    if (totalMovesEvaluated > 0)
+        std::cout << "Beta cutoff moves: " << betaCutoffMoves << " / " << totalMovesEvaluated
+                  << pct(betaCutoffMoves, totalMovesEvaluated) << std::endl;
 
     return pv;
 }
