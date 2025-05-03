@@ -63,49 +63,15 @@ void perftWithDivide(Position position, int depth, int expectedCount) {
     }
 }
 
-/**
- *  Return whether the given string is a FEN string rather than a number. Doesn't check for
- *  validity, just that it can't possibly be a valid number.
- */
-bool maybeFEN(const std::string& str) {
-    return str.find('/') != std::string::npos;
-}
-
 bool maybeMove(const std::string& str) {
-    return !maybeFEN(str) && str[0] >= 'a' && str[0] <= 'h' && str[1] >= '1' && str[1] <= '8' &&
-        str[2] >= 'a' && str[2] <= 'h' && str[3] >= '1' && str[3] <= '8';
-}
-
-Move parseMove(const Board& board, const std::string& str) {
-    assert(str.length() >= 4);
-    auto from = Square(str[0] - 'a', str[1] - '1');
-    auto to = Square(str[2] - 'a', str[3] - '1');
-    auto piece = board[from];
-    auto kind = MoveKind::QUIET_MOVE;
-
-    if (board[to] != Piece::_) {
-        kind = MoveKind::CAPTURE;
-    }
-
-    if (piece == Piece::P || piece == Piece::p) {
-        if (std::abs(to.rank() - from.rank()) == 2) kind = MoveKind::DOUBLE_PAWN_PUSH;
-        if (to.file() != from.file() && board[to] == Piece::_) kind = MoveKind::EN_PASSANT;
-    }
-    if (piece == Piece::K || piece == Piece::k) {
-        if (to.file() - from.file() == 2)
-            kind = MoveKind::KING_CASTLE;
-        else if (from.file() - to.file() == 2)
-            kind = MoveKind::QUEEN_CASTLE;
-    }
-
-    return Move(from, to, kind);
+    return !fen::maybeFEN(str) && str[0] >= 'a' && str[0] <= 'h' && str[1] >= '1' &&
+        str[1] <= '8' && str[2] >= 'a' && str[2] <= 'h' && str[3] >= '1' && str[3] <= '8';
 }
 
 int main(int argc, char** argv) {
-
     std::vector<Position> positions;
 
-    while (argc >= 2 && maybeFEN(argv[1])) {
+    while (argc >= 2 && fen::maybeFEN(argv[1])) {
         positions.push_back(fen::parsePosition(argv[1]));
         argv++;
         argc--;
@@ -114,7 +80,7 @@ int main(int argc, char** argv) {
             argc--;
         }
         while (argc >= 2 && maybeMove(argv[1])) {
-            Move move = parseMove(positions.back().board, argv[1]);
+            Move move = parseUCIMove(positions.back(), argv[1]);
             auto pos = applyMove(positions.back(), move);
             std::cout << "applied move " << static_cast<std::string>(move) << std::endl;
             positions.pop_back();
