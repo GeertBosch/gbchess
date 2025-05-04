@@ -361,6 +361,51 @@ void testBasicPuzzles() {
     std::cout << "Basic puzzle test passed!\n";
 }
 
+void testMissingPV() {
+    // Test that the move for a missing PV is 0000, which indicates resignation
+    PrincipalVariation pv;
+    std::stringstream ss;
+    ss << pv.front();
+    assert(ss.str() == "0000");
+}
+
+void testCheckMated() {
+    // Test a position where black already is check mate
+    PrincipalVariation pv;
+    std::string fen = "1k6/1Q6/1K6/8/8/8/8/8 b - - 0 1";
+    Position position = fen::parsePosition(fen);
+    pv = search::computeBestMove(position, 1);
+    {
+        // Test the correct pv when we lost
+        std::stringstream ss;
+        ss << pv;
+        assert(ss.str() == "mate -1");
+    }
+    {
+        // Make sure we resign if we're check mated
+        std::stringstream ss;
+        ss << pv.front();
+        assert(ss.str() == "0000");
+    }
+}
+
+void testMateInOne() {
+    // Test a mate-in-1
+    PrincipalVariation pv;
+    std::string fen = "N6r/1p1k1ppp/2np4/b3p3/4P1b1/N1Q5/P4PPP/R3KB1R b KQ - 0 18";
+    Position position = fen::parsePosition(fen);
+    pv = search::computeBestMove(position, 1);
+    std::stringstream ss;
+    ss << pv;
+    assert(ss.str() == "mate 1 pv a5c3");
+}
+
+void testBasicSearch() {
+    testMissingPV();
+    testCheckMated();
+    testMateInOne();
+}
+
 // Returns true if and only if number consists exclusively of digits and  is not empty
 bool isAllDigits(std::string number) {
     return !number.empty() && std::all_of(number.begin(), number.end(), ::isdigit);
@@ -371,6 +416,7 @@ bool isAllDigits(std::string number) {
 int main(int argc, char* argv[]) {
     cmdName = argv[0];
 
+    testBasicSearch();
     testBasicPuzzles();
 
     if (argc < 2) return 0;
