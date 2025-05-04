@@ -181,12 +181,8 @@ private:
                         return stopping;
                     });
                 std::stringstream ss;
-                if (!pv.front()) {
-                    ss << "resign";
-                } else {
-                    ss << "bestmove " << pv.front();
-                    if (Move ponder = pv[1]) ss << " ponder " << ponder;
-                }
+                ss << "bestmove " << pv.front();
+                if (Move ponder = pv[1]) ss << " ponder " << ponder;
                 respond(ss.str());
             };
         startTime = clock::now();
