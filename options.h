@@ -22,6 +22,6 @@ constexpr size_t quiescenceCacheSize = 1ull << 18;        // Zero means not enab
 
 constexpr bool incrementalEvaluation = true;  // During quiescence, compute evaluation using deltas
 constexpr bool transpositionTableDebug = false;
-constexpr bool quiescenceCacheDebug = true;
+constexpr bool quiescenceCacheDebug = false;
 
 };  // namespace options

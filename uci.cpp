@@ -211,10 +211,15 @@ void UCIRunner::execute(std::string line) {
     } else if (command == "d") {
         out << fen::to_string(position) << "\n";
     } else if (command == "sleep") {
+        // Test command to sleep for a number of milliseconds
         int ms;
         in >> ms;
         std::cerr << "sleeping for " << ms << "ms\n";
         std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+        std::cerr << "waking from sleep after " << ms << "ms\n";
+    } else if (command == "#" || command == "expect") {
+        // This is to allow comments and expected output in UCI test scripts
+        std::cerr << line << "\n";
     } else {
         out << "Unknown command: " << command << "\n";
     }

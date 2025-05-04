@@ -69,6 +69,7 @@ clean: .PHONY
 	rm -f perft-{clang,gcc}-{sse2,emul}
 	rm -f *.profraw *.profdata *.gcda *.gcno lcov.info
 	rm -f game.??? log.??? players.dat # XBoard outputs
+	rm -f ut*.out
 	rm -rf *.dSYM
 
 fen-test: ${OPTOBJ}/fen.o
@@ -186,13 +187,22 @@ searches2: search-debug
 searches: search-test search-debug searches1 searches2
 	./search-test "r4rk1/p3ppbp/Pp3np1/3PpbB1/2q5/2N2P2/1PPQ2PP/3RR2K w - - 0 20" 1
 
-test: build debug searches evals
+ut%.out: ut%.in uci-debug
+	@./uci-debug $< 2>&1 | grep -wv "expect" > "$@"
+	@grep -w "^expect" $< | \
+	while read expect pattern ; do \
+		grep -He "$$pattern" "$@" || \
+			(echo "$@: no match for \"$$pattern\"" && cat "$@" && rm -f "$@" && false) ; \
+	done
+
+uci: $(patsubst ut%.in,ut%.out,$(wildcard ut*.in))
+
+test: build debug searches evals uci
 	rm -f coverage-*.profraw
 	./fen-test
 	./moves-test
 	./elo-test
 	./eval-test "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1"
-	./uci-test ut1.in | grep "bestmove g5f6 ponder"
 
 coverage: test
 	${LLVM-MERGE}
