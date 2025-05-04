@@ -161,16 +161,15 @@ struct QuiescenceCache {
     using Hash = uint64_t;
     constexpr static size_t kQsCacheSize = options::quiescenceCacheSize;
     using Entry = std::pair<Hash, Score>;
-    Entry entries[kQsCacheSize];
+    std::vector<Entry> entries{kQsCacheSize};
     Counter count = 0;
     Counter collisions = 0;
     mutable Counter calls = 0;
     mutable Counter hits = 0;
     mutable Counter misses = 0;
 
-    constexpr QuiescenceCache() : entries{} {
+    QuiescenceCache() {
         for (auto& entry : entries) entry = {0, Score::min()};
-        count = collisions = calls = hits = misses = 0;
     }
     static constexpr size_t size() { return kQsCacheSize; }
     static Hash hash(const Position& position) {
@@ -178,7 +177,7 @@ struct QuiescenceCache {
         return ::Hash(position)();
     }
 
-    void reset() { QuiescenceCache(); }
+    void reset() { *this = {}; }
 
     void insert(Hash hash, Score score) {
         if constexpr (size()) {
