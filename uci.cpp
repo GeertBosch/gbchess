@@ -57,84 +57,6 @@ MoveVector parseUCIMoves(Position position, const std::string& moves) {
     return parseUCIMoves(position, split(moves, ' '));
 }
 
-}  // namespace
-
-class UCIRunner {
-public:
-    UCIRunner(std::ostream& out, std::ostream& log) : out(out), log(log) {}
-    ~UCIRunner() { stop(); }
-
-    void execute(std::string line);
-
-private:
-    using UCICommandHandler = std::function<void(std::ostream&, UCIArguments args)>;
-
-    Position position = fen::parsePosition(fen::initialPosition);
-    MoveVector moves;
-    std::atomic_bool stopping = false;
-
-    void go(UCIArguments arguments) {
-        auto depth = options::defaultDepth;
-        auto wait = false;
-        for (size_t i = 0; i < arguments.size(); ++i) {
-            if (arguments[i] == "depth" && ++i < arguments.size()) {
-                depth = std::stoi(arguments[i]);
-                continue;
-            }
-            if (arguments[i] == "wait") {
-                wait = true;
-                continue;
-            }
-        }
-        stop();
-        auto search = [this, depth, pos = position, moves = moves] {
-            auto position = pos;  // need to copy the position
-            auto pv =
-                search::computeBestMove(position, depth, moves, [this](std::string info) -> bool {
-                    out << "info " << info << "\n";
-                    std::flush(out);
-                    if (&out != &log) {
-                        log << "info " << info << "\n";
-                        std::flush(log);
-                    }
-                    return stopping;
-                });
-            std::stringstream ss;
-            if (!pv.front()) {
-                ss << "resign\n";
-            } else {
-                ss << "bestmove " << pv.front();
-                if (Move ponder = pv[1]) ss << " ponder " << ponder;
-            }
-            ss << "\n";
-            out << ss.str();
-            std::flush(out);
-            if (&out != &log) {
-                log << ss.str();
-                std::flush(log);
-            }
-        };
-        if (wait) {
-            search();
-        } else {
-            thread = std::thread(search);
-        }
-    }
-
-    void stop() {
-        if (thread.joinable()) {
-            stopping = true;
-            std::flush(out);
-            thread.join();
-            stopping = false;
-        }
-    }
-
-    std::ostream& out;
-    std::ostream& log;
-    std::thread thread;
-};
-
 template <class InputIt, class OutputIt, class Joiner>
 OutputIt join(InputIt first, InputIt last, Joiner joiner, OutputIt d_first) {
     for (; first != last; ++first) {
@@ -155,27 +77,48 @@ OutputIt skip(InputIt first, InputIt last, size_t skip, OutputIt d_first) {
     return d_first;
 }
 
-void UCIRunner::execute(std::string line) {
-    auto in = std::stringstream(line);
-    std::string command;
-    in >> command;
 
-    if (command == "uci") {
-        out << "id name " << cmdName << "\n";
-        out << "id author " << authorName << "\n";
-        out << "uciok\n";
-    } else if (command == "isready") {
-        out << "readyok\n";
-    } else if (command == "quit") {
-        std::exit(0);
-    } else if (command == "ucinewgame") {
-    } else if (command == "position") {
-        std::string positionKind;
-        in >> positionKind >> std::ws;
-        UCIArguments posArgs;
+}  // namespace
+
+using namespace std::chrono;
+using namespace std::chrono_literals;
+using clock = steady_clock;
+
+class UCIRunner {
+public:
+    UCIRunner(std::ostream& out, std::ostream& log) : out(out), log(log) {}
+    ~UCIRunner() { stop(); }
+
+    void execute(std::string line);
+
+private:
+    using UCICommandHandler = std::function<void(std::ostream&, UCIArguments args)>;
+
+    Position position = fen::parsePosition(fen::initialPosition);
+    MoveVector moves;
+    std::atomic_bool stopping = false;
+    time_point<clock> startTime;
+
+    void respond(std::ostream& out, const std::string& response) {
+        out << response << "\n";
+        std::flush(out);
+    }
+
+    void respond(const std::string& response) {
+        respond(out, response);
+        if (&out == &log) return;  // don't log to log if it's the same as out
+        respond(log, response);
+    }
+
+    UCIArguments getUCIArguments(std::istream& in) {
+        UCIArguments args;
+        std::copy(std::istream_iterator<std::string>(in), {}, std::back_inserter(args));
+        return args;
+    }
+
+    void parsePosition(std::string positionKind, UCIArguments posArgs) {
         UCIArguments moveArgs;
         Position position;
-        std::copy(std::istream_iterator<std::string>(in), {}, std::back_inserter(posArgs));
         if (positionKind == "startpos") {
             position = fen::parsePosition(fen::initialPosition);
             moveArgs = std::move(posArgs);
@@ -202,10 +145,92 @@ void UCIRunner::execute(std::string line) {
 
         this->moves = parseUCIMoves(position, moveArgs);
         this->position = position;
+    }
+
+    void go(UCIArguments arguments) {
+        auto depth = options::defaultDepth;
+        auto movetime = options::defaultMoveTime;
+        auto wait = false;
+        for (size_t i = 0; i < arguments.size(); ++i) {
+            if (arguments[i] == "depth" && ++i < arguments.size()) {
+                depth = std::stoi(arguments[i]);
+                continue;
+            }
+            if (arguments[i] == "wait") {
+                wait = true;
+                continue;
+            }
+            if (arguments[i] == "movetime" && ++i < arguments.size()) {
+                movetime = std::stoi(arguments[i]);
+                continue;
+            }
+        }
+        stop();
+        auto search =
+            [this, depth, pos = position, moves = moves, movetime, &startTime = startTime]() {
+                auto position = pos;  // need to copy the position
+                auto pv = search::computeBestMove(
+                    position, depth, moves, [this, movetime, &startTime](std::string info) -> bool {
+                        auto elapsed =
+                            duration_cast<milliseconds>(clock::now() - startTime).count();
+                        respond("info " + info);
+                        if (elapsed > movetime) {
+                            stopping.store(true);
+                            respond("info string time exceeded " + std::to_string(elapsed) + "ms");
+                        }
+                        return stopping;
+                    });
+                std::stringstream ss;
+                if (!pv.front()) {
+                    ss << "resign";
+                } else {
+                    ss << "bestmove " << pv.front();
+                    if (Move ponder = pv[1]) ss << " ponder " << ponder;
+                }
+                respond(ss.str());
+            };
+        startTime = clock::now();
+        if (wait) {
+            search();
+        } else {
+            thread = std::thread(search);
+        }
+    }
+
+    void stop() {
+        if (thread.joinable()) {
+            stopping = true;
+            std::flush(out);
+            thread.join();
+            stopping = false;
+        }
+    }
+
+    std::ostream& out;
+    std::ostream& log;
+    std::thread thread;
+};
+
+void UCIRunner::execute(std::string line) {
+    auto in = std::stringstream(line);
+    std::string command;
+    in >> command;
+
+    if (command == "uci") {
+        out << "id name " << cmdName << "\n";
+        out << "id author " << authorName << "\n";
+        out << "uciok\n";
+    } else if (command == "isready") {
+        out << "readyok\n";
+    } else if (command == "quit") {
+        std::exit(0);
+    } else if (command == "ucinewgame") {
+    } else if (command == "position") {
+        std::string positionKind;
+        in >> positionKind >> std::ws;
+        parsePosition(positionKind, getUCIArguments(in));
     } else if (command == "go") {
-        UCIArguments args;
-        std::copy(std::istream_iterator<std::string>(in), {}, std::back_inserter(args));
-        go(args);
+        go(getUCIArguments(in));
     } else if (command == "stop") {
         stop();
     } else if (command == "d") {
