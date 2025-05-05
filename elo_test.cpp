@@ -39,7 +39,7 @@ void testWin25PercentAgainstOne() {
     }
 
     std::cout << "After winning 25% of " << kNumRounds << " rounds against a " << kOpponentRating
-              << " rated opponens: " << player() << " vs " << opponent() << "\n";
+              << " rated opponent: " << player() << " vs " << opponent() << "\n";
     // No ELO points should get lost
     assert(player() + opponent() == ELO::kInitialRating + kOpponentRating);
 

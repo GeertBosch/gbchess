@@ -68,7 +68,7 @@ struct TranspositionTable {
     uint64_t numMisses = 0;
 
     ~TranspositionTable() {
-        if (debug && numInserted) printStats();
+        if (debug && options::transpositionTableDebug) printStats();
     }
 
     Eval find(Hash hash) {
@@ -640,7 +640,7 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
     if (options::quiescenceCacheDebug) quiescenceCache.printStats();
 
     // Print beta cutoff statistics
-    if (totalMovesEvaluated > 0)
+    if (options::alphaBetaDebug && totalMovesEvaluated > 0)
         std::cout << "Beta cutoff moves: " << betaCutoffMoves << " / " << totalMovesEvaluated
                   << pct(betaCutoffMoves, totalMovesEvaluated) << std::endl;
 

@@ -103,10 +103,13 @@ void usage(std::string cmdName, std::string errmsg) {
     std::exit(1);
 }
 
+constexpr bool debugAnalysis = false;
+
 PrincipalVariation analyzePosition(Position position, int maxdepth) {
     auto pv = search::computeBestMove(position, maxdepth);
-    std::cout << "        analyzePosition \"" << fen::to_string(position) << "\" as " << pv.score
-              << ", move " << std::string(pv.front()) << "\n";
+    if (debugAnalysis)
+        std::cout << "        analyzePosition \"" << fen::to_string(position) << "\" as "
+                  << pv.score << ", move " << std::string(pv.front()) << "\n";
     return pv;
 }
 PrincipalVariation analyzeMoves(Position position, int maxdepth) {
@@ -115,18 +118,23 @@ PrincipalVariation analyzeMoves(Position position, int maxdepth) {
 
     if (maxdepth > 0) moves = allLegalMovesAndCaptures(position.turn, position.board);
 
-    std::cout << "Analyzing " << moves.size() << " moves from " << fen::to_string(position) << "\n";
+    if (debugAnalysis)
+        std::cout << "Analyzing " << moves.size() << " moves from " << fen::to_string(position)
+                  << "\n";
+
     if (moves.empty()) pv = analyzePosition(position, 0);
 
     for (auto move : moves) {
-        std::cout << "    Considering " << move << " depth " << maxdepth - 1 << "\n";
+        if (debugAnalysis)
+            std::cout << "    Considering " << move << " depth " << maxdepth - 1 << "\n";
         auto newPosition = applyMove(position, move);
         auto newVariation = PrincipalVariation{move, -analyzePosition(newPosition, maxdepth - 1)};
-        std::cout << "    Evaluated " << move << " as " << newVariation.score << "\n";
+        if (debugAnalysis)
+            std::cout << "    Evaluated " << move << " as " << newVariation.score << "\n";
 
         if (newVariation > pv) {
             pv = newVariation;
-            std::cout << "    New best move: " << (std::string)pv << "\n";
+            if (debugAnalysis) std::cout << "    New best move: " << (std::string)pv << "\n";
         }
     }
 
@@ -276,12 +284,16 @@ PuzzleError analyzePuzzleSolution(std::string puzzle,
                                   MoveVector got) {
     if (expected.front() == got.front()) return NO_ERROR;
 
-    std::cout << "\n" << puzzle << ": \"" << fen::to_string(position) << "\" " << expected << "\n";
     auto [gotScore, gotReason] = computeScore(position, got);
     auto [expectedScore, expectedReason] = computeScore(position, expected);
-    if (expectedScore.mate() && gotScore.mate() && expectedScore == gotScore) {
-        std::cout << "Note: Both " << expected.front() << " and " << got.front() << " lead to "
-                  << gotScore << "\n";
+    bool acceptableMate = expectedScore.mate() && gotScore.mate() && expectedScore == gotScore;
+    // If we have a real error, or if we are debugging, print the puzzle information
+    if (debugAnalysis || !acceptableMate)
+        std::cout << puzzle << ": \"" << fen::to_string(position) << "\" " << expected << "\n";
+    if (acceptableMate) {
+        if (debugAnalysis)
+            std::cout << "Note: Both " << expected.front() << " and " << got.front() << " lead to "
+                      << gotScore << "\n";
         return NO_ERROR;
     }
     auto evalError = gotScore >= expectedScore;
@@ -298,9 +310,7 @@ PuzzleError doPuzzle(std::string puzzle, Position position, MoveVector moves, in
                   << " (skipped)\n";
         return DEPTH_ERROR;  // Skip puzzles that are too deep
     }
-    std::cerr << puzzle << ": ";
-    PrincipalVariation pv;
-    printEvalRate([&]() { pv = search::computeBestMove(position, maxdepth); });
+    PrincipalVariation pv = search::computeBestMove(position, maxdepth);
     return analyzePuzzleSolution(puzzle, position, moves, pv.moves);
 }
 
@@ -358,7 +368,7 @@ void testBasicPuzzles() {
         assert(doPuzzle("000Zo, ranking 1311", puzpos, puzmoves, 5) == NO_ERROR);
     }
 
-    std::cout << "Basic puzzle test passed!\n";
+    if (debug) std::cout << "Basic puzzle test passed!\n";
 }
 
 void testMissingPV() {
@@ -404,6 +414,7 @@ void testBasicSearch() {
     testMissingPV();
     testCheckMated();
     testMateInOne();
+    if (debug) std::cout << "Basic search test passed!\n";
 }
 
 // Returns true if and only if number consists exclusively of digits and  is not empty

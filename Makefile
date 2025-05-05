@@ -70,6 +70,7 @@ clean: .PHONY
 	rm -f *.profraw *.profdata *.gcda *.gcno lcov.info
 	rm -f game.??? log.??? players.dat # XBoard outputs
 	rm -f ut*.out
+	rm -f puzzles.csv
 	rm -rf *.dSYM
 
 fen-test: ${OPTOBJ}/fen.o
@@ -110,7 +111,7 @@ perft-gcc-sse2: perft.cpp  moves.cpp fen.cpp *.h
 perft-gcc-emul: perft.cpp  moves.cpp fen.cpp *.h
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
 
-perft-emul:perft-clang-emul perft-gcc-emul .PHONY
+perft-emul: perft-clang-emul perft-gcc-emul .PHONY
 	./perft-clang-emul 5 4865609
 	./perft-gcc-emul 5 4865609
 perft-sse2: perft-clang-sse2 perft-gcc-sse2 .PHONY
@@ -124,8 +125,11 @@ mate123: search-test ${PUZZLES} .PHONY
 mate45: search-test ${PUZZLES} .PHONY
 	egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -51 | ./search-test 9
 
-puzzles: search-test ${PUZZLES} .PHONY
-	egrep -v "mateIn[12345]" ${PUZZLES} | head -61| ./search-test 6
+puzzles.csv: ${PUZZLES} Makefile
+	egrep -v "mateIn[12345]" ${PUZZLES} | head -61 > $@
+
+puzzles: puzzles.csv search-test .PHONY
+	./search-test 6 < $<
 
 evals: eval-test ${EVALS} .PHONY
 	./eval-test ${EVALS}
@@ -176,16 +180,24 @@ build: $(BUILD_TARGETS)
 #build: fen-test moves-test elo-test eval-test search-test uci-test
 
 searches1: search-debug
-	./search-debug "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 5
 	./search-debug "5r1k/pp4pp/5p2/1BbQp1r1/7K/7P/1PP3P1/3R3R b - - 3 26" 3
-	./search-debug "8/8/8/8/8/4bk1p/2R2Np1/6K1 b - - 7 62" 3
-	./search-debug "3r2k1/1p3ppp/pq1Q1b2/8/8/1P3N2/P4PPP/3R2K1 w - - 4 28" 3
 
-searches2: search-debug
-	./search-debug "8/1N3k2/6p1/8/2P3P1/pr6/R7/5K2 b - - 2 56" 5
+searches2: search-test
+	./search-test "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 5
 
-searches: search-test search-debug searches1 searches2
+searches3: search-test
+	./search-test "8/8/8/8/8/4bk1p/2R2Np1/6K1 b - - 7 62" 3
+
+searches4: search-test
+	./search-test "3r2k1/1p3ppp/pq1Q1b2/8/8/1P3N2/P4PPP/3R2K1 w - - 4 28" 3
+
+searches5: search-test
+	./search-test "8/1N3k2/6p1/8/2P3P1/pr6/R7/5K2 b - - 2 56" 5
+
+searches6: search-test
 	./search-test "r4rk1/p3ppbp/Pp3np1/3PpbB1/2q5/2N2P2/1PPQ2PP/3RR2K w - - 0 20" 1
+
+searches: searches1 searches2 searches3 searches4 searches5 searches6
 
 ut%.out: ut%.in uci-debug
 	@./uci-debug $< 2>&1 | grep -wv "expect" > "$@"

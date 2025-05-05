@@ -24,5 +24,6 @@ constexpr int defaultMoveTime = 8'000;                    // Max time for a move
 constexpr bool incrementalEvaluation = true;  // During quiescence, compute evaluation using deltas
 constexpr bool transpositionTableDebug = false;
 constexpr bool quiescenceCacheDebug = false;
+constexpr bool alphaBetaDebug = false;
 
 };  // namespace options
