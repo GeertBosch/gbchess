@@ -1,6 +1,5 @@
 #include "common.h"
 #include <chrono>
-#include <cmath>
 #include <iostream>
 #include <sstream>
 #include <sys/types.h>
@@ -430,10 +429,9 @@ Score quiesce(Position& position, int depthleft) {
 }
 
 struct Depth {
-    float current = 0;
-    float left = 0;
-    Depth(float current, float left) : current(current), left(left) {}
-    Depth operator+(float i) const { return {current + i, left - i}; }
+    int current;
+    int left;
+    Depth operator+(int i) const { return {current + i, left - i}; }
 };
 
 /**
@@ -455,12 +453,9 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, Depth 
         if (auto eval = transpositionTable.find(hash)) return {{eval.move}, alpha};
 
     auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
-    // Set listDepth to binary logarithm of the number of moves plus one, make more complex
-    // searches count as more depth
-    float listDepth = logb(moveList.size() + 1) * (5.0 / 16.0) + (1.0 / 8.0);
 
     // Forced moves don't count towards depth, but avoid infinite recursion
-    // if (moveList.size() == 1 && position.turn.halfmove() < 50) ++depth.left;
+    if (moveList.size() == 1 && position.turn.halfmove() < 50) ++depth.left;
 
     // Need at least 4 half moves since the last irreversible move, to get to draw by repetition.
     if (position.turn.halfmove() >= 4) {
@@ -486,12 +481,12 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, Depth 
             moveCount > 2 && isQuiet(newPosition, depth.left);
 
         // Perform a reduced-depth search
-        auto newVar =
-            -alphaBeta(newPosition, -beta, -newAlpha, depth + (listDepth - 0.5 * applyLMR));
+        auto newVar = -alphaBeta(
+            newPosition, -beta, -newAlpha, {depth.current + 1, depth.left - 1 - applyLMR});
 
         // Re-search at full depth if the reduced search fails high
         if (applyLMR && newVar.score > alpha)
-            newVar = -alphaBeta(newPosition, -beta, -newAlpha, depth + listDepth);
+            newVar = -alphaBeta(newPosition, -beta, -newAlpha, {depth.current + 1, depth.left - 1});
 
         if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
         if (pv.score >= beta) {
@@ -551,7 +546,7 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
 PrincipalVariation toplevelAlphaBeta(
     Position& position, Score alpha, Score beta, int depthleft, InfoFn info) {
     if (depthleft <= 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
-    Depth depth = {0.0, static_cast<float>(depthleft)};
+    Depth depth = {0, depthleft};
 
     // No need to check the transposition table here, as we're at the top level
 
