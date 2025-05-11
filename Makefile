@@ -65,6 +65,7 @@ ALLSRCS=$(wildcard *.cpp)
 clean: .PHONY
 	rm -fr build
 	rm -f *-debug *-test perft
+	rm -f *.log
 	rm -f core *.core puzzles.actual perf.data* *.ii *.bc *.s
 	rm -f perft-{clang,gcc}-{sse2,emul}
 	rm -f *.profraw *.profdata *.gcda *.gcno lcov.info
