@@ -310,6 +310,7 @@ PuzzleError doPuzzle(std::string puzzle, Position position, MoveVector moves, in
                   << " (skipped)\n";
         return DEPTH_ERROR;  // Skip puzzles that are too deep
     }
+    search::newGame();
     PrincipalVariation pv = search::computeBestMove(position, maxdepth);
     return analyzePuzzleSolution(puzzle, position, moves, pv.moves);
 }

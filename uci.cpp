@@ -221,6 +221,7 @@ void UCIRunner::execute(std::string line) {
     } else if (command == "quit") {
         std::exit(0);
     } else if (command == "ucinewgame") {
+        search::newGame();
     } else if (command == "position") {
         std::string positionKind;
         in >> positionKind >> std::ws;
@@ -252,6 +253,7 @@ void UCIRunner::execute(std::string line) {
 void enterUCI(std::istream& in, std::ostream& out, std::ostream& log) {
     UCIRunner runner(out, log);
     std::flush(log);
+    search::newGame();
     for (std::string line; std::getline(in, line);) {
         log << "UCI: " << line << "\n";
         std::flush(log);

@@ -123,10 +123,10 @@ mate123: search-test ${PUZZLES} .PHONY
 	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -1001 | ./search-test 5
 
 mate45: search-test ${PUZZLES} .PHONY
-	egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -51 | ./search-test 9
+	egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -101 | ./search-test 9
 
 puzzles.csv: ${PUZZLES} Makefile
-	egrep -v "mateIn[12345]" ${PUZZLES} | head -61 > $@
+	egrep -v "mateIn[12345]" ${PUZZLES} | head -101 > $@
 
 puzzles: puzzles.csv search-test .PHONY
 	./search-test 6 < $<

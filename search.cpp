@@ -111,6 +111,7 @@ struct TranspositionTable {
         }
     }
 
+
     void insert(Hash hash, Eval move, uint8_t depthleft, EntryType type) {
         if constexpr (kNumEntries == 0) return;
         auto idx = hash() % kNumEntries;
@@ -130,6 +131,15 @@ struct TranspositionTable {
             ++numOccupied;
 
         entry = Entry{hash, move, depthleft, type};
+    }
+
+    void insert(Hash hash, Eval move, uint8_t depthleft, Score alpha, Score beta) {
+        if (move.score > alpha && move.score < beta)
+            insert(hash, move, depthleft, TranspositionTable::EXACT);
+        else if (move.score <= alpha)
+            insert(hash, move, depthleft, TranspositionTable::UPPERBOUND);
+        else if (move.score >= beta)
+            insert(hash, move, depthleft, TranspositionTable::LOWERBOUND);
     }
 
     void clear() {
@@ -172,10 +182,6 @@ struct QuiescenceCache {
         for (auto& entry : entries) entry = {0, Score::min()};
     }
     static constexpr size_t size() { return kQsCacheSize; }
-    static Hash hash(const Position& position) {
-        if constexpr (size() == 0) return 0;
-        return ::Hash(position)();
-    }
 
     void reset() { *this = {}; }
 
@@ -230,24 +236,66 @@ struct QuiescenceCache {
  * The repetition table stores the hashes of all positions played so far in the game, so we can
  * detect repetitions and apply the rule that a third repetition is a draw.
  */
-struct Repetitions {
+class Repetitions {
     std::vector<Hash> hashes;
-    Repetitions() = default;
     void push_back(Hash hash) { hashes.push_back(hash); }
     void pop_back() { hashes.pop_back(); }
+    Hash back() const { return hashes.back(); }
 
     /**
      * Returns the number of occurrences in the game of a position with the same hash. Only
-     * considers up to halfMoveClock moves, as any capture or pawn move prevents repetition.
+     * considers up to halfmove moves, as any capture or pawn move prevents repetition.
      */
-    int count(Hash hash, int halfMoveClock) {
+    int count(Hash hash, int halfmove) {
         // When starting with some FEN game positions, we may not have all move history.
-        halfMoveClock = std::min(halfMoveClock, int(hashes.size()));
+        halfmove = std::min(halfmove, int(hashes.size()));
 
         int count = 0;
-        for (auto it = hashes.begin() + halfMoveClock; it != hashes.end(); ++it)
-            count += (*it == hash);
+        for (auto it = hashes.begin() + halfmove; it != hashes.end(); ++it) count += (*it == hash);
         return count;
+    }
+
+public:
+    Repetitions() = default;
+    void clear() { hashes.clear(); }
+
+    class State {
+        friend class Repetitions;
+        Repetitions& repetitions;
+        size_t count;
+        State(Repetitions& repetitions) : repetitions(repetitions), count(1) {};
+
+    public:
+        ~State() {
+            while (count--) repetitions.pop_back();
+        }
+
+        /**
+         * Returns true iff the state represents a game drawn by repetition or the fifty move rule
+         */
+        bool drawn(int halfmove) const {
+            // Need at least 4 half moves since the last irreversible move, to get to draw by
+            // repetition.
+            if (halfmove < 4) return false;
+            if (halfmove >= 100) return true;  // Fifty-move rule
+
+            // Check for three-fold repetition
+            return repetitions.count(repetitions.back(), halfmove) >= 3;
+        }
+    };
+
+    /**
+     * Enters a new position in the repetition table. The hash is the hash of the position. Returns
+     * a RAII State object that will remove the hash from the table when it goes out of scope. The
+     * state object reports whether the position is a draw by repetition.
+     */
+    [[nodiscard]] State enter(Hash hash) {
+        push_back(hash);
+        return State(*this);
+    }
+    void enter(State& state, Hash hash) {
+        push_back(hash);
+        ++state.count;
     }
 } repetitions;
 
@@ -413,7 +461,7 @@ Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depth
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     ++evalCount;
-    auto hash = QuiescenceCache::hash(position);
+    auto hash = Hash(position)();
     if (auto score = quiescenceCache[hash]) return *score;
 
     auto eval = evaluateBoard(position.board, position.active(), evalTable);
@@ -454,16 +502,12 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, Depth 
 
     auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
 
-    // Forced moves don't count towards depth, but avoid infinite recursion
-    if (moveList.size() == 1 && position.turn.halfmove() < 50) ++depth.left;
+    // Forced moves don't count towards depth
+    if (moveList.size() == 1) ++depth.left;
 
-    // Need at least 4 half moves since the last irreversible move, to get to draw by repetition.
-    if (position.turn.halfmove() >= 4) {
-        if (position.turn.halfmove() >= 100) return {{}, Score()};  // Fifty-move rule
-        // Three-fold repetition, note that the current position is not included in the count
-        if (repetitions.count(hash, position.turn.halfmove() - 1) >= 2) return {{}, Score()};
-    }
-    repetitions.push_back(hash);
+    // Check for draws due to repetition or the fifty-move rule
+    auto drawState = repetitions.enter(hash);
+    if (drawState.drawn(position.turn.halfmove())) return {{}, Score()};
 
     sortMoves(position, hash, moveList.begin(), moveList.end());
 
@@ -497,7 +541,6 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, Depth 
             break;
         }
     }
-    repetitions.pop_back();
 
     if (moveList.empty() && !isInCheck(position)) pv.score = Score();  // Stalemate
 
@@ -548,11 +591,19 @@ PrincipalVariation toplevelAlphaBeta(
     if (depthleft <= 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
     Depth depth = {0, depthleft};
 
-    // No need to check the transposition table here, as we're at the top level
+    Hash hash(position);
+
+    transpositionTable.refineAlphaBeta(hash, depth.left, alpha, beta);
 
     auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
 
-    Hash hash(position);
+    // Forced moves don't count towards depth
+    if (moveList.size() == 1) ++depth.left;
+
+    // Register position for later checks of draws due to repetition or the fifty-move rule
+    auto drawState = repetitions.enter(hash);
+    if (drawState.drawn(position.turn.halfmove())) return {{}, Score()};
+
     sortMoves(position, hash, moveList.begin(), moveList.end());
     PrincipalVariation pv;
 
@@ -569,6 +620,7 @@ PrincipalVariation toplevelAlphaBeta(
         }
     }
     if (moveList.empty() && !isInCheck(position)) pv = {Move(), Score()};
+    transpositionTable.insert(hash, {pv.front(), pv.score}, depthleft, alpha, beta);
 
     return pv;
 }
@@ -601,9 +653,6 @@ PrincipalVariation aspirationWindows(Position position, Score expected, int maxd
         pv = {};
     }
     if (!pv) pv = toplevelAlphaBeta(position, maxdepth, info);
-    if (pv)
-        transpositionTable.insert(
-            Hash{position}, {pv.front(), pv.score}, maxdepth, TranspositionTable::EXACT);
 
     return pv;
 }
@@ -618,24 +667,26 @@ PrincipalVariation iterativeDeepening(Position& position, int maxdepth, InfoFn i
     return pv;
 }
 
-PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector moves, InfoFn info) {
-    evalTable = EvalTable{position.board, true};
+void newGame() {
     transpositionTable.clear();
-    repetitions.hashes.clear();
+    repetitions.clear();
     quiescenceCache.reset();
     std::fill(&history[0][0][0], &history[0][0][0] + sizeof(history) / sizeof(history[0][0][0]), 0);
+}
+
+PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector moves, InfoFn info) {
+    evalTable = EvalTable{position.board, true};
     searchEvalCount = evalCount;
     searchStartTime = clock::now();
 
-    repetitions.push_back(Hash(position));
+    auto drawState = repetitions.enter(Hash(position));
     for (auto move : moves) {
         position = applyMove(position, move);
-        repetitions.push_back(Hash(position));
+        repetitions.enter(drawState, Hash(position));
     }
 
     auto pv = options::iterativeDeepening ? iterativeDeepening(position, maxdepth, info)
                                           : toplevelAlphaBeta(position, maxdepth, info);
-    repetitions.pop_back();
 
     if (options::quiescenceCacheDebug) quiescenceCache.printStats();
 

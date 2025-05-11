@@ -8,5 +8,12 @@
             "binaryPath": "/Users/bosch/gbchess/uci-test",
             "binaryArgs": []
         }
-    ]
+    ],
+    "github.copilot.enable": {
+        "*": true,
+        "plaintext": false,
+        "markdown": false,
+        "scminput": false,
+        "c++": true
+    }
 }

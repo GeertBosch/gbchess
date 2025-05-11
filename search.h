@@ -38,6 +38,11 @@ PrincipalVariation computeBestMove(Position position,
                                    InfoFn info = nullptr);
 
 /**
+ * Reset internal caches such as the transposition table to prepare for a new game.
+ */
+void newGame();
+
+/**
  * Search all tactical moves necessary to achieve a quiet position and return the best score
  */
 Score quiesce(Position& position, int depthleft);
