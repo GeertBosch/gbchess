@@ -49,8 +49,8 @@ public:
         toggle(piece, to);
     }
 
-    // Does not cancel out castling rights or en passant targets.
     // Assumes that passed in board is the same as the board used to construct this hash.
+    // Cancels out castling rights and en passant targets.
     void applyMove(const Board& board, Move mv);
 
     // Use toggle to add/remove a piece or non piece/location vector.
