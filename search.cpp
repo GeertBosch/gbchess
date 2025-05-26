@@ -164,7 +164,7 @@ struct TranspositionTable {
 
 } transpositionTable;
 
-size_t history[2][kNumSquares][kNumSquares] = {0};
+size_t history[2][kNumSquares][kNumSquares] = {{{0}}};
 
 struct QuiescenceCache {
     using Counter = uint64_t;
@@ -307,7 +307,6 @@ const int kCapturePromoScore = 2'100'000'000;  // a bit below INT_MAX
 const int kEnPassantScore = 2'099'999'999;     // a bit below kCapturePromoScore
 const int kCaptureScore = 2'000'000'000;       // a bit below kEnPassantScore
 const int kPromoScore = 1'950'000'000;         // a bit below kCaptureScore
-const int K = 1'000;                           // a thousand
 constexpr int kind[16] = {
     0,                       // QUIET
     -3,                      // DOUBLE_PAWN_PUSH

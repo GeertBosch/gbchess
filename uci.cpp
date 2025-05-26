@@ -18,43 +18,13 @@ const char* const authorName = "Geert Bosch";
 
 using UCIArguments = std::vector<std::string>;
 
-std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
-    for (const auto& move : moves) os << std::string(move) << " ";
-
-    return os;
-}
-std::ostream& operator<<(std::ostream& os, const UCIArguments& args) {
-    for (const auto& arg : args) os << arg << " ";
-
-    return os;
-}
-
 namespace {
-std::vector<std::string> split(std::string line, char delim) {
-    std::vector<std::string> res;
-    std::string word;
-    for (auto c : line) {
-        if (c == delim) {
-            res.emplace_back(std::move(word));
-            word = "";
-        } else {
-            word.push_back(c);
-        }
-    }
-    if (word.size()) res.emplace_back(std::move(word));
-    return res;
-}
-
 MoveVector parseUCIMoves(Position position, const std::vector<std::string>& moves) {
     MoveVector vector;
     for (auto uci : moves)
         position = applyMove(position, vector.emplace_back(parseUCIMove(position, uci)));
 
     return vector;
-}
-
-MoveVector parseUCIMoves(Position position, const std::string& moves) {
-    return parseUCIMoves(position, split(moves, ' '));
 }
 
 template <class InputIt, class OutputIt, class Joiner>

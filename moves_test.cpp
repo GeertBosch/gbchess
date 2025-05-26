@@ -805,7 +805,6 @@ void testIsAttacked() {
     {
         Board board = base;
         board["b1"_sq] = Piece::r;
-        auto opponentSquares = SquareSet::occupancy(board, Color::BLACK);
         auto occupancy = Occupancy(board, Color::WHITE);
         assert(isAttacked(board, whiteKingSquare, occupancy));
         assert(!isAttacked(board, blackKingSquare, occupancy));

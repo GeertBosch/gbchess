@@ -28,12 +28,6 @@ std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
 std::ostream& operator<<(std::ostream& os, Move mv) {
     return os << std::string(mv);
 }
-std::ostream& operator<<(std::ostream& os, Square sq) {
-    return os << std::string(sq);
-}
-std::ostream& operator<<(std::ostream& os, Color color) {
-    return os << (color == Color::BLACK ? 'b' : 'w');
-}
 std::ostream& operator<<(std::ostream& os, Score score) {
     return os << std::string(score);
 }
@@ -42,58 +36,6 @@ std::ostream& operator<<(std::ostream& os, const PrincipalVariation& pv) {
 }
 
 std::string cmdName = "search-test";
-
-using GridDrawing = std::array<std::string, 11>;
-GridDrawing gridDrawing = {
-    " ┌─",
-    "─",
-    "─┬─",
-    "─┐ ",
-    " │ ",
-    " ├─",
-    "─┼─",
-    "─┤ ",
-    " └─",
-    "─┴─",
-    "─┘ ",
-};
-
-std::string operator*(std::string str, int n) {
-    if (!n) return "";
-    return n == 1 ? str : str * (n / 2) + str * (n - n / 2);
-}
-
-std::string gridTop(int width) {
-    std::string res;
-    res += gridDrawing[0];
-    res += (gridDrawing[1] + gridDrawing[2]) * (width - 1);
-    res += gridDrawing[1] + gridDrawing[3];
-    return res;
-}
-std::string gridRow(std::string row) {
-    std::string res;
-    res += gridDrawing[4];
-    for (int i = 0; i < row.size(); ++i) {
-        res += row[i];
-        if (i < row.size() - 1) res += gridDrawing[4];
-    }
-    res += gridDrawing[4];
-    return res;
-}
-std::string gridMiddle(int width) {
-    std::string res;
-    res += gridDrawing[5];
-    res += (gridDrawing[1] + gridDrawing[6]) * (width - 1);
-    res += gridDrawing[1] + gridDrawing[7];
-    return res;
-}
-std::string gridBottom(int width) {
-    std::string res;
-    res += gridDrawing[8];
-    res += (gridDrawing[1] + gridDrawing[9]) * (width - 1);
-    res += gridDrawing[1] + gridDrawing[10];
-    return res;
-}
 
 void usage(std::string cmdName, std::string errmsg) {
     std::cerr << "Error: " << errmsg << "\n\n";
@@ -160,18 +102,6 @@ void printEvalRate(const F& fun) {
               << " ms @ " << evalRate / 1000.0 << "K evals/sec" << std::endl;
 }
 
-void printAvailableMoves(const Position& position) {
-    MoveVector moves;
-    for_test::addAvailableMoves(moves, position.board, position.turn);
-    std::cout << "Moves: " << moves << std::endl;
-}
-
-void printAvailableCaptures(const Position& position) {
-    MoveVector captures;
-    for_test::addAvailableCaptures(captures, position.board, position.turn);
-    std::cout << "Captures: " << captures << std::endl;
-}
-
 void printBestMove(Position position, int maxdepth) {
     auto bestMove = search::computeBestMove(position, maxdepth);
     std::cout << "Best Move: " << bestMove << " for " << fen::to_string(position) << std::endl;
@@ -189,29 +119,6 @@ void printAnalysis(Position position, int maxdepth) {
     else if (bestMove.front() != analyzed.front())
         std::cerr << "Mismatch: " << bestMove.front() << " != " << analyzed.front() << "\n";
     assert(analyzed.score == bestMove.score);
-}
-
-/**
- * Prints the chess board to the specified output stream in grid notation.
- */
-void printBoard(std::ostream& os, const Board& board) {
-    os << " " << gridTop(kNumFiles) << std::endl;
-    for (int rank = kNumRanks - 1; rank >= 0; --rank) {
-        os << rank + 1;
-        std::string row;
-        for (int file = 0; file < kNumFiles; ++file) {
-            auto piece = board[Square(file, rank)];
-            row.push_back(to_char(piece));
-        }
-        os << gridRow(row) << std::endl;
-        if (rank > 0) os << " " << gridMiddle(kNumFiles) << std::endl;
-    }
-    os << " " << gridBottom(kNumFiles) << std::endl;
-    os << " ";
-    for (char file = 'a'; file <= 'h'; ++file) {
-        os << "   " << file;
-    }
-    os << std::endl;
 }
 
 std::vector<std::string> split(std::string line, char delim) {

@@ -70,7 +70,6 @@ void testWinDrawLoseDrawAgainstOne() {
               << " rated opponents: " << player() << " vs " << opponent() << "\n";
     assert(player() + opponent() == ELO::kInitialRating + kOpponentRating);
     assert(player() < ELO::kInitialRating);  // Lost some
-    const int kExpectedDiff = kOpponentDiff / 2;
     int diff = player() - opponent();
     assert(diff > -ELO::K);
     assert(diff < +ELO::K);

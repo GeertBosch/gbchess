@@ -13,7 +13,6 @@ std::array<uint64_t, kNumHashVectors> hashVectors = []() {
 }();
 
 Hash::Hash(Position position) {
-    int location = 0;
     for (auto square : SquareSet::occupancy(position.board))
         toggle(position.board[square], square.index());
     if (position.active() == Color::BLACK) toggle(BLACK_TO_MOVE);

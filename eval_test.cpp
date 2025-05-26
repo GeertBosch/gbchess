@@ -17,19 +17,6 @@ std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     os << "]";
     return os;
 }
-std::ostream& operator<<(std::ostream& os, Move mv) {
-    return os << std::string(mv);
-}
-std::ostream& operator<<(std::ostream& os, Square sq) {
-    return os << std::string(sq);
-}
-std::ostream& operator<<(std::ostream& os, Color color) {
-    return os << (color == Color::BLACK ? 'b' : 'w');
-}
-std::ostream& operator<<(std::ostream& os, Score score) {
-    return os << std::string(score);
-}
-
 std::string cmdName = "eval-test";
 
 using GridDrawing = std::array<std::string, 11>;

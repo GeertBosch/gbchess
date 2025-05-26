@@ -528,7 +528,6 @@ SquareSet pinnedPieces(const Board& board,
 
 SquareSet pinnedPieces(const Board& board, Occupancy occupancy, Square kingSquare) {
     // For the purpose of pinning, we only consider sliding pieces, not knights.
-    auto myColor = color(board[kingSquare]);
 
     // Define pinning piece sets and corresponding capture sets
     PinData pinData[] = {{movesTable.captures[index(Piece::R)][kingSquare.index()],
@@ -599,7 +598,6 @@ template <typename F>
 void findPawnCaptures(SearchState& state, const F& fun) {
     bool white = state.active() == Color::WHITE;
     const auto promo = white ? SquareSet::rank(kNumRanks - 1) : SquareSet::rank(0);
-    auto free = !state.occupancy();
     auto leftPawns = state.pawns - SquareSet::file(0);
     auto rightPawns = state.pawns - SquareSet::file(7);
     auto left = (white ? leftPawns << 7 : leftPawns >> 9) & state.occupancy.theirs();
