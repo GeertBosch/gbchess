@@ -1,7 +1,7 @@
 PUZZLES=puzzles/lichess_db_puzzle.csv
 PHASES=opening middlegame endgame
 EVALS=$(foreach phase,${PHASES},evals/lichess_${phase}_evals.csv)
-CCFLAGS=-std=c++20
+CCFLAGS=-std=c++20 -Werror
 CLANGPP=clang++
 GPP=g++
 # DEBUGFLAGS=-fsanitize=address -DDEBUG -O0 -g --coverage
@@ -16,7 +16,7 @@ calc_objs=$(patsubst %.cpp,${$(1)OBJ}/%.o,$(2))
 calc_deps=${calc_objs:.o=.d}
 
 all: debug test build perft-test mate123 mate45 puzzles evals
-	@echo "All tests passed!"
+	@echo -e "\n\n*** All tests passed! ***\n"
 
 -include $(call calc_deps,OPT,$(wildcard *.cpp))
 -include $(call calc_deps,DBG,$(wildcard *.cpp))

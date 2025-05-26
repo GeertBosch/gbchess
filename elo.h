@@ -29,7 +29,7 @@ public:
     void updateBoth(ELO& opponent, Result win) {
         int ratingDiff = opponent() - rating;
         double expected = 1.0 / (1.0 + pow(10.0, ratingDiff / 400.0));
-        int change = std::round(K * (win * 0.5 - expected));
+        int change = std::round(K * (double(win) * 0.5 - expected));
         rating += change;
         opponent.rating -= change;
     }
