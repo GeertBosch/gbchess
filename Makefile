@@ -1,7 +1,7 @@
 PUZZLES=puzzles/lichess_db_puzzle.csv
 PHASES=opening middlegame endgame
 EVALS=$(foreach phase,${PHASES},evals/lichess_${phase}_evals.csv)
-CCFLAGS=-std=c++17
+CCFLAGS=-std=c++20
 CLANGPP=clang++
 GPP=g++
 # DEBUGFLAGS=-fsanitize=address -DDEBUG -O0 -g --coverage
@@ -115,11 +115,11 @@ perft-gcc-emul: perft.cpp  moves.cpp fen.cpp *.h
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
 
 perft-emul: perft-clang-emul perft-gcc-emul .PHONY
-	./perft-clang-emul 5 4865609
-	./perft-gcc-emul 5 4865609
+	./perft-clang-emul -q 5 4865609
+	./perft-gcc-emul -q 5 4865609
 perft-sse2: perft-clang-sse2 perft-gcc-sse2 .PHONY
-	./perft-clang-sse2 5 4865609
-	./perft-gcc-sse2 5 4865609
+	./perft-clang-sse2 -q 5 4865609
+	./perft-gcc-sse2 -q 5 4865609
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
 mate123: search-test ${PUZZLES} .PHONY
@@ -155,14 +155,14 @@ position6="r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0
 # Verify well-known perft results. Great for checking correct move generation.
 perft-test: perft perft-debug perft-sse2 perft-emul
 	./perft-debug 4 197281
-	./perft 5 4865609
-	./perft "rnbqkbnr/1ppppppp/B7/p7/4P3/8/PPPP1PPP/RNBQK1NR b KQkq - 1 2" 4 509448
-	./perft ${kiwipete} 4 4085603
-	./perft ${position3} 5 674624
-	./perft ${position4} 4 422333
-	./perft ${position4m} 4 422333
-	./perft ${position5} 4 2103487
-	./perft ${position6} 4 3894594
+	./perft -q 5 4865609
+	./perft -q "rnbqkbnr/1ppppppp/B7/p7/4P3/8/PPPP1PPP/RNBQK1NR b KQkq - 1 2" 4 509448
+	./perft -q ${kiwipete} 4 4085603
+	./perft -q ${position3} 5 674624
+	./perft -q ${position4} 4 422333
+	./perft -q ${position4m} 4 422333
+	./perft -q ${position5} 4 2103487
+	./perft -q ${position6} 4 3894594
 
 ${PUZZLES}:
 	mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) && wget https://database.lichess.org/$(notdir ${PUZZLES}).zst

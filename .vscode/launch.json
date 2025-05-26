@@ -67,10 +67,14 @@
             ],
             "program": "${workspaceFolder}/perft-debug",
             "args": [
-                "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+                "-q",
+                // "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
                 // "r3kr2/7R/1q1pb1n1/8/3pP3/3B1P2/4K3/R7 w q - 1 30",
                 // 2
-                5
+                // 5,
+                "rnbqkbnr/1ppppppp/B7/p7/4P3/8/PPPP1PPP/RNBQK1NR b KQkq - 1 2",
+                "4",
+                "509448"
             ],
         },
         {

@@ -7,6 +7,8 @@
 #include "fen.h"
 #include "moves.h"
 
+bool quiet = false;
+
 /**
  *  a debugging function to walk the move generation tree of strictly legal moves to count all the
  *  leaf nodes of a certain depth, which can be compared to predetermined values and used to isolate
@@ -45,7 +47,7 @@ void perftWithDivide(Position position, int depth, int expectedCount) {
         auto newPosition = applyMove(position, move);
         auto newState = SearchState(newPosition.board, newPosition.turn);
         auto newCount = perft(newPosition.board, newState, depth - 1);
-        if (debug) std::cout << static_cast<std::string>(move) << ": " << newCount << std::endl;
+        if (!quiet) std::cout << static_cast<std::string>(move) << ": " << newCount << "\n";
         divisions.push_back({move, newCount});
         count += newCount;
     }
@@ -68,40 +70,50 @@ bool maybeMove(const std::string& str) {
         str[1] <= '8' && str[2] >= 'a' && str[2] <= 'h' && str[3] >= '1' && str[3] <= '8';
 }
 
+void error(const std::string& message) {
+    std::cerr << "Error: " << message << std::endl;
+    std::exit(1);
+}
+
+void option(const std::string& arg) {
+    if (arg == "-q" || arg == "--quiet")
+        quiet = true;
+    else
+        error("Unknown option: " + arg);
+}
+
+void usage() {
+    std::cerr << "Usage: perft [-q] <depth> [expected-count]" << std::endl;
+    std::cerr << "Usage: perft [-q] [fen] <depth> [expected-count]" << std::endl;
+    std::exit(1);
+}
+
 int main(int argc, char** argv) {
     std::vector<Position> positions;
 
-    while (argc >= 2 && fen::maybeFEN(argv[1])) {
-        positions.push_back(fen::parsePosition(argv[1]));
-        argv++;
-        argc--;
-        if (argc > 2 && std::string(argv[1]) == "moves") {
-            argv++;
-            argc--;
-        }
-        while (argc >= 2 && maybeMove(argv[1])) {
-            Move move = parseUCIMove(positions.back(), argv[1]);
+    auto shift = [&argc, &argv]() -> char* { return --argc, *++argv; };
+    auto arg = [&argc, &argv]() -> std::string { return argc < 2 ? "" : std::string(argv[1]); };
+
+    while (arg().starts_with('-')) option(shift());
+
+    while (fen::maybeFEN(arg())) {
+        positions.push_back(fen::parsePosition(shift()));
+        if (arg() == "moves") shift();
+
+        while (maybeMove(arg())) {
+            Move move = parseUCIMove(positions.back(), shift());
             auto pos = applyMove(positions.back(), move);
             std::cout << "applied move " << static_cast<std::string>(move) << std::endl;
-            positions.pop_back();
-            positions.push_back(pos);
-            argv++;
-            argc--;
+            positions.back() = pos;
         }
     }
 
-    if (positions.empty()) {
-        positions.push_back(fen::parsePosition(fen::initialPosition));
-    }
+    if (positions.empty()) positions.push_back(fen::parsePosition(fen::initialPosition));
 
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <depth> [expected-count]" << std::endl;
-        std::cerr << "Usage: " << argv[0] << " {fen} <depth> [expected-count]" << std::endl;
-        std::exit(1);
-    }
+    if (argc < 2) usage();
 
-    int depth = std::atoi(argv[1]);
-    int expectedCount = argc > 2 ? std::atoi(argv[2]) : 0;
+    int depth = std::atoi(shift());
+    int expectedCount = std::atoi(shift());
 
     for (auto& position : positions) perftWithDivide(position, depth, expectedCount);
 }
