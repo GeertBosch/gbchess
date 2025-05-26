@@ -22,6 +22,11 @@ Hash::Hash(Position position) {
         toggle(ExtraVectors(position.turn.enPassant().file() + EN_PASSANT_A));
 }
 
+namespace {
+static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::WHITE),
+                                                 CastlingInfo(Color::BLACK)};
+}  // namespace
+
 void Hash::applyMove(const Position& position, Move mv) {
     const Board& board = position.board;
     auto piece = board[mv.from()];
@@ -42,23 +47,15 @@ void Hash::applyMove(const Position& position, Move mv) {
     case MoveKind::QUIET_MOVE: break;
     case MoveKind::DOUBLE_PAWN_PUSH: toggle(ExtraVectors(mv.to().file() + EN_PASSANT_A)); break;
     case MoveKind::KING_CASTLE:  // Assume the move has the king move, so adjust the rook here.
-        move(addColor(PieceType::ROOK, color(piece)),
-             (color(piece) == Color::WHITE ? Position::whiteKingSideRook
-                                           : Position::blackKingSideRook)
-                 .index(),
-             (color(piece) == Color::WHITE ? Position::whiteRookCastledKingSide
-                                           : Position::blackRookCastledKingSide)
-                 .index());
-        break;
+    {
+        auto& info = castlingInfo[int(color(piece))];
+        move(info.rook, info.kingSide[1][0].index(), info.kingSide[1][1].index());
+    } break;
     case MoveKind::QUEEN_CASTLE:  // Assume the move has the king move, so adjust the rook here.
-        move(addColor(PieceType::ROOK, color(piece)),
-             (color(piece) == Color::WHITE ? Position::whiteQueenSideRook
-                                           : Position::blackQueenSideRook)
-                 .index(),
-             (color(piece) == Color::WHITE ? Position::whiteRookCastledQueenSide
-                                           : Position::blackRookCastledQueenSide)
-                 .index());
-        break;
+    {
+        auto& info = castlingInfo[int(color(piece))];
+        move(info.rook, info.queenSide[1][0].index(), info.queenSide[1][1].index());
+    } break;
 
     case MoveKind::CAPTURE: toggle(target, mv.to().index()); break;
     case MoveKind::EN_PASSANT:

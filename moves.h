@@ -149,6 +149,31 @@ public:
     bool operator!=(Occupancy other) const { return !(*this == other); }
 };
 
+using CastlingMove = std::array<TwoSquares, 2>;  // King and Rook moves for castling
+struct CastlingInfo {
+    const Piece rook;
+    const Piece king;
+    const CastlingMask kingSideMask;
+    const CastlingMask queenSideMask;
+
+    const CastlingMove kingSide;
+    const CastlingMove queenSide;
+
+    constexpr CastlingInfo(Color color)
+        : rook(addColor(PieceType::ROOK, color)),
+          king(addColor(PieceType::KING, color)),
+          kingSideMask(color == Color::WHITE ? CastlingMask::K : CastlingMask::k),
+          queenSideMask(color == Color::WHITE ? CastlingMask::Q : CastlingMask::q),
+
+          kingSide(color == Color::WHITE
+                       ? CastlingMove{TwoSquares{"e1"_sq, "g1"_sq}, TwoSquares{"h1"_sq, "f1"_sq}}
+                       : CastlingMove{TwoSquares{"e8"_sq, "g8"_sq}, TwoSquares{"h8"_sq, "f8"_sq}}),
+          queenSide(
+              color == Color::WHITE
+                  ? CastlingMove{TwoSquares{"e1"_sq, "c1"_sq}, TwoSquares{"a1"_sq, "d1"_sq}}
+                  : CastlingMove{TwoSquares{"e8"_sq, "c8"_sq}, TwoSquares{"a8"_sq, "d8"_sq}}) {};
+};
+
 /**
  * Returns true if the given square is attacked by a piece of the given opponent color.
  */

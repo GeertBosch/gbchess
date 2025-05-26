@@ -368,35 +368,6 @@ inline std::string to_string(CastlingMask mask) {
     return str;
 }
 
-struct CastlingInfo {
-    const Piece rook;
-    const Piece king;
-    const CastlingMask kingSideMask;
-    const CastlingMask queenSideMask;
-    const Square rookFromKingSide;
-    const Square rookToKingSide;
-    const Square rookFromQueenSide;
-    const Square rookToQueenSide;
-    const Square kingFrom;
-    const Square kingToKingSide;
-    const Square kingToQueenSide;
-
-    constexpr CastlingInfo(Color color)
-        : rook(addColor(PieceType::ROOK, color)),
-          king(addColor(PieceType::KING, color)),
-          kingSideMask(color == Color::WHITE ? CastlingMask::K : CastlingMask::k),
-          queenSideMask(color == Color::WHITE ? CastlingMask::Q : CastlingMask::q),
-          rookFromKingSide(Square(kNumFiles - 1, baseRank(color))),
-          rookToKingSide(Square(kNumFiles - 3, baseRank(color))),
-          rookFromQueenSide(Square(0, baseRank(color))),
-          rookToQueenSide(Square(3, baseRank(color))),
-          kingFrom(Square(kNumFiles / 2, baseRank(color))),
-          kingToKingSide(Square(kNumFiles - 2, baseRank(color))),
-          kingToQueenSide(Square(2, baseRank(color))) {};
-};
-
-static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::WHITE),
-                                                 CastlingInfo(Color::BLACK)};
 
 // Square to indicate no enpassant target
 static constexpr auto noEnPassantTarget = Square(0);

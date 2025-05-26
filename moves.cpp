@@ -655,6 +655,11 @@ void findPromotionMoves(const Board& board, SearchState& state, const F& fun) {
     state.pawns = pawns;
 }
 
+namespace {
+static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::WHITE),
+                                                 CastlingInfo(Color::BLACK)};
+}  // namespace
+
 template <typename F>
 void findCastles(const Board& board, Occupancy occupancy, Turn turn, const F& fun) {
     auto color = int(turn.activeColor());
@@ -664,13 +669,14 @@ void findCastles(const Board& board, Occupancy occupancy, Turn turn, const F& fu
     if ((turn.castling() & info.kingSideMask) != CastlingMask::_) {
         auto path = movesTable.castlingClear[color][index(MoveKind::KING_CASTLE)];
         if ((occupancy() & path).empty())
-            fun(info.king, {info.kingFrom, info.kingToKingSide, MoveKind::KING_CASTLE});
+            fun(info.king, {info.kingSide[0][0], info.kingSide[0][1], MoveKind::KING_CASTLE});
     }
     // Check for queen side castling
     if ((turn.castling() & info.queenSideMask) != CastlingMask::_) {
         auto path = movesTable.castlingClear[color][index(MoveKind::QUEEN_CASTLE)];
         if ((occupancy() & path).empty())
-            fun(info.king, Move{info.kingFrom, info.kingToQueenSide, MoveKind::QUEEN_CASTLE});
+            fun(info.king,
+                Move{info.queenSide[0][0], info.queenSide[0][1], MoveKind::QUEEN_CASTLE});
     }
 }
 
