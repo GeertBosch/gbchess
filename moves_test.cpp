@@ -875,15 +875,23 @@ void testAllLegalMovesAndCaptures() {
         assert(legalMoves.size() == 2);
     }
     {
-        // This king can castle queen side
+        // The black king can castle queen side
         auto position = fen::parsePosition(
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/1R2K2R b Kkq - 1 1");
+        auto castles = parseUCIMove(position, "e8c8");
+        assert(castles.kind() == MoveKind::QUEEN_CASTLE);
         auto legalMoves = allLegalMovesAndCaptures(position.turn, position.board);
-        assert(std::count_if(legalMoves.begin(), legalMoves.end(), [](auto item) {
-                   return item == Move{"e8"_sq, "c8"_sq, MoveKind::QUEEN_CASTLE};
-               }) == 1);
-    }
+        assert(std::count(legalMoves.begin(), legalMoves.end(), castles) == 1);
+        auto castled = applyMove(position, castles);
 
+        // Check that pieces moved correctly
+        assert(castled.board["c8"_sq] == Piece::k);
+        assert(castled.board["d8"_sq] == Piece::r);
+        assert(castled.board["e8"_sq] == Piece::_);
+
+        // Black's castling rights are cancelled.
+        assert(castled.turn.castling() == CastlingMask::K);
+    }
 
     std::cout << "All allLegalMovesAndCaptures tests passed!" << std::endl;
 }

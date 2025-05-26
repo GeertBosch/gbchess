@@ -527,11 +527,12 @@ struct Position {
     static constexpr auto blackKingSideRook = "h8"_sq;
 
     // Positions of castled pieces
-    static constexpr auto whiteRookCastledQueenSide = "c1"_sq;
+    // TODO: Remove these from Position
+    static constexpr auto whiteRookCastledQueenSide = "d1"_sq;
     static constexpr auto whiteRookCastledKingSide = "f1"_sq;
     static constexpr auto whiteKingCastledQueenSide = "b1"_sq;
     static constexpr auto whiteKingCastledKingSide = "g1"_sq;
-    static constexpr auto blackRookCastledQueenSide = "c8"_sq;
+    static constexpr auto blackRookCastledQueenSide = "d8"_sq;
     static constexpr auto blackRookCastledKingSide = "f8"_sq;
     static constexpr auto blackKingCastledQueenSide = "b8"_sq;
     static constexpr auto blackKingCastledKingSide = "g8"_sq;

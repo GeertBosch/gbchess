@@ -1,10 +1,13 @@
+#include <array>
+#include <random>
+
+#include "common.h"
 #include "hash.h"
 #include "moves.h"
-#include <random>
 
 std::array<uint64_t, kNumHashVectors> hashVectors = []() {
     std::array<uint64_t, kNumHashVectors> vectors;
-    std::ranlux48 gen(0xbad5eed5'bad5eed5);
+    std::mt19937_64 gen(0xbad5eed5bad5eed5ULL);  // 64-bit seed
     for (auto& v : vectors) v = gen();
     return vectors;
 }();
@@ -14,16 +17,27 @@ Hash::Hash(Position position) {
     for (auto square : SquareSet::occupancy(position.board))
         toggle(position.board[square], square.index());
     if (position.active() == Color::BLACK) toggle(BLACK_TO_MOVE);
-    if (position.turn.castling() != CastlingMask::_)
-        toggle(ExtraVectors(CASTLING_1 - 1 + uint8_t(position.turn.castling())));
+    if (position.turn.castling() != CastlingMask::_) toggle(position.turn.castling());
     if (position.turn.enPassant().index())
         toggle(ExtraVectors(position.turn.enPassant().file() + EN_PASSANT_A));
 }
 
-void Hash::applyMove(const Board& board, Move mv) {
+void Hash::applyMove(const Position& position, Move mv) {
+    const Board& board = position.board;
     auto piece = board[mv.from()];
     auto target = board[mv.to()];
+
+    // Always assume we move a piece and switch the player to move.
     move(piece, mv.from().index(), mv.to().index());
+    toggle(BLACK_TO_MOVE);
+
+    // Cancel en passant target if it was set.
+    if (position.turn.enPassant() != noEnPassantTarget)
+        toggle(ExtraVectors(position.turn.enPassant().file() + EN_PASSANT_A));
+
+    // Cancel any castling rights according to the move squares.
+    toggle(position.turn.castling() & castlingMask(mv.from(), mv.to()));
+
     switch (mv.kind()) {
     case MoveKind::QUIET_MOVE: break;
     case MoveKind::DOUBLE_PAWN_PUSH: toggle(ExtraVectors(mv.to().file() + EN_PASSANT_A)); break;
@@ -50,7 +64,11 @@ void Hash::applyMove(const Board& board, Move mv) {
     case MoveKind::EN_PASSANT:
         // Depending of the color of our piece, the captured pawn is either above or below the
         // destination square.
-        toggle(target, mv.to().index() + (color(piece) == Color::WHITE ? -kNumFiles : kNumFiles));
+        {
+            auto targetSquare = Square{mv.to().file(), mv.from().rank()};
+            target = board[targetSquare];
+            toggle(target, targetSquare.index());
+        }
         break;
     case MoveKind::KNIGHT_PROMOTION:
     case MoveKind::BISHOP_PROMOTION:

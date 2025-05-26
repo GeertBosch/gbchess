@@ -27,9 +27,17 @@ class Hash {
 public:
     enum ExtraVectors {
         BLACK_TO_MOVE = kNumBoardVectors + 0,
-        CASTLING_1 = kNumBoardVectors + 1,
-        CASTLING_15 = kNumBoardVectors + 15,
+        CASTLING_0 = kNumBoardVectors + 1,
+        CASTLING_1 = kNumBoardVectors + 2,
+        CASTLING_2 = kNumBoardVectors + 3,
+        CASTLING_3 = kNumBoardVectors + 4,
         EN_PASSANT_A = kNumBoardVectors + 16,
+        EN_PASSANT_B = kNumBoardVectors + 17,
+        EN_PASSANT_C = kNumBoardVectors + 18,
+        EN_PASSANT_D = kNumBoardVectors + 19,
+        EN_PASSANT_E = kNumBoardVectors + 20,
+        EN_PASSANT_F = kNumBoardVectors + 21,
+        EN_PASSANT_G = kNumBoardVectors + 22,
         EN_PASSANT_H = kNumBoardVectors + 23,
     };
 
@@ -49,14 +57,22 @@ public:
         toggle(piece, to);
     }
 
-    // Does not cancel out castling rights or en passant targets.
-    // Assumes that passed in board is the same as the board used to construct this hash.
-    void applyMove(const Board& board, Move mv);
+    // Assumes that passed in position is the same as the one used to construct this hash.
+    // Cancels out castling rights and en passant targets.
+    void applyMove(const Position& position, Move mv);
 
     // Use toggle to add/remove a piece or non piece/location vector.
-    void toggle(Piece piece, int location) { toggle(index(piece) * kNumSquares + location); }
+    void toggle(Piece piece, int location) {
+        dassert(piece != Piece::_);
+        toggle(index(piece) * kNumSquares + location);
+    }
     void toggle(int vector) { hash ^= hashVectors[vector]; }
     void toggle(ExtraVectors extra) { toggle(kNumBoardVectors + int(extra)); }
+    void toggle(CastlingMask mask) {
+        for (int i = 0; i < 4; ++i)
+            if ((mask & CastlingMask(1 << i)) != CastlingMask::_)
+                toggle(ExtraVectors(CASTLING_0 + i));
+    }
 };
 
 namespace std {

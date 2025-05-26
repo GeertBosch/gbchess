@@ -80,7 +80,9 @@ fen-debug: ${DBGOBJ}/fen.o
 moves-test: ${OPTOBJ}/moves.o ${OPTOBJ}/fen.o
 moves-debug: ${DBGOBJ}/moves.o ${DBGOBJ}/fen.o
 
-fen-test: ${OPTOBJ}/fen_test.o ${OPTOBJ}/fen.o
+hash-test: ${OPTOBJ}/hash.o ${OPTOBJ}/fen.o ${OPTOBJ}/moves.o
+hash-debug: ${DBGOBJ}/hash.o ${DBGOBJ}/fen.o ${DBGOBJ}/moves.o
+
 
 EVAL_SRCS=eval.cpp hash.cpp fen.cpp moves.cpp
 
@@ -169,7 +171,6 @@ ${PUZZLES}:
 evals/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
 	mkdir -p $(dir $@) && ./$< $(@:evals/lichess_%_evals.csv=%) > $@
 
-# debug: eval-debug moves-debug perft-debug search-debug uci-debug
 # Automatically generate debug targets from *_test.cpp files
 TEST_SRCS=$(wildcard *_test.cpp)
 DEBUG_TARGETS=$(patsubst %_test.cpp,%-debug,$(TEST_SRCS))
@@ -177,8 +178,6 @@ BUILD_TARGETS=$(patsubst %_test.cpp,%-test,$(TEST_SRCS))
 
 debug: $(DEBUG_TARGETS)
 build: $(BUILD_TARGETS)
-
-#build: fen-test moves-test elo-test eval-test search-test uci-test
 
 searches1: search-debug
 	./search-debug "5r1k/pp4pp/5p2/1BbQp1r1/7K/7P/1PP3P1/3R3R b - - 3 26" 3
