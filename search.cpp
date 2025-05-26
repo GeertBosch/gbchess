@@ -433,7 +433,6 @@ bool isQuiet(Position& position, int depthleft) {
     return true;
 }
 
-
 Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depthleft) {
     Score stand_pat = eval;
 
@@ -488,10 +487,8 @@ struct Depth {
  * level, and beta the best score that the minimizing player can guarantee. The function returns
  * the best score that the current player can guarantee, assuming the opponent plays optimally.
  */
-PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, Depth depth) {
+PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score beta, Depth depth) {
     if (depth.left <= 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
-
-    Hash hash(position);
 
     // Check the transposition table, which may tighten one or both search bounds
     transpositionTable.refineAlphaBeta(hash, depth.left, alpha, beta);
@@ -517,7 +514,10 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, Depth 
     for (auto move : moveList) {
         ++totalMovesEvaluated;  // Increment total moves evaluated
         ++moveCount;
+        auto newHash = hash;
+        newHash.applyMove(position, move);
         auto newPosition = applyMove(position, move);
+        dassert(newHash == Hash(newPosition));
         auto newAlpha = std::max(alpha, pv.score);
 
         // Apply Late Move Reduction (LMR)
@@ -526,11 +526,12 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, Depth 
 
         // Perform a reduced-depth search
         auto newVar = -alphaBeta(
-            newPosition, -beta, -newAlpha, {depth.current + 1, depth.left - 1 - applyLMR});
+            newPosition, newHash, -beta, -newAlpha, {depth.current + 1, depth.left - 1 - applyLMR});
 
         // Re-search at full depth if the reduced search fails high
         if (applyLMR && newVar.score > alpha)
-            newVar = -alphaBeta(newPosition, -beta, -newAlpha, {depth.current + 1, depth.left - 1});
+            newVar = -alphaBeta(
+                newPosition, newHash, -beta, -newAlpha, {depth.current + 1, depth.left - 1});
 
         if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
         if (pv.score >= beta) {
@@ -544,10 +545,7 @@ PrincipalVariation alphaBeta(Position& position, Score alpha, Score beta, Depth 
 
     if (moveList.empty() && !isInCheck(position)) pv.score = Score();  // Stalemate
 
-    TranspositionTable::EntryType type = TranspositionTable::EXACT;
-    if (pv.score <= alpha) type = TranspositionTable::UPPERBOUND;
-    if (pv.score >= beta) type = TranspositionTable::LOWERBOUND;
-    transpositionTable.insert(hash, {pv.front(), pv.score}, depth.left, type);
+    transpositionTable.insert(hash, {pv.front(), pv.score}, depth.left, alpha, beta);
 
     return pv;
 }
@@ -610,8 +608,12 @@ PrincipalVariation toplevelAlphaBeta(
     int currmovenumber = 0;
     for (auto move : moveList) {
         if (currmoveInfo(info, depthleft, move, ++currmovenumber)) break;
+        auto newHash = hash;
+        newHash.applyMove(position, move);
         auto newPosition = applyMove(position, move);
-        auto newVar = -alphaBeta(newPosition, -beta, -std::max(alpha, pv.score), depth + 1);
+        dassert(newHash == Hash(newPosition));
+        auto newVar =
+            -alphaBeta(newPosition, newHash, -beta, -std::max(alpha, pv.score), depth + 1);
         if (newVar.score > pv.score || !pv.front()) pv = {move, newVar};
         if (pv.score >= beta) {
             int side = int(position.active());
