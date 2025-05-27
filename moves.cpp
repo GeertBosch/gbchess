@@ -558,6 +558,26 @@ void addMove(MoveVector& moves, Move move) {
     moves.emplace_back(move);
 }
 
+int noPromo(MoveKind kind) {
+    MoveKind noPromoKinds[] = {MoveKind::QUIET_MOVE,
+                               MoveKind::DOUBLE_PAWN_PUSH,
+                               MoveKind::KING_CASTLE,
+                               MoveKind::QUEEN_CASTLE,
+                               MoveKind::CAPTURE,
+                               MoveKind::EN_PASSANT,
+                               MoveKind::QUIET_MOVE,
+                               MoveKind::QUIET_MOVE,
+                               MoveKind::QUIET_MOVE,
+                               MoveKind::QUIET_MOVE,
+                               MoveKind::QUIET_MOVE,
+                               MoveKind::QUIET_MOVE,
+                               MoveKind::CAPTURE,
+                               MoveKind::CAPTURE,
+                               MoveKind::CAPTURE,
+                               MoveKind::CAPTURE};
+    return index(noPromoKinds[index(kind)]);
+}
+
 Occupancy occupancyDelta(Move move) {
     return movesTable.occupancyDelta[noPromo(move.kind())][move.from().index()][move.to().index()];
 }

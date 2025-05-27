@@ -40,12 +40,7 @@ public:
     bool operator!=(Square other) const { return square != other.square; }
 
     // Conversion to std::string: file to letter ('a' to 'h') and rank to digit ('1' to '8')
-    operator std::string() const {
-        std::string str = "";
-        str += 'a' + file();
-        str += '1' + rank();
-        return str;
-    }
+    operator std::string() const { return {char('a' + file()), char('1' + rank())}; }
 
 private:
     // lldb summary-string "${var.rep}"
@@ -88,16 +83,9 @@ constexpr Color color(char color) {
     return color == 'b' ? Color::BLACK : Color::WHITE;
 }
 
-constexpr uint8_t baseRank(Color color) {
-    return color == Color::WHITE ? 0 : kNumRanks - 1;
-}
-
 enum class PieceType : uint8_t { PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING };
-inline constexpr uint8_t index(PieceType type) {
+constexpr uint8_t index(PieceType type) {
     return static_cast<uint8_t>(type);
-}
-inline constexpr char to_char(PieceType type) {
-    return "pnbrqk"[index(type)];
 }
 static constexpr uint8_t kNumPieceTypes = index(PieceType::KING) + 1;
 
@@ -132,7 +120,7 @@ private:
 };
 static constexpr Range pieces(Piece::P, Piece::k);
 
-inline constexpr uint8_t index(Piece piece) {
+constexpr uint8_t index(Piece piece) {
     return static_cast<uint8_t>(piece);
 }
 static const std::string pieceChars = "PNBRQK.pnbrqk";
@@ -184,40 +172,20 @@ enum class MoveKind : uint8_t {
     ROOK_PROMOTION_CAPTURE = 14,
     QUEEN_PROMOTION_CAPTURE = 15,
 };
-inline constexpr uint8_t index(MoveKind kind) {
+constexpr uint8_t index(MoveKind kind) {
     return static_cast<uint8_t>(kind);
 }
-inline constexpr bool isCapture(MoveKind kind) {
+constexpr bool isCapture(MoveKind kind) {
     return (static_cast<uint8_t>(kind) & static_cast<uint8_t>(MoveKind::CAPTURE_MASK)) != 0;
 }
-inline constexpr bool isPromotion(MoveKind kind) {
+constexpr bool isPromotion(MoveKind kind) {
     return (static_cast<uint8_t>(kind) & static_cast<uint8_t>(MoveKind::PROMOTION_MASK)) != 0;
 }
-inline constexpr bool isCastles(MoveKind kind) {
+constexpr bool isCastles(MoveKind kind) {
     return kind == MoveKind::KING_CASTLE || kind == MoveKind::QUEEN_CASTLE;
 }
-static constexpr uint8_t kNumMoveKinds = index(MoveKind::QUEEN_PROMOTION_CAPTURE) + 1;
-static constexpr uint8_t kNumNoPromoMoveKinds = index(MoveKind::EN_PASSANT) + 1;
-
-inline int noPromo(MoveKind kind) {
-    MoveKind noPromoKinds[] = {MoveKind::QUIET_MOVE,
-                               MoveKind::DOUBLE_PAWN_PUSH,
-                               MoveKind::KING_CASTLE,
-                               MoveKind::QUEEN_CASTLE,
-                               MoveKind::CAPTURE,
-                               MoveKind::EN_PASSANT,
-                               MoveKind::QUIET_MOVE,
-                               MoveKind::QUIET_MOVE,
-                               MoveKind::QUIET_MOVE,
-                               MoveKind::QUIET_MOVE,
-                               MoveKind::QUIET_MOVE,
-                               MoveKind::QUIET_MOVE,
-                               MoveKind::CAPTURE,
-                               MoveKind::CAPTURE,
-                               MoveKind::CAPTURE,
-                               MoveKind::CAPTURE};
-    return index(noPromoKinds[index(kind)]);
-}
+constexpr uint8_t kNumMoveKinds = index(MoveKind::QUEEN_PROMOTION_CAPTURE) + 1;
+constexpr uint8_t kNumNoPromoMoveKinds = index(MoveKind::EN_PASSANT) + 1;
 
 inline PieceType promotionType(MoveKind kind) {
     return static_cast<PieceType>((static_cast<uint8_t>(kind) & 3) + 1);
@@ -274,7 +242,7 @@ public:
     operator std::string() const {
         if (!move) return "0000";
         auto str = static_cast<std::string>(from()) + static_cast<std::string>(to());
-        if (isPromotion()) str += to_char(promotionType(kind()));
+        if (isPromotion()) str += to_char(addColor(promotionType(kind()), Color::BLACK));
         return str;
     }
 
@@ -367,7 +335,6 @@ inline std::string to_string(CastlingMask mask) {
     if (str == "") str = "-";
     return str;
 }
-
 
 // Square to indicate no enpassant target
 static constexpr auto noEnPassantTarget = Square(0);
