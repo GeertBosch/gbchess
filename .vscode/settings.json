@@ -15,5 +15,11 @@
         "markdown": false,
         "scminput": false,
         "c++": true
-    }
+    },
+    "clangd.fallbackFlags": [
+        "-Wextra",
+        "-Wall",
+        "-Werror",
+        "-std=c++20"
+    ]
 }

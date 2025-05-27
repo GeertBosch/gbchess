@@ -211,7 +211,7 @@ PuzzleError analyzePuzzleSolution(std::string puzzle,
     return evalError ? EVAL_ERROR : SEARCH_ERROR;
 }
 
-PuzzleError doPuzzle(std::string puzzle, Position position, MoveVector moves, int maxdepth) {
+PuzzleError doPuzzle(std::string puzzle, Position position, MoveVector moves, size_t maxdepth) {
     if (moves.size() > maxdepth) {
         std::cout << puzzle << " too deep:\"" << fen::to_string(position) << "\" " << moves
                   << " (skipped)\n";
@@ -239,7 +239,7 @@ void testFromStdIn(int depth) {
     while (std::cin) {
         std::getline(std::cin, line);
         columns = split(line, ',');
-        if (columns.size() < std::max(colMoves, colFEN)) continue;
+        if (columns.size() < size_t(std::max(colMoves, colFEN))) continue;
         auto initialPosition = fen::parsePosition(columns[colFEN]);
         auto currentPosition = initialPosition;
         auto rating = ELO(std::stoi(columns[colRating]));

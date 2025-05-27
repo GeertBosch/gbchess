@@ -49,7 +49,7 @@ std::string gridTop(int width) {
 std::string gridRow(std::string row) {
     std::string res;
     res += gridDrawing[4];
-    for (int i = 0; i < row.size(); ++i) {
+    for (size_t i = 0; i < row.size(); ++i) {
         res += row[i];
         if (i < row.size() - 1) res += gridDrawing[4];
     }

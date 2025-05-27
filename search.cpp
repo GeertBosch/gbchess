@@ -52,7 +52,6 @@ struct TranspositionTable {
         uint8_t depth = 0;
         EntryType type = EXACT;
         Entry() = default;
-        Entry& operator=(const Entry& other) = default;
 
         Entry(Hash hash, Eval move, uint8_t depth, EntryType type)
             : hash(hash), eval(move), depth(depth), type(type) {}
@@ -353,7 +352,7 @@ uint64_t betaCutoffMoves = 0;
  * Sorts the moves (including captures) in the range [begin, end) in place, so that the move or
  * capture from the transposition table, if any, comes first. Returns an iterator to the next move.
  */
-MoveIt sortTransposition(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
+MoveIt sortTransposition(Hash hash, MoveIt begin, MoveIt end) {
     // See if the current position is a transposition of a previously seen one
     auto cachedMove = transpositionTable.find(hash);
     if (!cachedMove.move) return begin;
@@ -400,7 +399,7 @@ MoveIt sortCaptures(const Position& position, MoveIt begin, MoveIt end) {
 }
 
 void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
-    begin = sortTransposition(position, hash, begin, end);
+    begin = sortTransposition(hash, begin, end);
     begin = sortCaptures(position, begin, end);
 }
 

@@ -20,7 +20,7 @@ inline __m128i _mm_cmpeq_epi8(__m128i x, __m128i y) {
     memcpy(xm, &x, sizeof(x));
     memcpy(ym, &y, sizeof(y));
 
-    for (int i = 0; i < sizeof(xm); ++i) zm[i] = xm[i] == ym[i] ? 0xff : 0;
+    for (size_t i = 0; i < sizeof(xm); ++i) zm[i] = xm[i] == ym[i] ? 0xff : 0;
 
     memcpy(&z, zm, sizeof(z));
     return z;
@@ -34,7 +34,7 @@ inline __m128i _mm_cmplt_epi8(__m128i x, __m128i y) {
     memcpy(xm, &x, sizeof(x));
     memcpy(ym, &y, sizeof(y));
 
-    for (int i = 0; i < sizeof(xm); ++i) zm[i] = xm[i] < ym[i] ? 0xff : 0;
+    for (size_t i = 0; i < sizeof(xm); ++i) zm[i] = xm[i] < ym[i] ? 0xff : 0;
 
     memcpy(&z, zm, sizeof(z));
     return z;

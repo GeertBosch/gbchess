@@ -1,7 +1,7 @@
 PUZZLES=puzzles/lichess_db_puzzle.csv
 PHASES=opening middlegame endgame
 EVALS=$(foreach phase,${PHASES},evals/lichess_${phase}_evals.csv)
-CCFLAGS=-std=c++17 -Werror -Wall
+CCFLAGS=-std=c++17 -Werror -Wall -Wextra
 CLANGPP=clang++
 GPP=g++
 # DEBUGFLAGS=-fsanitize=address -DDEBUG -O0 -g --coverage

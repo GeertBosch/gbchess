@@ -33,7 +33,7 @@ uint64_t perft(Board& board, SearchState& state, int depth) {
     return nodes;
 }
 
-void perftWithDivide(Position position, int depth, int expectedCount) {
+void perftWithDivide(Position position, int depth, size_t expectedCount) {
     struct Division {
         Move move;
         uint64_t count;

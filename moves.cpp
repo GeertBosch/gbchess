@@ -400,7 +400,7 @@ uint64_t equalSetT(std::array<Piece, 64> squares, Piece piece, bool invert) {
     static_assert(kNumPieces <= 16, "Piece must fit in 4 bits");
 
     uint64_t set = 0;
-    for (int j = 0; j < sizeof(squares); j += sizeof(T)) {
+    for (size_t j = 0; j < sizeof(squares); j += sizeof(T)) {
         T input;
         memcpy(&input, &squares[j], sizeof(T));
         set |= equalSet(input, static_cast<uint8_t>(piece)) << j;
@@ -457,7 +457,7 @@ uint64_t lessSetT(std::array<Piece, 64> squares, Piece piece, bool invert) {
     if (!int(piece)) return invert ? 0xffffffffffffffffull : 0;  // Special case for empty squares
 
     uint64_t set = 0;
-    for (int j = 0; j < sizeof(squares); j += sizeof(T)) {
+    for (size_t j = 0; j < sizeof(squares); j += sizeof(T)) {
         T input;
         memcpy(&input, &squares[j], sizeof(T));
         set |= lessSet(input, static_cast<uint8_t>(piece)) << j;
@@ -555,7 +555,7 @@ bool clearPath(SquareSet occupancy, Square from, Square to) {
     return (occupancy & path).empty();
 }
 
-void addMove(MoveVector& moves, Piece piece, Move move) {
+void addMove(MoveVector& moves, Move move) {
     moves.emplace_back(move);
 }
 
@@ -643,7 +643,7 @@ void findMoves(const Board& board, SearchState& state, const F& fun) {
 
 /** For use in quiescent search: allow pawn moves that promote or near promotion */
 template <typename F>
-void findPromotionMoves(const Board& board, SearchState& state, const F& fun) {
+void findPromotionMoves(SearchState& state, const F& fun) {
     bool white = state.active() == Color::WHITE;
     auto masked = white ? SquareSet::rank(kNumRanks - 2) | SquareSet::rank(kNumRanks - 3)
                         : SquareSet::rank(1) | SquareSet::rank(2);
@@ -659,7 +659,7 @@ static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::WHITE),
 }  // namespace
 
 template <typename F>
-void findCastles(const Board& board, Occupancy occupancy, Turn turn, const F& fun) {
+void findCastles(Occupancy occupancy, Turn turn, const F& fun) {
     auto color = int(turn.activeColor());
     auto& info = castlingInfo[color];
 
@@ -891,14 +891,16 @@ bool mayHavePromoMove(Color side, Board& board, Occupancy occupancy) {
     return false;
 }
 
-void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun action) {
+void forAllLegalQuiescentMoves(Turn turn,
+                               Board& board,
+                               int depthleft,
+                               std::function<void(Move)> action) {
     // Iterate over all moves and captures
     auto state = SearchState(board, turn);
-    auto doMove = [&](Piece piece, Move move) {
+    auto doMove = [&](Piece, Move move) {
         auto change = makeMove(board, move);
 
-        if (doesNotCheck(board, state, move))
-            action(board, MoveWithPieces{move, piece, change.captured});
+        if (doesNotCheck(board, state, move)) action(move);
 
         unmakeMove(board, change);
     };
@@ -909,7 +911,7 @@ void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun a
         mayHavePromoMove(!turn.activeColor(), board, !state.occupancy);
 
     // Avoid horizon effect: don't promote in the last plies
-    if (depthleft >= options::promotionMinDepthLeft) findPromotionMoves(board, state, doMove);
+    if (depthleft >= options::promotionMinDepthLeft) findPromotionMoves(state, doMove);
 
     findEnPassant(board, turn, doMove);
     if (state.inCheck || otherMayPromote) findMoves(board, state, doMove);
@@ -917,9 +919,8 @@ void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun a
 
 MoveVector allLegalQuiescentMoves(Turn turn, Board& board, int depthleft) {
     MoveVector legalQuiescentMoves;
-    forAllLegalQuiescentMoves(turn, board, depthleft, [&](Board& board, MoveWithPieces mwp) {
-        legalQuiescentMoves.emplace_back(mwp.move);
-    });
+    forAllLegalQuiescentMoves(
+        turn, board, depthleft, [&](Move move) { legalQuiescentMoves.emplace_back(move); });
     return legalQuiescentMoves;
 }
 
@@ -934,7 +935,7 @@ void forAllLegalMovesAndCaptures(Board& board, SearchState& state, MoveFun actio
     findCaptures(board, state, doMove);
     findEnPassant(board, state.turn, doMove);
     findMoves(board, state, doMove);
-    if (!state.inCheck) findCastles(board, state.occupancy, state.turn, doMove);
+    if (!state.inCheck) findCastles(state.occupancy, state.turn, doMove);
 }
 
 size_t countLegalMovesAndCaptures(Board& board, SearchState& state) {
@@ -945,7 +946,7 @@ size_t countLegalMovesAndCaptures(Board& board, SearchState& state) {
     findCaptures(board, state, countMove);
     findEnPassant(board, state.turn, countMove);
     findMoves(board, state, countMove);
-    if (!state.inCheck) findCastles(board, state.occupancy, state.turn, countMove);
+    if (!state.inCheck) findCastles(state.occupancy, state.turn, countMove);
 
     return count;
 }
@@ -967,15 +968,15 @@ SquareSet possibleCaptures(Piece piece, Square from) {
 
 void addAvailableMoves(MoveVector& moves, const Board& board, Turn turn) {
     auto state = SearchState(board, turn);
-    findMoves(board, state, [&](Piece piece, Move move) { addMove(moves, piece, move); });
+    findMoves(board, state, [&](Piece, Move move) { addMove(moves, move); });
 }
 
 void addAvailableCaptures(MoveVector& captures, const Board& board, Turn turn) {
     auto state = SearchState(board, turn);
-    findCaptures(board, state, [&](Piece piece, Move move) { addMove(captures, piece, move); });
+    findCaptures(board, state, [&](Piece, Move move) { addMove(captures, move); });
 }
 
 void addAvailableEnPassant(MoveVector& captures, const Board& board, Turn turn) {
-    findEnPassant(board, turn, [&](Piece piece, Move move) { addMove(captures, piece, move); });
+    findEnPassant(board, turn, [&](Piece, Move move) { addMove(captures, move); });
 }
 }  // namespace for_test

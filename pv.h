@@ -1,4 +1,3 @@
-
 #include "common.h"
 #include "eval.h"
 
@@ -20,6 +19,7 @@ struct PrincipalVariation {
         if (move) moves.push_back(move);
         moves.insert(moves.end(), pv.moves.begin(), pv.moves.end());
     }
+    PrincipalVariation(const PrincipalVariation&) = default;
     PrincipalVariation& operator=(const PrincipalVariation& other) = default;
     Move front() const { return moves.empty() ? Move() : moves.front(); }
     Move operator[](size_t i) const { return i < moves.size() ? moves[i] : Move(); }
