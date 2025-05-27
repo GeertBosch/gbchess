@@ -400,7 +400,7 @@ struct BoardChange {
     }
 };
 
-class Turn {
+class alignas(4) Turn {
     enum EnPassantTarget : uint16_t {
         _ = 0,
         // clang-format off
@@ -479,35 +479,6 @@ public:
 };
 
 struct Position {
-    // File indices for standard castling, not chess960
-    static const int kQueenSideRookFile = 0;
-    static const int kKingSideRookFile = kNumFiles - 1;
-    static const int kKingFile = kNumFiles / 2;
-
-    static const int kRookCastledQueenSideFile = 3;
-    static const int kKingCastledQueenSideFile = 2;
-    static const int kRookCastledKingSideFile = kNumFiles - 3;
-    static const int kKingCastledKingSideFile = kNumFiles - 2;
-
-    // Base positions of pieces involved in castling
-    static constexpr auto whiteQueenSideRook = "a1"_sq;
-    static constexpr auto whiteKing = "e1"_sq;
-    static constexpr auto whiteKingSideRook = "h1"_sq;
-    static constexpr auto blackQueenSideRook = "a8"_sq;
-    static constexpr auto blackKing = "e8"_sq;
-    static constexpr auto blackKingSideRook = "h8"_sq;
-
-    // Positions of castled pieces
-    // TODO: Remove these from Position
-    static constexpr auto whiteRookCastledQueenSide = "d1"_sq;
-    static constexpr auto whiteRookCastledKingSide = "f1"_sq;
-    static constexpr auto whiteKingCastledQueenSide = "b1"_sq;
-    static constexpr auto whiteKingCastledKingSide = "g1"_sq;
-    static constexpr auto blackRookCastledQueenSide = "d8"_sq;
-    static constexpr auto blackRookCastledKingSide = "f8"_sq;
-    static constexpr auto blackKingCastledQueenSide = "b8"_sq;
-    static constexpr auto blackKingCastledKingSide = "g8"_sq;
-
     Board board;
     Turn turn = {Color::WHITE};
     Color active() const { return turn.activeColor(); }

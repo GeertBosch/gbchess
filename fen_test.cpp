@@ -23,12 +23,12 @@ int testparse() {
 
 void testInitialPosition() {
     Board board(fen::parsePiecePlacement(fen::initialPiecePlacement));
-    assert(board[Position::whiteKing] == Piece::K);
-    assert(board[Position::whiteKingSideRook] == Piece::R);
-    assert(board[Position::whiteQueenSideRook] == Piece::R);
-    assert(board[Position::blackKing] == Piece::k);
-    assert(board[Position::blackKingSideRook] == Piece::r);
-    assert(board[Position::blackQueenSideRook] == Piece::r);
+    assert(board["e1"_sq] == Piece::K);
+    assert(board["h1"_sq] == Piece::R);
+    assert(board["a1"_sq] == Piece::R);
+    assert(board["e8"_sq] == Piece::k);
+    assert(board["h8"_sq] == Piece::r);
+    assert(board["a8"_sq] == Piece::r);
 
     Position position = fen::parsePosition(fen::initialPosition);
     assert(position.board == board);

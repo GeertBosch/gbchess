@@ -64,6 +64,11 @@ private:
     void initializeCompound();
 } movesTable;
 
+namespace {
+static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::WHITE),
+                                                 CastlingInfo(Color::BLACK)};
+}  // namespace
+
 namespace init {
 Occupancy occupancyDelta(Move move) {
     auto [from, to, kind] = Move::Tuple(move);
@@ -72,14 +77,18 @@ Occupancy occupancyDelta(Move move) {
     ours.insert(to);
     SquareSet theirs;
     switch (kind) {
-    case MoveKind::KING_CASTLE:
-        ours.insert(Square(Position::kRookCastledKingSideFile, from.rank()));
-        ours.insert(Square(Position::kKingSideRookFile, from.rank()));
+    case MoveKind::KING_CASTLE: {
+        auto info = castlingInfo[from.rank() != 0];
+        ours.insert(info.kingSide[1][1]);
+        ours.insert(info.kingSide[1][0]);
         break;
-    case MoveKind::QUEEN_CASTLE:
-        ours.insert(Square(Position::kRookCastledQueenSideFile, from.rank()));
-        ours.insert(Square(Position::kQueenSideRookFile, from.rank()));
+    }
+    case MoveKind::QUEEN_CASTLE: {
+        auto info = castlingInfo[from.rank() != 0];
+        ours.insert(info.queenSide[1][1]);
+        ours.insert(info.queenSide[1][0]);
         break;
+    }
     case MoveKind::CAPTURE:
     case MoveKind::KNIGHT_PROMOTION_CAPTURE:
     case MoveKind::BISHOP_PROMOTION_CAPTURE:
@@ -92,26 +101,16 @@ Occupancy occupancyDelta(Move move) {
 }
 SquareSet castlingPath(Color color, MoveKind side) {
     SquareSet path;
-    int rank = color == Color::WHITE ? 0 : kNumRanks - 1;
+    auto info = castlingInfo[int(color)];
 
-    if (side == MoveKind::QUEEN_CASTLE) {
-        // Note the paths are reversed, so the start point is excluded and the endpoint included.
-        path |= SquareSet::path(Square(Position::kKingCastledQueenSideFile, rank),
-                                Square(Position::kKingFile, rank));
-        path |= SquareSet::path(Square(Position::kRookCastledQueenSideFile, rank),
-                                Square(Position::kQueenSideRookFile, rank));
-    } else {
-        assert(side == MoveKind::KING_CASTLE);
-        // Note the paths are reversed, so the start point is excluded and the endpoint included.
-        path |= SquareSet::path(Square(Position::kKingCastledKingSideFile, rank),
-                                Square(Position::kKingFile, rank));
-        path |= SquareSet::path(Square(Position::kRookCastledKingSideFile, rank),
-                                Square(Position::kKingSideRookFile, rank));
-    }
+    // Note the paths are reversed, so the start point is excluded and the endpoint included.
+    if (side == MoveKind::KING_CASTLE)
+        path |= SquareSet::path(info.kingSide[0][1], info.kingSide[0][0]) |
+            SquareSet::path(info.kingSide[1][1], info.kingSide[1][0]);
+    else
+        path |= SquareSet::path(info.queenSide[0][1], info.queenSide[0][0]) |
+            SquareSet::path(info.queenSide[1][1], info.queenSide[1][0]);
 
-    // Explicitly exclude the king's and rook's starting square for chess960
-    path.erase(Square(Position::kKingFile, rank));
-    path.erase(Square(Position::kKingSideRookFile, rank));
     return path;
 }
 SquareSet rookMoves(Square from) {
@@ -653,10 +652,6 @@ void findPromotionMoves(SearchState& state, const F& fun) {
     state.pawns = pawns;
 }
 
-namespace {
-static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::WHITE),
-                                                 CastlingInfo(Color::BLACK)};
-}  // namespace
 
 template <typename F>
 void findCastles(Occupancy occupancy, Turn turn, const F& fun) {
@@ -765,18 +760,17 @@ void unmakeMove(Position& position, UndoPosition undo) {
 }
 
 CastlingMask castlingMask(Square from, Square to) {
-    using P = Position;
     using CM = CastlingMask;
 
     const struct MaskTable {
         std::array<CM, kNumSquares> mask;
         constexpr MaskTable() : mask{} {
-            mask[P::whiteQueenSideRook.index()] = CM::Q;
-            mask[P::whiteKingSideRook.index()] = CM::K;
-            mask[P::blackQueenSideRook.index()] = CM::q;
-            mask[P::blackKingSideRook.index()] = CM::k;
-            mask[P::whiteKing.index()] = CM::KQ;
-            mask[P::blackKing.index()] = CM::kq;
+            mask[castlingInfo[0].kingSide[0][0].index()] = CM::KQ;  // White King
+            mask[castlingInfo[0].kingSide[1][0].index()] = CM::K;   // White King Side Rook
+            mask[castlingInfo[0].queenSide[1][0].index()] = CM::Q;  // White Queen Side Rook
+            mask[castlingInfo[1].kingSide[0][0].index()] = CM::kq;  // Black King
+            mask[castlingInfo[1].kingSide[1][0].index()] = CM::k;   // Black King Side Rook
+            mask[castlingInfo[1].queenSide[1][0].index()] = CM::q;  // Black Queen Side Rook
         }
         CM operator[](Square sq) const { return mask[sq.index()]; }
     } maskTable;
