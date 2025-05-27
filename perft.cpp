@@ -94,7 +94,7 @@ int main(int argc, char** argv) {
     auto shift = [&argc, &argv]() -> char* { return --argc, *++argv; };
     auto arg = [&argc, &argv]() -> std::string { return argc < 2 ? "" : std::string(argv[1]); };
 
-    while (arg().starts_with('-')) option(shift());
+    while (arg()[0] == '-') option(shift());
 
     while (fen::maybeFEN(arg())) {
         positions.push_back(fen::parsePosition(shift()));

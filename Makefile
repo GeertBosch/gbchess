@@ -1,7 +1,7 @@
 PUZZLES=puzzles/lichess_db_puzzle.csv
 PHASES=opening middlegame endgame
 EVALS=$(foreach phase,${PHASES},evals/lichess_${phase}_evals.csv)
-CCFLAGS=-std=c++20 -Werror -Wall
+CCFLAGS=-std=c++17 -Werror -Wall
 CLANGPP=clang++
 GPP=g++
 # DEBUGFLAGS=-fsanitize=address -DDEBUG -O0 -g --coverage
@@ -176,8 +176,8 @@ TEST_SRCS=$(wildcard *_test.cpp)
 DEBUG_TARGETS=$(patsubst %_test.cpp,%-debug,$(TEST_SRCS))
 BUILD_TARGETS=$(patsubst %_test.cpp,%-test,$(TEST_SRCS))
 
-debug: $(DEBUG_TARGETS)
-build: $(BUILD_TARGETS)
+debug: $(DEBUG_TARGETS) perft-debug
+build: $(BUILD_TARGETS) perft
 
 searches1: search-debug
 	./search-debug "5r1k/pp4pp/5p2/1BbQp1r1/7K/7P/1PP3P1/3R3R b - - 3 26" 3
