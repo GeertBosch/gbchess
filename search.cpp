@@ -26,7 +26,7 @@ uint64_t searchEvalCount = 0;  // copy of evalCount at the start of the search
 timepoint searchStartTime = {};
 
 std::string pct(uint64_t some, uint64_t all) {
-    return " " + std::to_string((some * 100) / all) + "%";
+    return all ? " " + std::to_string((some * 100) / all) + "%" : "";
 }
 
 /**
@@ -63,11 +63,10 @@ struct TranspositionTable {
     uint64_t numCollisions = 0;
     uint64_t numImproved = 0;
     uint64_t numHits = 0;
-    uint64_t numStale = 0;  // Hits on entries from previous generations
     uint64_t numMisses = 0;
 
     ~TranspositionTable() {
-        if (debug && options::transpositionTableDebug) printStats();
+        if (options::transpositionTableDebug) printStats();
     }
 
     Eval find(Hash hash) {
@@ -113,6 +112,7 @@ struct TranspositionTable {
 
     void insert(Hash hash, Eval move, uint8_t depthleft, EntryType type) {
         if constexpr (kNumEntries == 0) return;
+        if (!move) return;
         auto idx = hash() % kNumEntries;
         auto& entry = entries[idx];
         ++numInserted;
@@ -151,14 +151,14 @@ struct TranspositionTable {
 
 
     void printStats() {
+        auto numCalls = numHits + numMisses;
         std::cout << "Transposition table stats:\n";
-        std::cout << "  Inserted: " << numInserted << "\n";
-        std::cout << "  Collisions: " << numCollisions << "\n";
-        std::cout << "  Occupied: " << numOccupied << "\n";
-        std::cout << "  Improved: " << numImproved << "\n";
-        std::cout << "  Hits: " << numHits << "\n";
-        std::cout << "  Stale: " << numStale << "\n";
-        std::cout << "  Misses: " << numMisses << "\n";
+        std::cout << "  occupied: " << numOccupied << pct(numOccupied, kNumEntries) << "\n";
+        std::cout << "  inserts: " << numInserted << "\n";
+        std::cout << "  collisions: " << numCollisions << pct(numCollisions, numInserted) << "\n";
+        std::cout << "  Improved: " << numImproved << pct(numImproved, numInserted) << "\n";
+        std::cout << "  Hits: " << numHits << pct(numHits, numCalls) << "\n";
+        std::cout << "  Misses: " << numMisses << pct(numMisses, numCalls) << "\n";
     }
 
 } transpositionTable;
@@ -170,7 +170,7 @@ struct QuiescenceCache {
     using Hash = uint64_t;
     constexpr static size_t kQsCacheSize = options::quiescenceCacheSize;
     using Entry = std::pair<Hash, Score>;
-    std::vector<Entry> entries{kQsCacheSize};
+    std::vector<Entry> entries;
     Counter count = 0;
     Counter collisions = 0;
     mutable Counter calls = 0;
@@ -178,6 +178,7 @@ struct QuiescenceCache {
     mutable Counter misses = 0;
 
     QuiescenceCache() {
+        entries.resize(kQsCacheSize);
         for (auto& entry : entries) entry = {0, Score::min()};
     }
     static constexpr size_t size() { return kQsCacheSize; }
@@ -192,7 +193,8 @@ struct QuiescenceCache {
                 ++hits;
                 return;
             }
-            ++collisions;
+            if (entry.first)  //
+                ++collisions;
             entry = {hash, score};
         }
     }
@@ -221,12 +223,12 @@ struct QuiescenceCache {
         assert(calls == hits + misses);
 
         if (options::quiescenceCacheDebug) {
-            std::cout << "  entries: " << count << "\n";
-            std::cout << "  used: " << used << "\n";
-            std::cout << "  collisions: " << collisions << "\n";
+            std::cout << "  inserts: " << count << "\n";
+            std::cout << "  used: " << used << pct(used, entries.size()) << "\n";
+            std::cout << "  collisions: " << collisions << pct(collisions, count) << "\n";
             std::cout << "  calls: " << calls << "\n";
-            std::cout << "  hits: " << hits << "\n";
-            std::cout << "  misses: " << misses << "\n";
+            std::cout << "  hits: " << hits << pct(hits, calls) << "\n";
+            std::cout << "  misses: " << misses << pct(misses, calls) << "\n";
         }
     }
 } quiescenceCache;
@@ -456,21 +458,20 @@ Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depth
     return alpha;
 }
 
-Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
+Score quiesce(Position& position, Hash hash, Score alpha, Score beta, int depthleft) {
     ++evalCount;
-    auto hash = Hash(position)();
-    if (auto score = quiescenceCache[hash]) return *score;
+    if (auto score = quiescenceCache[hash()]) return *score;
 
     auto eval = evaluateBoard(position.board, position.active(), evalTable);
     eval = quiesce(position, eval, alpha, beta, depthleft);
     if (eval.mate() && !isCheckmate(position)) eval = std::clamp(eval, -1000_cp, 1000_cp);
 
-    quiescenceCache.insert(hash, eval);
+    quiescenceCache.insert(hash(), eval);
     return eval;
 }
 
 Score quiesce(Position& position, int depthleft) {
-    return search::quiesce(position, Score::min(), Score::max(), depthleft);
+    return search::quiesce(position, Hash(position), Score::min(), Score::max(), depthleft);
 }
 
 struct Depth {
@@ -486,7 +487,8 @@ struct Depth {
  * the best score that the current player can guarantee, assuming the opponent plays optimally.
  */
 PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score beta, Depth depth) {
-    if (depth.left <= 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
+    if (depth.left <= 0)
+        return {{}, quiesce(position, hash, alpha, beta, options::quiescenceDepth)};
 
     // Check the transposition table, which may tighten one or both search bounds
     transpositionTable.refineAlphaBeta(hash, depth.left, alpha, beta);
@@ -584,7 +586,8 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
 
 PrincipalVariation toplevelAlphaBeta(
     Position& position, Score alpha, Score beta, int depthleft, InfoFn info) {
-    if (depthleft <= 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
+    if (depthleft <= 0)
+        return {{}, quiesce(position, Hash(position), alpha, beta, options::quiescenceDepth)};
     Depth depth = {0, depthleft};
 
     Hash hash(position);
