@@ -165,74 +165,6 @@ struct TranspositionTable {
 
 size_t history[2][kNumSquares][kNumSquares] = {{{0}}};
 
-struct QuiescenceCache {
-    using Counter = uint64_t;
-    using Hash = uint64_t;
-    constexpr static size_t kQsCacheSize = options::quiescenceCacheSize;
-    using Entry = std::pair<Hash, Score>;
-    std::vector<Entry> entries;
-    Counter count = 0;
-    Counter collisions = 0;
-    mutable Counter calls = 0;
-    mutable Counter hits = 0;
-    mutable Counter misses = 0;
-
-    QuiescenceCache() {
-        entries.resize(kQsCacheSize);
-        for (auto& entry : entries) entry = {0, Score::min()};
-    }
-    static constexpr size_t size() { return kQsCacheSize; }
-
-    void reset() { *this = {}; }
-
-    void insert(Hash hash, Score score) {
-        if constexpr (size()) {
-            ++count;
-            auto& entry = entries[hash % kQsCacheSize];
-            if (entry.first == hash) {
-                ++hits;
-                return;
-            }
-            if (entry.first)  //
-                ++collisions;
-            entry = {hash, score};
-        }
-    }
-
-    OptionalScore operator[](Hash hash) {
-        if constexpr (size() == 0) return {};
-
-        ++calls;
-        ++hits;
-        auto& entry = entries[hash % size()];
-        if (entry.first == hash) return entry.second;
-
-        --hits;
-        ++misses;
-        return {};
-    }
-
-    void printStats() {
-        if constexpr (size() == 0) return;
-        std::cout << "\nQuiescence cache stats:\n";
-
-        uint64_t used = 0;
-        for (auto entry : entries)
-            if (entry.first) ++used;
-
-        assert(calls == hits + misses);
-
-        if (options::quiescenceCacheDebug) {
-            std::cout << "  inserts: " << count << "\n";
-            std::cout << "  used: " << used << pct(used, entries.size()) << "\n";
-            std::cout << "  collisions: " << collisions << pct(collisions, count) << "\n";
-            std::cout << "  calls: " << calls << "\n";
-            std::cout << "  hits: " << hits << pct(hits, calls) << "\n";
-            std::cout << "  misses: " << misses << pct(misses, calls) << "\n";
-        }
-    }
-} quiescenceCache;
-
 /**
  * The repetition table stores the hashes of all positions played so far in the game, so we can
  * detect repetitions and apply the rule that a third repetition is a draw.
@@ -458,20 +390,18 @@ Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depth
     return alpha;
 }
 
-Score quiesce(Position& position, Hash hash, Score alpha, Score beta, int depthleft) {
+Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     ++evalCount;
-    if (auto score = quiescenceCache[hash()]) return *score;
 
     auto eval = evaluateBoard(position.board, position.active(), evalTable);
     eval = quiesce(position, eval, alpha, beta, depthleft);
     if (eval.mate() && !isCheckmate(position)) eval = std::clamp(eval, -1000_cp, 1000_cp);
 
-    quiescenceCache.insert(hash(), eval);
     return eval;
 }
 
 Score quiesce(Position& position, int depthleft) {
-    return search::quiesce(position, Hash(position), Score::min(), Score::max(), depthleft);
+    return search::quiesce(position, Score::min(), Score::max(), depthleft);
 }
 
 struct Depth {
@@ -487,8 +417,7 @@ struct Depth {
  * the best score that the current player can guarantee, assuming the opponent plays optimally.
  */
 PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score beta, Depth depth) {
-    if (depth.left <= 0)
-        return {{}, quiesce(position, hash, alpha, beta, options::quiescenceDepth)};
+    if (depth.left <= 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
 
     // Check the transposition table, which may tighten one or both search bounds
     transpositionTable.refineAlphaBeta(hash, depth.left, alpha, beta);
@@ -586,8 +515,7 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
 
 PrincipalVariation toplevelAlphaBeta(
     Position& position, Score alpha, Score beta, int depthleft, InfoFn info) {
-    if (depthleft <= 0)
-        return {{}, quiesce(position, Hash(position), alpha, beta, options::quiescenceDepth)};
+    if (depthleft <= 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
     Depth depth = {0, depthleft};
 
     Hash hash(position);
@@ -673,7 +601,6 @@ PrincipalVariation iterativeDeepening(Position& position, int maxdepth, InfoFn i
 void newGame() {
     transpositionTable.clear();
     repetitions.clear();
-    quiescenceCache.reset();
     std::fill(&history[0][0][0], &history[0][0][0] + sizeof(history) / sizeof(history[0][0][0]), 0);
 }
 
@@ -690,8 +617,6 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
 
     auto pv = options::iterativeDeepening ? iterativeDeepening(position, maxdepth, info)
                                           : toplevelAlphaBeta(position, maxdepth, info);
-
-    if (options::quiescenceCacheDebug) quiescenceCache.printStats();
 
     // Print beta cutoff statistics
     if (options::alphaBetaDebug && totalMovesEvaluated > 0)
