@@ -803,9 +803,9 @@ Turn applyMove(Turn turn, MoveWithPieces mwp) {
     // Set the en passant target if a pawn moves two squares forward, otherwise reset it.
     turn.setEnPassant(noEnPassantTarget);
     auto move = mwp.move;
-    if (move.kind() == MoveKind::DOUBLE_PAWN_PUSH) {
+    if (move.kind() == MoveKind::DOUBLE_PAWN_PUSH)
         turn.setEnPassant({move.from().file(), (move.from().rank() + move.to().rank()) / 2});
-    }
+
     // Update castlingAvailability
     turn.setCastling(turn.castling() & ~castlingMask(move.from(), move.to()));
 

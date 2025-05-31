@@ -16,7 +16,7 @@ calc_objs=$(patsubst %.cpp,${$(1)OBJ}/%.o,$(2))
 calc_deps=${calc_objs:.o=.d}
 
 all: debug test build perft-test mate123 mate45 puzzles evals
-	@echo -e "\n\n*** All tests passed! ***\n"
+	@echo "\n*** All tests passed! ***\n"
 
 -include $(call calc_deps,OPT,$(wildcard *.cpp))
 -include $(call calc_deps,DBG,$(wildcard *.cpp))

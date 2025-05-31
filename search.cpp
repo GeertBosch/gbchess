@@ -275,8 +275,10 @@ int score(const Board& board, Move move) {
     auto side = color(piece);
 
     return base +
-        (isCapture(move.kind()) ? xx[index(type(piece))][index(type(board[move.to()]))]
-                                : history[int(side)][move.from().index()][move.to().index()]);
+        (isCapture(move.kind())
+             ? xx[index(type(piece))][index(type(board[move.to()]))]
+             : (options::historyStore ? history[int(side)][move.from().index()][move.to().index()]
+                                      : 0));
 }
 uint64_t totalMovesEvaluated = 0;
 uint64_t betaCutoffMoves = 0;
@@ -337,18 +339,13 @@ void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
     begin = sortCaptures(position, begin, end);
 }
 
-void sortMoves(const Position& position, MoveIt begin, MoveIt end) {
-    Hash hash(position);
-    sortMoves(position, hash, begin, end);
-}
-
 std::pair<UndoPosition, Score> makeMoveWithEval(Position& position, Move move, Score eval) {
     auto change = prepareMove(position.board, move);
     UndoPosition undo;
-    if (options::incrementalEvaluation) {
+    if constexpr (options::incrementalEvaluation) {
         eval += evaluateMove(position.board, position.active(), change, evalTable);
         undo = makeMove(position, change, move);
-        assert(!debug || -eval == evaluateBoard(position.board, position.active(), evalTable));
+        dassert(-eval == evaluateBoard(position.board, position.active(), evalTable));
     } else {
         undo = makeMove(position, change, move);
         eval = evaluateBoard(position.board, !position.active(), evalTable);
@@ -410,6 +407,14 @@ struct Depth {
     Depth operator+(int i) const { return {current + i, left - i}; }
 };
 
+bool betaCutoff(Score score, Score beta, Move move, Color side, int depthleft) {
+    if (score < beta) return false;  // No beta cutoff
+    ++betaCutoffMoves;               // Increment beta cutoff moves
+    if (options::historyStore && !isCapture(move.kind()))
+        history[int(side)][move.from().index()][move.to().index()] += depthleft * depthleft;
+    return true;
+}
+
 /**
  * The alpha-beta search algorithm with fail-soft negamax search.
  * The alpha represents the best score that the maximizing player can guarantee at the current
@@ -445,31 +450,25 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
         ++moveCount;
         auto newHash = hash;
         newHash.applyMove(position, move);
-        auto newPosition = applyMove(position, move);
-        dassert(newHash == Hash(newPosition));
+        auto undo = makeMove(position, move);
+        dassert(newHash == Hash(position));
         auto newAlpha = std::max(alpha, pv.score);
 
         // Apply Late Move Reduction (LMR)
-        bool applyLMR = options::lateMoveReductions && depth.current > 1 && depth.left > 2 &&
-            moveCount > 2 && isQuiet(newPosition, depth.left);
+        bool applyLMR = options::lateMoveReductions && depth.left > 2 && moveCount > 2 &&
+            isQuiet(position, depth.left);
 
         // Perform a reduced-depth search
         auto newVar = -alphaBeta(
-            newPosition, newHash, -beta, -newAlpha, {depth.current + 1, depth.left - 1 - applyLMR});
+            position, newHash, -beta, -newAlpha, {depth.current + 1, depth.left - 1 - applyLMR});
 
         // Re-search at full depth if the reduced search fails high
         if (applyLMR && newVar.score > alpha)
-            newVar = -alphaBeta(
-                newPosition, newHash, -beta, -newAlpha, {depth.current + 1, depth.left - 1});
+            newVar = -alphaBeta(position, newHash, -beta, -newAlpha, depth + 1);
+        unmakeMove(position, undo);
 
         if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
-        if (pv.score >= beta) {
-            ++betaCutoffMoves;  // Increment beta cutoff moves
-            int side = int(position.active());
-            if (!isCapture(move.kind()))
-                history[side][move.from().index()][move.to().index()] += depth.left * depth.left;
-            break;
-        }
+        if (betaCutoff(pv.score, beta, move, position.active(), depth.left)) break;
     }
 
     if (moveList.empty() && !isInCheck(position)) pv.score = Score();  // Stalemate
@@ -537,6 +536,8 @@ PrincipalVariation toplevelAlphaBeta(
     int currmovenumber = 0;
     for (auto move : moveList) {
         if (currmoveInfo(info, depthleft, move, ++currmovenumber)) break;
+        ++totalMovesEvaluated;  // Increment total moves evaluated
+
         auto newHash = hash;
         newHash.applyMove(position, move);
         auto newPosition = applyMove(position, move);
@@ -544,11 +545,7 @@ PrincipalVariation toplevelAlphaBeta(
         auto newVar =
             -alphaBeta(newPosition, newHash, -beta, -std::max(alpha, pv.score), depth + 1);
         if (newVar.score > pv.score || !pv.front()) pv = {move, newVar};
-        if (pv.score >= beta) {
-            int side = int(position.active());
-            history[side][move.from().index()][move.to().index()] += depthleft * depthleft;
-            break;
-        }
+        if (betaCutoff(pv.score, beta, move, position.active(), depth.left)) break;
     }
     if (moveList.empty() && !isInCheck(position)) pv = {Move(), Score()};
     transpositionTable.insert(hash, {pv.front(), pv.score}, depthleft, alpha, beta);

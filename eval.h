@@ -151,22 +151,6 @@ struct EvalTable {
 int computePhase(const Board& board);
 
 /**
- * This function iterates over each square in the board, uses the pieceValues map to find
- * the value of the piece on that square, and adjusts the total value accordingly. White
- * pieces have positive values, and black pieces have negative values, so the returned value
- * represents the advantage to the white player: positive for white's advantage, negative
- * for black's advantage.
- * If usePieceSquareTables is true, additionally adjust the evaluation of each piece based on
- * its position and the phase of the game.
- */
-Score evaluateBoard(const Board& board, bool usePieceSquareTables);
-
-/**
- * Same as above, but uses a pre-computed evaluation table.
- */
-Score evaluateBoard(const Board& board, const EvalTable& table);
-
-/**
  * Return the delta in the Score as result of the move from white's perspective: positive scores
  * indicate an advantage for white. The board past reflects the state before the move.
  */
@@ -198,6 +182,23 @@ inline Score evaluateMove(const Board& board,
     Score eval = evaluateMove(board, move, table);
     return activePlayer == Color::WHITE ? eval : -eval;
 }
+
+
+/**
+ * This function iterates over each square in the board, uses the pieceValues map to find
+ * the value of the piece on that square, and adjusts the total value accordingly. White
+ * pieces have positive values, and black pieces have negative values, so the returned value
+ * represents the advantage to the white player: positive for white's advantage, negative
+ * for black's advantage.
+ * If usePieceSquareTables is true, additionally adjust the evaluation of each piece based on
+ * its position and the phase of the game.
+ */
+Score evaluateBoard(const Board& board, bool usePieceSquareTables);
+
+/**
+ * Same as above, but uses a pre-computed evaluation table.
+ */
+Score evaluateBoard(const Board& board, const EvalTable& table);
 
 /**
  * Same as the two functions above, but with player-relative scores
