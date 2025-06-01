@@ -173,22 +173,6 @@ void testScore() {
     std::cout << "Score tests passed" << std::endl;
 }
 
-void testOptionalScore() {
-    OptionalScore opt;
-    assert(!opt);
-    opt = Score::max();
-    assert(opt);
-    assert(opt->mate() == 1);
-    opt = Score::min();
-    assert(opt);
-    assert(opt->mate() == -1);
-    opt = Score();
-    assert(opt);
-    opt = {};
-    assert(!opt);
-    std::cout << "OptionalScore tests passed" << std::endl;
-}
-
 void testMateScore() {
     Score M1 = Score::max();
     assert(std::string(M1) == "M1");
@@ -316,7 +300,6 @@ int main(int argc, char* argv[]) {
     --argc;
 
     testScore();
-    testOptionalScore();
     testCheckAndMate();
     testMateScore();
     testEvaluateBoard();

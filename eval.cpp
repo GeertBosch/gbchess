@@ -1,4 +1,3 @@
-#include <iostream>
 #include <string>
 
 #include "eval_tables.h"
@@ -7,23 +6,6 @@
 #include "moves.h"
 
 #include "eval.h"
-
-std::ostream& operator<<(std::ostream& os, Move mv) {
-    return os << std::string(mv);
-}
-std::ostream& operator<<(std::ostream& os, Square sq) {
-    return os << to_string(sq);
-}
-std::ostream& operator<<(std::ostream& os, Color color) {
-    return os << (color == Color::b ? 'b' : 'w');
-}
-std::ostream& operator<<(std::ostream& os, Score score) {
-    return os << std::string(score);
-}
-std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
-    for (const auto& move : moves) os << " " << std::string(move);
-    return os;
-}
 
 SquareTable operator+(SquareTable lhs, Score rhs) {
     for (auto& value : lhs) value += rhs;
@@ -92,7 +74,7 @@ struct GamePhase {
     GamePhase(int phase) : phase(std::clamp(phase, kEndgame, kOpening)) {}
     GamePhase(const Board& board) {
         int material[2] = {0, 0};  // per color, in pawns
-        for (auto piece : board.squares()) {
+        for (auto piece : board) {
             auto val = pieceValues[index(piece)].pawns();
             // Ignore pawns
             if (val < -1) material[0] -= val;

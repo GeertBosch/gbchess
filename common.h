@@ -1,6 +1,7 @@
 #include <array>
 #include <cassert>
 #include <climits>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <tuple>
@@ -245,6 +246,10 @@ public:
     using iterator = Squares::iterator;
     iterator begin() { return _squares.begin(); }
     iterator end() { return _squares.end(); }
+
+    using const_iterator = Squares::const_iterator;
+    const_iterator begin() const { return _squares.begin(); }
+    const_iterator end() const { return _squares.end(); }
 };
 
 enum class CastlingMask : uint8_t {
