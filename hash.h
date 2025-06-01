@@ -19,6 +19,10 @@ static constexpr int kNumHashVectors = kNumBoardVectors + kNumExtraVectors;
 // hash function.
 extern std::array<uint64_t, kNumHashVectors> hashVectors;
 
+constexpr PieceType promotionType(MoveKind kind) {
+    return PieceType((index(kind) & 3) + 1);
+}
+
 // A Hash is a 64-bit integer that represents a position. It is the XOR of the hash vectors for
 // each piece on each square, as well as the applicable extra vectors.
 class Hash {

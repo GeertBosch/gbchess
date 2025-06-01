@@ -33,7 +33,7 @@ void testInitialPosition() {
     Position position = fen::parsePosition(fen::initialPosition);
     assert(position.board == board);
     Turn turn = position.turn;
-    assert(turn.activeColor() == Color::WHITE);
+    assert(turn.activeColor() == Color::w);
     assert(turn.castling() == CastlingMask::KQkq);
     assert(turn.enPassant() == Square(0));
     assert(turn.halfmove() == 0);

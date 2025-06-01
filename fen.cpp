@@ -39,7 +39,7 @@ Turn parseTurn(std::stringstream ss) {
     ss >> activeColorStr >> castlingAvailabilityStr >> enPassantTargetStr >> halfmoveClockStr >>
         fullmoveNumberStr;
 
-    Color active = activeColorStr == "b" ? Color::BLACK : Color::WHITE;
+    Color active = activeColorStr == "b" ? Color::b : Color::w;
     CastlingMask castling = CastlingMask::_;
     for (char ch : castlingAvailabilityStr) {
         switch (ch) {

@@ -15,7 +15,7 @@ std::ostream& operator<<(std::ostream& os, Square sq) {
     return os << to_string(sq);
 }
 std::ostream& operator<<(std::ostream& os, Color color) {
-    return os << (color == Color::BLACK ? 'b' : 'w');
+    return os << (color == Color::b ? 'b' : 'w');
 }
 std::ostream& operator<<(std::ostream& os, Score score) {
     return os << std::string(score);
@@ -42,7 +42,7 @@ SquareTable operator*(SquareTable table, Score score) {
 
 void flip(SquareTable& table) {
     // Flip the table vertically (king side remains king side, queen side remains queen side)
-    for (auto sq = Square(0); index(sq) != kNumSquares / 2; inc(sq)) {
+    for (auto sq : Range(Square(0), Square(kNumSquares / 2 - 1))) {
         auto other = makeSquare(file(sq), kNumRanks - 1 - rank(sq));
         std::swap(table[index(sq)], table[index(other)]);
     };
@@ -152,7 +152,7 @@ EvalTable::EvalTable(const Board& board, bool usePieceSquareTables) {
             table = phase.interpolate(middlegame, endgame);
         }
         table = table + pieceValues[index(type(piece))];
-        if (color(piece) == Color::BLACK) flip(table);
+        if (color(piece) == Color::b) flip(table);
     }
 }
 
