@@ -70,7 +70,7 @@ static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::w), Castlin
 
 namespace init {
 Occupancy occupancyDelta(Move move) {
-    auto [from, to, kind] = Move::Tuple(move);
+    auto [from, to, kind] = move;
     SquareSet ours;
     ours.insert(from);
     ours.insert(to);
@@ -879,7 +879,7 @@ Position applyUCIMove(Position position, const std::string& move) {
 }
 
 bool doesNotCheck(Board& board, const SearchState& state, Move move) {
-    auto [from, to, kind] = Move::Tuple(move);
+    auto [from, to, kind] = move;
 
     SquareSet checkSquares = state.kingSquare;
     if (from == state.kingSquare)
