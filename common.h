@@ -209,9 +209,6 @@ struct Move {
         return str;
     }
 
-    using Tuple = std::tuple<Square, Square, MoveKind>;
-    operator Tuple() const { return {from, to, kind}; }
-
     operator bool() const { return from != to; }
 
     bool operator==(const Move& other) const {
