@@ -23,49 +23,47 @@ constexpr bool debug = 0;
 static constexpr uint8_t kNumFiles = 8, kNumRanks = 8;
 static constexpr uint8_t kNumSquares = kNumFiles * kNumRanks;
 
-class Square {
-
-public:
-    // rank and file range from 0 to 7
-    constexpr Square(int file, int rank) : square(rank * kNumFiles + file) {}
-    constexpr Square(int index) : square(index) {}
-
-    int rank() const { return square / kNumFiles; }
-    int file() const { return square % kNumRanks; }
-    int index() const { return square; }
-
-    Square operator++() { return ++square, *this; }
-
-    bool operator==(Square other) const { return square == other.square; }
-    bool operator!=(Square other) const { return square != other.square; }
-
-    // Conversion to std::string: file to letter ('a' to 'h') and rank to digit ('1' to '8')
-    operator std::string() const { return {char('a' + file()), char('1' + rank())}; }
-
-private:
-    // lldb summary-string "${var.rep}"
-    enum Rep : uint8_t {
-        // clang-format off
-        a1, b1, c1, d1, e1, f1, g1, h1,
-        a2, b2, c2, d2, e2, f2, g2, h2,
-        a3, b3, c3, d3, e3, f3, g3, h3,
-        a4, b4, c4, d4, e4, f4, g4, h4,
-        a5, b5, c5, d5, e5, f5, g5, h5,
-        a6, b6, c6, d6, e6, f6, g6, h6,
-        a7, b7, c7, d7, e7, f7, g7, h7,
-        a8, b8, c8, d8, e8, f8, g8, h8,
-        // clang-format on
-    };
-    union {
-        uint8_t square = 0;
-        Rep rep;
-    };
+enum class Square : uint16_t {
+    // clang-format off
+    a1, b1, c1, d1, e1, f1, g1, h1,
+    a2, b2, c2, d2, e2, f2, g2, h2,
+    a3, b3, c3, d3, e3, f3, g3, h3,
+    a4, b4, c4, d4, e4, f4, g4, h4,
+    a5, b5, c5, d5, e5, f5, g5, h5,
+    a6, b6, c6, d6, e6, f6, g6, h6,
+    a7, b7, c7, d7, e7, f7, g7, h7,
+    a8, b8, c8, d8, e8, f8, g8, h8,
+    // clang-format on
 };
+
+constexpr Square makeSquare(int file, int rank) {
+    return Square(rank * kNumFiles + file);
+}
+
+inline void inc(Square& sq) {
+    sq = Square(uint8_t(sq) + 1);
+}
+
+inline int rank(Square square) {
+    return int(square) / kNumFiles;
+}
+inline int file(Square square) {
+    return int(square) % kNumRanks;
+}
+inline int index(Square square) {
+    return int(square);
+}
+
+// Conversion to std::string: file to letter ('a' to 'h') and rank to digit ('1' to '8')
+inline std::string to_string(Square square) {
+    return {char('a' + file(square)), char('1' + rank(square))};
+}
+
 constexpr Square operator""_sq(const char* str, size_t len) {
     assert(len == 2);
     assert(str[0] >= 'a' && str[0] - 'a' < kNumFiles);
     assert(str[1] >= '1' && str[1] - '1' < kNumRanks);
-    return Square(str[0] - 'a', str[1] - '1');
+    return makeSquare(str[0] - 'a', str[1] - '1');
 }
 
 enum class Color : uint8_t { WHITE, BLACK };
@@ -149,116 +147,84 @@ inline Piece toPiece(char piece) {
 
 enum class MoveKind : uint8_t {
     // Moves that don't capture or promote
-    QUIET_MOVE = 0,
-    DOUBLE_PAWN_PUSH = 1,
-    KING_CASTLE = 2,
-    QUEEN_CASTLE = 3,
+    Quiet_Move = 0,
+    Double_Push = 1,
+    O_O = 2,
+    O_O_O = 3,
 
     // Captures that don't promote
-    CAPTURE_MASK = 4,
-    CAPTURE = 4,
-    EN_PASSANT = 5,
+    Capture = 4,
+    En_Passant = 5,
 
     // Promotions that don't capture
-    PROMOTION_MASK = 8,
-    KNIGHT_PROMOTION = 8,
-    BISHOP_PROMOTION = 9,
-    ROOK_PROMOTION = 10,
-    QUEEN_PROMOTION = 11,
+    Knight_Promotion = 8,
+    Bishop_Promotion = 9,
+    Rook_Promotion = 10,
+    Queen_Promotion = 11,
 
     // Promotions that capture
-    KNIGHT_PROMOTION_CAPTURE = 12,
-    BISHOP_PROMOTION_CAPTURE = 13,
-    ROOK_PROMOTION_CAPTURE = 14,
-    QUEEN_PROMOTION_CAPTURE = 15,
+    Knight_Promotion_Capture = 12,
+    Bishop_Promotion_Capture = 13,
+    Rook_Promotion_Capture = 14,
+    Queen_Promotion_Capture = 15,
+
+    // Masks last so debugger will prefer specific enum literals
+    Capture_Mask = 4,
+    Promotion_Mask = 8,
 };
 constexpr uint8_t index(MoveKind kind) {
     return static_cast<uint8_t>(kind);
 }
 constexpr bool isCapture(MoveKind kind) {
-    return (static_cast<uint8_t>(kind) & static_cast<uint8_t>(MoveKind::CAPTURE_MASK)) != 0;
+    return index(kind) & index(MoveKind::Capture_Mask);
 }
 constexpr bool isPromotion(MoveKind kind) {
-    return (static_cast<uint8_t>(kind) & static_cast<uint8_t>(MoveKind::PROMOTION_MASK)) != 0;
+    return index(kind) & index(MoveKind::Promotion_Mask);
 }
 constexpr bool isCastles(MoveKind kind) {
-    return kind == MoveKind::KING_CASTLE || kind == MoveKind::QUEEN_CASTLE;
+    return kind == MoveKind::O_O || kind == MoveKind::O_O_O;
 }
-constexpr uint8_t kNumMoveKinds = index(MoveKind::QUEEN_PROMOTION_CAPTURE) + 1;
-constexpr uint8_t kNumNoPromoMoveKinds = index(MoveKind::EN_PASSANT) + 1;
+constexpr uint8_t kNumMoveKinds = index(MoveKind::Queen_Promotion_Capture) + 1;
+constexpr uint8_t kNumNoPromoMoveKinds = index(MoveKind::En_Passant) + 1;
 
 inline PieceType promotionType(MoveKind kind) {
     return static_cast<PieceType>((static_cast<uint8_t>(kind) & 3) + 1);
 }
 
-class Move {
-    // lldb summary-string
-    // "${var.rep.fromFile}${var.rep.fromRank} ${var.rep.toFile}${var.rep.toRank}${var.rep.kind}"
+struct Move {
 
     static_assert(kNumSquares * kNumSquares * kNumMoveKinds <= (1u << 16));
-    struct Rep {
-        // lldb summary-string: "${var.from}${var.to} ${var.kind}"
+    static_assert(sizeof(Square) == 2, "Square must be derived from uint16_t for proper packing");
 
-        // Square needs to be derived from uint16_t to allow proper packing
-        enum Square : uint16_t {
-            // clang-format off
-            a1, b1, c1, d1, e1, f1, g1, h1,
-            a2, b2, c2, d2, e2, f2, g2, h2,
-            a3, b3, c3, d3, e3, f3, g3, h3,
-            a4, b4, c4, d4, e4, f4, g4, h4,
-            a5, b5, c5, d5, e5, f5, g5, h5,
-            a6, b6, c6, d6, e6, f6, g6, h6,
-            a7, b7, c7, d7, e7, f7, g7, h7,
-            a8, b8, c8, d8, e8, f8, g8, h8,
-            // clang-format on
-        };
+    // Square needs to be derived from uint16_t to allow proper packing
+    Square from : 6;
+    Square to : 6;
+    MoveKind kind : 4;
 
-        enum Kind : uint16_t {
-            // clang-format off
-            quiet_move, double_push, o_o, o_o_o,
-            capture, en_passant,
-            N_promo = 8, B_promo, R_promo, Q_promo,
-            N_promo_capture, B_promo_capture, R_promo_capture, Q_promo_capture
-            // clang-format on
-        };
-
-        Square from : 6;
-        Square to : 6;
-        Kind kind : 4;
-    };
-    union {
-        uint16_t move = 0;
-        Rep rep;
-    };
-
-public:
-    static constexpr MoveKind QUIET = MoveKind::QUIET_MOVE;
-    static constexpr MoveKind CAPTURE = MoveKind::CAPTURE;
     Move() = default;
-    Move(Square from, Square to, MoveKind kind)
-        : move(from.index() + to.index() * kNumSquares + index(kind) * kNumSquares * kNumSquares) {}
+    Move(Square from, Square to, MoveKind kind) : from(from), to(to), kind(kind) {}
 
     // String conversion operator
     operator std::string() const {
-        if (!move) return "0000";
-        auto str = static_cast<std::string>(from()) + static_cast<std::string>(to());
-        if (isPromotion()) str += to_char(addColor(promotionType(kind()), Color::BLACK));
+        if (*this == Move{}) return "0000";
+        auto str = to_string(from) + to_string(to);
+        if (isPromotion()) str += to_char(addColor(promotionType(kind), Color::BLACK));
         return str;
     }
 
     using Tuple = std::tuple<Square, Square, MoveKind>;
-    operator Tuple() const { return {from(), to(), kind()}; }
+    operator Tuple() const { return {from, to, kind}; }
 
-    Square from() const { return move % kNumSquares; }
-    Square to() const { return (move / kNumSquares) % kNumSquares; }
-    MoveKind kind() const { return MoveKind(move / (kNumSquares * kNumSquares)); }
+    operator bool() const { return from != to; }
 
-    operator bool() const { return from().index() != to().index(); }
+    bool operator==(const Move& other) const {
+        return from == other.from && to == other.to && kind == other.kind;
+    }
 
-    bool operator==(Move other) { return move == other.move; }
-
-    bool isPromotion() const { return kind() >= MoveKind::PROMOTION_MASK; }
+    bool isPromotion() const { return kind >= MoveKind::Promotion_Mask; }
 };
+static_assert(sizeof(Move) == 2);
+
 using MoveVector = std::vector<Move>;
 inline std::string to_string(MoveVector moves) {
     std::string str = "";
@@ -282,8 +248,8 @@ class Board {
 public:
     Board() { _squares.fill(Piece::_); }
 
-    Piece& operator[](Square sq) { return _squares[sq.index()]; }
-    const Piece& operator[](Square sq) const { return _squares[sq.index()]; }
+    Piece& operator[](Square sq) { return _squares[index(sq)]; }
+    const Piece& operator[](Square sq) const { return _squares[index(sq)]; }
     const auto& squares() const { return _squares; }
     bool operator==(const Board& other) const { return _squares == other._squares; }
     bool operator!=(const Board& other) const { return _squares != other._squares; }
@@ -297,12 +263,12 @@ enum class CastlingMask : uint8_t {
     _ = 0,
     K = 1,
     Q = 2,
-    KQ = K | Q,  // 3
     k = 4,
+    q = 8,
+    KQ = K | Q,       // 3
     Kk = K | k,       // 5
     Qk = Q | k,       // 6
     KQk = K | Q | k,  // 7
-    q = 8,
     Kq = K | q,       // 9
     Qq = Q | q,       // 10
     KQq = K | Q | q,  // 11
@@ -349,9 +315,9 @@ using TwoSquares = std::array<Square, 2>;
  */
 struct BoardChange {
     Piece captured;
-    TwoSquares first = {0, 0};
+    TwoSquares first = {Square(0), Square(0)};
     uint8_t promo;
-    TwoSquares second = {0, 0};
+    TwoSquares second = {Square(0), Square(0)};
 };
 
 class alignas(4) Turn {
@@ -369,7 +335,7 @@ class alignas(4) Turn {
         return Square(value);
     }
     static EnPassantTarget toEnPassantTarget(Square square) {
-        uint16_t value = square.index();
+        uint16_t value = index(square);
         value -= (value & 32) / 2;  // Shift rank 6 to rank 4, not affecting rank 3 or value 0.
         return EnPassantTarget(value);
     }
@@ -408,7 +374,7 @@ public:
         dassert(fullmoveNumber > 0 && fullmoveNumber < 32768);
     }
 
-    Turn(Color color) : Turn(color, CastlingMask::KQkq, noEnPassantTarget, 0, 1) {}
+    Turn(Color color) : Turn(color, CastlingMask::KQkq, Square(noEnPassantTarget), 0, 1) {}
 
     Color activeColor() const { return static_cast<Color>(active); };
     void setActive(Color color) { active = static_cast<Active>(color); };

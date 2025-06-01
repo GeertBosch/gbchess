@@ -270,9 +270,9 @@ void testBasicPuzzles() {
     {
         auto puzfen = "4r3/1k6/pp3P2/1b5p/3R1p2/P1R2P2/1P4PP/6K1 b - - 0 35";
         auto puzpos = fen::parsePosition(puzfen);
-        auto puzmoves = MoveVector{{"e8"_sq, "e1"_sq, MoveKind::QUIET_MOVE},
-                                   {"g1"_sq, "f2"_sq, MoveKind::QUIET_MOVE},
-                                   {"e1"_sq, "f1"_sq, MoveKind::QUIET_MOVE}};
+        auto puzmoves = MoveVector{{"e8"_sq, "e1"_sq, MoveKind::Quiet_Move},
+                                   {"g1"_sq, "f2"_sq, MoveKind::Quiet_Move},
+                                   {"e1"_sq, "f1"_sq, MoveKind::Quiet_Move}};
         assert(doPuzzle("000Zo, ranking 1311", puzpos, puzmoves, 5) == NO_ERROR);
     }
 

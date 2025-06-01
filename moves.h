@@ -21,7 +21,7 @@ class SquareSet {
 
 public:
     SquareSet(uint64_t squares) : _squares(squares) {}
-    SquareSet(Square square) : _squares(1ull << square.index()) {}
+    SquareSet(Square square) : _squares(1ull << index(square)) {}
     class iterator;
 
     SquareSet() = default;
@@ -55,13 +55,13 @@ public:
 
     static SquareSet valid(int rank, int file) {
         return rank >= 0 && rank < kNumRanks && file >= 0 && file < kNumFiles
-            ? SquareSet(Square(file, rank))
+            ? SquareSet(makeSquare(file, rank))
             : SquareSet();
     }
     static SquareSet all() { return SquareSet(0xffff'ffff'ffff'ffffull); }
 
-    void erase(Square square) { _squares &= ~(1ull << square.index()); }
-    void insert(Square square) { _squares |= (1ull << square.index()); }
+    void erase(Square square) { _squares &= ~(1ull << index(square)); }
+    void insert(Square square) { _squares |= (1ull << index(square)); }
     void insert(SquareSet other) { _squares |= other._squares; }
 
     void insert(iterator begin, iterator end) {

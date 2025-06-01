@@ -12,9 +12,9 @@
 constexpr bool haveSSE2 = true;
 
 struct CompoundMove {
-    Square to = 0;
+    Square to = Square(0);
     uint8_t promo = 0;
-    TwoSquares second = {0, 0};
+    TwoSquares second = {Square(0), Square(0)};
 };
 
 struct MovesTable {
@@ -43,7 +43,7 @@ struct MovesTable {
     SquareSet paths[kNumSquares][kNumSquares];  // from, to
 
     // precomputed squares required to be clear for castling
-    SquareSet castlingClear[2][index(MoveKind::QUEEN_CASTLE) + 1];  // color, moveKind
+    SquareSet castlingClear[2][index(MoveKind::O_O_O) + 1];  // color, moveKind
 
     // precomputed from squares for en passant targets
     SquareSet enPassantFrom[2][kNumFiles];  // color, file
@@ -77,24 +77,24 @@ Occupancy occupancyDelta(Move move) {
     ours.insert(to);
     SquareSet theirs;
     switch (kind) {
-    case MoveKind::KING_CASTLE: {
-        auto info = castlingInfo[from.rank() != 0];
+    case MoveKind::O_O: {
+        auto info = castlingInfo[rank(from) != 0];
         ours.insert(info.kingSide[1][1]);
         ours.insert(info.kingSide[1][0]);
         break;
     }
-    case MoveKind::QUEEN_CASTLE: {
-        auto info = castlingInfo[from.rank() != 0];
+    case MoveKind::O_O_O: {
+        auto info = castlingInfo[rank(from) != 0];
         ours.insert(info.queenSide[1][1]);
         ours.insert(info.queenSide[1][0]);
         break;
     }
-    case MoveKind::CAPTURE:
-    case MoveKind::KNIGHT_PROMOTION_CAPTURE:
-    case MoveKind::BISHOP_PROMOTION_CAPTURE:
-    case MoveKind::ROOK_PROMOTION_CAPTURE:
-    case MoveKind::QUEEN_PROMOTION_CAPTURE: theirs.insert(to); break;
-    case MoveKind::EN_PASSANT: theirs.insert(Square(to.file(), from.rank())); break;
+    case MoveKind::Capture:
+    case MoveKind::Knight_Promotion_Capture:
+    case MoveKind::Bishop_Promotion_Capture:
+    case MoveKind::Rook_Promotion_Capture:
+    case MoveKind::Queen_Promotion_Capture: theirs.insert(to); break;
+    case MoveKind::En_Passant: theirs.insert(makeSquare(file(to), rank(from))); break;
     default: break;
     }
     return Occupancy::delta(theirs, ours);
@@ -104,7 +104,7 @@ SquareSet castlingPath(Color color, MoveKind side) {
     auto info = castlingInfo[int(color)];
 
     // Note the paths are reversed, so the start point is excluded and the endpoint included.
-    if (side == MoveKind::KING_CASTLE)
+    if (side == MoveKind::O_O)
         path |= SquareSet::path(info.kingSide[0][1], info.kingSide[0][0]) |
             SquareSet::path(info.kingSide[1][1], info.kingSide[1][0]);
     else
@@ -116,10 +116,10 @@ SquareSet castlingPath(Color color, MoveKind side) {
 SquareSet rookMoves(Square from) {
     SquareSet moves;
     for (int rank = 0; rank < kNumRanks; ++rank)
-        if (rank != from.rank()) moves.insert(Square(from.file(), rank));
+        if (rank != ::rank(from)) moves.insert(makeSquare(file(from), rank));
 
     for (int file = 0; file < kNumFiles; ++file)
-        if (file != from.file()) moves.insert(Square(file, from.rank()));
+        if (file != ::file(from)) moves.insert(makeSquare(file, rank(from)));
 
     return moves;
 }
@@ -127,10 +127,10 @@ SquareSet rookMoves(Square from) {
 SquareSet bishopMoves(Square from) {
     SquareSet moves;
     for (int i = 1; i < std::min(kNumRanks, kNumFiles); ++i) {
-        moves.insert(SquareSet::valid(from.rank() + i, from.file() + i));
-        moves.insert(SquareSet::valid(from.rank() - i, from.file() - i));
-        moves.insert(SquareSet::valid(from.rank() + i, from.file() - i));
-        moves.insert(SquareSet::valid(from.rank() - i, from.file() + i));
+        moves.insert(SquareSet::valid(rank(from) + i, file(from) + i));
+        moves.insert(SquareSet::valid(rank(from) - i, file(from) - i));
+        moves.insert(SquareSet::valid(rank(from) + i, file(from) - i));
+        moves.insert(SquareSet::valid(rank(from) - i, file(from) + i));
     }
     return moves;
 }
@@ -145,7 +145,7 @@ SquareSet knightMoves(Square from) {
 
     SquareSet moves;
     for (auto [rank, file] : vectors)
-        moves.insert(SquareSet::valid(from.rank() + rank, from.file() + file));
+        moves.insert(SquareSet::valid(::rank(from) + rank, ::file(from) + file));
     return moves;
 }
 
@@ -154,19 +154,19 @@ SquareSet kingMoves(Square from) {
 
     SquareSet moves;
     for (auto [rank, file] : vectors)
-        moves.insert(SquareSet::valid(from.rank() + rank, from.file() + file));
+        moves.insert(SquareSet::valid(::rank(from) + rank, ::file(from) + file));
     return moves;
 }
 
 SquareSet whitePawnMoves(Square from) {
-    SquareSet moves = SquareSet::valid(from.rank() + 1, from.file());
-    if (from.rank() == 1) moves.insert(SquareSet::valid(from.rank() + 2, from.file()));
+    SquareSet moves = SquareSet::valid(rank(from) + 1, file(from));
+    if (rank(from) == 1) moves.insert(SquareSet::valid(rank(from) + 2, file(from)));
     return moves;
 }
 
 SquareSet blackPawnMoves(Square from) {
-    SquareSet moves = SquareSet::valid(from.rank() - 1, from.file());
-    if (from.rank() == kNumRanks - 2) moves.insert(SquareSet::valid(from.rank() - 2, from.file()));
+    SquareSet moves = SquareSet::valid(rank(from) - 1, file(from));
+    if (rank(from) == kNumRanks - 2) moves.insert(SquareSet::valid(rank(from) - 2, file(from)));
     return moves;
 }
 
@@ -192,12 +192,12 @@ SquareSet possibleMoves(Piece piece, Square from) {
 SquareSet possibleCaptures(Piece piece, Square from) {
     switch (piece) {
     case Piece::_: break;
-    case Piece::P:                                                 // White Pawn
-        return SquareSet::valid(from.rank() + 1, from.file() - 1)  // Diagonal left
-            | SquareSet::valid(from.rank() + 1, from.file() + 1);  // Diagonal right
-    case Piece::p:                                                 // Black Pawn
-        return SquareSet::valid(from.rank() - 1, from.file() - 1)  // Diagonal left
-            | SquareSet::valid(from.rank() - 1, from.file() + 1);  // Diagonal right
+    case Piece::P:                                               // White Pawn
+        return SquareSet::valid(rank(from) + 1, file(from) - 1)  // Diagonal left
+            | SquareSet::valid(rank(from) + 1, file(from) + 1);  // Diagonal right
+    case Piece::p:                                               // Black Pawn
+        return SquareSet::valid(rank(from) - 1, file(from) - 1)  // Diagonal left
+            | SquareSet::valid(rank(from) - 1, file(from) + 1);  // Diagonal right
     case Piece::N:
     case Piece::n: return knightMoves(from);
     case Piece::B:
@@ -213,8 +213,8 @@ SquareSet possibleCaptures(Piece piece, Square from) {
 }
 SquareSet path(Square from, Square to) {
     SquareSet path;
-    int rankDiff = to.rank() - from.rank();
-    int fileDiff = to.file() - from.file();
+    int rankDiff = rank(to) - rank(from);
+    int fileDiff = file(to) - file(from);
 
     // Check that the move is horizontal, vertical, or diagonal. If not, no path.
     if (rankDiff && fileDiff && abs(rankDiff) != abs(fileDiff))
@@ -224,11 +224,11 @@ SquareSet path(Square from, Square to) {
     int rankStep = rankDiff ? rankDiff / abs(rankDiff) : 0;
     int fileStep = fileDiff ? fileDiff / abs(fileDiff) : 0;
 
-    int rankPos = from.rank() + rankStep;
-    int filePos = from.file() + fileStep;
+    int rankPos = rank(from) + rankStep;
+    int filePos = file(from) + fileStep;
 
-    while (rankPos != to.rank() || filePos != to.file()) {
-        path.insert(Square{filePos, rankPos});
+    while (rankPos != rank(to) || filePos != file(to)) {
+        path.insert(makeSquare(filePos, rankPos));
         rankPos += rankStep;
         filePos += fileStep;
     }
@@ -237,14 +237,14 @@ SquareSet path(Square from, Square to) {
 }  // namespace init
 
 SquareSet SquareSet::path(Square from, Square to) {
-    return movesTable.paths[from.index()][to.index()];
+    return movesTable.paths[index(from)][index(to)];
 }
 
 void MovesTable::initializePieceMovesAndCaptures() {
     for (auto piece : pieces) {
-        for (Square from = 0; from != kNumSquares; ++from) {
-            moves[int(piece)][from.index()] = init::possibleMoves(Piece(piece), from);
-            captures[int(piece)][from.index()] = init::possibleCaptures(Piece(piece), from);
+        for (Square from = Square(0); index(from) != kNumSquares; inc(from)) {
+            moves[int(piece)][index(from)] = init::possibleMoves(Piece(piece), from);
+            captures[int(piece)][index(from)] = init::possibleCaptures(Piece(piece), from);
         }
     }
 }
@@ -252,22 +252,22 @@ void MovesTable::initializePieceMoveAndCaptureKinds() {
     for (auto piece : pieces) {
         for (int fromRank = 0; fromRank != kNumRanks; ++fromRank) {
             for (int toRank = 0; toRank != kNumRanks; ++toRank) {
-                MoveKind moveKind = MoveKind::QUIET_MOVE;
-                MoveKind captureKind = MoveKind::CAPTURE;
+                MoveKind moveKind = MoveKind::Quiet_Move;
+                MoveKind captureKind = MoveKind::Capture;
                 switch (piece) {
                 case Piece::P:
-                    if (fromRank == 1 && toRank == 3) moveKind = MoveKind::DOUBLE_PAWN_PUSH;
+                    if (fromRank == 1 && toRank == 3) moveKind = MoveKind::Double_Push;
                     if (toRank == kNumRanks - 1) {
-                        moveKind = MoveKind::QUEEN_PROMOTION;
-                        captureKind = MoveKind::QUEEN_PROMOTION_CAPTURE;
+                        moveKind = MoveKind::Queen_Promotion;
+                        captureKind = MoveKind::Queen_Promotion_Capture;
                     }
                     break;
                 case Piece::p:
                     if (fromRank == kNumRanks - 2 && toRank == kNumRanks - 4)
-                        moveKind = MoveKind::DOUBLE_PAWN_PUSH;
+                        moveKind = MoveKind::Double_Push;
                     if (toRank == 0) {
-                        moveKind = MoveKind::QUEEN_PROMOTION;
-                        captureKind = MoveKind::QUEEN_PROMOTION_CAPTURE;
+                        moveKind = MoveKind::Queen_Promotion;
+                        captureKind = MoveKind::Queen_Promotion_Capture;
                     }
                     break;
                 default: break;
@@ -281,12 +281,12 @@ void MovesTable::initializePieceMoveAndCaptureKinds() {
 
 void MovesTable::initializeAttackers() {
     // Initialize attackers
-    for (Square from = 0; from != kNumSquares; ++from) {
+    for (Square from = Square(0); index(from) != kNumSquares; inc(from)) {
         SquareSet toSquares;
         // Gather all possible squares that can be attacked by any piece
-        for (auto piece : pieces) toSquares |= captures[int(piece)][from.index()];
+        for (auto piece : pieces) toSquares |= captures[int(piece)][index(from)];
         // Distribute attackers over the target squares
-        for (auto to : toSquares) attackers[to.index()].insert(from);
+        for (auto to : toSquares) attackers[index(to)].insert(from);
     }
 }
 
@@ -309,10 +309,10 @@ void MovesTable::initializePaths() {
 void MovesTable::initializeCastlingMasks() {
     // Initialize castling masks and en passant from squares
     for (int color = 0; color < 2; ++color) {
-        castlingClear[color][index(MoveKind::QUEEN_CASTLE)] =
-            init::castlingPath(Color(color), MoveKind::QUEEN_CASTLE);
-        castlingClear[color][index(MoveKind::KING_CASTLE)] =
-            init::castlingPath(Color(color), MoveKind::KING_CASTLE);
+        castlingClear[color][index(MoveKind::O_O_O)] =
+            init::castlingPath(Color(color), MoveKind::O_O_O);
+        castlingClear[color][index(MoveKind::O_O)] =
+            init::castlingPath(Color(color), MoveKind::O_O);
     }
 }
 
@@ -337,26 +337,26 @@ void MovesTable::initializeCompound() {
             compound[kind][to] = {Square(to), 0, {Square(to), Square(to)}};
 
     // Initialize castles
-    compound[index(MK::KING_CASTLE)]["g1"_sq.index()] = {"g1"_sq, 0, {"h1"_sq, "f1"_sq}};
-    compound[index(MK::KING_CASTLE)]["g8"_sq.index()] = {"g8"_sq, 0, {"h8"_sq, "f8"_sq}};
-    compound[index(MK::QUEEN_CASTLE)]["c1"_sq.index()] = {"c1"_sq, 0, {"a1"_sq, "d1"_sq}};
-    compound[index(MK::QUEEN_CASTLE)]["c8"_sq.index()] = {"c8"_sq, 0, {"a8"_sq, "d8"_sq}};
+    compound[index(MK::O_O)][index("g1"_sq)] = {"g1"_sq, 0, {"h1"_sq, "f1"_sq}};
+    compound[index(MK::O_O)][index("g8"_sq)] = {"g8"_sq, 0, {"h8"_sq, "f8"_sq}};
+    compound[index(MK::O_O_O)][index("c1"_sq)] = {"c1"_sq, 0, {"a1"_sq, "d1"_sq}};
+    compound[index(MK::O_O_O)][index("c8"_sq)] = {"c8"_sq, 0, {"a8"_sq, "d8"_sq}};
 
     // En passant helper functions
     auto epRank = [](int rank) -> int { return rank < kNumRanks / 2 ? rank + 1 : rank - 1; };
-    auto epTarget = [=](Square to) -> Square { return Square(to.file(), epRank(to.rank())); };
+    auto epTarget = [=](Square to) -> Square { return makeSquare(file(to), epRank(rank(to))); };
     auto epCompound = [=](Square to) -> CM { return {epTarget(to), 0, {epTarget(to), to}}; };
 
     // Initialize en passant capture for white
     for (auto to : SquareSet::ipath("a6"_sq, "h6"_sq) | SquareSet::ipath("a3"_sq, "h3"_sq))
-        compound[index(MK::EN_PASSANT)][to.index()] = epCompound(to);
+        compound[index(MK::En_Passant)][index(to)] = epCompound(to);
 
     // Initialize promotion moves
-    auto pm = index(MK::KNIGHT_PROMOTION);
-    auto pc = index(MK::KNIGHT_PROMOTION_CAPTURE);
+    auto pm = index(MK::Knight_Promotion);
+    auto pc = index(MK::Knight_Promotion_Capture);
     for (auto promo = index(PT::KNIGHT); promo <= index(PT::QUEEN); ++promo, ++pm, ++pc)
         for (auto to : SquareSet::ipath("a8"_sq, "h8"_sq) | SquareSet::ipath("a1"_sq, "h1"_sq))
-            compound[pc][to.index()] = compound[pm][to.index()] = {to, promo, {to, to}};
+            compound[pc][index(to)] = compound[pm][index(to)] = {to, promo, {to, to}};
 }
 
 MovesTable::MovesTable() {
@@ -518,7 +518,7 @@ SquareSet pinnedPieces(const Board& board,
         // Check if the pin is a valid sliding piece
         if (!pinData.pinningPieces.has(board[pinner])) continue;
 
-        auto path = movesTable.paths[kingSquare.index()][pinner.index()];
+        auto path = movesTable.paths[index(kingSquare)][index(pinner)];
         auto pieces = occupancy() & path;
         if (pieces.size() == 1) pinned.insert(pieces);
     }
@@ -529,9 +529,9 @@ SquareSet pinnedPieces(const Board& board, Occupancy occupancy, Square kingSquar
     // For the purpose of pinning, we only consider sliding pieces, not knights.
 
     // Define pinning piece sets and corresponding capture sets
-    PinData pinData[] = {{movesTable.captures[index(Piece::R)][kingSquare.index()],
+    PinData pinData[] = {{movesTable.captures[index(Piece::R)][index(kingSquare)],
                           PieceSet(PieceType::ROOK) | PieceSet(PieceType::QUEEN)},
-                         {movesTable.captures[index(Piece::B)][kingSquare.index()],
+                         {movesTable.captures[index(Piece::B)][index(kingSquare)],
                           PieceSet(PieceType::BISHOP) | PieceSet(PieceType::QUEEN)}};
 
     auto pinned = SquareSet();
@@ -550,7 +550,7 @@ SearchState::SearchState(const Board& board, Turn turn)
       pinned(pinnedPieces(board, occupancy, kingSquare)) {}
 
 bool clearPath(SquareSet occupancy, Square from, Square to) {
-    auto path = movesTable.paths[from.index()][to.index()];
+    auto path = movesTable.paths[index(from)][index(to)];
     return (occupancy & path).empty();
 }
 
@@ -559,33 +559,33 @@ void addMove(MoveVector& moves, Move move) {
 }
 
 int noPromo(MoveKind kind) {
-    MoveKind noPromoKinds[] = {MoveKind::QUIET_MOVE,
-                               MoveKind::DOUBLE_PAWN_PUSH,
-                               MoveKind::KING_CASTLE,
-                               MoveKind::QUEEN_CASTLE,
-                               MoveKind::CAPTURE,
-                               MoveKind::EN_PASSANT,
-                               MoveKind::QUIET_MOVE,
-                               MoveKind::QUIET_MOVE,
-                               MoveKind::QUIET_MOVE,
-                               MoveKind::QUIET_MOVE,
-                               MoveKind::QUIET_MOVE,
-                               MoveKind::QUIET_MOVE,
-                               MoveKind::CAPTURE,
-                               MoveKind::CAPTURE,
-                               MoveKind::CAPTURE,
-                               MoveKind::CAPTURE};
+    MoveKind noPromoKinds[] = {MoveKind::Quiet_Move,
+                               MoveKind::Double_Push,
+                               MoveKind::O_O,
+                               MoveKind::O_O_O,
+                               MoveKind::Capture,
+                               MoveKind::En_Passant,
+                               MoveKind::Quiet_Move,
+                               MoveKind::Quiet_Move,
+                               MoveKind::Quiet_Move,
+                               MoveKind::Quiet_Move,
+                               MoveKind::Quiet_Move,
+                               MoveKind::Quiet_Move,
+                               MoveKind::Capture,
+                               MoveKind::Capture,
+                               MoveKind::Capture,
+                               MoveKind::Capture};
     return index(noPromoKinds[index(kind)]);
 }
 
 Occupancy occupancyDelta(Move move) {
-    return movesTable.occupancyDelta[noPromo(move.kind())][move.from().index()][move.to().index()];
+    return movesTable.occupancyDelta[noPromo(move.kind)][index(move.from)][index(move.to)];
 }
 
 template <typename F>
 void expandPromos(const F& fun, Piece piece, Move move) {
     for (int i = 0; i < 4; ++i)
-        fun(piece, Move{move.from(), move.to(), MoveKind(index(move.kind()) - i)});
+        fun(piece, Move{move.from, move.to, MoveKind(index(move.kind) - i)});
 }
 
 template <typename F>
@@ -599,18 +599,20 @@ void findPawnPushes(SearchState& state, const F& fun) {
     auto piece = white ? Piece::P : Piece::p;
     for (auto to : singles - promo)
         fun(piece,
-            Move{{to.file(), white ? to.rank() - 1 : to.rank() + 1}, to, MoveKind::QUIET_MOVE});
+            Move{makeSquare(file(to), white ? rank(to) - 1 : rank(to) + 1),
+                 to,
+                 MoveKind::Quiet_Move});
     for (auto to : singles& promo)
         expandPromos(fun,
                      piece,
-                     Move{{to.file(), white ? to.rank() - 1 : to.rank() + 1},
+                     Move{makeSquare(file(to), white ? rank(to) - 1 : rank(to) + 1),
                           to,
-                          MoveKind::QUEEN_PROMOTION});
+                          MoveKind::Queen_Promotion});
     for (auto to : doubles)
         fun(piece,
-            Move{{to.file(), white ? to.rank() - 2 : to.rank() + 2},
+            Move{makeSquare(file(to), white ? rank(to) - 2 : rank(to) + 2),
                  to,
-                 MoveKind::DOUBLE_PAWN_PUSH});
+                 MoveKind::Double_Push});
 }
 
 template <typename F>
@@ -624,32 +626,37 @@ void findPawnCaptures(SearchState& state, const F& fun) {
     auto piece = white ? Piece::P : Piece::p;
     for (auto to : left - promo)
         fun(piece,
-            Move{{to.file() + 1, white ? to.rank() - 1 : to.rank() + 1}, to, MoveKind::CAPTURE});
+            Move{makeSquare(file(to) + 1, white ? rank(to) - 1 : rank(to) + 1),
+                 to,
+                 MoveKind::Capture});
     for (auto to : left& promo)
         expandPromos(fun,
                      piece,
-                     Move{{to.file() + 1, white ? to.rank() - 1 : to.rank() + 1},
+                     Move{makeSquare(file(to) + 1, white ? rank(to) - 1 : rank(to) + 1),
                           to,
-                          MoveKind::QUEEN_PROMOTION_CAPTURE});
+                          MoveKind::Queen_Promotion_Capture});
     for (auto to : right - promo)
         fun(piece,
-            Move{{to.file() - 1, white ? to.rank() - 1 : to.rank() + 1}, to, MoveKind::CAPTURE});
+            Move{makeSquare(file(to) - 1, white ? rank(to) - 1 : rank(to) + 1),
+                 to,
+                 MoveKind::Capture});
     for (auto to : right& promo)
         expandPromos(fun,
                      piece,
-                     Move{{to.file() - 1, white ? to.rank() - 1 : to.rank() + 1},
+                     Move{makeSquare(file(to) - 1, white ? rank(to) - 1 : rank(to) + 1),
                           to,
-                          MoveKind::QUEEN_PROMOTION_CAPTURE});
+                          MoveKind::Queen_Promotion_Capture});
 }
 
 template <typename F>
 void findNonPawnMoves(const Board& board, SearchState& state, const F& fun) {
     for (auto from : state.occupancy.ours() - state.pawns) {
         auto piece = board[from];
-        auto possibleSquares = movesTable.moves[index(piece)][from.index()] - state.occupancy();
+        auto possibleSquares = movesTable.moves[index(piece)][index(from)] - state.occupancy();
         for (auto to : possibleSquares) {
             // Check for moving through pieces
-            if (clearPath(state.occupancy(), from, to)) fun(piece, Move{from, to, Move::QUIET});
+            if (clearPath(state.occupancy(), from, to))
+                fun(piece, Move{from, to, MoveKind::Quiet_Move});
         }
     }
 }
@@ -680,16 +687,15 @@ void findCastles(Occupancy occupancy, Turn turn, const F& fun) {
 
     // Check for king side castling
     if ((turn.castling() & info.kingSideMask) != CastlingMask::_) {
-        auto path = movesTable.castlingClear[color][index(MoveKind::KING_CASTLE)];
+        auto path = movesTable.castlingClear[color][index(MoveKind::O_O)];
         if ((occupancy() & path).empty())
-            fun(info.king, {info.kingSide[0][0], info.kingSide[0][1], MoveKind::KING_CASTLE});
+            fun(info.king, {info.kingSide[0][0], info.kingSide[0][1], MoveKind::O_O});
     }
     // Check for queen side castling
     if ((turn.castling() & info.queenSideMask) != CastlingMask::_) {
-        auto path = movesTable.castlingClear[color][index(MoveKind::QUEEN_CASTLE)];
+        auto path = movesTable.castlingClear[color][index(MoveKind::O_O_O)];
         if ((occupancy() & path).empty())
-            fun(info.king,
-                Move{info.queenSide[0][0], info.queenSide[0][1], MoveKind::QUEEN_CASTLE});
+            fun(info.king, Move{info.queenSide[0][0], info.queenSide[0][1], MoveKind::O_O_O});
     }
 }
 
@@ -698,11 +704,11 @@ void findNonPawnCaptures(const Board& board, SearchState& state, const F& fun) {
     for (auto from : state.occupancy.ours() - state.pawns) {
         auto piece = board[from];
         auto possibleSquares =
-            movesTable.captures[index(piece)][from.index()] & state.occupancy.theirs();
+            movesTable.captures[index(piece)][index(from)] & state.occupancy.theirs();
         for (auto to : possibleSquares) {
             // Exclude captures that move through pieces
             if (clearPath(state.occupancy(), from, to))
-                fun(piece, Move{from, to, MoveKind::CAPTURE});
+                fun(piece, Move{from, to, MoveKind::Capture});
         }
     }
 }
@@ -723,17 +729,17 @@ void findEnPassant(const Board& board, Turn turn, const F& fun) {
     auto active = turn.activeColor();
     auto pawn = addColor(PieceType::PAWN, active);
 
-    for (auto from : movesTable.enPassantFrom[int(active)][enPassantTarget.file()])
-        if (board[from] == pawn) fun(pawn, {from, enPassantTarget, MoveKind::EN_PASSANT});
+    for (auto from : movesTable.enPassantFrom[int(active)][file(enPassantTarget)])
+        if (board[from] == pawn) fun(pawn, {from, enPassantTarget, MoveKind::En_Passant});
 }
 
 BoardChange prepareMove(Board& board, Move move) {
     // Lookup the compound move for the given move kind and target square. This breaks moves like
     // castling, en passant and promotion into a simple capture/move and a second move that can be a
     // no-op move, a quiet move or a promotion. The target square is taken from the compound move.
-    auto compound = movesTable.compound[index(move.kind())][move.to().index()];
+    auto compound = movesTable.compound[index(move.kind)][index(move.to)];
     auto captured = board[compound.to];
-    BoardChange undo = {captured, {move.from(), compound.to}, compound.promo, compound.second};
+    BoardChange undo = {captured, {move.from, compound.to}, compound.promo, compound.second};
     return undo;
 }
 BoardChange makeMove(Board& board, BoardChange change) {
@@ -785,14 +791,14 @@ CastlingMask castlingMask(Square from, Square to) {
     const struct MaskTable {
         std::array<CM, kNumSquares> mask;
         constexpr MaskTable() : mask{} {
-            mask[castlingInfo[0].kingSide[0][0].index()] = CM::KQ;  // White King
-            mask[castlingInfo[0].kingSide[1][0].index()] = CM::K;   // White King Side Rook
-            mask[castlingInfo[0].queenSide[1][0].index()] = CM::Q;  // White Queen Side Rook
-            mask[castlingInfo[1].kingSide[0][0].index()] = CM::kq;  // Black King
-            mask[castlingInfo[1].kingSide[1][0].index()] = CM::k;   // Black King Side Rook
-            mask[castlingInfo[1].queenSide[1][0].index()] = CM::q;  // Black Queen Side Rook
+            mask[index(castlingInfo[0].kingSide[0][0])] = CM::KQ;  // White King
+            mask[index(castlingInfo[0].kingSide[1][0])] = CM::K;   // White King Side Rook
+            mask[index(castlingInfo[0].queenSide[1][0])] = CM::Q;  // White Queen Side Rook
+            mask[index(castlingInfo[1].kingSide[0][0])] = CM::kq;  // Black King
+            mask[index(castlingInfo[1].kingSide[1][0])] = CM::k;   // Black King Side Rook
+            mask[index(castlingInfo[1].queenSide[1][0])] = CM::q;  // Black Queen Side Rook
         }
-        CM operator[](Square sq) const { return mask[sq.index()]; }
+        CM operator[](Square sq) const { return mask[index(sq)]; }
     } maskTable;
 
     return maskTable[from] | maskTable[to];
@@ -803,23 +809,23 @@ Turn applyMove(Turn turn, MoveWithPieces mwp) {
     // Set the en passant target if a pawn moves two squares forward, otherwise reset it.
     turn.setEnPassant(noEnPassantTarget);
     auto move = mwp.move;
-    if (move.kind() == MoveKind::DOUBLE_PAWN_PUSH)
-        turn.setEnPassant({move.from().file(), (move.from().rank() + move.to().rank()) / 2});
+    if (move.kind == MoveKind::Double_Push)
+        turn.setEnPassant(makeSquare(file(move.from), (rank(move.from) + rank(move.to)) / 2));
 
     // Update castlingAvailability
-    turn.setCastling(turn.castling() & ~castlingMask(move.from(), move.to()));
+    turn.setCastling(turn.castling() & ~castlingMask(move.from, move.to));
 
     // Update halfmoveClock and halfmoveNumber, and switch the active side.
     turn.tick();
     // Reset halfmove clock on pawn advance or capture
-    if (type(mwp.piece) == PieceType::PAWN || isCapture(move.kind())) turn.resetHalfmove();
+    if (type(mwp.piece) == PieceType::PAWN || isCapture(move.kind)) turn.resetHalfmove();
 
     return turn;
 }
 
 Position applyMove(Position position, Move move) {
     // Remember the piece being moved, before applying the move to the board
-    auto piece = position.board[move.from()];
+    auto piece = position.board[move.from];
 
     // Apply the move to the board
     auto undo = makeMove(position.board, move);
@@ -838,10 +844,10 @@ Position applyMoves(Position position, MoveVector const& moves) {
 bool isAttacked(const Board& board, Square square, Occupancy occupancy) {
     // We're using this function to find out if empty squares are attacked for determining
     // legality of castling, so we can't assume that the capture square is occupied.
-    auto attackers = occupancy.theirs() & movesTable.attackers[square.index()];
+    auto attackers = occupancy.theirs() & movesTable.attackers[index(square)];
     for (auto from : attackers)
         if (clearPath(occupancy(), from, square) &&
-            movesTable.captures[index(board[from])][from.index()].contains(square))
+            movesTable.captures[index(board[from])][index(from)].contains(square))
             return true;
 
     return false;
@@ -879,9 +885,9 @@ bool doesNotCheck(Board& board, const SearchState& state, Move move) {
     SquareSet checkSquares = state.kingSquare;
     if (from == state.kingSquare)
         checkSquares = isCastles(kind) ? SquareSet::ipath(from, to) : to;
-    else if (!state.pinned.contains(from) && !state.inCheck && kind != MoveKind::EN_PASSANT)
+    else if (!state.pinned.contains(from) && !state.inCheck && kind != MoveKind::En_Passant)
         return true;
-    auto delta = movesTable.occupancyDelta[noPromo(kind)][from.index()][to.index()];
+    auto delta = movesTable.occupancyDelta[noPromo(kind)][index(from)][index(to)];
     auto check = isAttacked(board, checkSquares, state.occupancy ^ delta);
     return !check;
 }
@@ -974,10 +980,10 @@ MoveVector allLegalMovesAndCaptures(Turn turn, Board& board) {
 
 namespace for_test {
 SquareSet possibleMoves(Piece piece, Square from) {
-    return movesTable.moves[index(piece)][from.index()];
+    return movesTable.moves[index(piece)][index(from)];
 }
 SquareSet possibleCaptures(Piece piece, Square from) {
-    return movesTable.captures[index(piece)][from.index()];
+    return movesTable.captures[index(piece)][index(from)];
 }
 
 void addAvailableMoves(MoveVector& moves, const Board& board, Turn turn) {

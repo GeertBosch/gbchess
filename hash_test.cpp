@@ -35,7 +35,7 @@ std::string hashVectorName(int i) {
     std::string vectorName;
     vectorName += to_char(piece);
     vectorName += "@";
-    vectorName += std::string(square);
+    vectorName += to_string(square);
     return vectorName;
 }
 void reportChanges(const changes& changed) {
@@ -127,7 +127,7 @@ void testEnPassant() {
     assert(pos1.turn.enPassant() == "f6"_sq);
     auto hash1 = Hash(pos1);
     auto move = parseUCIMove(pos1, "e5f6");
-    assert(move.kind() == MoveKind::EN_PASSANT);
+    assert(move.kind == MoveKind::En_Passant);
 
     auto pos2 = applyMove(pos1, move);
     assert(pos2.turn.enPassant() == noEnPassantTarget);

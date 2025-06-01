@@ -236,12 +236,12 @@ const int kEnPassantScore = 2'099'999'999;     // a bit below kCapturePromoScore
 const int kCaptureScore = 2'000'000'000;       // a bit below kEnPassantScore
 const int kPromoScore = 1'950'000'000;         // a bit below kCaptureScore
 constexpr int kind[16] = {
-    0,                       // QUIET
-    -3,                      // DOUBLE_PAWN_PUSH
-    -1,                      // KING_CASTLE
-    -2,                      // QUEEN_CASTLE
-    kCaptureScore,           // CAPTURE
-    kEnPassantScore,         // EN_PASSANT, close to promo
+    0,                       // Quiet_Move
+    -3,                      // Double_Push
+    -1,                      // O_O
+    -2,                      // O_O_O
+    kCaptureScore,           // Capture
+    kEnPassantScore,         // En_Passant, close to promo
     0,                       // unused (6)
     0,                       // unused (7)
     kPromoScore + 7,         // KNIGHT_PROMO, second most common after queen
@@ -265,15 +265,14 @@ int xx[6][6] = {
 };
 
 int score(const Board& board, Move move) {
-    int base = kind[int(move.kind())];
-    auto piece = board[move.from()];
+    int base = kind[int(move.kind)];
+    auto piece = board[move.from];
     auto side = color(piece);
 
     return base +
-        (isCapture(move.kind())
-             ? xx[index(type(piece))][index(type(board[move.to()]))]
-             : (options::historyStore ? history[int(side)][move.from().index()][move.to().index()]
-                                      : 0));
+        (isCapture(move.kind)
+             ? xx[index(type(piece))][index(type(board[move.to]))]
+             : (options::historyStore ? history[int(side)][index(move.from)][index(move.to)] : 0));
 }
 uint64_t totalMovesEvaluated = 0;
 uint64_t betaCutoffMoves = 0;
@@ -300,23 +299,23 @@ MoveIt sortTransposition(Hash hash, MoveIt begin, MoveIt end) {
 
 bool less(const Board& board, Move a, Move b) {
     // For non-captures, sort by history score
-    if (!isCapture(a.kind()))
+    if (!isCapture(a.kind))
         return options::historyStore ? score(board, a) > score(board, b) : false;
 
     // Most valuable victims first
-    auto ato = board[a.to()];
-    auto bto = board[b.to()];
+    auto ato = board[a.to];
+    auto bto = board[b.to];
     if (bto < ato) return true;
     if (ato < bto) return false;
 
     // Least valuable attackers next
-    auto afrom = board[a.from()];
-    auto bfrom = board[b.from()];
+    auto afrom = board[a.from];
+    auto bfrom = board[b.from];
     if (afrom < bfrom) return true;
     if (bfrom < afrom) return false;
 
     // Otherwise, sort by move kind, highest first
-    return b.kind() < a.kind();
+    return b.kind < a.kind;
 }
 
 /**
@@ -405,8 +404,8 @@ struct Depth {
 bool betaCutoff(Score score, Score beta, Move move, Color side, int depthleft) {
     if (score < beta) return false;  // No beta cutoff
     ++betaCutoffMoves;               // Increment beta cutoff moves
-    if (options::historyStore && !isCapture(move.kind()))
-        history[int(side)][move.from().index()][move.to().index()] += depthleft * depthleft;
+    if (options::historyStore && !isCapture(move.kind))
+        history[int(side)][index(move.from)][index(move.to)] += depthleft * depthleft;
     return true;
 }
 

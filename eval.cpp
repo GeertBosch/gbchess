@@ -12,7 +12,7 @@ std::ostream& operator<<(std::ostream& os, Move mv) {
     return os << std::string(mv);
 }
 std::ostream& operator<<(std::ostream& os, Square sq) {
-    return os << std::string(sq);
+    return os << to_string(sq);
 }
 std::ostream& operator<<(std::ostream& os, Color color) {
     return os << (color == Color::BLACK ? 'b' : 'w');
@@ -42,9 +42,9 @@ SquareTable operator*(SquareTable table, Score score) {
 
 void flip(SquareTable& table) {
     // Flip the table vertically (king side remains king side, queen side remains queen side)
-    for (auto sq = Square(0); sq != kNumSquares / 2; ++sq) {
-        auto other = Square(sq.file(), kNumRanks - 1 - sq.rank());
-        std::swap(table[sq.index()], table[other.index()]);
+    for (auto sq = Square(0); index(sq) != kNumSquares / 2; inc(sq)) {
+        auto other = makeSquare(file(sq), kNumRanks - 1 - rank(sq));
+        std::swap(table[index(sq)], table[index(other)]);
     };
     // Invert the values
     for (auto& sq : table) sq = -sq;
@@ -158,7 +158,7 @@ EvalTable::EvalTable(const Board& board, bool usePieceSquareTables) {
 
 Score evaluateBoard(const Board& board, const EvalTable& table) {
     Score value = 0_cp;
-    for (auto sq : SquareSet::occupancy(board)) value += table[board[sq]][sq.index()];
+    for (auto sq : SquareSet::occupancy(board)) value += table[board[sq]][index(sq)];
 
     return value;
 }

@@ -1,7 +1,7 @@
 type format add --format decimal uint8_t
 
 type summary add --summary-string "${var.active} ${var.castlingAvailability} ${var.enPassantTarget} ${var.halfmoveClock} ${var.fullmoveNumber}" Turn
-type sum add -s "${var.rep}" Square
+type sum add -s "${var.square}" Square
 type sum add -s "${var[0]}${var[1]}" Square[2]
 type sum add -s "${var.__elems_}" TwoSquares
 type sum add -s "${var.value}" Score

@@ -18,7 +18,8 @@ Board parsePiecePlacement(const std::string& piecePlacement) {
         } else if (std::isdigit(ch)) {
             file += ch - '0';  // Move the file by the number of empty squares
         } else {
-            Square sq{file, 7 - rank};  // Adjust the rank based on how it's stored in the Board
+            Square sq = makeSquare(
+                file, 7 - rank);  // Adjust the rank based on how it's stored in the Board
             board[sq] = toPiece(ch);
             file++;
         }
@@ -57,7 +58,7 @@ Turn parseTurn(std::stringstream ss) {
     if (enPassantTargetStr != "-") {
         int file = enPassantTargetStr[0] - 'a';
         int rank = enPassantTargetStr[1] - '1';
-        turn.setEnPassant(Square{file, rank});
+        turn.setEnPassant(makeSquare(file, rank));
     }
 
     return turn;
@@ -89,7 +90,8 @@ std::string to_string(const Board& board) {
     for (int rank = 7; rank >= 0; --rank) {  // Start from the 8th rank and go downwards
         int emptyCount = 0;                  // Count of consecutive empty squares
         for (int file = 0; file < 8; ++file) {
-            Square sq{file, rank};  // Adjust the rank based on how it's stored in the Board
+            Square sq =
+                makeSquare(file, rank);  // Adjust the rank based on how it's stored in the Board
             auto piece = board[sq];
             if (piece == Piece::_) {  // Empty square
                 ++emptyCount;
@@ -112,7 +114,7 @@ std::string to_string(const Turn& turn) {
     std::stringstream str;
     str << to_string(turn.activeColor()) << " ";
     str << to_string(turn.castling()) << " ";
-    str << (turn.enPassant().index() ? std::string(turn.enPassant()) : "-") << " ";
+    str << (index(turn.enPassant()) ? to_string(turn.enPassant()) : "-") << " ";
     str << (int)turn.halfmove() << " ";
     str << turn.fullmove();
     return str.str();

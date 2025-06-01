@@ -99,7 +99,7 @@ void printBoard(std::ostream& os, const Board& board) {
         os << rank + 1;
         std::string row;
         for (int file = 0; file < kNumFiles; ++file) {
-            auto piece = board[Square(file, rank)];
+            auto piece = board[makeSquare(file, rank)];
             row.push_back(to_char(piece));
         }
         os << gridRow(row) << std::endl;

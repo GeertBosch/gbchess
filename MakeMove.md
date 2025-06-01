@@ -24,28 +24,28 @@ The `Piece` enum has the following values:
 Let's further consider a `MoveKind` with the following values:
 
     // Moves that don't capture or promote
-    QUIET_MOVE = 0,
-    DOUBLE_PAWN_PUSH = 1,
-    KING_CASTLE = 2,
-    QUEEN_CASTLE = 3,
+    Quiet_Move = 0,
+    Double_Push = 1,
+    O_O = 2,
+    O_O_O = 3,
 
     // Captures that don't promote
-    CAPTURE_MASK = 4,
-    CAPTURE = 4,
-    EN_PASSANT = 5,
+    Capture_Mask = 4,
+    Capture = 4,
+    En_Passant = 5,
 
     // Promotions that don't capture
-    PROMOTION_MASK = 8,
-    KNIGHT_PROMOTION = 8,
-    BISHOP_PROMOTION = 9,
-    ROOK_PROMOTION = 10,
-    QUEEN_PROMOTION = 11,
+    Promotion_Mask = 8,
+    Knight_Promotion = 8,
+    Bishop_Promotion = 9,
+    Rook_Promotion = 10,
+    Queen_Promotion = 11,
 
     // Promotions that capture
-    KNIGHT_PROMOTION_CAPTURE = 12,
-    BISHOP_PROMOTION_CAPTURE = 13,
-    ROOK_PROMOTION_CAPTURE = 14,
-    QUEEN_PROMOTION_CAPTURE = 15,
+    Knight_Promotion_Capture = 12,
+    Bishop_Promotion_Capture = 13,
+    Rook_Promotion_Capture = 14,
+    Queen_Promotion_Capture = 15,
 
 So, a `Move` needs 16 bits to encode: 4 for the `kind` and 6 each for the `from` and `to` squares.
 
@@ -83,8 +83,8 @@ Let's delve in each of the three complications.
 
 ### Castling Moves
 
-King side: `{ KING_CASTLE, "e1"_sq, "g1"_sq}` or `{ KING_CASTLE, "e8"_sq, "g8"_sq }`, and  
-Queen side: `{ QUEEN_CASTLE, "e1"_sq, "c1"_sq}` or `{ QUEEN_CASTLE, "e8"_sq", "c8"_sq}`.
+King side: `{ O_O, "e1"_sq, "g1"_sq}` or `{ O_O, "e8"_sq, "g8"_sq }`, and  
+Queen side: `{ O_O_O, "e1"_sq, "c1"_sq}` or `{ O_O_O, "e8"_sq", "c8"_sq}`.
 
 These become a combination of a king move and a rook move. Using UCI notiation this becomes:
 
@@ -93,13 +93,13 @@ Queen side: `e1c1` `a1d1` or `e8c8` `a8d8`.
 
 Note that the low 4 bits of the `to` square suffice to identify both the destination file and the
 side for castling. Even with chess960 this would be unambiguous. We don't even need the
-`KING_CASTLE` vs `QUEEN_CASTLE` information from the `MoveKind` as it is redundant with the `to`
+`O_O` vs `O_O_O` information from the `MoveKind` as it is redundant with the `to`
 square file.
 
 ### En Passant Moves
 
-White player: `{ EN_PASSANT, "e5"_sq, "f6"_sq}`,  
-Black player: `{ EN_PASSANT, "d4"_sq, "c3"_sq}`.
+White player: `{ En_Passant, "e5"_sq, "f6"_sq}`,  
+Black player: `{ En_Passant, "d4"_sq, "c3"_sq}`.
 
 These become a combination of a sideways capture followed by a regular pawn push:
 
