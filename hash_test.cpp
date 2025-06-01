@@ -160,9 +160,19 @@ void testHashApplyMove() {
     checkApplyMove("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1", "e1c1");
 }
 
+void testPromotionKind() {
+    {
+        Square from = "a7"_sq;
+        Square to = "a8"_sq;
+        Move move(from, to, MoveKind::Queen_Promotion);
+        assert(move.isPromotion());
+        assert(promotionType(move.kind) == PieceType::QUEEN);
+    }
+}
 }  // namespace
 
 int main() {
+    testPromotionKind();
     testTrivialHash();
     testBasicHash();
     testToggleCastlingRights();

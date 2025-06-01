@@ -15,15 +15,14 @@ std::array<uint64_t, kNumHashVectors> hashVectors = []() {
 Hash::Hash(Position position) {
     for (auto square : SquareSet::occupancy(position.board))
         toggle(position.board[square], index(square));
-    if (position.active() == Color::BLACK) toggle(BLACK_TO_MOVE);
+    if (position.active() == Color::b) toggle(BLACK_TO_MOVE);
     if (position.turn.castling() != CastlingMask::_) toggle(position.turn.castling());
     if (index(position.turn.enPassant()))
         toggle(ExtraVectors(file(position.turn.enPassant()) + EN_PASSANT_A));
 }
 
 namespace {
-static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::WHITE),
-                                                 CastlingInfo(Color::BLACK)};
+static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::w), CastlingInfo(Color::b)};
 }  // namespace
 
 void Hash::applyMove(const Position& position, Move mv) {
@@ -48,12 +47,12 @@ void Hash::applyMove(const Position& position, Move mv) {
     case MoveKind::O_O:  // Assume the move has the king move, so adjust the rook here.
     {
         auto& info = castlingInfo[int(color(piece))];
-        move(info.rook, index(info.kingSide[1][0]), index(info.kingSide[1][1]));
+        move(info.rook, index(info.kingSide[1].from), index(info.kingSide[1].to));
     } break;
     case MoveKind::O_O_O:  // Assume the move has the king move, so adjust the rook here.
     {
         auto& info = castlingInfo[int(color(piece))];
-        move(info.rook, index(info.queenSide[1][0]), index(info.queenSide[1][1]));
+        move(info.rook, index(info.queenSide[1].from), index(info.queenSide[1].to));
     } break;
 
     case MoveKind::Capture: toggle(target, index(mv.to)); break;

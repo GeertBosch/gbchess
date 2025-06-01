@@ -130,7 +130,7 @@ std::vector<std::string> split(std::string line, char delim) {
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     Score stand_pat = evaluateBoard(position.board, true);
-    if (position.active() == Color::BLACK) stand_pat = -stand_pat;
+    if (position.active() == Color::b) stand_pat = -stand_pat;
 
     if (!depthleft) return stand_pat;
 
@@ -278,7 +278,7 @@ void testFromStream(std::ifstream& stream) {
         auto fen = columns[fenCol];
         auto position = fen::parsePosition(fen);
         auto score = quiesce(position, Score::min(), Score::max(), 4).cp();
-        if (position.active() == Color::BLACK) score = -score;
+        if (position.active() == Color::b) score = -score;
         auto phase = computePhase(position.board);
         auto diff = expected - score;
         diffs.push_back(diff * 0.01);
@@ -343,7 +343,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Piece-Square Board Evaluation: " << std::string(pieceSquareEval) << std::endl;
 
     auto quiesceEval = quiesce(position, Score::min(), Score::max(), 4);
-    if (position.active() == Color::BLACK) quiesceEval = -quiesceEval;
+    if (position.active() == Color::b) quiesceEval = -quiesceEval;
     std::cout << "Quiescence Evaluation: " << std::string(quiesceEval) << std::endl;
 
     printAvailableCaptures(position);

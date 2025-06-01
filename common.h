@@ -40,17 +40,13 @@ constexpr Square makeSquare(int file, int rank) {
     return Square(rank * kNumFiles + file);
 }
 
-inline void inc(Square& sq) {
-    sq = Square(uint8_t(sq) + 1);
-}
-
-inline int rank(Square square) {
+constexpr int rank(Square square) {
     return int(square) / kNumFiles;
 }
-inline int file(Square square) {
+constexpr int file(Square square) {
     return int(square) % kNumRanks;
 }
-inline int index(Square square) {
+constexpr int index(Square square) {
     return int(square);
 }
 
@@ -66,19 +62,23 @@ constexpr Square operator""_sq(const char* str, size_t len) {
     return makeSquare(str[0] - 'a', str[1] - '1');
 }
 
-enum class Color : uint8_t { WHITE, BLACK };
+enum class Color : uint8_t { w, b };
 
 inline std::string to_string(Color color) {
-    return color == Color::WHITE ? "w" : "b";
+    return color == Color::w ? "w" : "b";
 }
 
 constexpr Color operator!(Color color) {
-    return color == Color::WHITE ? Color::BLACK : Color::WHITE;
+    return color == Color::w ? Color::b : Color::w;
 }
 
 constexpr Color color(char color) {
     assert(color == 'w' || color == 'b');
-    return color == 'b' ? Color::BLACK : Color::WHITE;
+    return color == 'b' ? Color::b : Color::w;
+}
+
+constexpr int index(Color color) {
+    return static_cast<int>(color);
 }
 
 enum class PieceType : uint8_t { PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING };
@@ -129,18 +129,18 @@ constexpr PieceType type(Piece piece) {
 
 constexpr Piece addColor(PieceType type, Color color) {
     return static_cast<Piece>(static_cast<uint8_t>(type) +
-                              (color == Color::WHITE ? 0 : kNumPieceTypes + 1));
+                              (color == Color::w ? 0 : kNumPieceTypes + 1));
 }
 
 constexpr Color color(Piece piece) {
-    return piece <= Piece::K ? Color::WHITE : Color::BLACK;
+    return piece <= Piece::K ? Color::w : Color::b;
 }
 
-inline char to_char(Piece piece) {
+constexpr char to_char(Piece piece) {
     return pieceChars[index(piece)];
 }
 
-inline Piece toPiece(char piece) {
+constexpr Piece toPiece(char piece) {
     auto pieceIndex = pieceChars.find(piece);
     return pieceIndex == std::string::npos ? Piece::_ : static_cast<Piece>(pieceIndex);
 }
@@ -187,10 +187,6 @@ constexpr bool isCastles(MoveKind kind) {
 constexpr uint8_t kNumMoveKinds = index(MoveKind::Queen_Promotion_Capture) + 1;
 constexpr uint8_t kNumNoPromoMoveKinds = index(MoveKind::En_Passant) + 1;
 
-inline PieceType promotionType(MoveKind kind) {
-    return static_cast<PieceType>((static_cast<uint8_t>(kind) & 3) + 1);
-}
-
 struct Move {
 
     static_assert(kNumSquares * kNumSquares * kNumMoveKinds <= (1u << 16));
@@ -208,7 +204,7 @@ struct Move {
     operator std::string() const {
         if (*this == Move{}) return "0000";
         auto str = to_string(from) + to_string(to);
-        if (isPromotion()) str += to_char(addColor(promotionType(kind), Color::BLACK));
+        if (isPromotion()) str += to_char(addColor(PieceType((index(kind) & 3) + 1), Color::b));
         return str;
     }
 
@@ -236,14 +232,6 @@ inline std::string to_string(MoveVector moves) {
 class Board {
     using Squares = std::array<Piece, kNumSquares>;
     Squares _squares;
-
-    // The minimal space required is 64 bits for occupied squares (8 bytes), plus 6 bits for white
-    // king pos, plus 6 bits for black king, plus 30 * log2(10) = 102 bits for identification of the
-    // pieces, which would be 21 bytes. For practical purposes, we can just use 4 bits per piece and
-    // avoid the special king encoding, so we'd end up with 8 bytes for the occupied squares and
-    // 32*4 = 128 bits for the pieces, which would be 24 bytes in total. The question is whether the
-    // advantage of having the occupancy bitset available outweighs the disadvantage of having to do
-    // the bit twiddling to get the piece type and color.
 
 public:
     Board() { _squares.fill(Piece::_); }
@@ -305,7 +293,10 @@ inline std::string to_string(CastlingMask mask) {
 // Square to indicate no enpassant target
 static constexpr auto noEnPassantTarget = Square(0);
 
-using TwoSquares = std::array<Square, 2>;
+struct FromTo {
+    Square from;
+    Square to;
+};
 
 /**
  * Succinct representation of data needed to make or unmake a move. It is sufficient to recreate a
@@ -315,13 +306,13 @@ using TwoSquares = std::array<Square, 2>;
  */
 struct BoardChange {
     Piece captured;
-    TwoSquares first = {Square(0), Square(0)};
     uint8_t promo;
-    TwoSquares second = {Square(0), Square(0)};
+    FromTo first = {Square(0), Square(0)};
+    FromTo second = {Square(0), Square(0)};
 };
 
 class alignas(4) Turn {
-    enum EnPassantTarget : uint16_t {
+    enum EnPassantTarget : uint16_t {  // 16 bits to allow better packing
         _ = 0,
         // clang-format off
         a3 = 16, b3 = 17, c3 = 18, d3 = 19, e3 = 20, f3 = 21, g3 = 22, h3 = 23,
@@ -347,16 +338,11 @@ class alignas(4) Turn {
     // Castling availability (4 bits)
     CastlingMask castlingAvailability : 4;
 
-    enum Active : uint16_t {
-        w = 0,
-        b = 1,
-    };
-
     // Rather than using a separate full move number and active color bit, we can just use the
     // number of half moves to both determine the active side (white on even, black on odd) and
     // the full move number (half moves / 2 + 1).
     uint16_t fullmoveNumber : 15;
-    Active active : 1;
+    Color active : 1;
 
 public:
     Turn(Color active,
@@ -368,7 +354,7 @@ public:
           halfmoveClock(halfmoveClock),
           castlingAvailability(castlingAvailability),
           fullmoveNumber(fullmoveNumber),
-          active(static_cast<Active>(active)) {
+          active(static_cast<Color>(active)) {
         // This code path is suprisingly hot, so only assert in debug mode
         dassert(halfmoveClock >= 0 && halfmoveClock < 128);
         dassert(fullmoveNumber > 0 && fullmoveNumber < 32768);
@@ -376,8 +362,8 @@ public:
 
     Turn(Color color) : Turn(color, CastlingMask::KQkq, Square(noEnPassantTarget), 0, 1) {}
 
-    Color activeColor() const { return static_cast<Color>(active); };
-    void setActive(Color color) { active = static_cast<Active>(color); };
+    Color activeColor() const { return active; };
+    void setActive(Color color) { active = color; };
 
     CastlingMask castling() const { return castlingAvailability; }
     void setCastling(CastlingMask castling) { castlingAvailability = castling; }
@@ -393,13 +379,14 @@ public:
     void tick() {
         ++halfmoveClock;
         // Flip active color and increment fullmove number if active color was black
-        active = static_cast<Active>(!active);
-        fullmoveNumber += !active;
+        active = !active;
+        fullmoveNumber += active == Color::w;
     }
 };
+static_assert(sizeof(Turn) == 4);
 
-struct Position {
+struct alignas(8) Position {
     Board board;
-    Turn turn = {Color::WHITE};
+    Turn turn = {Color::w};
     Color active() const { return turn.activeColor(); }
 };

@@ -14,7 +14,7 @@ constexpr bool haveSSE2 = true;
 struct CompoundMove {
     Square to = Square(0);
     uint8_t promo = 0;
-    TwoSquares second = {Square(0), Square(0)};
+    FromTo second = {Square(0), Square(0)};
 };
 
 struct MovesTable {
@@ -65,8 +65,7 @@ private:
 } movesTable;
 
 namespace {
-static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::WHITE),
-                                                 CastlingInfo(Color::BLACK)};
+static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::w), CastlingInfo(Color::b)};
 }  // namespace
 
 namespace init {
@@ -79,14 +78,14 @@ Occupancy occupancyDelta(Move move) {
     switch (kind) {
     case MoveKind::O_O: {
         auto info = castlingInfo[rank(from) != 0];
-        ours.insert(info.kingSide[1][1]);
-        ours.insert(info.kingSide[1][0]);
+        ours.insert(info.kingSide[1].to);
+        ours.insert(info.kingSide[1].from);
         break;
     }
     case MoveKind::O_O_O: {
         auto info = castlingInfo[rank(from) != 0];
-        ours.insert(info.queenSide[1][1]);
-        ours.insert(info.queenSide[1][0]);
+        ours.insert(info.queenSide[1].to);
+        ours.insert(info.queenSide[1].from);
         break;
     }
     case MoveKind::Capture:
@@ -105,11 +104,11 @@ SquareSet castlingPath(Color color, MoveKind side) {
 
     // Note the paths are reversed, so the start point is excluded and the endpoint included.
     if (side == MoveKind::O_O)
-        path |= SquareSet::path(info.kingSide[0][1], info.kingSide[0][0]) |
-            SquareSet::path(info.kingSide[1][1], info.kingSide[1][0]);
+        path |= SquareSet::path(info.kingSide[0].to, info.kingSide[0].from) |
+            SquareSet::path(info.kingSide[1].to, info.kingSide[1].from);
     else
-        path |= SquareSet::path(info.queenSide[0][1], info.queenSide[0][0]) |
-            SquareSet::path(info.queenSide[1][1], info.queenSide[1][0]);
+        path |= SquareSet::path(info.queenSide[0].to, info.queenSide[0].from) |
+            SquareSet::path(info.queenSide[1].to, info.queenSide[1].from);
 
     return path;
 }
@@ -242,7 +241,7 @@ SquareSet SquareSet::path(Square from, Square to) {
 
 void MovesTable::initializePieceMovesAndCaptures() {
     for (auto piece : pieces) {
-        for (Square from = Square(0); index(from) != kNumSquares; inc(from)) {
+        for (auto from : SquareSet::all()) {
             moves[int(piece)][index(from)] = init::possibleMoves(Piece(piece), from);
             captures[int(piece)][index(from)] = init::possibleCaptures(Piece(piece), from);
         }
@@ -281,7 +280,7 @@ void MovesTable::initializePieceMoveAndCaptureKinds() {
 
 void MovesTable::initializeAttackers() {
     // Initialize attackers
-    for (Square from = Square(0); index(from) != kNumSquares; inc(from)) {
+    for (auto from : SquareSet::all()) {
         SquareSet toSquares;
         // Gather all possible squares that can be attacked by any piece
         for (auto piece : pieces) toSquares |= captures[int(piece)][index(from)];
@@ -484,7 +483,7 @@ SquareSet SquareSet::occupancy(const Board& board) {
 }
 
 SquareSet SquareSet::occupancy(const Board& board, Color color) {
-    bool black = color == Color::BLACK;
+    bool black = color == Color::b;
     return lessSet(board.squares(), black ? Piece::p : Piece::_, black);
 }
 
@@ -497,8 +496,8 @@ struct PieceSet {
     PieceSet() = default;
     PieceSet(Piece piece) : pieces(1 << index(piece)) {}
     PieceSet(PieceType pieceType)
-        : pieces((1 << index(addColor(pieceType, Color::WHITE))) |
-                 (1 << index(addColor(pieceType, Color::BLACK)))) {}
+        : pieces((1 << index(addColor(pieceType, Color::w))) |
+                 (1 << index(addColor(pieceType, Color::b)))) {}
     constexpr PieceSet(uint16_t pieces) : pieces(pieces) {}
     constexpr PieceSet operator|(PieceSet other) const { return PieceSet(pieces | other.pieces); }
     bool has(Piece piece) const { return pieces & (1 << index(piece)); }
@@ -590,7 +589,7 @@ void expandPromos(const F& fun, Piece piece, Move move) {
 
 template <typename F>
 void findPawnPushes(SearchState& state, const F& fun) {
-    bool white = state.active() == Color::WHITE;
+    bool white = state.active() == Color::w;
     const auto doublePushRank = white ? SquareSet::rank(3) : SquareSet::rank(kNumRanks - 1 - 3);
     const auto promo = white ? SquareSet::rank(kNumRanks - 1) : SquareSet::rank(0);
     auto free = !state.occupancy();
@@ -617,7 +616,7 @@ void findPawnPushes(SearchState& state, const F& fun) {
 
 template <typename F>
 void findPawnCaptures(SearchState& state, const F& fun) {
-    bool white = state.active() == Color::WHITE;
+    bool white = state.active() == Color::w;
     const auto promo = white ? SquareSet::rank(kNumRanks - 1) : SquareSet::rank(0);
     auto leftPawns = state.pawns - SquareSet::file(0);
     auto rightPawns = state.pawns - SquareSet::file(7);
@@ -670,7 +669,7 @@ void findMoves(const Board& board, SearchState& state, const F& fun) {
 /** For use in quiescent search: allow pawn moves that promote or near promotion */
 template <typename F>
 void findPromotionMoves(SearchState& state, const F& fun) {
-    bool white = state.active() == Color::WHITE;
+    bool white = state.active() == Color::w;
     auto masked = white ? SquareSet::rank(kNumRanks - 2) | SquareSet::rank(kNumRanks - 3)
                         : SquareSet::rank(1) | SquareSet::rank(2);
     auto pawns = state.pawns;
@@ -689,13 +688,13 @@ void findCastles(Occupancy occupancy, Turn turn, const F& fun) {
     if ((turn.castling() & info.kingSideMask) != CastlingMask::_) {
         auto path = movesTable.castlingClear[color][index(MoveKind::O_O)];
         if ((occupancy() & path).empty())
-            fun(info.king, {info.kingSide[0][0], info.kingSide[0][1], MoveKind::O_O});
+            fun(info.king, {info.kingSide[0].from, info.kingSide[0].to, MoveKind::O_O});
     }
     // Check for queen side castling
     if ((turn.castling() & info.queenSideMask) != CastlingMask::_) {
         auto path = movesTable.castlingClear[color][index(MoveKind::O_O_O)];
         if ((occupancy() & path).empty())
-            fun(info.king, Move{info.queenSide[0][0], info.queenSide[0][1], MoveKind::O_O_O});
+            fun(info.king, Move{info.queenSide[0].from, info.queenSide[0].to, MoveKind::O_O_O});
     }
 }
 
@@ -739,19 +738,19 @@ BoardChange prepareMove(Board& board, Move move) {
     // no-op move, a quiet move or a promotion. The target square is taken from the compound move.
     auto compound = movesTable.compound[index(move.kind)][index(move.to)];
     auto captured = board[compound.to];
-    BoardChange undo = {captured, {move.from, compound.to}, compound.promo, compound.second};
+    BoardChange undo = {captured, compound.promo, {move.from, compound.to}, compound.second};
     return undo;
 }
 BoardChange makeMove(Board& board, BoardChange change) {
     Piece first = Piece::_;
-    std::swap(first, board[change.first[0]]);
-    board[change.first[1]] = first;
+    std::swap(first, board[change.first.from]);
+    board[change.first.to] = first;
 
     // The following statements don't change the board for non-compound moves
     auto second = Piece::_;
-    std::swap(second, board[change.second[0]]);
+    std::swap(second, board[change.second.from]);
     second = Piece(index(second) + change.promo);
-    board[change.second[1]] = second;
+    board[change.second.to] = second;
     return change;
 }
 
@@ -761,7 +760,7 @@ BoardChange makeMove(Board& board, Move move) {
 }
 
 UndoPosition makeMove(Position& position, BoardChange change, Move move) {
-    auto ours = position.board[change.first[0]];
+    auto ours = position.board[change.first.from];
     auto undo = UndoPosition{makeMove(position.board, change), position.turn};
     MoveWithPieces mwp = {move, ours, undo.board.captured};
     position.turn = applyMove(position.turn, mwp);
@@ -772,12 +771,12 @@ UndoPosition makeMove(Position& position, Move move) {
 }
 void unmakeMove(Board& board, BoardChange undo) {
     Piece ours = Piece::_;
-    std::swap(board[undo.second[1]], ours);
+    std::swap(board[undo.second.to], ours);
     ours = Piece(index(ours) - undo.promo);
-    board[undo.second[0]] = ours;
+    board[undo.second.from] = ours;
     auto piece = undo.captured;
-    std::swap(piece, board[undo.first[1]]);
-    board[undo.first[0]] = piece;
+    std::swap(piece, board[undo.first.to]);
+    board[undo.first.from] = piece;
 }
 
 void unmakeMove(Position& position, UndoPosition undo) {
@@ -791,12 +790,12 @@ CastlingMask castlingMask(Square from, Square to) {
     const struct MaskTable {
         std::array<CM, kNumSquares> mask;
         constexpr MaskTable() : mask{} {
-            mask[index(castlingInfo[0].kingSide[0][0])] = CM::KQ;  // White King
-            mask[index(castlingInfo[0].kingSide[1][0])] = CM::K;   // White King Side Rook
-            mask[index(castlingInfo[0].queenSide[1][0])] = CM::Q;  // White Queen Side Rook
-            mask[index(castlingInfo[1].kingSide[0][0])] = CM::kq;  // Black King
-            mask[index(castlingInfo[1].kingSide[1][0])] = CM::k;   // Black King Side Rook
-            mask[index(castlingInfo[1].queenSide[1][0])] = CM::q;  // Black Queen Side Rook
+            mask[index(castlingInfo[0].kingSide[0].from)] = CM::KQ;  // White King
+            mask[index(castlingInfo[0].kingSide[1].from)] = CM::K;   // White King Side Rook
+            mask[index(castlingInfo[0].queenSide[1].from)] = CM::Q;  // White Queen Side Rook
+            mask[index(castlingInfo[1].kingSide[0].from)] = CM::kq;  // Black King
+            mask[index(castlingInfo[1].kingSide[1].from)] = CM::k;   // Black King Side Rook
+            mask[index(castlingInfo[1].queenSide[1].from)] = CM::q;  // Black Queen Side Rook
         }
         CM operator[](Square sq) const { return mask[index(sq)]; }
     } maskTable;
@@ -895,7 +894,7 @@ bool doesNotCheck(Board& board, const SearchState& state, Move move) {
 bool mayHavePromoMove(Color side, Board& board, Occupancy occupancy) {
     Piece pawn;
     SquareSet from;
-    if (side == Color::WHITE) {
+    if (side == Color::w) {
         from = SquareSet(0x00ff'0000'0000'0000ull) & occupancy.ours();
         auto to = SquareSet(0xff00'0000'0000'0000ull) - occupancy();
         from &= to >> 8;

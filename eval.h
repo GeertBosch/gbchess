@@ -159,18 +159,18 @@ inline Score evaluateMove(const Board& before, BoardChange move, const EvalTable
     // Go over all changes in order, as we have the board before the move was made.
 
     // The first move is a regular capture or move, so adjust delta accordingly.
-    Piece first = before[move.first[0]];
-    delta -= table[move.captured][index(move.first[1])];  // Remove captured piece
-    delta -= table[first][index(move.first[0])];          // Remove piece from original square
-    delta += table[first][index(move.first[1])];          // Add the piece to its target square
+    Piece first = before[move.first.from];
+    delta -= table[move.captured][index(move.first.to)];  // Remove captured piece
+    delta -= table[first][index(move.first.from)];        // Remove piece from original square
+    delta += table[first][index(move.first.to)];          // Add the piece to its target square
 
     // The second move is either a quiet move for en passant or castling, or a promo move.
     Piece second = first;
-    if (move.second[0] != move.first[1]) second = before[move.second[0]];  // Castling
+    if (move.second.from != move.first.to) second = before[move.second.from];  // Castling
 
-    delta -= table[second][index(move.second[0])];  // Remove piece before promotion
-    second = Piece(index(second) + move.promo);     // Apply any promotion
-    delta += table[second][index(move.second[1])];  // Add piece with any promotions
+    delta -= table[second][index(move.second.from)];  // Remove piece before promotion
+    second = Piece(index(second) + move.promo);       // Apply any promotion
+    delta += table[second][index(move.second.to)];    // Add piece with any promotions
 
     return delta;
 }
@@ -180,7 +180,7 @@ inline Score evaluateMove(const Board& board,
                           BoardChange move,
                           EvalTable& table) {
     Score eval = evaluateMove(board, move, table);
-    return activePlayer == Color::WHITE ? eval : -eval;
+    return activePlayer == Color::w ? eval : -eval;
 }
 
 
@@ -206,7 +206,7 @@ Score evaluateBoard(const Board& board, const EvalTable& table);
 template <typename TableArg>
 Score evaluateBoard(const Board& board, Color activePlayer, TableArg&& arg) {
     Score eval = evaluateBoard(board, arg);
-    return activePlayer == Color::WHITE ? eval : -eval;
+    return activePlayer == Color::w ? eval : -eval;
 }
 
 /**
