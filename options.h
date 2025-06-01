@@ -8,7 +8,7 @@ namespace options {
 /**
  * Below options allow disabling various search optimizations.
  */
-constexpr int defaultDepth = 8;
+constexpr int defaultDepth = 12;
 constexpr int quiescenceDepth = 9;
 constexpr bool iterativeDeepening = true;                 // Aspiration windows need this
 constexpr bool lateMoveReductions = true;                 // Reduce moves at the end of the search

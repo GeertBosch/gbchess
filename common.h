@@ -352,19 +352,6 @@ struct BoardChange {
     TwoSquares first = {0, 0};
     uint8_t promo;
     TwoSquares second = {0, 0};
-    operator std::string() {
-        auto piece2str = [](Piece piece) -> std::string {
-            return std::string(1, pieceChars[index(piece)]);
-        };
-        std::string promoChars = " nbrq";
-        auto promo2str = [&promoChars](uint8_t promo) -> std::string {
-            return promo ? std::string(1, promoChars[promo]) : "";
-        };
-
-        return "captured = " + piece2str(captured) + " " + std::string(first[0]) +
-            std::string(first[1]) + std::string(second[0]) + std::string(second[1]) +
-            promo2str(promo);
-    }
 };
 
 class alignas(4) Turn {

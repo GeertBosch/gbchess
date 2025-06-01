@@ -49,21 +49,24 @@ struct TranspositionTable {
     struct Entry {
         Hash hash;
         Eval eval;
-        uint8_t depth = 0;
+        uint8_t depthleft = 0;
         EntryType type = EXACT;
+        uint8_t generation;
         Entry() = default;
 
-        Entry(Hash hash, Eval move, uint8_t depth, EntryType type)
-            : hash(hash), eval(move), depth(depth), type(type) {}
+        Entry(Hash hash, Eval move, uint8_t depth, EntryType type, uint8_t generation)
+            : hash(hash), eval(move), depthleft(depth), type(type), generation(generation) {}
     };
 
     std::vector<Entry> entries{kNumEntries};
     uint64_t numInserted = 0;
-    uint64_t numOccupied = 0;  // Number of non-obsolete entries
+    uint64_t numWorse = 0;
+    uint64_t numOccupied = 0;
     uint64_t numCollisions = 0;
     uint64_t numImproved = 0;
     uint64_t numHits = 0;
     uint64_t numMisses = 0;
+    uint8_t numGenerations = 0;
 
     ~TranspositionTable() {
         if (options::transpositionTableDebug) printStats();
@@ -79,57 +82,48 @@ struct TranspositionTable {
         return {};  // no move found
     }
 
-    Entry* lookup(Hash hash, int depth) {
-        if constexpr (kNumEntries == 0) return nullptr;
-
+    void refineAlphaBeta(Hash hash, int depthleft, Score& alpha, Score& beta) {
+        if constexpr (kNumEntries == 0) return;
         auto idx = hash() % kNumEntries;
         auto& entry = entries[idx];
-        ++numHits;
-        if (entry.hash == hash && entry.depth >= depth) {
-            return &entry;
-        }
-        --numHits;
-        ++numMisses;
-        return nullptr;
-    }
 
-    void refineAlphaBeta(Hash hash, int depth, Score& alpha, Score& beta) {
-        if constexpr (kNumEntries == 0) return;
-        auto entry = lookup(hash, depth);
         ++numMisses;
-        if (!entry) return;
-
+        if (entry.hash() != hash() || entry.depthleft < depthleft ||
+            entry.generation != numGenerations)
+            return;
         --numMisses;
         ++numHits;
+
         ++cacheCount;
-        switch (entry->type) {
-        case EXACT: alpha = beta = entry->eval.score; break;
-        case LOWERBOUND: alpha = std::max(alpha, entry->eval.score); break;
-        case UPPERBOUND: beta = std::min(beta, entry->eval.score); break;
+        switch (entry.type) {
+        case EXACT: alpha = beta = entry.eval.score; break;
+        case LOWERBOUND: alpha = std::max(alpha, entry.eval.score); break;
+        case UPPERBOUND: beta = std::min(beta, entry.eval.score); break;
         }
     }
-
 
     void insert(Hash hash, Eval move, uint8_t depthleft, EntryType type) {
         if constexpr (kNumEntries == 0) return;
-        if (!move) return;
+        if (!move || depthleft < 1) return;
         auto idx = hash() % kNumEntries;
         auto& entry = entries[idx];
+        ++numWorse;
+        if (entry.type == EXACT && depthleft < entry.depthleft && entry.eval.move &&
+            (type != EXACT || move.score <= entry.eval.score) && entry.generation == numGenerations)
+            return;
+        --numWorse;
         ++numInserted;
 
-        if (entry.type == EXACT && entry.depth > depthleft && entry.eval.move &&
-            (type != EXACT || entry.eval.score >= move.score))
-            return;
-
-        // 3 cases: improve existing entry, collision with unrelated entry, or occupy an empty slot
-        if (entry.eval.move && entry.hash == hash)
+        // 3 cases: improve existing entry, collision with unrelated entry, or occupy an empty
+        // slot
+        if (entry.hash == hash)
             ++numImproved;
         else if (entry.eval.move)
             ++numCollisions;
         else
-            ++numOccupied;
+            ++numOccupied;  // nothing in this slot yet
 
-        entry = Entry{hash, move, depthleft, type};
+        entry = Entry{hash, move, depthleft, type, numGenerations};
     }
 
     void insert(Hash hash, Eval move, uint8_t depthleft, Score alpha, Score beta) {
@@ -151,16 +145,17 @@ struct TranspositionTable {
 
 
     void printStats() {
-        auto numCalls = numHits + numMisses;
+        auto numLookups = numHits + numMisses;
+        auto numInserts = numInserted + numWorse;
         std::cout << "Transposition table stats:\n";
         std::cout << "  occupied: " << numOccupied << pct(numOccupied, kNumEntries) << "\n";
         std::cout << "  inserts: " << numInserted << "\n";
+        std::cout << "  worse: " << numWorse << pct(numWorse, numInserts) << "\n";
         std::cout << "  collisions: " << numCollisions << pct(numCollisions, numInserted) << "\n";
-        std::cout << "  Improved: " << numImproved << pct(numImproved, numInserted) << "\n";
-        std::cout << "  Hits: " << numHits << pct(numHits, numCalls) << "\n";
-        std::cout << "  Misses: " << numMisses << pct(numMisses, numCalls) << "\n";
+        std::cout << "  improved: " << numImproved << pct(numImproved, numInserted) << "\n";
+        std::cout << "  lookup hits: " << numHits << pct(numHits, numLookups) << "\n";
+        std::cout << "  lookup misses: " << numMisses << pct(numMisses, numLookups) << "\n";
     }
-
 } transpositionTable;
 
 size_t history[2][kNumSquares][kNumSquares] = {{{0}}};
@@ -184,7 +179,7 @@ class Repetitions {
         halfmove = std::min(halfmove, int(hashes.size()));
 
         int count = 0;
-        for (auto it = hashes.begin() + halfmove; it != hashes.end(); ++it) count += (*it == hash);
+        for (auto it = hashes.end() - halfmove; it != hashes.end(); ++it) count += (*it == hash);
         return count;
     }
 
@@ -218,9 +213,9 @@ public:
     };
 
     /**
-     * Enters a new position in the repetition table. The hash is the hash of the position. Returns
-     * a RAII State object that will remove the hash from the table when it goes out of scope. The
-     * state object reports whether the position is a draw by repetition.
+     * Enters a new position in the repetition table. The hash is the hash of the position.
+     * Returns a RAII State object that will remove the hash from the table when it goes out of
+     * scope. The state object reports whether the position is a draw by repetition.
      */
     [[nodiscard]] State enter(Hash hash) {
         push_back(hash);
@@ -526,10 +521,7 @@ PrincipalVariation toplevelAlphaBeta(
     // Forced moves don't count towards depth
     if (moveList.size() == 1) ++depth.left;
 
-    // Register position for later checks of draws due to repetition or the fifty-move rule
-    auto drawState = repetitions.enter(hash);
-    if (drawState.drawn(position.turn.halfmove())) return {{}, Score()};
-
+    // computeBestMove already entered the current position in the repetition table
     sortMoves(position, hash, moveList.begin(), moveList.end());
     PrincipalVariation pv;
 
@@ -588,8 +580,9 @@ PrincipalVariation aspirationWindows(Position position, Score expected, int maxd
 PrincipalVariation iterativeDeepening(Position& position, int maxdepth, InfoFn info) {
     PrincipalVariation pv = {{}, quiesce(position, options::quiescenceDepth)};
     for (auto depth = 1; depth <= maxdepth; ++depth) {
-        pv = aspirationWindows(position, pv.score, depth, info);
-        if (pvInfo(info, depth, pv.score, pv.moves)) break;
+        auto newpv = aspirationWindows(position, pv.score, depth, info);
+        if (pvInfo(info, depth, newpv.score, newpv.moves)) break;
+        pv = newpv;  // Avoid losing the previous principal variation due to an aborted search
         if (pv.score.mate()) break;
     }
     return pv;
@@ -605,6 +598,7 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
     evalTable = EvalTable{position.board, true};
     searchEvalCount = evalCount;
     searchStartTime = clock::now();
+    ++transpositionTable.numGenerations;
 
     auto drawState = repetitions.enter(Hash(position));
     for (auto move : moves) {
