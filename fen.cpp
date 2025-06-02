@@ -6,6 +6,85 @@
 #include "fen.h"
 
 namespace fen {
+MoveKind parsePromotionType(char promo) {
+    switch (promo) {
+    case 'q': return MoveKind::Queen_Promotion;
+    case 'r': return MoveKind::Rook_Promotion;
+    case 'b': return MoveKind::Bishop_Promotion;
+    case 'n': return MoveKind::Knight_Promotion;
+    default: throw ParseError("Invalid promotion format: " + std::string(1, promo));
+    }
+}
+
+/** Check if to to and from squares could be used for promotion */
+bool validPromotion(Square from, Square to) {
+    bool validToRank = rank(to) == 0 || rank(to) == kNumRanks - 1;
+    bool validRankStep = abs(rank(from) - rank(to)) == 1;
+    bool validFileStep = abs(file(from) - file(to)) <= 1;
+    return validToRank && validRankStep && validFileStep;
+}
+
+/** Check that the (from, to) move can be valid for any piece */
+bool validMove(Square from, Square to) {
+    int rankDist = abs(rank(to) - rank(from));
+    int fileDist = abs(file(to) - file(from));
+    // A move is valid if it is not to the same square and the rank and file steps are valid for
+    // either a knight, bishop or rook move.
+    bool validKnightMove = (rankDist == 2 && fileDist == 1) || (rankDist == 1 && fileDist == 2);
+    bool validBishopMove = from != to && rankDist == fileDist;
+    bool validRookMove = (rankDist == 0) ^ (fileDist == 0);
+    return validKnightMove || validBishopMove || validRookMove;
+}
+
+/** Check if the move by itself could possibly be a valid move, and returns either
+ * a quiet move or a promotion move, based on the passed string. */
+Move parseUCIMove(const std::string& move) {
+    if (move.size() != 4 && move.size() != 5)
+        throw ParseError("Invalid length for a UCI move, should be 4 or 5: " + move);
+    int field[4] = {move[0] - 'a', move[1] - '1', move[2] - 'a', move[3] - '1'};
+    if (field[0] < 0 || field[0] >= kNumFiles || field[1] < 0 || field[1] >= kNumRanks ||
+        field[2] < 0 || field[2] >= kNumFiles || field[3] < 0 || field[3] >= kNumRanks)
+        throw ParseError("Invalid UCI move format: " + move);
+    Square from = makeSquare(field[0], field[1]);
+    Square to = makeSquare(field[2], field[3]);
+    if (!validMove(from, to)) throw ParseError("Invalid UCI move for any piece: " + move);
+    auto kind = move.size() == 5 ? parsePromotionType(move[4]) : MoveKind::Quiet_Move;
+    if (isPromotion(kind) && !validPromotion(from, to))
+        throw ParseError("Invalid promotion move: " + move);
+    return Move(from, to, kind);
+}
+
+MoveKind setCapture(MoveKind kind) {
+    return MoveKind(index(kind) | index(MoveKind::Capture_Mask));  // Set the capture bit
+}
+
+Move parseUCIMove(const Board& board, const std::string& move) {
+    auto [from, to, kind] = parseUCIMove(move);
+
+    // Any move to an occupied square is a capture
+    if (board[to] != Piece::_) return Move(from, to, setCapture(kind));
+
+    auto piece = board[from];
+    if (piece == Piece::_) throw ParseError("No piece on the board for UCI move: " + move);
+    int rankStep = rank(to) - rank(from);
+    int fileStep = file(to) - file(from);
+
+    // If the king moves two squares, it's castling
+    if (type(piece) == PieceType::KING && rankStep == 0 && abs(fileStep) == 2)
+        return Move(from, to, fileStep < 0 ? MoveKind::O_O_O : MoveKind::O_O);
+
+    // If a pawn moves two squares it's a double push
+    if (type(piece) == PieceType::PAWN && fileStep == 0 && abs(rankStep) == 2)
+        return Move(from, to, MoveKind::Double_Push);
+
+    // If a pawn moves diagonally and the target square is empty, it must be en passant
+    if (type(piece) == PieceType::PAWN && abs(fileStep) == 1 && abs(rankStep) == 1)
+        return Move(from, to, MoveKind::En_Passant);
+
+    // Finally, this must be a quiet or promoting move, as determined during parsing
+    return Move(from, to, kind);
+}
+
 Board parsePiecePlacement(const std::string& piecePlacement) {
     Board board;
 
@@ -110,11 +189,21 @@ std::string to_string(const Board& board) {
     return fen.str();
 }
 
+std::string to_string(CastlingMask mask) {
+    std::string str = "";
+    if ((mask & CastlingMask::K) != CastlingMask::_) str += "K";
+    if ((mask & CastlingMask::Q) != CastlingMask::_) str += "Q";
+    if ((mask & CastlingMask::k) != CastlingMask::_) str += "k";
+    if ((mask & CastlingMask::q) != CastlingMask::_) str += "q";
+    if (str == "") str = "-";
+    return str;
+}
+
 std::string to_string(const Turn& turn) {
     std::stringstream str;
     str << to_string(turn.activeColor()) << " ";
     str << to_string(turn.castling()) << " ";
-    str << (index(turn.enPassant()) ? to_string(turn.enPassant()) : "-") << " ";
+    str << (turn.enPassant() ? to_string(turn.enPassant()) : "-") << " ";
     str << (int)turn.halfmove() << " ";
     str << turn.fullmove();
     return str.str();

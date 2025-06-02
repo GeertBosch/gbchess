@@ -19,20 +19,20 @@ namespace {
 std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     os << "[";
     for (const auto& move : moves) {
-        if (move) os << std::string(move) << ", ";
+        if (move) os << to_string(move) << ", ";
     }
     os << "]";
     return os;
 }
 
 std::ostream& operator<<(std::ostream& os, Move mv) {
-    return os << std::string(mv);
+    return os << to_string(mv);
 }
 std::ostream& operator<<(std::ostream& os, Score score) {
     return os << std::string(score);
 }
 std::ostream& operator<<(std::ostream& os, const PrincipalVariation& pv) {
-    return os << std::string(pv);
+    return os << to_string(pv);
 }
 
 std::string cmdName = "search-test";
@@ -51,7 +51,7 @@ PrincipalVariation analyzePosition(Position position, int maxdepth) {
     auto pv = search::computeBestMove(position, maxdepth);
     if (debugAnalysis)
         std::cout << "        analyzePosition \"" << fen::to_string(position) << "\" as "
-                  << pv.score << ", move " << std::string(pv.front()) << "\n";
+                  << pv.score << ", move " << to_string(pv.front()) << "\n";
     return pv;
 }
 PrincipalVariation analyzeMoves(Position position, int maxdepth) {
@@ -76,7 +76,7 @@ PrincipalVariation analyzeMoves(Position position, int maxdepth) {
 
         if (newVariation > pv) {
             pv = newVariation;
-            if (debugAnalysis) std::cout << "    New best move: " << (std::string)pv << "\n";
+            if (debugAnalysis) std::cout << "    New best move: " << to_string(pv) << "\n";
         }
     }
 
@@ -246,7 +246,7 @@ void testFromStdIn(int depth) {
 
         MoveVector moves;
         for (auto move : split(columns[colMoves], ' ')) {
-            moves.emplace_back(parseUCIMove(currentPosition, move));
+            moves.emplace_back(fen::parseUCIMove(currentPosition.board, move));
             currentPosition = applyMove(currentPosition, moves.back());
             // In puzzles, the first move is just to establish the initial position
             if (moves.size() == 1) initialPosition = currentPosition;
@@ -270,9 +270,9 @@ void testBasicPuzzles() {
     {
         auto puzfen = "4r3/1k6/pp3P2/1b5p/3R1p2/P1R2P2/1P4PP/6K1 b - - 0 35";
         auto puzpos = fen::parsePosition(puzfen);
-        auto puzmoves = MoveVector{{"e8"_sq, "e1"_sq, MoveKind::Quiet_Move},
-                                   {"g1"_sq, "f2"_sq, MoveKind::Quiet_Move},
-                                   {"e1"_sq, "f1"_sq, MoveKind::Quiet_Move}};
+        auto puzmoves = MoveVector{{e8, e1, MoveKind::Quiet_Move},
+                                   {g1, f2, MoveKind::Quiet_Move},
+                                   {e1, f1, MoveKind::Quiet_Move}};
         assert(doPuzzle("000Zo, ranking 1311", puzpos, puzmoves, 5) == NO_ERROR);
     }
 

@@ -47,7 +47,7 @@ void perftWithDivide(Position position, int depth, size_t expectedCount) {
         auto newPosition = applyMove(position, move);
         auto newState = SearchState(newPosition.board, newPosition.turn);
         auto newCount = perft(newPosition.board, newState, depth - 1);
-        if (!quiet) std::cout << static_cast<std::string>(move) << ": " << newCount << "\n";
+        if (!quiet) std::cout << to_string(move) << ": " << newCount << "\n";
         divisions.push_back({move, newCount});
         count += newCount;
     }
@@ -101,9 +101,9 @@ int main(int argc, char** argv) {
         if (arg() == "moves") shift();
 
         while (maybeMove(arg())) {
-            Move move = parseUCIMove(positions.back(), shift());
+            Move move = fen::parseUCIMove(positions.back().board, shift());
             auto pos = applyMove(positions.back(), move);
-            std::cout << "applied move " << static_cast<std::string>(move) << std::endl;
+            std::cout << "applied move " << to_string(move) << std::endl;
             positions.back() = pos;
         }
     }

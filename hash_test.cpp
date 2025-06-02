@@ -87,6 +87,11 @@ void testTrivialHash() {
     assert(hash1() == hash2());
 }
 
+Position applyUCIMove(Position position, const std::string& move) {
+    return applyMove(position, fen::parseUCIMove(position.board, move));
+    throw MoveError("Invalid move: " + move);
+}
+
 void testBasicHash() {
     auto startPos = fen::parsePosition(fen::initialPosition);
     auto e2e3 = applyUCIMove(startPos, "e2e3");
@@ -124,9 +129,9 @@ void testToggleCastlingRights() {
 void testEnPassant() {
     auto pos1 =
         fen::parsePosition("r3k2r/pb1p2pp/1b4q1/1Q2Pp2/8/2NP1PP1/PP4P1/R1B2R1K w kq f6 0 18");
-    assert(pos1.turn.enPassant() == "f6"_sq);
+    assert(pos1.turn.enPassant() == f6);
     auto hash1 = Hash(pos1);
-    auto move = parseUCIMove(pos1, "e5f6");
+    auto move = fen::parseUCIMove(pos1.board, "e5f6");
     assert(move.kind == MoveKind::En_Passant);
 
     auto pos2 = applyMove(pos1, move);
@@ -141,7 +146,7 @@ void testEnPassant() {
 void checkApplyMove(std::string position, std::string move) {
     auto pos1 = fen::parsePosition(position);
     Hash hash(pos1);
-    auto mv = parseUCIMove(pos1, move);
+    auto mv = fen::parseUCIMove(pos1.board, move);
     hash.applyMove(pos1, mv);
     auto pos2 = applyMove(pos1, mv);
     bool ok = checkSameHash(hash, Hash(pos2));
@@ -161,13 +166,11 @@ void testHashApplyMove() {
 }
 
 void testPromotionKind() {
-    {
-        Square from = "a7"_sq;
-        Square to = "a8"_sq;
-        Move move(from, to, MoveKind::Queen_Promotion);
-        assert(move.isPromotion());
-        assert(promotionType(move.kind) == PieceType::QUEEN);
-    }
+    Square from = a7;
+    Square to = a8;
+    Move move(from, to, MoveKind::Queen_Promotion);
+    assert(isPromotion(move.kind));
+    assert(promotionType(move.kind) == PieceType::QUEEN);
 }
 }  // namespace
 

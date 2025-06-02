@@ -12,7 +12,7 @@ namespace {
 std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     os << "[";
     for (const auto& move : moves) {
-        if (move) os << std::string(move) << ", ";
+        if (move) os << to_string(move) << ", ";
     }
     os << "]";
     return os;
@@ -215,7 +215,7 @@ void testCheckAndMate() {
 int parseMoves(Position& position, int* argc, char** argv[]) {
     int moves = 0;
     for (; *argc > 0; ++moves, --*argc, ++*argv) {
-        auto move = parseUCIMove(position, **argv);
+        auto move = fen::parseUCIMove(position.board, **argv);
         if (!move) usage(cmdName, std::string(**argv) + " is not a valid move");
         position = applyMove(position, move);
     }

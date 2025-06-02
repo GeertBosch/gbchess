@@ -29,6 +29,13 @@ std::string pct(uint64_t some, uint64_t all) {
     return all ? " " + std::to_string((some * 100) / all) + "%" : "";
 }
 
+std::string to_string(MoveVector moves) {
+    std::string str = "";
+    for (auto&& move : moves) str += to_string(move) + " ";
+    if (!str.empty()) str.pop_back();
+    return str;
+}
+
 /**
  * The transposition table is a hash table that stores the best move found for a position, so it can
  * be reused in subsequent searches. The table is indexed by the hash of the position, and stores
@@ -272,7 +279,7 @@ int score(const Board& board, Move move) {
     return base +
         (isCapture(move.kind)
              ? xx[index(type(piece))][index(type(board[move.to]))]
-             : (options::historyStore ? history[int(side)][index(move.from)][index(move.to)] : 0));
+             : (options::historyStore ? history[int(side)][move.from][move.to] : 0));
 }
 uint64_t totalMovesEvaluated = 0;
 uint64_t betaCutoffMoves = 0;
@@ -405,7 +412,7 @@ bool betaCutoff(Score score, Score beta, Move move, Color side, int depthleft) {
     if (score < beta) return false;  // No beta cutoff
     ++betaCutoffMoves;               // Increment beta cutoff moves
     if (options::historyStore && !isCapture(move.kind))
-        history[int(side)][index(move.from)][index(move.to)] += depthleft * depthleft;
+        history[int(side)][move.from][move.to] += depthleft * depthleft;
     return true;
 }
 
@@ -477,7 +484,7 @@ bool currmoveInfo(InfoFn info, int depthleft, Move currmove, int currmovenumber)
     std::stringstream ss;
     ss << "depth " << std::to_string(depthleft)     //
        << " nodes " << evalCount - searchEvalCount  //
-       << " currmove " << std::string(currmove)     //
+       << " currmove " << to_string(currmove)       //
        << " currmovenumber " + std::to_string(currmovenumber);
     auto stop = info(ss.str());
     return stop;

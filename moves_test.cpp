@@ -24,7 +24,7 @@ std::string toString(SquareSet squares) {
 std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     os << "[";
     for (const auto& move : moves) {
-        if (move) os << std::string(move) << ", ";
+        if (move) os << to_string(move) << ", ";
     }
     os << "]";
     return os;
@@ -157,53 +157,53 @@ void testColor() {
 void testPossibleMoves() {
     // Test rook moves
     {
-        auto moves = possibleMoves(Piece::R, "a1"_sq);
+        auto moves = possibleMoves(Piece::R, a1);
         assert(moves.size() == 14);
-        assert(moves.contains("h1"_sq));
-        assert(moves.contains("a8"_sq));
+        assert(moves.contains(h1));
+        assert(moves.contains(a8));
     }
 
     // Test bishop moves
     {
-        auto moves = possibleMoves(Piece::b, "a1"_sq);
+        auto moves = possibleMoves(Piece::b, a1);
         assert(moves.size() == 7);
-        assert(moves.contains("h8"_sq));
+        assert(moves.contains(h8));
     }
 
     // Test knight moves
     {
-        auto moves = possibleMoves(Piece::N, "a1"_sq);
+        auto moves = possibleMoves(Piece::N, a1);
         assert(moves.size() == 2);
-        assert(moves.contains("c2"_sq));
-        assert(moves.contains("b3"_sq));
+        assert(moves.contains(c2));
+        assert(moves.contains(b3));
     }
 
     // Test king moves
     {
-        auto moves = possibleMoves(Piece::k, "a1"_sq);
+        auto moves = possibleMoves(Piece::k, a1);
         assert(moves.size() == 3);
     }
 
     // Test queen moves
     {
-        auto moves = possibleMoves(Piece::Q, "a1"_sq);
+        auto moves = possibleMoves(Piece::Q, a1);
         assert(moves.size() == 21);
     }
 
     // Test white pawn moves
     {
-        auto moves = possibleMoves(Piece::P, "a2"_sq);
+        auto moves = possibleMoves(Piece::P, a2);
         assert(moves.size() == 2);
-        assert(moves.contains("a3"_sq));
-        assert(moves.contains("a4"_sq));
+        assert(moves.contains(a3));
+        assert(moves.contains(a4));
     }
 
     // Test black pawn moves
     {
-        auto moves = possibleMoves(Piece::p, "a7"_sq);
+        auto moves = possibleMoves(Piece::p, a7);
         assert(moves.size() == 2);
-        assert(moves.contains("a6"_sq));
-        assert(moves.contains("a5"_sq));
+        assert(moves.contains(a6));
+        assert(moves.contains(a5));
     }
 
     std::cout << "All possibleMoves tests passed!" << std::endl;
@@ -266,20 +266,20 @@ void testPossibleCaptures() {
 }
 void testMove() {
     // Test constructor
-    Move move("a2"_sq, "a4"_sq, MoveKind::Quiet_Move);
-    assert(move.from == "a2"_sq);
-    assert(move.to == "a4"_sq);
+    Move move(a2, a4, MoveKind::Quiet_Move);
+    assert(move.from == a2);
+    assert(move.to == a4);
     assert(move.kind == MoveKind::Quiet_Move);
 
     // Test operator==
-    Move capture = Move("a2"_sq, "a4"_sq, MoveKind::Capture);
-    assert(move == Move("a2"_sq, "a4"_sq, MoveKind::Quiet_Move));
+    Move capture = Move(a2, a4, MoveKind::Capture);
+    assert(move == Move(a2, a4, MoveKind::Quiet_Move));
     assert(!(move == capture));
 
     // Test conversion to std::string
-    Move promotion = Move("a7"_sq, "a8"_sq, MoveKind::Queen_Promotion);
-    assert(static_cast<std::string>(move) == "a2a4");
-    assert(static_cast<std::string>(Move()) == "0000");
+    Move promotion = Move(a7, a8, MoveKind::Queen_Promotion);
+    assert(to_string(move) == "a2a4");
+    assert(to_string(Move()) == "0000");
 
     std::cout << "All Move tests passed!" << std::endl;
 }
@@ -288,13 +288,13 @@ void testSquare() {
     Square square1 = makeSquare(3, 2);
     assert(rank(square1) == 2);
     assert(file(square1) == 3);
-    assert(index(square1) == 19);
+    assert(square1 == 19);
 
     // Test constructor with index
     Square square2 = Square(42);
     assert(rank(square2) == 5);
     assert(file(square2) == 2);
-    assert(index(square2) == 42);
+    assert(square2 == 42);
 
     // Test operator==
     assert(square1 == Square(19));
@@ -366,26 +366,26 @@ void testSquareSet() {
 void testOccupancy() {
     {
         Board board;
-        board["a3"_sq] = Piece::P;
-        board["b4"_sq] = Piece::P;
-        board["a1"_sq] = Piece::R;
-        board["d2"_sq] = Piece::N;
-        board["c2"_sq] = Piece::B;
-        board["d1"_sq] = Piece::Q;
-        board["e1"_sq] = Piece::K;
-        board["f2"_sq] = Piece::B;
-        board["g2"_sq] = Piece::N;
-        board["h5"_sq] = Piece::r;
-        board["d7"_sq] = Piece::p;
-        board["e5"_sq] = Piece::p;
-        board["f7"_sq] = Piece::p;
-        board["g7"_sq] = Piece::p;
-        board["h7"_sq] = Piece::p;
-        board["a8"_sq] = Piece::r;
-        board["b8"_sq] = Piece::n;
-        board["c8"_sq] = Piece::b;
-        board["d8"_sq] = Piece::q;
-        board["e8"_sq] = Piece::k;
+        board[a3] = Piece::P;
+        board[b4] = Piece::P;
+        board[a1] = Piece::R;
+        board[d2] = Piece::N;
+        board[c2] = Piece::B;
+        board[d1] = Piece::Q;
+        board[e1] = Piece::K;
+        board[f2] = Piece::B;
+        board[g2] = Piece::N;
+        board[h5] = Piece::r;
+        board[d7] = Piece::p;
+        board[e5] = Piece::p;
+        board[f7] = Piece::p;
+        board[g7] = Piece::p;
+        board[h7] = Piece::p;
+        board[a8] = Piece::r;
+        board[b8] = Piece::n;
+        board[c8] = Piece::b;
+        board[d8] = Piece::q;
+        board[e8] = Piece::k;
         auto squares = SquareSet::occupancy(board);
         assert(squares.size() == 20);
         squares = SquareSet::occupancy(board, Color::w);
@@ -403,14 +403,14 @@ void testAddAvailableMoves() {
     // Test pawn moves
     {
         Board board;
-        board["a2"_sq] = Piece::P;
-        board["a4"_sq] = Piece::P;  // Block the pawn, so there's no two-square move
+        board[a2] = Piece::P;
+        board[a4] = Piece::P;  // Block the pawn, so there's no two-square move
         MoveVector moves;
         Turn turn(Color::w);
         for_test::addAvailableMoves(moves, board, turn);
         assert(moves.size() == 2);
-        assert(find(moves, Move("a2"_sq, "a3"_sq, MoveKind::Quiet_Move)));
-        assert(find(moves, Move("a4"_sq, "a5"_sq, MoveKind::Quiet_Move)));
+        assert(find(moves, Move(a2, a3, MoveKind::Quiet_Move)));
+        assert(find(moves, Move(a4, a5, MoveKind::Quiet_Move)));
     }
 
     std::cout << "All addAvailableMoves tests passed!" << std::endl;
@@ -428,12 +428,12 @@ void testAddAvailableCaptures() {
         Turn turn(Color::w);
         for_test::addAvailableCaptures(captures, board, turn);
         assert(captures.size() == 6);
-        assert(find(captures, Move("e5"_sq, "d7"_sq, MoveKind::Capture)));
-        assert(find(captures, Move("e5"_sq, "f7"_sq, MoveKind::Capture)));
-        assert(find(captures, Move("b7"_sq, "a8"_sq, MoveKind::Queen_Promotion_Capture)));
-        assert(find(captures, Move("b7"_sq, "a8"_sq, MoveKind::Rook_Promotion_Capture)));
-        assert(find(captures, Move("b7"_sq, "a8"_sq, MoveKind::Bishop_Promotion_Capture)));
-        assert(find(captures, Move("b7"_sq, "a8"_sq, MoveKind::Knight_Promotion_Capture)));
+        assert(find(captures, Move(e5, d7, MoveKind::Capture)));
+        assert(find(captures, Move(e5, f7, MoveKind::Capture)));
+        assert(find(captures, Move(b7, a8, MoveKind::Queen_Promotion_Capture)));
+        assert(find(captures, Move(b7, a8, MoveKind::Rook_Promotion_Capture)));
+        assert(find(captures, Move(b7, a8, MoveKind::Bishop_Promotion_Capture)));
+        assert(find(captures, Move(b7, a8, MoveKind::Knight_Promotion_Capture)));
     }
     std::cout << "All addAvailableCaptures tests passed!" << std::endl;
 }
@@ -442,11 +442,11 @@ void testAddAvailableEnPassant() {
     {
         Board board = fen::parsePiecePlacement("rnbqkbnr/1ppppppp/8/8/pP6/P1P5/3PPPPP/RNBQKBNR");
         MoveVector moves;
-        Turn turn(Color::b, CastlingMask::_, "b3"_sq);
+        Turn turn(Color::b, CastlingMask::_, b3);
 
         for_test::addAvailableEnPassant(moves, board, turn);
         assert(moves.size() == 1);
-        assert(moves[0] == Move("a4"_sq, "b3"_sq, MoveKind::En_Passant));
+        assert(moves[0] == Move(a4, b3, MoveKind::En_Passant));
     }
     std::cout << "All addAvailableEnPassant tests passed!" << std::endl;
 }
@@ -468,8 +468,8 @@ void testAllLegalCastling() {
     {
         auto moves = allLegalCastling("r3k2r/8/8/8/8/8/8/R3K2R", Color::w, CastlingMask::KQkq);
         assert(moves.size() == 2);
-        assert(moves[0] == Move("e1"_sq, "g1"_sq, MoveKind::O_O));
-        assert(moves[1] == Move("e1"_sq, "c1"_sq, MoveKind::O_O_O));
+        assert(moves[0] == Move(e1, g1, MoveKind::O_O));
+        assert(moves[1] == Move(e1, c1, MoveKind::O_O_O));
     }
     {
         auto moves = allLegalCastling(
@@ -481,7 +481,7 @@ void testAllLegalCastling() {
                                       Color::b,
                                       CastlingMask::KQq);
         assert(moves.size() == 1);
-        assert(moves[0] == Move("e8"_sq, "c8"_sq, MoveKind::O_O_O));
+        assert(moves[0] == Move(e8, c8, MoveKind::O_O_O));
     }
     std::cout << "All legal castling tests passed!" << std::endl;
 }
@@ -491,7 +491,7 @@ void testPinnedPieces() {
         Board board = fen::parsePiecePlacement("rnb1kbnr/pp1ppppp/2p5/q7/8/PP6/2PPPPPP/RNBQKBNR");
         Turn turn = Color::w;
         SearchState state(board, turn);
-        assert(state.pinned == "d2"_sq);
+        assert(state.pinned == d2);
     }
     std::cout << "All pinned pieces tests passed!" << std::endl;
 }
@@ -501,9 +501,9 @@ void testDoesNotCheck() {
         // We may indicate en passent capture is available, even if it results in check.
         // So test that we reject the move in this case.
         Board board = fen::parsePiecePlacement("8/8/3p4/KPp4r/5R2/4P1k1/6P1/8");
-        Turn turn = {Color::w, CastlingMask::_, "c6"_sq};
+        Turn turn = {Color::w, CastlingMask::_, c6};
         SearchState state(board, turn);
-        assert(!doesNotCheck(board, state, Move("b5"_sq, "c6"_sq, MoveKind::En_Passant)));
+        assert(!doesNotCheck(board, state, Move(b5, c6, MoveKind::En_Passant)));
     }
     std::cout << "All doesNotCheck tests passed!" << std::endl;
 }
@@ -517,8 +517,7 @@ void testMakeAndUnmakeMove(Board& board, Move move) {
     auto expected = Occupancy(board, !activeColor);
     auto actual = !(occupancy ^ delta);
     if (actual != expected) {
-        std::cout << "Move: " << static_cast<std::string>(move) << ", kind " << (int)move.kind
-                  << "\n";
+        std::cout << "Move: " << to_string(move) << ", kind " << (int)move.kind << "\n";
         std::cout << "Occupancy: {" << toString(occupancy.ours()) << ", "
                   << toString(occupancy.theirs()) << "}\n";
         std::cout << "Delta: { " << toString(delta.ours()) << ", " << toString(delta.theirs())
@@ -538,7 +537,7 @@ void testMakeAndUnmakeMove(Board& board, Move move) {
         std::cout << "Original board:" << std::endl;
         std::cout << fen::to_string(originalBoard) << std::endl;
         printBoard(std::cout, originalBoard);
-        std::cout << "Move: " << static_cast<std::string>(move) << std::endl;
+        std::cout << "Move: " << to_string(move) << std::endl;
         std::cout << "Kind: " << static_cast<int>(move.kind) << std::endl;
         std::cout << "Captured: " << to_char(undo.captured) << std::endl;
         {
@@ -560,129 +559,129 @@ void testMakeAndUnmakeMove() {
     // Test pawn move
     {
         Board board;
-        board["a2"_sq] = Piece::P;
-        testMakeAndUnmakeMove(board, Move("a2"_sq, "a3"_sq, MoveKind::Quiet_Move));
-        assert(board["a3"_sq] == Piece::P);
-        assert(board["a2"_sq] == Piece::_);
+        board[a2] = Piece::P;
+        testMakeAndUnmakeMove(board, Move(a2, a3, MoveKind::Quiet_Move));
+        assert(board[a3] == Piece::P);
+        assert(board[a2] == Piece::_);
     }
 
     // Test pawn capture
     {
         Board board;
-        board["a2"_sq] = Piece::P;
-        board["b3"_sq] = Piece::r;  // White pawn captures black rook
-        testMakeAndUnmakeMove(board, Move("a2"_sq, "b3"_sq, MoveKind::Capture));
-        assert(board["b3"_sq] == Piece::P);
-        assert(board["a2"_sq] == Piece::_);
+        board[a2] = Piece::P;
+        board[b3] = Piece::r;  // White pawn captures black rook
+        testMakeAndUnmakeMove(board, Move(a2, b3, MoveKind::Capture));
+        assert(board[b3] == Piece::P);
+        assert(board[a2] == Piece::_);
     }
 
     // Test pawn promotion move
     {
         // White pawn promotion
         Board board;
-        board["a7"_sq] = Piece::P;
-        auto move = Move("a7"_sq, "a8"_sq, MoveKind::Queen_Promotion);
+        board[a7] = Piece::P;
+        auto move = Move(a7, a8, MoveKind::Queen_Promotion);
         testMakeAndUnmakeMove(board, move);
-        assert(board["a8"_sq] == Piece::Q);
-        assert(board["a7"_sq] == Piece::_);
+        assert(board[a8] == Piece::Q);
+        assert(board[a7] == Piece::_);
 
         // Black pawn promotion
-        board["a2"_sq] = Piece::p;
-        testMakeAndUnmakeMove(board, Move("a2"_sq, "a1"_sq, MoveKind::Rook_Promotion));
-        assert(board["a1"_sq] == Piece::r);
-        assert(board["a2"_sq] == Piece::_);
+        board[a2] = Piece::p;
+        testMakeAndUnmakeMove(board, Move(a2, a1, MoveKind::Rook_Promotion));
+        assert(board[a1] == Piece::r);
+        assert(board[a2] == Piece::_);
     }
 
     // Test pawn promotion capture
     {
         // White pawn promotion
         Board board;
-        board["a7"_sq] = Piece::P;
-        board["b8"_sq] = Piece::r;  // White pawn captures black rook
-        testMakeAndUnmakeMove(board, Move("a7"_sq, "b8"_sq, MoveKind::Bishop_Promotion_Capture));
-        assert(board["b8"_sq] == Piece::B);
-        assert(board["a7"_sq] == Piece::_);
+        board[a7] = Piece::P;
+        board[b8] = Piece::r;  // White pawn captures black rook
+        testMakeAndUnmakeMove(board, Move(a7, b8, MoveKind::Bishop_Promotion_Capture));
+        assert(board[b8] == Piece::B);
+        assert(board[a7] == Piece::_);
 
         // Black pawn promotion
-        board["a2"_sq] = Piece::p;
-        board["b1"_sq] = Piece::R;  // Black pawn captures white rook
-        testMakeAndUnmakeMove(board, Move("a2"_sq, "b1"_sq, MoveKind::Knight_Promotion_Capture));
-        assert(board["b1"_sq] == Piece::n);
-        assert(board["a2"_sq] == Piece::_);
+        board[a2] = Piece::p;
+        board[b1] = Piece::R;  // Black pawn captures white rook
+        testMakeAndUnmakeMove(board, Move(a2, b1, MoveKind::Knight_Promotion_Capture));
+        assert(board[b1] == Piece::n);
+        assert(board[a2] == Piece::_);
     }
 
     // Test rook move
     {
         Board board;
-        board["a8"_sq] = Piece::R;
-        testMakeAndUnmakeMove(board, Move("a8"_sq, "h8"_sq, MoveKind::Quiet_Move));
-        assert(board["h8"_sq] == Piece::R);
-        assert(board["a8"_sq] == Piece::_);
+        board[a8] = Piece::R;
+        testMakeAndUnmakeMove(board, Move(a8, h8, MoveKind::Quiet_Move));
+        assert(board[h8] == Piece::R);
+        assert(board[a8] == Piece::_);
     }
 
     // Test rook capture
     {
         Board board;
-        board["a8"_sq] = Piece::r;
-        board["a1"_sq] = Piece::R;  // Black rook captures white rook
-        testMakeAndUnmakeMove(board, Move("a8"_sq, "a1"_sq, MoveKind::Capture));
-        assert(board["a1"_sq] == Piece::r);
-        assert(board["a8"_sq] == Piece::_);
+        board[a8] = Piece::r;
+        board[a1] = Piece::R;  // Black rook captures white rook
+        testMakeAndUnmakeMove(board, Move(a8, a1, MoveKind::Capture));
+        assert(board[a1] == Piece::r);
+        assert(board[a8] == Piece::_);
     }
 
     // Test knight move
     {
         Board board;
-        board["b1"_sq] = Piece::N;
-        testMakeAndUnmakeMove(board, Move("b1"_sq, "c3"_sq, MoveKind::Quiet_Move));
-        assert(board["c3"_sq] == Piece::N);
-        assert(board["b1"_sq] == Piece::_);
+        board[b1] = Piece::N;
+        testMakeAndUnmakeMove(board, Move(b1, c3, MoveKind::Quiet_Move));
+        assert(board[c3] == Piece::N);
+        assert(board[b1] == Piece::_);
     }
 
     // Test knight capture
     {
         Board board;
-        board["b1"_sq] = Piece::N;
-        board["c3"_sq] = Piece::r;  // White knight captures black rook
-        testMakeAndUnmakeMove(board, Move("b1"_sq, "c3"_sq, MoveKind::Capture));
-        assert(board["c3"_sq] == Piece::N);
-        assert(board["b1"_sq] == Piece::_);
+        board[b1] = Piece::N;
+        board[c3] = Piece::r;  // White knight captures black rook
+        testMakeAndUnmakeMove(board, Move(b1, c3, MoveKind::Capture));
+        assert(board[c3] == Piece::N);
+        assert(board[b1] == Piece::_);
     }
 
     // Test en passant capture
     {
         Board board;
-        board["a5"_sq] = Piece::P;
-        board["b5"_sq] = Piece::p;  // Black pawn moved two squares
-        board["a6"_sq] = Piece::p;
-        Move move("a5"_sq, "b6"_sq, MoveKind::En_Passant);
+        board[a5] = Piece::P;
+        board[b5] = Piece::p;  // Black pawn moved two squares
+        board[a6] = Piece::p;
+        Move move(a5, b6, MoveKind::En_Passant);
         testMakeAndUnmakeMove(board, move);
-        assert(board["b6"_sq] == Piece::P);
-        assert(board["b5"_sq] == Piece::_);
-        assert(board["a5"_sq] == Piece::_);
+        assert(board[b6] == Piece::P);
+        assert(board[b5] == Piece::_);
+        assert(board[a5] == Piece::_);
     }
 
     // Test king castling move
     {
         Board board;
-        board["e1"_sq] = Piece::K;
-        board["h1"_sq] = Piece::R;
-        testMakeAndUnmakeMove(board, Move("e1"_sq, "g1"_sq, MoveKind::O_O));
-        assert(board["g1"_sq] == Piece::K);
-        assert(board["f1"_sq] == Piece::R);
-        assert(board["e1"_sq] == Piece::_);
-        assert(board["h1"_sq] == Piece::_);
+        board[e1] = Piece::K;
+        board[h1] = Piece::R;
+        testMakeAndUnmakeMove(board, Move(e1, g1, MoveKind::O_O));
+        assert(board[g1] == Piece::K);
+        assert(board[f1] == Piece::R);
+        assert(board[e1] == Piece::_);
+        assert(board[h1] == Piece::_);
     }
     // Test queen castling move
     {
         Board board;
-        board["e1"_sq] = Piece::K;
-        board["a1"_sq] = Piece::R;
-        testMakeAndUnmakeMove(board, Move("e1"_sq, "c1"_sq, MoveKind::O_O_O));
-        assert(board["c1"_sq] == Piece::K);
-        assert(board["d1"_sq] == Piece::R);
-        assert(board["e1"_sq] == Piece::_);
-        assert(board["a1"_sq] == Piece::_);
+        board[e1] = Piece::K;
+        board[a1] = Piece::R;
+        testMakeAndUnmakeMove(board, Move(e1, c1, MoveKind::O_O_O));
+        assert(board[c1] == Piece::K);
+        assert(board[d1] == Piece::R);
+        assert(board[e1] == Piece::_);
+        assert(board[a1] == Piece::_);
     }
     std::cout << "All makeMove and unmakeMove tests passed!" << std::endl;
 }
@@ -691,11 +690,11 @@ void testApplyMove() {
     // Now test the Position applyMove function for a pawn move
     {
         Position position;
-        position.board["a2"_sq] = Piece::P;
+        position.board[a2] = Piece::P;
 
-        position = applyMove(position, Move("a2"_sq, "a3"_sq, MoveKind::Quiet_Move));
-        assert(position.board["a3"_sq] == Piece::P);
-        assert(position.board["a2"_sq] == Piece::_);
+        position = applyMove(position, Move(a2, a3, MoveKind::Quiet_Move));
+        assert(position.board[a3] == Piece::P);
+        assert(position.board[a2] == Piece::_);
         assert(position.turn.activeColor() == Color::b);
         assert(position.turn.halfmove() == 0);
     }
@@ -703,12 +702,12 @@ void testApplyMove() {
     // Test pawn capture
     {
         Position position;
-        position.board["a2"_sq] = Piece::P;
-        position.board["b3"_sq] = Piece::r;  // White pawn captures black rook
+        position.board[a2] = Piece::P;
+        position.board[b3] = Piece::r;  // White pawn captures black rook
         position.turn = {Color::w, CastlingMask::_, noEnPassantTarget, 1, 1};
-        position = applyMove(position, Move("a2"_sq, "b3"_sq, MoveKind::Capture));
-        assert(position.board["b3"_sq] == Piece::P);
-        assert(position.board["a2"_sq] == Piece::_);
+        position = applyMove(position, Move(a2, b3, MoveKind::Capture));
+        assert(position.board[b3] == Piece::P);
+        assert(position.board[a2] == Piece::_);
         assert(position.turn.activeColor() == Color::b);
         assert(position.turn.halfmove() == 0);
     }
@@ -716,11 +715,11 @@ void testApplyMove() {
     // Test that the fullmove number is updated correctly on a black move
     {
         Position position;
-        position.board["a2"_sq] = Piece::p;
+        position.board[a2] = Piece::p;
         position.turn = Turn(Color::b, CastlingMask::_, noEnPassantTarget, 1, 1);
-        position = applyMove(position, Move("a2"_sq, "a3"_sq, MoveKind::Quiet_Move));
-        assert(position.board["a3"_sq] == Piece::p);
-        assert(position.board["a2"_sq] == Piece::_);
+        position = applyMove(position, Move(a2, a3, MoveKind::Quiet_Move));
+        assert(position.board[a3] == Piece::p);
+        assert(position.board[a2] == Piece::_);
         assert(position.turn.activeColor() == Color::w);
         assert(position.turn.halfmove() == 0);
         assert(position.turn.fullmove() == 2);
@@ -729,12 +728,12 @@ void testApplyMove() {
     // Test that capture with a non-pawn piece also resets the halfmoveClock
     {
         Position position;
-        position.board["a2"_sq] = Piece::P;
-        position.board["b3"_sq] = Piece::r;  // White pawn captures black rook
+        position.board[a2] = Piece::P;
+        position.board[b3] = Piece::r;  // White pawn captures black rook
         position.turn = Turn(Color::w, CastlingMask::_, noEnPassantTarget, 1, 1);
-        position = applyMove(position, Move("a2"_sq, "b3"_sq, MoveKind::Capture));
-        assert(position.board["b3"_sq] == Piece::P);
-        assert(position.board["a2"_sq] == Piece::_);
+        position = applyMove(position, Move(a2, b3, MoveKind::Capture));
+        assert(position.board[b3] == Piece::P);
+        assert(position.board[a2] == Piece::_);
         assert(position.turn.activeColor() == Color::b);
         assert(position.turn.halfmove() == 0);  // reset due to capture
         assert(position.turn.fullmove() == 1);  // not updated on white move
@@ -743,12 +742,12 @@ void testApplyMove() {
     // Test that a move with a non-pawn piece does not reset the halfmoveClock
     {
         Position position;
-        position.board["b1"_sq] = Piece::N;
+        position.board[b1] = Piece::N;
         position.turn = {Color::w, CastlingMask::_, noEnPassantTarget, 1, 1};
 
-        position = applyMove(position, Move("b1"_sq, "c3"_sq, MoveKind::Quiet_Move));
-        assert(position.board["c3"_sq] == Piece::N);
-        assert(position.board["b1"_sq] == Piece::_);
+        position = applyMove(position, Move(b1, c3, MoveKind::Quiet_Move));
+        assert(position.board[c3] == Piece::N);
+        assert(position.board[b1] == Piece::_);
         assert(position.turn.activeColor() == Color::b);
         assert(position.turn.halfmove() == 2);
     }
@@ -756,13 +755,13 @@ void testApplyMove() {
     // Test en passant capture
     {
         Position position;
-        position.board["a5"_sq] = Piece::P;
-        position.board["b5"_sq] = Piece::p;
-        position.turn = {Color::w, CastlingMask::_, "b6"_sq, 1, 1};
+        position.board[a5] = Piece::P;
+        position.board[b5] = Piece::p;
+        position.turn = {Color::w, CastlingMask::_, b6, 1, 1};
 
-        position = applyMove(position, Move("a5"_sq, "b6"_sq, MoveKind::En_Passant));
-        assert(position.board["b6"_sq] == Piece::P);
-        assert(position.board["b5"_sq] == Piece::_);
+        position = applyMove(position, Move(a5, b6, MoveKind::En_Passant));
+        assert(position.board[b6] == Piece::P);
+        assert(position.board[b5] == Piece::_);
         assert(position.turn.activeColor() == Color::b);
         assert(position.turn.halfmove() == 0);
     }
@@ -770,12 +769,12 @@ void testApplyMove() {
     // Test that capture of rook a by a rook removes castling rights on both sides
     {
         Position position;
-        position.board["a1"_sq] = Piece::R;
-        position.board["e1"_sq] = Piece::K;
-        position.board["a8"_sq] = Piece::r;
-        position.board["e8"_sq] = Piece::k;
+        position.board[a1] = Piece::R;
+        position.board[e1] = Piece::K;
+        position.board[a8] = Piece::r;
+        position.board[e8] = Piece::k;
         position.turn.setCastling(CastlingMask::q | CastlingMask::Q);
-        position = applyMove(position, Move("a1"_sq, "a8"_sq, MoveKind::Capture));
+        position = applyMove(position, Move(a1, a8, MoveKind::Capture));
         assert(position.turn.castling() == CastlingMask::_);
     }
 
@@ -783,8 +782,8 @@ void testApplyMove() {
 }
 
 void testIsAttacked() {
-    Square whiteKingSquare = "a1"_sq;
-    Square blackKingSquare = "f6"_sq;
+    Square whiteKingSquare = a1;
+    Square blackKingSquare = f6;
     Board base;
     base[whiteKingSquare] = Piece::K;
     base[blackKingSquare] = Piece::k;
@@ -792,7 +791,7 @@ void testIsAttacked() {
     // Test that a king is in check
     {
         Board board = base;
-        board["b1"_sq] = Piece::r;
+        board[b1] = Piece::r;
         auto occupancy = Occupancy(board, Color::w);
         assert(isAttacked(board, whiteKingSquare, occupancy));
         assert(!isAttacked(board, blackKingSquare, occupancy));
@@ -801,24 +800,24 @@ void testIsAttacked() {
     // Test that a king is not in check
     {
         Board board = base;
-        board["b1"_sq] = Piece::r;
+        board[b1] = Piece::r;
     }
 
     // Test that a king is in check after a move
     {
         Board board = base;
-        board["b2"_sq] = Piece::r;
-        testMakeAndUnmakeMove(board, Move("a1"_sq, "a2"_sq, MoveKind::Quiet_Move));
+        board[b2] = Piece::r;
+        testMakeAndUnmakeMove(board, Move(a1, a2, MoveKind::Quiet_Move));
         auto occupancy = Occupancy(board, Color::w);
-        assert(isAttacked(board, "a2"_sq, occupancy));
+        assert(isAttacked(board, a2, occupancy));
     }
 
     // Test that a king is not in check after a move
     {
         Board board;
-        board["a1"_sq] = Piece::K;
-        board["b1"_sq] = Piece::r;
-        testMakeAndUnmakeMove(board, Move("a1"_sq, "a2"_sq, MoveKind::Quiet_Move));
+        board[a1] = Piece::K;
+        board[b1] = Piece::r;
+        testMakeAndUnmakeMove(board, Move(a1, a2, MoveKind::Quiet_Move));
         auto occupancy = Occupancy(board, Color::b);
 
         assert(!isAttacked(board, blackKingSquare, occupancy));
@@ -827,11 +826,11 @@ void testIsAttacked() {
     // Test that this method also works for an empty square
     {
         Board board;
-        board["e1"_sq] = Piece::K;
-        board["f2"_sq] = Piece::r;
+        board[e1] = Piece::K;
+        board[f2] = Piece::r;
         auto occupancy = Occupancy(board, Color::w);
 
-        assert(isAttacked(board, "f1"_sq, occupancy));
+        assert(isAttacked(board, f1, occupancy));
     }
 
     std::cout << "All isAttacked tests passed!" << std::endl;
@@ -857,7 +856,7 @@ void testAllLegalMovesAndCaptures() {
             fen::parsePosition("r1bqkbnr/pppppppp/8/1B6/4P3/8/PPnPNPPP/RNBQK2R w KQkq - 0 4");
         auto legalMoves = allLegalMovesAndCaptures(position.turn, position.board);
         assert(std::count_if(legalMoves.begin(), legalMoves.end(), [](auto item) {
-                   return item == Move{"e1"_sq, "g1"_sq, MoveKind::O_O};
+                   return item == Move{e1, g1, MoveKind::O_O};
                }) == 0);
         assert(legalMoves.size() == 2);
     }
@@ -865,16 +864,16 @@ void testAllLegalMovesAndCaptures() {
         // The black king can castle queen side
         auto position = fen::parsePosition(
             "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/1R2K2R b Kkq - 1 1");
-        auto castles = parseUCIMove(position, "e8c8");
+        auto castles = fen::parseUCIMove(position.board, "e8c8");
         assert(castles.kind == MoveKind::O_O_O);
         auto legalMoves = allLegalMovesAndCaptures(position.turn, position.board);
         assert(std::count(legalMoves.begin(), legalMoves.end(), castles) == 1);
         auto castled = applyMove(position, castles);
 
         // Check that pieces moved correctly
-        assert(castled.board["c8"_sq] == Piece::k);
-        assert(castled.board["d8"_sq] == Piece::r);
-        assert(castled.board["e8"_sq] == Piece::_);
+        assert(castled.board[c8] == Piece::k);
+        assert(castled.board[d8] == Piece::r);
+        assert(castled.board[e8] == Piece::_);
 
         // Black's castling rights are cancelled.
         assert(castled.turn.castling() == CastlingMask::K);
@@ -888,7 +887,7 @@ void testAllLegalMovesAndCaptures() {
  */
 void testCastlingMask() {
     {
-        auto mask = castlingMask("a1"_sq, "a8"_sq);
+        auto mask = castlingMask(a1, a8);
         assert(mask == (CastlingMask::Q | CastlingMask::q));
     }
 }
@@ -902,7 +901,7 @@ void testAllLegalQuiescentMoves() {
         if (moves.size() != 2) {
             std::cout << "FEN: " << fen::to_string(position) << "\n";
             std::cout << "Moves:\n";
-            for (auto move : moves) std::cout << static_cast<std::string>(move) << " ";
+            for (auto move : moves) std::cout << to_string(move) << " ";
             std::cout << "\n";
         }
         assert(moves.size() == 2);
@@ -965,7 +964,7 @@ void testSWAR(Position position) {
     moves = sort(moves);
     std::cout << "Pawn moves and captures: " << moves.size() << "\n";
 
-    for (auto move : moves) std::cout << static_cast<std::string>(move) << " ";
+    for (auto move : moves) std::cout << to_string(move) << " ";
     std::cout << "\n";
 
     auto color = position.active();
