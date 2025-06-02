@@ -83,12 +83,12 @@ Let's delve in each of the three complications.
 
 ### Castling Moves
 
-King side: `{ O_O, "e1"_sq, "g1"_sq}` or `{ O_O, "e8"_sq, "g8"_sq }`, and  
-Queen side: `{ O_O_O, "e1"_sq, "c1"_sq}` or `{ O_O_O, "e8"_sq", "c8"_sq}`.
+King side: `{ O_O, e1, g1}` or `{ O_O, e8, g8 }`, and
+Queen side: `{ O_O_O, e1, c1}` or `{ O_O_O, e8", c8}`.
 
 These become a combination of a king move and a rook move. Using UCI notiation this becomes:
 
-King side: `e1g1` `h1f1` or `e8g8` `h8f8`, and  
+King side: `e1g1` `h1f1` or `e8g8` `h8f8`, and
 Queen side: `e1c1` `a1d1` or `e8c8` `a8d8`.
 
 Note that the low 4 bits of the `to` square suffice to identify both the destination file and the
@@ -98,12 +98,12 @@ square file.
 
 ### En Passant Moves
 
-White player: `{ En_Passant, "e5"_sq, "f6"_sq}`,  
-Black player: `{ En_Passant, "d4"_sq, "c3"_sq}`.
+White player: `{ En_Passant, e5, f6}`,
+Black player: `{ En_Passant, d4, c3}`.
 
 These become a combination of a sideways capture followed by a regular pawn push:
 
-White player: `e5f5` `f5f6`, and  
+White player: `e5f5` `f5f6`, and
 Black player: `d4c4` `c4c3`.
 
 Again, the low 4 bits of the `to` square are sufficient to identify the changes in both the first

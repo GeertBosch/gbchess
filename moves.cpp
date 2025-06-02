@@ -236,14 +236,14 @@ SquareSet path(Square from, Square to) {
 }  // namespace init
 
 SquareSet SquareSet::path(Square from, Square to) {
-    return movesTable.paths[index(from)][index(to)];
+    return movesTable.paths[from][to];
 }
 
 void MovesTable::initializePieceMovesAndCaptures() {
     for (auto piece : pieces) {
         for (auto from : SquareSet::all()) {
-            moves[int(piece)][index(from)] = init::possibleMoves(Piece(piece), from);
-            captures[int(piece)][index(from)] = init::possibleCaptures(Piece(piece), from);
+            moves[int(piece)][from] = init::possibleMoves(Piece(piece), from);
+            captures[int(piece)][from] = init::possibleCaptures(Piece(piece), from);
         }
     }
 }
@@ -283,9 +283,9 @@ void MovesTable::initializeAttackers() {
     for (auto from : SquareSet::all()) {
         SquareSet toSquares;
         // Gather all possible squares that can be attacked by any piece
-        for (auto piece : pieces) toSquares |= captures[int(piece)][index(from)];
+        for (auto piece : pieces) toSquares |= captures[int(piece)][from];
         // Distribute attackers over the target squares
-        for (auto to : toSquares) attackers[index(to)].insert(from);
+        for (auto to : toSquares) attackers[to].insert(from);
     }
 }
 
@@ -336,10 +336,10 @@ void MovesTable::initializeCompound() {
             compound[kind][to] = {Square(to), 0, {Square(to), Square(to)}};
 
     // Initialize castles
-    compound[index(MK::O_O)][index("g1"_sq)] = {"g1"_sq, 0, {"h1"_sq, "f1"_sq}};
-    compound[index(MK::O_O)][index("g8"_sq)] = {"g8"_sq, 0, {"h8"_sq, "f8"_sq}};
-    compound[index(MK::O_O_O)][index("c1"_sq)] = {"c1"_sq, 0, {"a1"_sq, "d1"_sq}};
-    compound[index(MK::O_O_O)][index("c8"_sq)] = {"c8"_sq, 0, {"a8"_sq, "d8"_sq}};
+    compound[index(MK::O_O)][g1] = {g1, 0, {h1, f1}};
+    compound[index(MK::O_O)][g8] = {g8, 0, {h8, f8}};
+    compound[index(MK::O_O_O)][c1] = {c1, 0, {a1, d1}};
+    compound[index(MK::O_O_O)][c8] = {c8, 0, {a8, d8}};
 
     // En passant helper functions
     auto epRank = [](int rank) -> int { return rank < kNumRanks / 2 ? rank + 1 : rank - 1; };
@@ -347,15 +347,15 @@ void MovesTable::initializeCompound() {
     auto epCompound = [=](Square to) -> CM { return {epTarget(to), 0, {epTarget(to), to}}; };
 
     // Initialize en passant capture for white
-    for (auto to : SquareSet::ipath("a6"_sq, "h6"_sq) | SquareSet::ipath("a3"_sq, "h3"_sq))
-        compound[index(MK::En_Passant)][index(to)] = epCompound(to);
+    for (auto to : SquareSet::ipath(a6, h6) | SquareSet::ipath(a3, h3))
+        compound[index(MK::En_Passant)][to] = epCompound(to);
 
     // Initialize promotion moves
     auto pm = index(MK::Knight_Promotion);
     auto pc = index(MK::Knight_Promotion_Capture);
     for (auto promo = index(PT::KNIGHT); promo <= index(PT::QUEEN); ++promo, ++pm, ++pc)
-        for (auto to : SquareSet::ipath("a8"_sq, "h8"_sq) | SquareSet::ipath("a1"_sq, "h1"_sq))
-            compound[pc][index(to)] = compound[pm][index(to)] = {to, promo, {to, to}};
+        for (auto to : SquareSet::ipath(a8, h8) | SquareSet::ipath(a1, h1))
+            compound[pc][to] = compound[pm][to] = {to, promo, {to, to}};
 }
 
 MovesTable::MovesTable() {
@@ -517,7 +517,7 @@ SquareSet pinnedPieces(const Board& board,
         // Check if the pin is a valid sliding piece
         if (!pinData.pinningPieces.has(board[pinner])) continue;
 
-        auto path = movesTable.paths[index(kingSquare)][index(pinner)];
+        auto path = movesTable.paths[kingSquare][pinner];
         auto pieces = occupancy() & path;
         if (pieces.size() == 1) pinned.insert(pieces);
     }
@@ -528,9 +528,9 @@ SquareSet pinnedPieces(const Board& board, Occupancy occupancy, Square kingSquar
     // For the purpose of pinning, we only consider sliding pieces, not knights.
 
     // Define pinning piece sets and corresponding capture sets
-    PinData pinData[] = {{movesTable.captures[index(Piece::R)][index(kingSquare)],
+    PinData pinData[] = {{movesTable.captures[index(Piece::R)][kingSquare],
                           PieceSet(PieceType::ROOK) | PieceSet(PieceType::QUEEN)},
-                         {movesTable.captures[index(Piece::B)][index(kingSquare)],
+                         {movesTable.captures[index(Piece::B)][kingSquare],
                           PieceSet(PieceType::BISHOP) | PieceSet(PieceType::QUEEN)}};
 
     auto pinned = SquareSet();
@@ -549,7 +549,7 @@ SearchState::SearchState(const Board& board, Turn turn)
       pinned(pinnedPieces(board, occupancy, kingSquare)) {}
 
 bool clearPath(SquareSet occupancy, Square from, Square to) {
-    auto path = movesTable.paths[index(from)][index(to)];
+    auto path = movesTable.paths[from][to];
     return (occupancy & path).empty();
 }
 
@@ -578,7 +578,7 @@ int noPromo(MoveKind kind) {
 }
 
 Occupancy occupancyDelta(Move move) {
-    return movesTable.occupancyDelta[noPromo(move.kind)][index(move.from)][index(move.to)];
+    return movesTable.occupancyDelta[noPromo(move.kind)][move.from][move.to];
 }
 
 template <typename F>
@@ -651,7 +651,7 @@ template <typename F>
 void findNonPawnMoves(const Board& board, SearchState& state, const F& fun) {
     for (auto from : state.occupancy.ours() - state.pawns) {
         auto piece = board[from];
-        auto possibleSquares = movesTable.moves[index(piece)][index(from)] - state.occupancy();
+        auto possibleSquares = movesTable.moves[index(piece)][from] - state.occupancy();
         for (auto to : possibleSquares) {
             // Check for moving through pieces
             if (clearPath(state.occupancy(), from, to))
@@ -702,8 +702,7 @@ template <typename F>
 void findNonPawnCaptures(const Board& board, SearchState& state, const F& fun) {
     for (auto from : state.occupancy.ours() - state.pawns) {
         auto piece = board[from];
-        auto possibleSquares =
-            movesTable.captures[index(piece)][index(from)] & state.occupancy.theirs();
+        auto possibleSquares = movesTable.captures[index(piece)][from] & state.occupancy.theirs();
         for (auto to : possibleSquares) {
             // Exclude captures that move through pieces
             if (clearPath(state.occupancy(), from, to))
@@ -736,7 +735,7 @@ BoardChange prepareMove(Board& board, Move move) {
     // Lookup the compound move for the given move kind and target square. This breaks moves like
     // castling, en passant and promotion into a simple capture/move and a second move that can be a
     // no-op move, a quiet move or a promotion. The target square is taken from the compound move.
-    auto compound = movesTable.compound[index(move.kind)][index(move.to)];
+    auto compound = movesTable.compound[index(move.kind)][move.to];
     auto captured = board[compound.to];
     BoardChange undo = {captured, compound.promo, {move.from, compound.to}, compound.second};
     return undo;
@@ -790,14 +789,14 @@ CastlingMask castlingMask(Square from, Square to) {
     const struct MaskTable {
         std::array<CM, kNumSquares> mask;
         constexpr MaskTable() : mask{} {
-            mask[index(castlingInfo[0].kingSide[0].from)] = CM::KQ;  // White King
-            mask[index(castlingInfo[0].kingSide[1].from)] = CM::K;   // White King Side Rook
-            mask[index(castlingInfo[0].queenSide[1].from)] = CM::Q;  // White Queen Side Rook
-            mask[index(castlingInfo[1].kingSide[0].from)] = CM::kq;  // Black King
-            mask[index(castlingInfo[1].kingSide[1].from)] = CM::k;   // Black King Side Rook
-            mask[index(castlingInfo[1].queenSide[1].from)] = CM::q;  // Black Queen Side Rook
+            mask[castlingInfo[0].kingSide[0].from] = CM::KQ;  // White King
+            mask[castlingInfo[0].kingSide[1].from] = CM::K;   // White King Side Rook
+            mask[castlingInfo[0].queenSide[1].from] = CM::Q;  // White Queen Side Rook
+            mask[castlingInfo[1].kingSide[0].from] = CM::kq;  // Black King
+            mask[castlingInfo[1].kingSide[1].from] = CM::k;   // Black King Side Rook
+            mask[castlingInfo[1].queenSide[1].from] = CM::q;  // Black Queen Side Rook
         }
-        CM operator[](Square sq) const { return mask[index(sq)]; }
+        CM operator[](Square sq) const { return mask[sq]; }
     } maskTable;
 
     return maskTable[from] | maskTable[to];
@@ -843,10 +842,10 @@ Position applyMoves(Position position, MoveVector const& moves) {
 bool isAttacked(const Board& board, Square square, Occupancy occupancy) {
     // We're using this function to find out if empty squares are attacked for determining
     // legality of castling, so we can't assume that the capture square is occupied.
-    auto attackers = occupancy.theirs() & movesTable.attackers[index(square)];
+    auto attackers = occupancy.theirs() & movesTable.attackers[square];
     for (auto from : attackers)
         if (clearPath(occupancy(), from, square) &&
-            movesTable.captures[index(board[from])][index(from)].contains(square))
+            movesTable.captures[index(board[from])][from].contains(square))
             return true;
 
     return false;
@@ -864,18 +863,14 @@ bool isAttacked(const Board& board, SquareSet squares, Color opponentColor) {
     return isAttacked(board, squares, occupancy);
 }
 
-Move parseUCIMove(Position position, const std::string& move) {
+Move checkMove(Position position, Move move) {
     auto moves = allLegalMovesAndCaptures(position.turn, position.board);
 
     // Try to find a legal move or capture corresponding to the given move string.
     for (auto m : moves)
-        if (std::string(m) == move) return m;
+        if (m == move) return m;
 
-    throw ParseError("Invalid UCI move: " + move);
-}
-
-Position applyUCIMove(Position position, const std::string& move) {
-    return applyMove(position, parseUCIMove(position, move));
+    throw MoveError("Invalid move: " + to_string(move));
 }
 
 bool doesNotCheck(Board& board, const SearchState& state, Move move) {
@@ -886,7 +881,7 @@ bool doesNotCheck(Board& board, const SearchState& state, Move move) {
         checkSquares = isCastles(kind) ? SquareSet::ipath(from, to) : to;
     else if (!state.pinned.contains(from) && !state.inCheck && kind != MoveKind::En_Passant)
         return true;
-    auto delta = movesTable.occupancyDelta[noPromo(kind)][index(from)][index(to)];
+    auto delta = movesTable.occupancyDelta[noPromo(kind)][from][to];
     auto check = isAttacked(board, checkSquares, state.occupancy ^ delta);
     return !check;
 }
@@ -979,10 +974,10 @@ MoveVector allLegalMovesAndCaptures(Turn turn, Board& board) {
 
 namespace for_test {
 SquareSet possibleMoves(Piece piece, Square from) {
-    return movesTable.moves[index(piece)][index(from)];
+    return movesTable.moves[index(piece)][from];
 }
 SquareSet possibleCaptures(Piece piece, Square from) {
-    return movesTable.captures[index(piece)][index(from)];
+    return movesTable.captures[index(piece)][from];
 }
 
 void addAvailableMoves(MoveVector& moves, const Board& board, Turn turn) {

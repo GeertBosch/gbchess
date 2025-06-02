@@ -26,7 +26,7 @@ void flip(SquareTable& table) {
     // Flip the table vertically (king side remains king side, queen side remains queen side)
     for (auto sq : Range(Square(0), Square(kNumSquares / 2 - 1))) {
         auto other = makeSquare(file(sq), kNumRanks - 1 - rank(sq));
-        std::swap(table[index(sq)], table[index(other)]);
+        std::swap(table[sq], table[other]);
     };
     // Invert the values
     for (auto& sq : table) sq = -sq;
@@ -140,7 +140,7 @@ EvalTable::EvalTable(const Board& board, bool usePieceSquareTables) {
 
 Score evaluateBoard(const Board& board, const EvalTable& table) {
     Score value = 0_cp;
-    for (auto sq : SquareSet::occupancy(board)) value += table[board[sq]][index(sq)];
+    for (auto sq : SquareSet::occupancy(board)) value += table[board[sq]][sq];
 
     return value;
 }

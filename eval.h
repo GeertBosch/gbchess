@@ -121,17 +121,17 @@ inline Score evaluateMove(const Board& before, BoardChange move, const EvalTable
 
     // The first move is a regular capture or move, so adjust delta accordingly.
     Piece first = before[move.first.from];
-    delta -= table[move.captured][index(move.first.to)];  // Remove captured piece
-    delta -= table[first][index(move.first.from)];        // Remove piece from original square
-    delta += table[first][index(move.first.to)];          // Add the piece to its target square
+    delta -= table[move.captured][move.first.to];  // Remove captured piece
+    delta -= table[first][move.first.from];        // Remove piece from original square
+    delta += table[first][move.first.to];          // Add the piece to its target square
 
     // The second move is either a quiet move for en passant or castling, or a promo move.
     Piece second = first;
     if (move.second.from != move.first.to) second = before[move.second.from];  // Castling
 
-    delta -= table[second][index(move.second.from)];  // Remove piece before promotion
-    second = Piece(index(second) + move.promo);       // Apply any promotion
-    delta += table[second][index(move.second.to)];    // Add piece with any promotions
+    delta -= table[second][move.second.from];      // Remove piece before promotion
+    second = Piece(uint8_t(second) + move.promo);  // Apply any promotion
+    delta += table[second][move.second.to];        // Add piece with any promotions
 
     return delta;
 }

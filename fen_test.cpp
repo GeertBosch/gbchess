@@ -14,7 +14,7 @@ int testparse() {
     std::cout << "Active Color: " << to_string(turn.activeColor()) << "\n";
     std::cout << "Castling Availability: " << (int)turn.castling() << "\n";
     std::cout << "En Passant Target: "
-              << (index(turn.enPassant()) ? to_string(turn.enPassant()) : "-") << "\n";
+              << (turn.enPassant() ? to_string(turn.enPassant()) : "-") << "\n";
     std::cout << "Halfmove Clock: " << (int)turn.halfmove() << "\n";
     std::cout << "Fullmove Number: " << turn.fullmove() << "\n";
 
@@ -23,12 +23,12 @@ int testparse() {
 
 void testInitialPosition() {
     Board board(fen::parsePiecePlacement(fen::initialPiecePlacement));
-    assert(board["e1"_sq] == Piece::K);
-    assert(board["h1"_sq] == Piece::R);
-    assert(board["a1"_sq] == Piece::R);
-    assert(board["e8"_sq] == Piece::k);
-    assert(board["h8"_sq] == Piece::r);
-    assert(board["a8"_sq] == Piece::r);
+    assert(board[e1] == Piece::K);
+    assert(board[h1] == Piece::R);
+    assert(board[a1] == Piece::R);
+    assert(board[e8] == Piece::k);
+    assert(board[h8] == Piece::r);
+    assert(board[a8] == Piece::r);
 
     Position position = fen::parsePosition(fen::initialPosition);
     assert(position.board == board);

@@ -24,7 +24,7 @@ constexpr bool debug = 0;
 static constexpr uint8_t kNumFiles = 8, kNumRanks = 8;
 static constexpr uint8_t kNumSquares = kNumFiles * kNumRanks;
 
-enum class Square : uint16_t {
+enum Square : uint16_t {
     // clang-format off
     a1, b1, c1, d1, e1, f1, g1, h1,
     a2, b2, c2, d2, e2, f2, g2, h2,
@@ -47,20 +47,10 @@ constexpr int rank(Square square) {
 constexpr int file(Square square) {
     return int(square) % kNumRanks;
 }
-constexpr int index(Square square) {
-    return int(square);
-}
 
-// Conversion to std::string: file to letter ('a' to 'h') and rank to digit ('1' to '8')
+/** Conversion to std::string: file to letter ('a' to 'h') and rank to digit ('1' to '8') */
 inline std::string to_string(Square square) {
     return {char('a' + file(square)), char('1' + rank(square))};
-}
-
-constexpr Square operator""_sq(const char* str, size_t len) {
-    assert(len == 2);
-    assert(str[0] >= 'a' && str[0] - 'a' < kNumFiles);
-    assert(str[1] >= '1' && str[1] - '1' < kNumRanks);
-    return makeSquare(str[0] - 'a', str[1] - '1');
 }
 
 enum class Color : uint8_t { w, b };
@@ -189,7 +179,6 @@ constexpr uint8_t kNumMoveKinds = index(MoveKind::Queen_Promotion_Capture) + 1;
 constexpr uint8_t kNumNoPromoMoveKinds = index(MoveKind::En_Passant) + 1;
 
 struct Move {
-
     static_assert(kNumSquares * kNumSquares * kNumMoveKinds <= (1u << 16));
     static_assert(sizeof(Square) == 2, "Square must be derived from uint16_t for proper packing");
 
@@ -201,31 +190,27 @@ struct Move {
     Move() = default;
     Move(Square from, Square to, MoveKind kind) : from(from), to(to), kind(kind) {}
 
-    // String conversion operator
-    operator std::string() const {
-        if (*this == Move{}) return "0000";
-        auto str = to_string(from) + to_string(to);
-        if (isPromotion()) str += to_char(addColor(PieceType((index(kind) & 3) + 1), Color::b));
-        return str;
-    }
-
     operator bool() const { return from != to; }
 
     bool operator==(const Move& other) const {
         return from == other.from && to == other.to && kind == other.kind;
     }
-
-    bool isPromotion() const { return kind >= MoveKind::Promotion_Mask; }
 };
 static_assert(sizeof(Move) == 2);
 
-using MoveVector = std::vector<Move>;
-inline std::string to_string(MoveVector moves) {
-    std::string str = "";
-    for (auto&& move : moves) str += std::string(move) + " ";
-    if (!str.empty()) str.pop_back();
+// String conversion operator
+inline std::string to_string(Move move) {
+    if (move == Move{}) return "0000";
+    std::string str = {char('a' + file(move.from)),
+                       char('1' + rank(move.from)),
+                       char('a' + file(move.to)),
+                       char('1' + rank(move.to))};
+    if (isPromotion(move.kind))
+        str += to_char(addColor(PieceType((index(move.kind) & 3) + 1), Color::b));
     return str;
 }
+
+using MoveVector = std::vector<Move>;
 
 class Board {
     using Squares = std::array<Piece, kNumSquares>;
@@ -234,8 +219,8 @@ class Board {
 public:
     Board() { _squares.fill(Piece::_); }
 
-    Piece& operator[](Square sq) { return _squares[index(sq)]; }
-    const Piece& operator[](Square sq) const { return _squares[index(sq)]; }
+    Piece& operator[](Square sq) { return _squares[sq]; }
+    const Piece& operator[](Square sq) const { return _squares[sq]; }
     const auto& squares() const { return _squares; }
     bool operator==(const Board& other) const { return _squares == other._squares; }
     bool operator!=(const Board& other) const { return _squares != other._squares; }
@@ -282,15 +267,6 @@ inline CastlingMask operator|=(CastlingMask& lhs, CastlingMask rhs) {
 inline CastlingMask operator~(CastlingMask lhs) {
     return static_cast<CastlingMask>(~static_cast<uint8_t>(lhs));
 }
-inline std::string to_string(CastlingMask mask) {
-    std::string str = "";
-    if ((mask & CastlingMask::K) != CastlingMask::_) str += "K";
-    if ((mask & CastlingMask::Q) != CastlingMask::_) str += "Q";
-    if ((mask & CastlingMask::k) != CastlingMask::_) str += "k";
-    if ((mask & CastlingMask::q) != CastlingMask::_) str += "q";
-    if (str == "") str = "-";
-    return str;
-}
 
 // Square to indicate no enpassant target
 static constexpr auto noEnPassantTarget = Square(0);
@@ -314,7 +290,7 @@ struct BoardChange {
 };
 
 class alignas(4) Turn {
-    enum EnPassantTarget : uint16_t {  // 16 bits to allow better packing
+    enum class EnPassantTarget : uint16_t {  // 16 bits to allow better packing
         _ = 0,
         // clang-format off
         a3 = 16, b3 = 17, c3 = 18, d3 = 19, e3 = 20, f3 = 21, g3 = 22, h3 = 23,
@@ -328,7 +304,7 @@ class alignas(4) Turn {
         return Square(value);
     }
     static EnPassantTarget toEnPassantTarget(Square square) {
-        uint16_t value = index(square);
+        uint16_t value = square;
         value -= (value & 32) / 2;  // Shift rank 6 to rank 4, not affecting rank 3 or value 0.
         return EnPassantTarget(value);
     }

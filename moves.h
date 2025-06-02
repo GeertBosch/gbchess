@@ -21,7 +21,7 @@ class SquareSet {
 
 public:
     SquareSet(uint64_t squares) : _squares(squares) {}
-    SquareSet(Square square) : _squares(1ull << index(square)) {}
+    SquareSet(Square square) : _squares(1ull << square) {}
     class iterator;
 
     SquareSet() = default;
@@ -60,8 +60,8 @@ public:
     }
     static SquareSet all() { return SquareSet(0xffff'ffff'ffff'ffffull); }
 
-    void erase(Square square) { _squares &= ~(1ull << index(square)); }
-    void insert(Square square) { _squares |= (1ull << index(square)); }
+    void erase(Square square) { _squares &= ~(1ull << square); }
+    void insert(Square square) { _squares |= (1ull << square); }
     void insert(SquareSet other) { _squares |= other._squares; }
 
     void insert(iterator begin, iterator end) {
@@ -112,7 +112,6 @@ public:
     iterator begin() const { return {*this}; }
     iterator end() const { return SquareSet(); }
 };
-
 
 class Occupancy {
     SquareSet _theirs;
@@ -165,12 +164,16 @@ struct CastlingInfo {
           kingSideMask(color == Color::w ? CastlingMask::K : CastlingMask::k),
           queenSideMask(color == Color::w ? CastlingMask::Q : CastlingMask::q),
 
-          kingSide(color == Color::w
-                       ? CastlingMove{FromTo{"e1"_sq, "g1"_sq}, FromTo{"h1"_sq, "f1"_sq}}
-                       : CastlingMove{FromTo{"e8"_sq, "g8"_sq}, FromTo{"h8"_sq, "f8"_sq}}),
-          queenSide(color == Color::w
-                        ? CastlingMove{FromTo{"e1"_sq, "c1"_sq}, FromTo{"a1"_sq, "d1"_sq}}
-                        : CastlingMove{FromTo{"e8"_sq, "c8"_sq}, FromTo{"a8"_sq, "d8"_sq}}) {};
+          kingSide(color == Color::w ? CastlingMove{FromTo{e1, g1}, FromTo{h1, f1}}
+                                     : CastlingMove{FromTo{e8, g8}, FromTo{h8, f8}}),
+          queenSide(color == Color::w ? CastlingMove{FromTo{e1, c1}, FromTo{a1, d1}}
+                                      : CastlingMove{FromTo{e8, c8}, FromTo{a8, d8}}) {};
+};
+
+struct MoveError : public std::exception {
+    std::string message;
+    MoveError(std::string message) : message(message) {}
+    const char* what() const noexcept override { return message.c_str(); }
 };
 
 /**
@@ -241,26 +244,6 @@ inline void forAllLegalMovesAndCaptures(Turn turn, Board& board, MoveFun action)
 size_t countLegalMovesAndCaptures(Board& board, SearchState& state);
 
 MoveVector allLegalQuiescentMoves(Turn turn, Board& board, int depthleft);
-
-struct ParseError : public std::exception {
-    std::string message;
-    ParseError(std::string message) : message(message) {}
-    const char* what() const noexcept override { return message.c_str(); }
-};
-
-/**
- * Parses a move string in UCI notation and returns a Move or MoveVector of the appropriate kind.
- * The UCI string is a 4 or 5 character string representing from/to squares and promotion piece, if
- * any. Returns the corresponding Move object. Throws a ParseError if the string is not a legal move
- * for the position.
- */
-Move parseUCIMove(Position position, const std::string& move);
-
-/**
- * Similar to above, but applies the move to a position and returns the updated position.
- * Throws a ParseError if the string is not a legal move for the position.
- */
-Position applyUCIMove(Position position, const std::string& move);
 
 struct UndoPosition {
     UndoPosition() : board(), turn(Color::w) {}
