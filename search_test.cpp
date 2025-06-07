@@ -54,6 +54,7 @@ PrincipalVariation analyzePosition(Position position, int maxdepth) {
                   << pv.score << ", move " << to_string(pv.front()) << "\n";
     return pv;
 }
+
 PrincipalVariation analyzeMoves(Position position, int maxdepth) {
     MoveVector moves;
     PrincipalVariation pv;
@@ -141,6 +142,12 @@ int find(T t, std::string what) {
     auto it = std::find(t.begin(), t.end(), what);
     if (it == t.end()) usage(cmdName, "Missing field \"" + what + "\"");
     return it - t.begin();
+}
+
+Position applyMoves(Position position, MoveVector const& moves) {
+    for (auto move : moves) position = applyMove(position, move);
+
+    return position;
 }
 
 using ScoreWithReason = std::pair<Score, std::string>;

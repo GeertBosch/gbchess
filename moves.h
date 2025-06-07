@@ -283,7 +283,6 @@ void unmakeMove(Position& position, UndoPosition undo);
  * en passant target, halfmove clock, and fullmove number).
  */
 [[nodiscard]] Position applyMove(Position position, Move move);
-[[nodiscard]] Position applyMoves(Position position, MoveVector const& moves);
 
 Turn applyMove(Turn turn, MoveWithPieces mwp);
 void applyMove(SearchState& state, MoveWithPieces mwp);

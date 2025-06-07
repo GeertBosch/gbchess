@@ -194,6 +194,9 @@ public:
     Repetitions() = default;
     void clear() { hashes.clear(); }
 
+    /**
+     * RAII type that will remove the hashes from the repetition table when it goes out of scope.
+     */
     class State {
         friend class Repetitions;
         Repetitions& repetitions;
