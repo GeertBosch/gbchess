@@ -27,14 +27,6 @@ struct MovesTable {
     // precomputed possible squares that each square can be attacked from
     SquareSet attackers[kNumSquares];
 
-    // precomputed move kinds to deal with double pawn push and pawn queen promotion, under
-    // promotions are expanded separately
-    MoveKind moveKinds[kNumPieces][kNumRanks][kNumRanks];  // piece, from rank, to rank
-
-    // precomputed capture kinds to deal with pawn queen promotion captures, under promotions are
-    // expanded separately
-    MoveKind captureKinds[kNumPieces][kNumRanks][kNumRanks];  // piece, from rank, to rank
-
     // precomputed delta in occupancy as result of a move, but only for non-promotion moves
     // to save on memory: convert promotion kinds using the noPromo function
     Occupancy occupancyDelta[kNumNoPromoMoveKinds][kNumSquares][kNumSquares];  // moveKind, from, to
@@ -55,7 +47,6 @@ struct MovesTable {
 
 private:
     void initializePieceMovesAndCaptures();
-    void initializePieceMoveAndCaptureKinds();
     void initializeAttackers();
     void initializeOccupancyDeltas();
     void initializePaths();
@@ -247,36 +238,6 @@ void MovesTable::initializePieceMovesAndCaptures() {
         }
     }
 }
-void MovesTable::initializePieceMoveAndCaptureKinds() {
-    for (auto piece : pieces) {
-        for (int fromRank = 0; fromRank != kNumRanks; ++fromRank) {
-            for (int toRank = 0; toRank != kNumRanks; ++toRank) {
-                MoveKind moveKind = MoveKind::Quiet_Move;
-                MoveKind captureKind = MoveKind::Capture;
-                switch (piece) {
-                case Piece::P:
-                    if (fromRank == 1 && toRank == 3) moveKind = MoveKind::Double_Push;
-                    if (toRank == kNumRanks - 1) {
-                        moveKind = MoveKind::Queen_Promotion;
-                        captureKind = MoveKind::Queen_Promotion_Capture;
-                    }
-                    break;
-                case Piece::p:
-                    if (fromRank == kNumRanks - 2 && toRank == kNumRanks - 4)
-                        moveKind = MoveKind::Double_Push;
-                    if (toRank == 0) {
-                        moveKind = MoveKind::Queen_Promotion;
-                        captureKind = MoveKind::Queen_Promotion_Capture;
-                    }
-                    break;
-                default: break;
-                }
-                moveKinds[int(piece)][fromRank][toRank] = moveKind;
-                captureKinds[int(piece)][fromRank][toRank] = captureKind;
-            }
-        }
-    }
-}
 
 void MovesTable::initializeAttackers() {
     // Initialize attackers
@@ -360,7 +321,6 @@ void MovesTable::initializeCompound() {
 
 MovesTable::MovesTable() {
     initializePieceMovesAndCaptures();
-    initializePieceMoveAndCaptureKinds();
     initializeAttackers();
     initializeOccupancyDeltas();
     initializePaths();
@@ -740,6 +700,7 @@ BoardChange prepareMove(Board& board, Move move) {
     BoardChange undo = {captured, compound.promo, {move.from, compound.to}, compound.second};
     return undo;
 }
+
 BoardChange makeMove(Board& board, BoardChange change) {
     Piece first = Piece::_;
     std::swap(first, board[change.first.from]);
@@ -765,9 +726,11 @@ UndoPosition makeMove(Position& position, BoardChange change, Move move) {
     position.turn = applyMove(position.turn, mwp);
     return undo;
 }
+
 UndoPosition makeMove(Position& position, Move move) {
     return makeMove(position, prepareMove(position.board, move), move);
 }
+
 void unmakeMove(Board& board, BoardChange undo) {
     Piece ours = Piece::_;
     std::swap(board[undo.second.to], ours);
@@ -784,9 +747,8 @@ void unmakeMove(Position& position, UndoPosition undo) {
 }
 
 CastlingMask castlingMask(Square from, Square to) {
-    using CM = CastlingMask;
-
     const struct MaskTable {
+        using CM = CastlingMask;
         std::array<CM, kNumSquares> mask;
         constexpr MaskTable() : mask{} {
             mask[castlingInfo[0].kingSide[0].from] = CM::KQ;  // White King
@@ -972,19 +934,5 @@ SquareSet possibleMoves(Piece piece, Square from) {
 }
 SquareSet possibleCaptures(Piece piece, Square from) {
     return movesTable.captures[index(piece)][from];
-}
-
-void addAvailableMoves(MoveVector& moves, const Board& board, Turn turn) {
-    auto state = SearchState(board, turn);
-    findMoves(board, state, [&](Piece, Move move) { addMove(moves, move); });
-}
-
-void addAvailableCaptures(MoveVector& captures, const Board& board, Turn turn) {
-    auto state = SearchState(board, turn);
-    findCaptures(board, state, [&](Piece, Move move) { addMove(captures, move); });
-}
-
-void addAvailableEnPassant(MoveVector& captures, const Board& board, Turn turn) {
-    findEnPassant(board, turn, [&](Piece, Move move) { addMove(captures, move); });
 }
 }  // namespace for_test

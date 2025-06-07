@@ -113,7 +113,7 @@ int main(int argc, char** argv) {
     if (argc < 2) usage();
 
     int depth = std::atoi(shift());
-    int expectedCount = std::atoi(shift());
+    int expectedCount = argc > 1 ? std::atoi(shift()) : 0;
 
     for (auto& position : positions) perftWithDivide(position, depth, expectedCount);
 }

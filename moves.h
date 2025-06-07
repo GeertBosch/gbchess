@@ -308,22 +308,4 @@ SquareSet possibleMoves(Piece piece, Square from);
 
 SquareSet possibleCaptures(Piece piece, Square from);
 
-/**
- * This availableMoves function iterates over each square on the board. If a piece of the active
- * color is found, it calculates its possible moves using the possibleMoves function you already
- * have. For each possible destination square, it checks if the move would target an occupied square
- * or move through other pieces. If neither condition is true, the move is added to the set.
- */
-void addAvailableMoves(MoveVector& moves, const Board& board, Turn turn);
-
-/**
- * This function follows the same structure as availableMoves but focuses on captures. It
- * loops through each square on the board, determines if there's a piece of the active color
- * on it, and then finds its possible captures. The result is filtered to exclude self-
- * captures, and those that move through other pieces, adding valid captures to the result
- * set.
- */
-void addAvailableCaptures(MoveVector& captures, const Board& board, Turn turn);
-
-void addAvailableEnPassant(MoveVector& captures, const Board& board, Turn turn);
 }  // namespace for_test

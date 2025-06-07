@@ -154,6 +154,7 @@ position6="r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0
 
 # Verify well-known perft results. Great for checking correct move generation.
 perft-test: perft perft-debug perft-sse2 perft-emul
+	./perft-debug 3
 	./perft-debug 4 197281
 	./perft -q 5 4865609
 	./perft -q "rnbqkbnr/1ppppppp/B7/p7/4P3/8/PPPP1PPP/RNBQK1NR b KQkq - 1 2" 4 509448

@@ -396,59 +396,48 @@ void testOccupancy() {
     std::cout << "All occupancy tests passed!" << std::endl;
 }
 
-void testAddAvailableMoves() {
-    auto find = [](MoveVector& moves, Move move) -> bool {
-        return std::find(moves.begin(), moves.end(), move) != moves.end();
-    };
+bool has(const MoveVector& moves, Move move) {
+    return std::find(moves.begin(), moves.end(), move) != moves.end();
+};
+
+void testLegalPawnMoves() {
     // Test pawn moves
-    {
-        Board board;
-        board[a2] = Piece::P;
-        board[a4] = Piece::P;  // Block the pawn, so there's no two-square move
-        MoveVector moves;
-        Turn turn(Color::w);
-        for_test::addAvailableMoves(moves, board, turn);
-        assert(moves.size() == 2);
-        assert(find(moves, Move(a2, a3, MoveKind::Quiet_Move)));
-        assert(find(moves, Move(a4, a5, MoveKind::Quiet_Move)));
-    }
-
-    std::cout << "All addAvailableMoves tests passed!" << std::endl;
+    Board board;
+    board[a2] = Piece::P;
+    board[a4] = Piece::P;  // Block the pawn, so there's no two-square move
+    Turn turn(Color::w, CastlingMask::_, noEnPassantTarget);
+    MoveVector moves = allLegalMovesAndCaptures(turn, board);
+    assert(moves.size() == 2);
+    assert(has(moves, Move(a2, a3, MoveKind::Quiet_Move)));
+    assert(has(moves, Move(a4, a5, MoveKind::Quiet_Move)));
 }
 
-void testAddAvailableCaptures() {
-    auto find = [](MoveVector& moves, Move move) -> bool {
-        return std::find(moves.begin(), moves.end(), move) != moves.end();
-    };
-
+void testLegalCaptures() {
     // Test case with a regular captures and one promoting a pawn while capturing
-    {
-        Board board = fen::parsePiecePlacement("r3kbnr/pP1qpppp/3p4/4N3/4P3/8/PPP2PPP/RNB1K2R");
-        MoveVector captures;
-        Turn turn(Color::w);
-        for_test::addAvailableCaptures(captures, board, turn);
-        assert(captures.size() == 6);
-        assert(find(captures, Move(e5, d7, MoveKind::Capture)));
-        assert(find(captures, Move(e5, f7, MoveKind::Capture)));
-        assert(find(captures, Move(b7, a8, MoveKind::Queen_Promotion_Capture)));
-        assert(find(captures, Move(b7, a8, MoveKind::Rook_Promotion_Capture)));
-        assert(find(captures, Move(b7, a8, MoveKind::Bishop_Promotion_Capture)));
-        assert(find(captures, Move(b7, a8, MoveKind::Knight_Promotion_Capture)));
-    }
-    std::cout << "All addAvailableCaptures tests passed!" << std::endl;
+    Board board = fen::parsePiecePlacement("r3kbnr/pP1qpppp/3p4/4N3/4P3/8/PPP2PPP/RNB1K2R");
+    Turn turn(Color::w);
+    MoveVector captures;
+    for (auto move : allLegalMovesAndCaptures(turn, board))
+        if (isCapture(move.kind)) captures.push_back(move);
+    // We expect 6 captures: 2 from the knight, and 4 from the pawn promotion
+    assert(captures.size() == 6);
+    assert(has(captures, Move(e5, d7, MoveKind::Capture)));
+    assert(has(captures, Move(e5, f7, MoveKind::Capture)));
+    assert(has(captures, Move(b7, a8, MoveKind::Queen_Promotion_Capture)));
+    assert(has(captures, Move(b7, a8, MoveKind::Rook_Promotion_Capture)));
+    assert(has(captures, Move(b7, a8, MoveKind::Bishop_Promotion_Capture)));
+    assert(has(captures, Move(b7, a8, MoveKind::Knight_Promotion_Capture)));
 }
 
-void testAddAvailableEnPassant() {
-    {
-        Board board = fen::parsePiecePlacement("rnbqkbnr/1ppppppp/8/8/pP6/P1P5/3PPPPP/RNBQKBNR");
-        MoveVector moves;
-        Turn turn(Color::b, CastlingMask::_, b3);
+void testLegalEnPassant() {
+    Board board = fen::parsePiecePlacement("rnbqkbnr/1ppppppp/8/8/pP6/P1P5/3PPPPP/RNBQKBNR");
+    Turn turn(Color::b, CastlingMask::_, b3);
+    MoveVector moves;
 
-        for_test::addAvailableEnPassant(moves, board, turn);
-        assert(moves.size() == 1);
-        assert(moves[0] == Move(a4, b3, MoveKind::En_Passant));
-    }
-    std::cout << "All addAvailableEnPassant tests passed!" << std::endl;
+    for (auto move : allLegalMovesAndCaptures(turn, board))
+        if (move.kind == MoveKind::En_Passant) moves.push_back(move);
+    assert(moves.size() == 1);
+    assert(moves[0] == Move(a4, b3, MoveKind::En_Passant));
 }
 
 MoveVector allLegalCastling(std::string piecePlacement,
@@ -997,9 +986,9 @@ int main(int argc, char* argv[]) {
     testOccupancy();
     testDoesNotCheck();
     testPinnedPieces();
-    testAddAvailableMoves();
-    testAddAvailableCaptures();
-    testAddAvailableEnPassant();
+    testLegalPawnMoves();
+    testLegalCaptures();
+    testLegalEnPassant();
     testAllLegalCastling();
     testMakeAndUnmakeMove();
     testCastlingMask();

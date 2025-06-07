@@ -9,14 +9,6 @@
 #include "moves.h"
 
 namespace {
-std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
-    os << "[";
-    for (const auto& move : moves) {
-        if (move) os << to_string(move) << ", ";
-    }
-    os << "]";
-    return os;
-}
 std::string cmdName = "eval-test";
 
 using GridDrawing = std::array<std::string, 11>;
@@ -76,18 +68,19 @@ void usage(std::string cmdName, std::string errmsg) {
     std::cerr << "Usage: " << cmdName << " <FEN-string> [move...]" << std::endl;
     std::exit(1);
 }
-}  // namespace
 
-void printAvailableMoves(const Position& position) {
-    MoveVector moves;
-    for_test::addAvailableMoves(moves, position.board, position.turn);
-    std::cout << "Moves: " << moves << std::endl;
-}
+void printAvailableMovesAndCaptures(const Position& position) {
+    auto [board, turn] = position;
+    MoveVector moves = allLegalMovesAndCaptures(turn, board);
 
-void printAvailableCaptures(const Position& position) {
-    MoveVector captures;
-    for_test::addAvailableCaptures(captures, position.board, position.turn);
-    std::cout << "Captures: " << captures << std::endl;
+    std::cout << "Captures: [ ";
+    for (auto move : moves)
+        if (isCapture(move.kind)) std::cout << to_string(move) << " ";
+
+    std::cout << "]\nMoves: [ ";
+    for (auto move : moves)
+        if (!isCapture(move.kind)) std::cout << to_string(move) << " ";
+    std::cout << "]\n";
 }
 
 /**
@@ -222,7 +215,6 @@ int parseMoves(Position& position, int* argc, char** argv[]) {
     return moves;
 }
 
-
 template <typename T>
 int find(T t, std::string what) {
     auto it = std::find(t.begin(), t.end(), what);
@@ -294,6 +286,7 @@ int testFromFiles(int argc, char* argv[]) {
     }
     return 0;
 }
+}  // namespace
 
 int main(int argc, char* argv[]) {
     cmdName = *argv++;
@@ -329,8 +322,6 @@ int main(int argc, char* argv[]) {
     if (position.active() == Color::b) quiesceEval = -quiesceEval;
     std::cout << "Quiescence Evaluation: " << std::string(quiesceEval) << std::endl;
 
-    printAvailableCaptures(position);
-    printAvailableMoves(position);
-
+    printAvailableMovesAndCaptures(position);
     return 0;
 }
