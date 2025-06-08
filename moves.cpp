@@ -1,7 +1,7 @@
-#include "common.h"
 #include <cassert>
 #include <cstring>
 
+#include "common.h"
 #include "options.h"
 #include "sse2.h"
 

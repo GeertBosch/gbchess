@@ -24,7 +24,7 @@ all: debug test build perft-test mate123 mate45 puzzles evals
 export LLVM_PROFILE_FILE=coverage-%m.profraw
 LLVM-MERGE=llvm-profdata merge -sparse coverage-*.profraw -o coverage.profdata
 
-# MacOS specific stuff - why can't thinks just work by default?
+# MacOS specific stuff - why can't thinks just work  by default?
 ifeq ($(_system_type),Darwin)
     export MallocNanoZone=0
     sdk=$(shell xcrun --sdk macosx --show-sdk-path)
@@ -83,6 +83,8 @@ moves-debug: ${DBGOBJ}/moves.o ${DBGOBJ}/fen.o
 hash-test: ${OPTOBJ}/hash.o ${OPTOBJ}/fen.o ${OPTOBJ}/moves.o
 hash-debug: ${DBGOBJ}/hash.o ${DBGOBJ}/fen.o ${DBGOBJ}/moves.o
 
+magic-test: ${OPTOBJ}/magic.o ${OPTOBJ}/moves.o
+magic-debug: ${DBGOBJ}/magic.o ${DBGOBJ}/moves.o
 
 EVAL_SRCS=eval.cpp hash.cpp fen.cpp moves.cpp
 
@@ -210,7 +212,12 @@ ut%.out: ut%.in uci-debug
 
 uci: $(patsubst ut%.in,ut%.out,$(wildcard ut*.in))
 
-test: build debug searches evals uci
+magic: magic-test
+# To accept any changes on test failure, pipe the output to the `patch` command
+	@(./magic-test | diff -u magic_gen.h -) && echo Magic tests passed || \
+	(echo "\n*** To accept these changes, pipe this output to the patch command ***" && false)
+
+test: build debug searches evals uci magic
 	rm -f coverage-*.profraw
 	./fen-test
 	./moves-test

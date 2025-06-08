@@ -35,6 +35,16 @@
             "args": [],
         },
         {
+            "name": "magic-debug",
+            "type": "lldb-dap",
+            "request": "launch",
+            "initCommands": [
+                "command source ${workspaceRoot}/chess.lldbinit"
+            ],
+            "program": "${workspaceFolder}/magic-debug",
+            "args": [],
+        },
+        {
             "name": "hash-debug",
             "type": "lldb-dap",
             "request": "launch",

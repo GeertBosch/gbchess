@@ -80,7 +80,11 @@ public:
     SquareSet operator!(void) const { return ~_squares; }
     SquareSet operator>>(int shift) const { return _squares >> shift; }
     SquareSet operator<<(int shift) const { return _squares << shift; }
-    SquareSet operator-(SquareSet other) const { return _squares & ~other._squares; }
+    SquareSet operator-(SquareSet other) const {
+        auto inv = ~other._squares;
+        auto ret = _squares & inv;
+        return ret;
+    }
 
     SquareSet operator|=(SquareSet other) { return _squares |= other._squares; }
     SquareSet operator&=(SquareSet other) { return _squares &= other._squares; }
