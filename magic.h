@@ -51,15 +51,12 @@ struct Magic {
     Magic(uint8_t square, bool bishop, uint64_t magic)
         : magic(magic), mask(computeSliderBlockers(square, bishop)), bits(pop_count(mask)) {
         table.resize(1ull << bits, 0ull);
-        uint64_t a[1 << 12];
-        for (int i = 0; i < (1 << pop_count(mask)); i++)
-            a[i] = computeSliderTargets(square, bishop, indexToBlockers(i, mask));
         for (int i = 0; i < (1 << bits); i++) {
-            auto& entry = table[magicTableIndex(indexToBlockers(i, mask), magic, bits)];
-            if (!entry)
-                entry = a[i];
-            else if (entry != a[i])
-                throw "collision found, incorrect magic";
+            auto targets = computeSliderTargets(square, bishop, indexToBlockers(i, mask));
+            if (auto& entry = table[magicTableIndex(indexToBlockers(i, mask), magic, bits)])
+                assert(entry == targets);
+            else
+                entry = targets;
         }
     }
     // Computes the attack bitboard for this square and piece type, given the board occupancy.
