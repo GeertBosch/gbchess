@@ -77,16 +77,18 @@ clean: .PHONY
 fen-test: ${OPTOBJ}/fen.o
 fen-debug: ${DBGOBJ}/fen.o
 
-moves-test: ${OPTOBJ}/moves.o ${OPTOBJ}/fen.o
-moves-debug: ${DBGOBJ}/moves.o ${DBGOBJ}/fen.o
+MOVES_SRCS=moves.cpp magic.cpp
 
-hash-test: ${OPTOBJ}/hash.o ${OPTOBJ}/fen.o ${OPTOBJ}/moves.o
-hash-debug: ${DBGOBJ}/hash.o ${DBGOBJ}/fen.o ${DBGOBJ}/moves.o
+moves-test: $(call calc_objs,OPT,${MOVES_SRCS} fen.cpp) 
+moves-debug: $(call calc_objs,DBG,${MOVES_SRCS} fen.cpp)
 
-magic-test: ${OPTOBJ}/magic.o ${OPTOBJ}/moves.o
-magic-debug: ${DBGOBJ}/magic.o ${DBGOBJ}/moves.o
+hash-test: $(call calc_objs,OPT,${MOVES_SRCS} hash.cpp fen.cpp)
+hash-debug: $(call calc_objs,DBG,${MOVES_SRCS} hash.cpp fen.cpp)
 
-EVAL_SRCS=eval.cpp hash.cpp fen.cpp moves.cpp
+magic-test: $(call calc_objs,OPT,${MOVES_SRCS})
+magic-debug: $(call calc_objs,DBG,${MOVES_SRCS})
+
+EVAL_SRCS=eval.cpp hash.cpp fen.cpp ${MOVES_SRCS}
 
 eval-test: $(call calc_objs,OPT,${EVAL_SRCS})
 eval-debug: $(call calc_objs,DBG,${EVAL_SRCS})
@@ -99,7 +101,7 @@ search-debug: $(call calc_objs,DBG,${SEARCH_SRCS})
 uci-test: $(call calc_objs,OPT,uci.cpp ${SEARCH_SRCS})
 uci-debug: $(call calc_objs,DBG,uci.cpp ${SEARCH_SRCS})
 
-PERFT_SRCS=perft.cpp moves.cpp fen.cpp
+PERFT_SRCS=perft.cpp ${MOVES_SRCS} fen.cpp
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
 perft: $(call calc_objs,OPT,${PERFT_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
@@ -107,13 +109,13 @@ perft-debug: $(call calc_objs,DBG,${PERFT_SRCS})
 	${GPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
 # Compare the perft tool with some different compilation options for speed comparison
-perft-clang-sse2: perft.cpp moves.cpp fen.cpp *.h
+perft-clang-sse2: perft.cpp ${MOVES_SRCS} fen.cpp *.h
 	${CLANGPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
-perft-clang-emul: perft.cpp  moves.cpp fen.cpp *.h
+perft-clang-emul: perft.cpp  ${MOVES_SRCS} fen.cpp *.h
 	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
-perft-gcc-sse2: perft.cpp  moves.cpp fen.cpp *.h
+perft-gcc-sse2: perft.cpp  ${MOVES_SRCS} fen.cpp *.h
 	${GPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
-perft-gcc-emul: perft.cpp  moves.cpp fen.cpp *.h
+perft-gcc-emul: perft.cpp  ${MOVES_SRCS} fen.cpp *.h
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
 
 perft-emul: perft-clang-emul perft-gcc-emul .PHONY

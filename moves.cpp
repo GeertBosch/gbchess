@@ -2,6 +2,7 @@
 #include <cstring>
 
 #include "common.h"
+#include "magic.h"
 #include "options.h"
 #include "sse2.h"
 
@@ -451,22 +452,33 @@ SquareSet SquareSet::find(const Board& board, Piece piece) {
     return equalSet(board.squares(), piece, false);
 }
 
+
+namespace {
 struct PieceSet {
     uint16_t pieces = 0;
     PieceSet() = default;
-    PieceSet(Piece piece) : pieces(1 << index(piece)) {}
-    PieceSet(PieceType pieceType)
+    constexpr PieceSet(Piece piece) : pieces(1 << index(piece)) {}
+    constexpr PieceSet(PieceType pieceType)
         : pieces((1 << index(addColor(pieceType, Color::w))) |
                  (1 << index(addColor(pieceType, Color::b)))) {}
+    constexpr PieceSet(std::initializer_list<Piece> piecesList) {
+        for (auto piece : piecesList) pieces |= 1 << index(piece);
+    }
+    constexpr PieceSet(std::initializer_list<PieceType> types) {
+        for (auto pieceType : types)
+            pieces |= (1 << index(addColor(pieceType, Color::w))) |
+                (1 << index(addColor(pieceType, Color::b)));
+    }
     constexpr PieceSet(uint16_t pieces) : pieces(pieces) {}
     constexpr PieceSet operator|(PieceSet other) const { return PieceSet(pieces | other.pieces); }
-    bool has(Piece piece) const { return pieces & (1 << index(piece)); }
+    bool contains(Piece piece) const { return pieces & (1 << index(piece)); }
 };
-
+static constexpr PieceSet sliders = {Piece::B, Piece::b, Piece::R, Piece::r, Piece::Q, Piece::q};
 struct PinData {
     SquareSet captures;
     PieceSet pinningPieces;
 };
+}  // namespace
 
 SquareSet pinnedPieces(const Board& board,
                        Occupancy occupancy,
@@ -475,7 +487,7 @@ SquareSet pinnedPieces(const Board& board,
     SquareSet pinned;
     for (auto pinner : pinData.captures & occupancy.theirs()) {
         // Check if the pin is a valid sliding piece
-        if (!pinData.pinningPieces.has(board[pinner])) continue;
+        if (!pinData.pinningPieces.contains(board[pinner])) continue;
 
         auto path = movesTable.paths[kingSquare][pinner];
         auto pieces = occupancy() & path;
@@ -488,10 +500,9 @@ SquareSet pinnedPieces(const Board& board, Occupancy occupancy, Square kingSquar
     // For the purpose of pinning, we only consider sliding pieces, not knights.
 
     // Define pinning piece sets and corresponding capture sets
-    PinData pinData[] = {{movesTable.captures[index(Piece::R)][kingSquare],
-                          PieceSet(PieceType::ROOK) | PieceSet(PieceType::QUEEN)},
-                         {movesTable.captures[index(Piece::B)][kingSquare],
-                          PieceSet(PieceType::BISHOP) | PieceSet(PieceType::QUEEN)}};
+    PinData pinData[] = {
+        {movesTable.captures[index(Piece::R)][kingSquare], {PieceType::ROOK, PieceType::QUEEN}},
+        {movesTable.captures[index(Piece::B)][kingSquare], {PieceType::BISHOP, PieceType::QUEEN}}};
 
     auto pinned = SquareSet();
 
@@ -611,11 +622,27 @@ template <typename F>
 void findNonPawnMoves(const Board& board, SearchState& state, const F& fun) {
     for (auto from : state.occupancy.ours() - state.pawns) {
         auto piece = board[from];
-        auto possibleSquares = movesTable.moves[index(piece)][from] - state.occupancy();
-        for (auto to : possibleSquares) {
-            // Check for moving through pieces
-            if (clearPath(state.occupancy(), from, to))
+        if (sliders.contains(piece) && !state.pinned.contains(from) && !state.inCheck) {
+            // If the piece is a sliding piece, and not pinned, we can move it freely to all target
+            // squares for its piece type that are not occupied by our own pieces.
+            SquareSet toSquares;
+            if (PieceSet{PieceType::BISHOP, PieceType::QUEEN}.contains(piece))
+                toSquares |= targets(from, true, state.occupancy().bits());
+            if (PieceSet{PieceType::ROOK, PieceType::QUEEN}.contains(piece))
+                toSquares |= targets(from, false, state.occupancy().bits());
+            toSquares -= state.occupancy();
+
+            for (auto to : toSquares) {
+                assert(board[to] == Piece::_);
                 fun(piece, Move{from, to, MoveKind::Quiet_Move});
+            }
+        } else {
+            auto possibleSquares = movesTable.moves[index(piece)][from] - state.occupancy();
+            for (auto to : possibleSquares) {
+                // Check for moving through pieces
+                if (clearPath(state.occupancy(), from, to))
+                    fun(piece, Move{from, to, MoveKind::Quiet_Move});
+            }
         }
     }
 }
@@ -638,9 +665,11 @@ void findPromotionMoves(SearchState& state, const F& fun) {
     state.pawns = pawns;
 }
 
-
 template <typename F>
-void findCastles(Occupancy occupancy, Turn turn, const F& fun) {
+void findCastles(SearchState& state, const F& fun) {
+    if (state.inCheck) return;  // No castling while in check
+    auto occupancy = state.occupancy;
+    auto turn = state.turn;
     auto color = int(turn.activeColor());
     auto& info = castlingInfo[color];
 
@@ -662,11 +691,25 @@ template <typename F>
 void findNonPawnCaptures(const Board& board, SearchState& state, const F& fun) {
     for (auto from : state.occupancy.ours() - state.pawns) {
         auto piece = board[from];
-        auto possibleSquares = movesTable.captures[index(piece)][from] & state.occupancy.theirs();
-        for (auto to : possibleSquares) {
-            // Exclude captures that move through pieces
-            if (clearPath(state.occupancy(), from, to))
-                fun(piece, Move{from, to, MoveKind::Capture});
+        if (sliders.contains(piece) && !state.pinned.contains(from) && !state.inCheck && 1) {
+            // If the piece is a sliding piece, and not pinned, we can move it freely to all target
+            // squares for its piece type that are not occupied by our own pieces.
+            SquareSet toSquares;
+            if (PieceSet{PieceType::BISHOP, PieceType::QUEEN}.contains(piece))
+                toSquares |= targets(from, true, state.occupancy().bits());
+            if (PieceSet{PieceType::ROOK, PieceType::QUEEN}.contains(piece))
+                toSquares |= targets(from, false, state.occupancy().bits());
+            toSquares &= state.occupancy.theirs();
+
+            for (auto to : toSquares) fun(piece, Move{from, to, MoveKind::Capture});
+        } else {
+            auto possibleSquares =
+                movesTable.captures[index(piece)][from] & state.occupancy.theirs();
+            for (auto to : possibleSquares) {
+                // Exclude captures that move through pieces
+                if (clearPath(state.occupancy(), from, to))
+                    fun(piece, Move{from, to, MoveKind::Capture});
+            }
         }
     }
 }
@@ -905,7 +948,7 @@ void forAllLegalMovesAndCaptures(Board& board, SearchState& state, MoveFun actio
     findCaptures(board, state, doMove);
     findEnPassant(board, state.turn, doMove);
     findMoves(board, state, doMove);
-    if (!state.inCheck) findCastles(state.occupancy, state.turn, doMove);
+    findCastles(state, doMove);
 }
 
 size_t countLegalMovesAndCaptures(Board& board, SearchState& state) {
@@ -913,10 +956,14 @@ size_t countLegalMovesAndCaptures(Board& board, SearchState& state) {
     auto countMove = [&count, &board, &state](Piece, Move move) {
         count += doesNotCheck(board, state, move);
     };
-    findCaptures(board, state, countMove);
+    findNonPawnCaptures(board, state, countMove);
+    findNonPawnMoves(board, state, countMove);
+
+    findPawnCaptures(state, countMove);
     findEnPassant(board, state.turn, countMove);
-    findMoves(board, state, countMove);
-    if (!state.inCheck) findCastles(state.occupancy, state.turn, countMove);
+    findPawnPushes(state, countMove);
+
+    findCastles(state, countMove);
 
     return count;
 }
