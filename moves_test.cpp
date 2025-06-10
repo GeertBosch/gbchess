@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <cassert>
-#include <iomanip>
 #include <iostream>
 
 #include "common.h"
@@ -412,13 +411,18 @@ void testLegalPawnMoves() {
     assert(has(moves, Move(a4, a5, MoveKind::Quiet_Move)));
 }
 
+MoveVector allLegalCaptures(Turn turn, Board board) {
+    MoveVector captures;
+    for (auto move : allLegalMovesAndCaptures(turn, board))
+        if (isCapture(move.kind)) captures.emplace_back(move);
+    return captures;
+}
+
 void testLegalCaptures() {
     // Test case with a regular captures and one promoting a pawn while capturing
     Board board = fen::parsePiecePlacement("r3kbnr/pP1qpppp/3p4/4N3/4P3/8/PPP2PPP/RNB1K2R");
     Turn turn(Color::w);
-    MoveVector captures;
-    for (auto move : allLegalMovesAndCaptures(turn, board))
-        if (isCapture(move.kind)) captures.push_back(move);
+    MoveVector captures = allLegalCaptures(turn, board);
     // We expect 6 captures: 2 from the knight, and 4 from the pawn promotion
     assert(captures.size() == 6);
     assert(has(captures, Move(e5, d7, MoveKind::Capture)));
@@ -440,11 +444,8 @@ void testLegalEnPassant() {
     assert(moves[0] == Move(a4, b3, MoveKind::En_Passant));
 }
 
-MoveVector allLegalCastling(std::string piecePlacement,
-                            Color activeColor,
-                            CastlingMask castlingAvailability) {
-    Board board = fen ::parsePiecePlacement(piecePlacement);
-    Turn turn(activeColor, castlingAvailability, noEnPassantTarget);
+MoveVector allLegalCastling(std::string fen) {
+    auto [board, turn] = fen::parsePosition(fen);
     MoveVector moves;
     SearchState state(board, turn);
     forAllLegalMovesAndCaptures(board, state, [&moves](Board&, MoveWithPieces mwp) {
@@ -455,20 +456,19 @@ MoveVector allLegalCastling(std::string piecePlacement,
 
 void testAllLegalCastling() {
     {
-        auto moves = allLegalCastling("r3k2r/8/8/8/8/8/8/R3K2R", Color::w, CastlingMask::KQkq);
+        auto moves = allLegalCastling("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
         assert(moves.size() == 2);
         assert(moves[0] == Move(e1, g1, MoveKind::O_O));
         assert(moves[1] == Move(e1, c1, MoveKind::O_O_O));
     }
     {
-        auto moves = allLegalCastling(
-            "rn1qkbnr/2pppppp/bp6/p7/4P3/5N2/PPPP1PPP/RNBQK2R", Color::w, CastlingMask::KQkq);
+        auto moves =
+            allLegalCastling("rn1qkbnr/2pppppp/bp6/p7/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 1");
         assert(moves.size() == 0);  // There is one castling move (e1g1), but it's illegal
     }
     {
-        auto moves = allLegalCastling("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/1R2K2R",
-                                      Color::b,
-                                      CastlingMask::KQq);
+        auto moves = allLegalCastling(
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/1R2K2R b KQq - 0 1");
         assert(moves.size() == 1);
         assert(moves[0] == Move(e8, c8, MoveKind::O_O_O));
     }
@@ -825,34 +825,50 @@ void testIsAttacked() {
     std::cout << "All isAttacked tests passed!" << std::endl;
 }
 
+MoveVector allLegalMoves(Turn turn, Board board) {
+    MoveVector moves;
+    for (auto move : allLegalMovesAndCaptures(turn, board))
+        if (!isCapture(move.kind)) moves.emplace_back(move);
+    return moves;
+}
+
+
+void showCapturesAndMoves(Position position) {
+    std::cout << "FEN: " << fen::to_string(position) << "\n";
+    auto captures = allLegalCaptures(position.turn, position.board);
+    auto moves = allLegalMoves(position.turn, position.board);
+    std::cout << "Legal captures: " << captures.size() << "\n";
+    for (auto move : captures) std::cout << to_string(move) << " ";
+    std::cout << "\n";
+    std::cout << "Legal moves: " << moves.size() << "\n";
+    for (auto move : moves) std::cout << to_string(move) << " ";
+    std::cout << "\n";
+}
+
+void checkMovesAndCaptures(std::string fen, size_t expectedMoves, size_t expectedCaptures) {
+    auto position = fen::parsePosition(fen);
+    auto legalMoves = allLegalMoves(position.turn, position.board);
+    auto legalCaptures = allLegalCaptures(position.turn, position.board);
+    if (legalMoves.size() != expectedMoves || legalCaptures.size() != expectedCaptures) {
+        std::cout << "Expected moves: " << expectedMoves << ", got: " << legalMoves.size() << "\n";
+        std::cout << "Expected captures: " << expectedCaptures << ", got: " << legalCaptures.size()
+                  << "\n";
+        showCapturesAndMoves(position);
+    }
+    assert(legalMoves.size() == expectedMoves);
+    assert(legalCaptures.size() == expectedCaptures);
+}
+
 void testAllLegalMovesAndCaptures() {
+    checkMovesAndCaptures("rnbqkbnr/pppppp1p/8/6p1/7P/8/PPPPPPP1/RNBQKBNR w KQkq - 0 2", 21, 1);
+    // Can't castle the king through check
+    checkMovesAndCaptures("rn1qkbnr/2pppppp/bp6/p7/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4", 23, 0);
+    // Can't castle the king that is in check
+    checkMovesAndCaptures("r1bqkbnr/pppppppp/8/1B6/4P3/8/PPnPNPPP/RNBQK2R w KQkq - 0 4", 1, 1);
     {
-        auto position =
-            fen::parsePosition("rnbqkbnr/pppppp1p/8/6p1/7P/8/PPPPPPP1/RNBQKBNR w KQkq - 0 2");
-        auto legalMoves = allLegalMovesAndCaptures(position.turn, position.board);
-        assert(legalMoves.size() == 22);
-    }
-    {
-        // Can't castle the king through check
-        auto position =
-            fen::parsePosition("rn1qkbnr/2pppppp/bp6/p7/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4");
-        auto legalMoves = allLegalMovesAndCaptures(position.turn, position.board);
-        assert(legalMoves.size() == 23);
-    }
-    {
-        // Can't castle a king that is in check
-        auto position =
-            fen::parsePosition("r1bqkbnr/pppppppp/8/1B6/4P3/8/PPnPNPPP/RNBQK2R w KQkq - 0 4");
-        auto legalMoves = allLegalMovesAndCaptures(position.turn, position.board);
-        assert(std::count_if(legalMoves.begin(), legalMoves.end(), [](auto item) {
-                   return item == Move{e1, g1, MoveKind::O_O};
-               }) == 0);
-        assert(legalMoves.size() == 2);
-    }
-    {
-        // The black king can castle queen side
-        auto position = fen::parsePosition(
-            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/1R2K2R b Kkq - 1 1");
+        // The black king can castle queen side, but not king side
+        auto fen = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/1R2K2R b Kkq - 1 1";
+        auto position = fen::parsePosition(fen);
         auto castles = fen::parseUCIMove(position.board, "e8c8");
         assert(castles.kind == MoveKind::O_O_O);
         auto legalMoves = allLegalMovesAndCaptures(position.turn, position.board);
@@ -866,6 +882,8 @@ void testAllLegalMovesAndCaptures() {
 
         // Black's castling rights are cancelled.
         assert(castled.turn.castling() == CastlingMask::K);
+
+        checkMovesAndCaptures(fen, 36, 7);
     }
 
     std::cout << "All allLegalMovesAndCaptures tests passed!" << std::endl;
@@ -906,73 +924,11 @@ void testAllLegalQuiescentMoves() {
     std::cout << "All allLegalQuiescentMoves tests passed!\n";
 }
 
-Piece flip(Piece piece) {
-    return piece == Piece::_ ? piece : addColor(type(piece), !color(piece));
-}
-Square flip(Square square) {
-    return makeSquare(file(square), kNumRanks - 1 - rank(square));
-}
-
-SquareSet flip(SquareSet squares) {
-    SquareSet result;
-    for (auto sq : SquareSet::all())
-        if (squares.contains(sq)) result.insert(flip(sq));
-    return result;
-}
-
-Board flip(Board board) {
-    Board result;
-    for (int i = 0; i < kNumSquares; i++) result[flip(Square(i))] = flip(board[Square(i)]);
-    return result;
-}
-Turn flip(Turn turn) {
-    turn.setActive(!turn.activeColor());
-    auto castling = turn.castling();
-    turn.setCastling(CastlingMask(
-        uint8_t(castling & CastlingMask::K) << 3 | uint8_t(castling & CastlingMask::Q) << 1 |
-        uint8_t(castling & CastlingMask::k) >> 1 | uint8_t(castling & CastlingMask::q) >> 3));
-    return turn;
-}
-Position flip(Position position) {
-    position.board = flip(position.board);
-    position.turn = flip(position.turn);
-    return position;
-}
-
-void testSWAR(Position position) {
-    std::cout << "FEN: " << fen::to_string(position) << "\n";
-    auto moves = allLegalMovesAndCaptures(position.turn, position.board);
-    // Remove all moves that are not pawn moves or captures
-    moves.erase(std::remove_if(moves.begin(),
-                               moves.end(),
-                               [board = position.board](Move move) {
-                                   return type(board[move.from]) != PieceType::PAWN &&
-                                       move.kind != MoveKind::Capture;
-                               }),
-                moves.end());
-    moves = sort(moves);
-    std::cout << "Pawn moves and captures: " << moves.size() << "\n";
-
-    for (auto move : moves) std::cout << to_string(move) << " ";
-    std::cout << "\n";
-
-    auto color = position.active();
-    auto occupancy = Occupancy(position.board, color);
-    auto ours = occupancy.ours().bits();
-    auto theirs = occupancy.theirs().bits();
-    std::cout << "Occupancy: {" << std::hex << std::setfill('0') << std::setw(16) << ours << ", "
-              << std::setw(16) << theirs << "}\n"
-              << std::dec;
-    auto pawns = SquareSet::find(position.board, addColor(PieceType::PAWN, color));
-    std::cout << "Our pawns:\n";
-    printSquareSet(std::cout, pawns);
-}
-
 int main(int argc, char* argv[]) {
     if (argc == 2) {
         std::string fen = argv[1];
         auto position = fen::parsePosition(fen);
-        testSWAR(position);
+        showCapturesAndMoves(position);
         return 0;
     }
     testSquare();
