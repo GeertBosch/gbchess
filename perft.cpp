@@ -55,9 +55,10 @@ void perftWithDivide(Position position, int depth, size_t expectedCount) {
     auto endTime = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
     auto rate = count / (duration.count() / 1000'000.0);  // evals per second
+    auto megarate = std::round(rate / 100'000.0) / 10.0;  // mega evals per second
 
-    std::cout << count << " nodes in " << duration.count() / 1000 << " ms @ " << rate / 1000.0
-              << "K nodes/sec" << std::endl;
+    std::cout << count << " nodes in " << duration.count() / 1000 << " ms @ " << megarate
+              << "M nodes/sec" << std::endl;
 
     if (expectedCount && count != expectedCount) {
         std::cerr << "Expected " << expectedCount << " nodes, got " << count << std::endl;
