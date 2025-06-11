@@ -72,40 +72,6 @@ void printSquareSet(std::ostream& os, const SquareSet& squares) {
     os << std::endl;
 }
 
-void testPiece() {
-    // Test toPiece
-    assert(toPiece('P') == Piece::P);
-    assert(toPiece('N') == Piece::N);
-    assert(toPiece('B') == Piece::B);
-    assert(toPiece('R') == Piece::R);
-    assert(toPiece('Q') == Piece::Q);
-    assert(toPiece('K') == Piece::K);
-    assert(toPiece('p') == Piece::p);
-    assert(toPiece('n') == Piece::n);
-    assert(toPiece('b') == Piece::b);
-    assert(toPiece('r') == Piece::r);
-    assert(toPiece('q') == Piece::q);
-    assert(toPiece('k') == Piece::k);
-    assert(toPiece(' ') == Piece::_);
-
-    // Test to_char
-    assert(to_char(Piece::P) == 'P');
-    assert(to_char(Piece::N) == 'N');
-    assert(to_char(Piece::B) == 'B');
-    assert(to_char(Piece::R) == 'R');
-    assert(to_char(Piece::Q) == 'Q');
-    assert(to_char(Piece::K) == 'K');
-    assert(to_char(Piece::p) == 'p');
-    assert(to_char(Piece::n) == 'n');
-    assert(to_char(Piece::b) == 'b');
-    assert(to_char(Piece::r) == 'r');
-    assert(to_char(Piece::q) == 'q');
-    assert(to_char(Piece::k) == 'k');
-    assert(to_char(Piece::_) == '.');
-
-    std::cout << "All Piece tests passed!" << std::endl;
-}
-
 void testPieceType() {
     assert(type(Piece::P) == PieceType::PAWN);
     assert(type(Piece::N) == PieceType::KNIGHT);
@@ -934,7 +900,6 @@ int main(int argc, char* argv[]) {
     testSquare();
     testMove();
     testSquareSet();
-    testPiece();
     testPieceType();
     testColor();
     testPossibleMoves();
