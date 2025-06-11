@@ -47,6 +47,12 @@ uint64_t randomMagic(uint64_t mask) {
     } while (pop_count((mask * magic) & 0xff00'0000'0000'0000ull) < 6);
     return magic;
 }
+/**
+ *   Computes the magic index for a given bitboard, magic number, and number of bits.
+ */
+inline size_t magicTableIndex(uint64_t blocked, uint64_t magic, int bits) {
+    return (blocked * magic) >> (64 - bits);
+}
 
 uint64_t checkMagic(uint64_t* targets, uint64_t* blockers, uint64_t magic, uint64_t mask) {
     attempts++;

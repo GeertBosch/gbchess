@@ -23,22 +23,25 @@ struct Magic {
     uint64_t magic;               // Magic number for the piece type
     uint64_t mask;                // Bitmask for the piece type
     std::vector<uint64_t> table;  // Precomputed target tables for the piece type
-    int bits;                     // Number of bits used for indexing into the table
+    int shift;                    // Number of bits used for indexing into the table
     Magic(uint8_t square, bool bishop, uint64_t magic)
-        : magic(magic), mask(computeSliderBlockers(square, bishop)), bits(pop_count(mask)) {
+        : magic(magic), mask(computeSliderBlockers(square, bishop)), shift(pop_count(~mask)) {
+        int bits = 64 - shift;
         table.resize(1ull << bits, 0ull);
         for (int i = 0; i < (1 << bits); i++) {
             auto targets = computeSliderTargets(square, bishop, parallelDeposit(i, mask));
-            if (auto& entry = table[magicTableIndex(parallelDeposit(i, mask), magic, bits)])
+            auto blockers = parallelDeposit(i, mask);
+            if (auto& entry = table[(blockers * magic) >> shift])
                 assert(entry == targets);
             else
                 entry = targets;
         }
     }
-    // Computes the attack bitboard for this square and piece type, given the board occupancy.
+
+    // Computes the target square for this square and piece type, given the board occupancy.
     uint64_t targets(uint64_t occupancy) const {
         uint64_t blockers = occupancy & mask;
-        size_t index = magicTableIndex(blockers, magic, bits);
+        size_t index = (blockers * magic) >> shift;
         return table[index];
     }
 };

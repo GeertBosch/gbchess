@@ -14,12 +14,6 @@ constexpr int pop_count(uint64_t b) {
  * The mask specifies where to deposit bits from the value.
  */
 uint64_t parallelDeposit(uint64_t value, uint64_t mask);
-/**
- *   Computes the magic index for a given bitboard, magic number, and number of bits.
- */
-inline size_t magicTableIndex(uint64_t blocked, uint64_t magic, int bits) {
-    return (blocked * magic) >> (64 - bits);
-}
 
 /**
  * Returns a set of pseudo-legal target squares for the given piece on the given square, assuming
