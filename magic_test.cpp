@@ -2,14 +2,30 @@
 #include <cstring>
 #include <iomanip>
 #include <iostream>
-#include <random>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "magic.h"
 
 namespace {
-std::mt19937_64 gen(0x3'14159'26535'89793ull);  // Arbitrary 64-bit seed
+/**
+ * The xorshift PRNG provides a balance between quality and performance, and is twice as fast
+ * as std::mt19937_64 in overall generation of magic tables. Poor quality would lead to longer
+ * search times, or in the worst case an unsuccessful search.
+ * See https://www.researchgate.net/publication/5142825_Xorshift_RNGs
+ */
+struct xorshift {
+    xorshift(uint64_t seed) : state(seed) {}
+    uint64_t operator()() {
+        auto result = state * 0xd989bcacc137dcd5ull;
+        state ^= state >> 11;
+        state ^= state << 31;
+        state ^= state >> 18;
+        return result;  // Multiplicative constant for better distribution
+    }
+    uint64_t state;
+};
+xorshift gen(0xc1f651c67c62c6e0ull);
 
 uint64_t attempts = 0;
 uint64_t magics = 0;
