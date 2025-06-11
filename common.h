@@ -109,7 +109,7 @@ static constexpr Range pieces(Piece::P, Piece::k);
 constexpr uint8_t index(Piece piece) {
     return static_cast<uint8_t>(piece);
 }
-static const std::string pieceChars = "PNBRQK.pnbrqk";
+static constexpr const char* pieceChars = "PNBRQK.pnbrqk";
 
 constexpr PieceType type(Piece piece) {
     return static_cast<PieceType>(index(piece) % (kNumPieceTypes + 1));
@@ -129,8 +129,10 @@ constexpr char to_char(Piece piece) {
 }
 
 constexpr Piece toPiece(char piece) {
-    auto pieceIndex = pieceChars.find(piece);
-    return pieceIndex == std::string::npos ? Piece::_ : static_cast<Piece>(pieceIndex);
+    for (int i = 0; i < kNumPieces; ++i)
+        if (pieceChars[i] == piece) return static_cast<Piece>(i);
+
+    return Piece::_;
 }
 
 enum class MoveKind : uint8_t {

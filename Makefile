@@ -4,9 +4,7 @@ EVALS=$(foreach phase,${PHASES},evals/lichess_${phase}_evals.csv)
 CCFLAGS=-std=c++17 -Werror -Wall -Wextra
 CLANGPP=clang++
 GPP=g++
-# DEBUGFLAGS=-fsanitize=address -DDEBUG -O0 -g --coverage
-DEBUGFLAGS=-DDEBUG -O0 -g -fsanitize=address
-# DEBUGFLAGS=-O2
+DEBUGFLAGS=-DDEBUG -O0 -g
 # -fprofile-instr-generate -fcoverage-mapping
 OPTOBJ=build/opt
 DBGOBJ=build/dbg
@@ -31,6 +29,7 @@ ifeq ($(_system_type),Darwin)
     arch=$(shell uname -m)
     CLANGPP:=/usr/bin/clang++
     CCFLAGS:=${CCFLAGS} -isysroot ${sdk} -mmacosx-version-min=11.0 -target darwin17.0.0 -arch ${arch} -stdlib=libc++
+ .  DEBUGFLAGS:=${DEBUGFLAGS} fsanitize=address
     LINKFLAGS:=${LINKFLAGS} -stdlib=libc++ -Wl,-syslibroot,${sdk} -mmacosx-version-min=11.0 -target darwin17.0.0 -arch ${arch}
 endif
 

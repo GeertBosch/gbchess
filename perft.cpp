@@ -1,4 +1,5 @@
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>  // For std::exit
 #include <iostream>

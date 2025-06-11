@@ -277,7 +277,7 @@ void testMove() {
 
     // Test conversion to std::string
     Move promotion = Move(a7, a8, MoveKind::Queen_Promotion);
-    assert(to_string(move) == "a2a4");
+    assert(to_string(promotion) == "a7a8q");
     assert(to_string(Move()) == "0000");
 
     std::cout << "All Move tests passed!" << std::endl;

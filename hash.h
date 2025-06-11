@@ -71,7 +71,7 @@ public:
         toggle(index(piece) * kNumSquares + location);
     }
     void toggle(int vector) { hash ^= hashVectors[vector]; }
-    void toggle(ExtraVectors extra) { toggle(kNumBoardVectors + int(extra)); }
+    void toggle(ExtraVectors extra) { toggle(int(extra)); }
     void toggle(CastlingMask mask) {
         for (int i = 0; i < 4; ++i)
             if ((mask & CastlingMask(1 << i)) != CastlingMask::_)

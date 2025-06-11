@@ -1,8 +1,12 @@
+#pragma once
+
+#include <functional>
+#include <string>
+
 #include "common.h"
 #include "eval.h"
 #include "pv.h"
 
-#pragma once
 
 namespace search {
 extern uint64_t evalCount;

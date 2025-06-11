@@ -1,10 +1,11 @@
-#include "common.h"
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <sstream>
 #include <sys/types.h>
 #include <vector>
 
+#include "common.h"
 #include "eval.h"
 #include "hash.h"
 #include "moves.h"
@@ -201,7 +202,7 @@ public:
         friend class Repetitions;
         Repetitions& repetitions;
         size_t count;
-        State(Repetitions& repetitions) : repetitions(repetitions), count(1) {};
+        State(Repetitions& repetitions) : repetitions(repetitions), count(1){};
 
     public:
         ~State() {

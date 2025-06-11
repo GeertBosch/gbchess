@@ -126,7 +126,7 @@ class Occupancy {
 
 public:
     constexpr Occupancy() = default;
-    constexpr Occupancy(const Board& board, Color activeColor)
+    Occupancy(const Board& board, Color activeColor)
         : Occupancy(SquareSet::occupancy(board, !activeColor),
                     SquareSet::occupancy(board, activeColor)) {}
 
@@ -171,7 +171,7 @@ struct CastlingInfo {
           kingSide(color == Color::w ? CastlingMove{FromTo{e1, g1}, FromTo{h1, f1}}
                                      : CastlingMove{FromTo{e8, g8}, FromTo{h8, f8}}),
           queenSide(color == Color::w ? CastlingMove{FromTo{e1, c1}, FromTo{a1, d1}}
-                                      : CastlingMove{FromTo{e8, c8}, FromTo{a8, d8}}) {};
+                                      : CastlingMove{FromTo{e8, c8}, FromTo{a8, d8}}){};
 };
 
 struct MoveError : public std::exception {

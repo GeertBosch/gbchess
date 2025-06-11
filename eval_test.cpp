@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <cmath>
 #include <cstdlib>  // For std::exit
 #include <fstream>
 #include <iostream>

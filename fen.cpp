@@ -160,8 +160,9 @@ Position parsePosition(const std::string& fen) {
 
 bool maybeFEN(std::string fen) {
     std::string startChars = "rnbqkpRNBQKP12345678";
-    return fen != "" && startChars.find(fen[0]) != std::string::npos &&
-        std::count(fen.begin(), fen.end(), '/') == 7;
+    int slashCount = 0;
+    for (char ch : fen) slashCount += ch == '/';
+    return fen != "" && startChars.find(fen[0]) != std::string::npos && slashCount == 7;
 }
 
 std::string to_string(const Board& board) {
