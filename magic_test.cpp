@@ -11,6 +11,9 @@
 namespace {
 std::mt19937_64 gen(0x3'14159'26535'89793ull);  // Arbitrary 64-bit seed
 
+uint64_t attempts = 0;
+uint64_t magics = 0;
+
 constexpr int kMaxMagicBits = 12;             // Maximum bits for magic numbers
 constexpr size_t kMaxMagicTries = 1'000'000;  // Maximum attempts to find a valid magic number
 constexpr uint64_t kMaxMagicTableSize = 1ull << kMaxMagicBits;
@@ -24,16 +27,17 @@ constexpr uint64_t kMaxMagicTableSize = 1ull << kMaxMagicBits;
 uint64_t randomMagic(uint64_t mask) {
     uint64_t magic;
     do {
-        magic = gen() & gen() & gen();
+        magic = gen() & gen() & gen();  // Evauation order does not affect the result
     } while (pop_count((mask * magic) & 0xff00'0000'0000'0000ull) < 6);
     return magic;
 }
 
 uint64_t checkMagic(uint64_t* targets, uint64_t* blockers, uint64_t magic, uint64_t mask) {
+    attempts++;
     uint64_t table[kMaxMagicTableSize];
-    memset(table, 0, sizeof(table));  // Initialize the table to zero
-    int bits = pop_count(mask);       // Theoretically, could do better sometimes.
+    int bits = pop_count(mask);  // Theoretically, could do better sometimes.
     int maskValues = 1 << bits;
+    memset(table, 0, sizeof(uint64_t) * maskValues);  // Initialize the table to zero
     for (int i = 0; i < maskValues; i++) {
         auto& entry = table[magicTableIndex(blockers[i], magic, bits)];
         if (!entry)
@@ -49,10 +53,11 @@ uint64_t checkMagic(uint64_t* targets, uint64_t* blockers, uint64_t magic, uint6
  *   by testing random candidates until one is found that produces unique attack mappings.
  */
 uint64_t findMagic(int square, bool bishop) {
+    ++magics;
     uint64_t mask = computeSliderBlockers(square, bishop);
 
     uint64_t blockers[kMaxMagicTableSize];
-    for (int i = 0; i < (1 << pop_count(mask)); i++) blockers[i] = indexToBlockers(i, mask);
+    for (int i = 0; i < (1 << pop_count(mask)); i++) blockers[i] = parallelDeposit(i, mask);
 
     uint64_t targets[kMaxMagicTableSize];
     for (int i = 0; i < (1 << pop_count(mask)); i++)
@@ -86,6 +91,8 @@ int main() {
                   << findMagic(square, 1) << "ull,\n";
     }
     std::cout << "};\n\n";
+    std::cerr << "Generated " << attempts << " attempts to find " << magics << " magic numbers.\n";
+    std::cerr << "Magic numbers generated successfully.\n";
 
     return 0;
 }

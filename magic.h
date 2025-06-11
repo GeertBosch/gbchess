@@ -1,10 +1,6 @@
-#include "common.h"
+#pragma once
 
-/**
- * Returns a bitboard of pseudo-legal target squares for the given piece on the given square,
- * assuming the provided occupancy.
- */
-uint64_t targets(uint8_t square, bool bishop, uint64_t occupancy);
+#include "common.h"
 
 /**
  *   Counts the number of set bits (population count) in a 64-bit integer.
@@ -14,25 +10,22 @@ constexpr int pop_count(uint64_t b) {
 }
 
 /**
- *   Converts an index to a set of blockers by mapping the bits of the index to the positions of set
- *   bits in the mask m.
+ * Parallel deposit function that deposits bits from `value` into `result` according to the `mask`.
+ * The mask specifies where to deposit bits from the value.
  */
-inline uint64_t indexToBlockers(int index, uint64_t mask) {
-    uint64_t result = 0ull;
-    int bits = pop_count(mask);
-    for (int i = 0; i < bits; i++) {
-        auto bit = mask & -mask;  // Isolate the least significant set bit in mask
-        mask -= bit;              // Remove it from mask
-        if (index & (1 << i)) result |= bit;
-    }
-    return result;
-}
+uint64_t parallelDeposit(uint64_t value, uint64_t mask);
 /**
  *   Computes the magic index for a given bitboard, magic number, and number of bits.
  */
 inline size_t magicTableIndex(uint64_t blocked, uint64_t magic, int bits) {
     return (blocked * magic) >> (64 - bits);
 }
+
+/**
+ * Returns a set of pseudo-legal target squares for the given piece on the given square, assuming
+ * the provided occupancy.
+ */
+uint64_t targets(uint8_t square, bool bishop, uint64_t occupancy);
 
 /**
  * Returns the set of squares where an enemy piece can restrict the movement of the sliding piece.
@@ -42,27 +35,3 @@ inline size_t magicTableIndex(uint64_t blocked, uint64_t magic, int bits) {
 uint64_t computeSliderBlockers(uint8_t square, bool bishop);
 
 uint64_t computeSliderTargets(uint8_t square, bool bishop, uint64_t blockers);
-
-struct Magic {
-    uint64_t magic;               // Magic number for the piece type
-    uint64_t mask;                // Bitmask for the piece type
-    std::vector<uint64_t> table;  // Precomputed attack tables for the piece type
-    int bits;                     // Number of bits used for indexing into the table
-    Magic(uint8_t square, bool bishop, uint64_t magic)
-        : magic(magic), mask(computeSliderBlockers(square, bishop)), bits(pop_count(mask)) {
-        table.resize(1ull << bits, 0ull);
-        for (int i = 0; i < (1 << bits); i++) {
-            auto targets = computeSliderTargets(square, bishop, indexToBlockers(i, mask));
-            if (auto& entry = table[magicTableIndex(indexToBlockers(i, mask), magic, bits)])
-                assert(entry == targets);
-            else
-                entry = targets;
-        }
-    }
-    // Computes the attack bitboard for this square and piece type, given the board occupancy.
-    uint64_t targets(uint64_t occupancy) const {
-        uint64_t blockers = occupancy & mask;
-        size_t index = magicTableIndex(blockers, magic, bits);
-        return table[index];
-    }
-};
