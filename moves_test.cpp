@@ -36,7 +36,7 @@ bool less(Move left, Move right) {
 }
 
 MoveVector sort(MoveVector moves) {
-    std::sort(moves.begin(), moves.end(), less);
+    std::stable_sort(moves.begin(), moves.end(), less);
     return moves;
 }
 

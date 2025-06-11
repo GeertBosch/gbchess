@@ -334,7 +334,7 @@ bool less(const Board& board, Move a, Move b) {
  * non-captures, and captures are sorted by victim value, attacker value, and move kind.
  */
 MoveIt sortCaptures(const Position& position, MoveIt begin, MoveIt end) {
-    std::sort(begin, end, [&board = position.board](Move a, Move b) { return less(board, a, b); });
+    std::stable_sort(begin, end, [&board = position.board](Move a, Move b) { return less(board, a, b); });
 
     return begin;
 }
