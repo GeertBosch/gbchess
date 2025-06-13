@@ -1,11 +1,11 @@
+#pragma once
+
 #include <array>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
-
-#pragma once
 
 #ifdef DEBUG
 constexpr bool debug = 1;

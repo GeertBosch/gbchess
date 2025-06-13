@@ -1,7 +1,7 @@
+#pragma once
+
 #include <array>
 #include <cstddef>
-
-#pragma once
 
 namespace options {
 

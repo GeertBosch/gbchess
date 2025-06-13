@@ -1,10 +1,10 @@
+#pragma once
+
 #include <limits>
 #include <map>
 #include <string>
 
 #include "common.h"
-
-#pragma once
 
 /**
  *  The Score type is used to represent the evaluation of a chess position. It is a signed integer,

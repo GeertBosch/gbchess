@@ -1,7 +1,7 @@
+#pragma once
+
 #include "common.h"
 #include "eval.h"
-
-#pragma once
 
 /**
  * Structure to store the principle variation of a chess game. This structure is used to store

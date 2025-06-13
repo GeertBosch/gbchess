@@ -1,7 +1,6 @@
+#pragma once
 #include <algorithm>
 #include <cmath>
-
-#pragma once
 
 class ELO {
     int rating = kInitialRating;
