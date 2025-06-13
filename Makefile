@@ -100,7 +100,7 @@ search-debug: $(call calc_objs,DBG,${SEARCH_SRCS})
 uci-test: $(call calc_objs,OPT,uci.cpp ${SEARCH_SRCS})
 uci-debug: $(call calc_objs,DBG,uci.cpp ${SEARCH_SRCS})
 
-PERFT_SRCS=perft.cpp ${MOVES_SRCS} fen.cpp
+PERFT_SRCS=perft.cpp ${MOVES_SRCS} fen.cpp hash.cpp
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
 perft: $(call calc_objs,OPT,${PERFT_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
@@ -108,13 +108,13 @@ perft-debug: $(call calc_objs,DBG,${PERFT_SRCS})
 	${GPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
 # Compare the perft tool with some different compilation options for speed comparison
-perft-clang-sse2: perft.cpp ${MOVES_SRCS} fen.cpp *.h
+perft-clang-sse2: ${PERFT_SRCS} *.h 
 	${CLANGPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
-perft-clang-emul: perft.cpp  ${MOVES_SRCS} fen.cpp *.h
+perft-clang-emul:  ${PERFT_SRCS} *.h
 	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
-perft-gcc-sse2: perft.cpp  ${MOVES_SRCS} fen.cpp *.h
+perft-gcc-sse2:  ${PERFT_SRCS} *.h
 	${GPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
-perft-gcc-emul: perft.cpp  ${MOVES_SRCS} fen.cpp *.h
+perft-gcc-emul:  ${PERFT_SRCS} *.h
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
 
 perft-emul: perft-clang-emul perft-gcc-emul .PHONY

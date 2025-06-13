@@ -6,22 +6,37 @@
 #include <string>
 
 #include "fen.h"
+#include "hash.h"
 #include "moves.h"
 
 bool quiet = false;
+
+constexpr bool hashPerft = false;
+HashTable<size_t, 1 << (hashPerft ? 21 : 0)> hashTable;
+uint64_t cached = 0;
+
+std::string pct(uint64_t some, uint64_t all) {
+    return all ? " " + std::to_string((some * 100) / all) + "%" : "";
+}
 
 /**
  *  a debugging function to walk the move generation tree of strictly legal moves to count all the
  *  leaf nodes of a certain depth, which can be compared to predetermined values and used to isolate
  *  bugs. (See https://www.chessprogramming.org/Perft)
  */
-uint64_t perft(Board& board, SearchState& state, int depth) {
+uint64_t perft(Board& board, Hash hash, SearchState& state, int depth) {
     if (--depth <= 0) return depth ? 1 : countLegalMovesAndCaptures(board, state);
+
+    dassert(hash == Hash(Position{board, state.turn}));
+
+    if (auto entry = hashTable.lookup(hash)) return cached += entry->value, entry->value;
 
     uint64_t nodes = 0;
     auto newState = state;
     forAllLegalMovesAndCaptures(board, state, [&](Board& board, MoveWithPieces mwp) {
         auto delta = occupancyDelta(mwp.move);
+        auto newHash = hash;
+        if (hashPerft) newHash.applyMove(state.turn, mwp);
         newState.occupancy = !(state.occupancy ^ delta);
         newState.pawns = SquareSet::find(board, addColor(PieceType::PAWN, !state.active()));
         newState.turn = applyMove(state.turn, mwp);
@@ -29,8 +44,9 @@ uint64_t perft(Board& board, SearchState& state, int depth) {
             *SquareSet::find(board, addColor(PieceType::KING, !state.active())).begin();
         newState.inCheck = isAttacked(board, newState.kingSquare, newState.occupancy);
         newState.pinned = pinnedPieces(board, newState.occupancy, newState.kingSquare);
-        nodes += perft(board, newState, depth);
+        nodes += perft(board, newHash, newState, depth);
     });
+    if (hashPerft && nodes > 100) hashTable.enter(hash, nodes);
     return nodes;
 }
 
@@ -47,7 +63,7 @@ void perftWithDivide(Position position, int depth, size_t expectedCount) {
     for (auto move : allLegalMovesAndCaptures(position.turn, position.board)) {
         auto newPosition = applyMove(position, move);
         auto newState = SearchState(newPosition.board, newPosition.turn);
-        auto newCount = perft(newPosition.board, newState, depth - 1);
+        auto newCount = perft(newPosition.board, Hash(newPosition), newState, depth - 1);
         if (!quiet) std::cout << to_string(move) << ": " << newCount << "\n";
         divisions.push_back({move, newCount});
         count += newCount;
@@ -58,8 +74,9 @@ void perftWithDivide(Position position, int depth, size_t expectedCount) {
     auto rate = count / (duration.count() / 1000'000.0);  // evals per second
     auto megarate = std::round(rate / 100'000.0) / 10.0;  // mega evals per second
 
-    std::cout << count << " nodes in " << duration.count() / 1000 << " ms @ " << megarate
-              << "M nodes/sec" << std::endl;
+    std::cout << count << " nodes ";
+    if (hashPerft) std::cout << cached << " cached" << pct(cached, count) << " ";
+    std::cout << "in " << duration.count() / 1000 << " ms @ " << megarate << "M nodes/sec\n";
 
     if (expectedCount && count != expectedCount) {
         std::cerr << "Expected " << expectedCount << " nodes, got " << count << std::endl;

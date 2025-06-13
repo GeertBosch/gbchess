@@ -274,6 +274,12 @@ struct FromTo {
     Square to;
 };
 
+struct MoveWithPieces {
+    Move move;
+    Piece piece;
+    Piece captured;
+};
+
 /**
  * Succinct representation of data needed to make or unmake a move. It is sufficient to recreate a
  * Board from before the move, starting from a board after the move was made and the other way

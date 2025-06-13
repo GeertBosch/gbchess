@@ -1,5 +1,7 @@
 #include <iomanip>
 #include <iostream>
+#include <ostream>
+#include <sstream>
 
 #include "common.h"
 #include "fen.h"
@@ -7,6 +9,19 @@
 #include "moves.h"
 
 namespace {
+std::string toHex(HashValue value) {
+    using Limb = uint32_t;
+    constexpr size_t limbCount = sizeof(HashValue) / sizeof(Limb);
+    std::array<Limb, limbCount> limbs;
+    for (auto it = limbs.rbegin(); it != limbs.rend(); ++it, value >>= sizeof(Limb))
+        *it = static_cast<Limb>(value);
+
+    std::ostringstream oss;
+    for (auto limb : limbs)
+        oss << std::hex << std::setw(sizeof(Limb) * 2) << std::setfill('0') << limb;
+    return oss.str();
+}
+
 using changes = std::vector<int>;
 std::string hashVectorName(int i) {
     switch (i) {
@@ -46,16 +61,16 @@ void reportChanges(const changes& changed) {
     }
     std::cout << "\n";
 }
-void findOneChange(uint64_t diff) {
+void findOneChange(HashValue diff) {
     for (int i = 0; i < kNumHashVectors; ++i)
         if (diff == hashVectors[i]) reportChanges({i});
 }
-void findTwoChanges(uint64_t diff) {
+void findTwoChanges(HashValue diff) {
     for (int i = 0; i < kNumHashVectors; ++i)
         for (int j = i + 1; j < kNumHashVectors; ++j)
             if (diff == (hashVectors[i] ^ hashVectors[j])) reportChanges({i, j});
 }
-void findThreeChanges(uint64_t diff) {
+void findThreeChanges(HashValue diff) {
     for (int i = 0; i < kNumHashVectors; ++i)
         for (int j = i + 1; j < kNumHashVectors; ++j)
             for (int k = j + 1; k < kNumHashVectors; ++k)
@@ -67,11 +82,9 @@ bool checkSameHash(Hash hash1, Hash hash2) {
     if (auto diff = hash1() ^ hash2()) {
         // Print both hashes and their difference using 16 hex digits each.
         std::cout << "Hash mismatch:\n";
-        std::cout << std::hex;
-        std::cout << "Hash 1: " << std::setw(16) << std::setfill('0') << hash1() << "\n";
-        std::cout << "Hash 2: " << std::setw(16) << std::setfill('0') << hash2() << "\n";
-        std::cout << "Diff:   " << std::setw(16) << std::setfill('0') << diff << "\n";
-        std::cout << std::dec;
+        std::cout << "Hash 1: " << toHex(hash1()) << "\n";
+        std::cout << "Hash 2: " << toHex(hash2()) << "\n";
+        std::cout << "Diff:   " << toHex(diff) << "\n";
 
         findOneChange(diff);
         findTwoChanges(diff);

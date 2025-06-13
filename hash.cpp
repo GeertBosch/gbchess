@@ -5,14 +5,17 @@
 #include "hash.h"
 #include "moves.h"
 
-std::array<uint64_t, kNumHashVectors> hashVectors = []() {
-    std::array<uint64_t, kNumHashVectors> vectors;
+std::array<HashValue, kNumHashVectors> hashVectors = []() {
+    std::array<HashValue, kNumHashVectors> vectors;
     std::mt19937_64 gen(0xbad5eed5bad5eed5ULL);  // 64-bit seed
     for (auto& v : vectors) v = gen();
+
+    if constexpr (sizeof(HashValue) > 64)
+        for (auto& v : vectors) v = (v << 64) + gen();
     return vectors;
 }();
 
-Hash::Hash(Position position) {
+Hash::Hash(const Position& position) {
     for (auto square : SquareSet::occupancy(position.board)) toggle(position.board[square], square);
     if (position.active() == Color::b) toggle(BLACK_TO_MOVE);
     if (position.turn.castling() != CastlingMask::_) toggle(position.turn.castling());
@@ -25,20 +28,26 @@ static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::w), Castlin
 }  // namespace
 
 void Hash::applyMove(const Position& position, Move mv) {
-    const Board& board = position.board;
-    auto piece = board[mv.from];
-    auto target = board[mv.to];
+    auto piece = position.board[mv.from];
+    auto target =
+        position.board[mv.kind == MoveKind::En_Passant ? makeSquare(file(mv.to), rank(mv.from))
+                                                       : mv.to];
+    applyMove(position.turn, {mv, piece, target});
+}
+
+void Hash::applyMove(Turn turn, MoveWithPieces mwp) {
+    auto [mv, piece, target] = mwp;
 
     // Always assume we move a piece and switch the player to move.
     move(piece, mv.from, mv.to);
     toggle(BLACK_TO_MOVE);
 
     // Cancel en passant target if it was set.
-    if (position.turn.enPassant() != noEnPassantTarget)
-        toggle(ExtraVectors(file(position.turn.enPassant()) + EN_PASSANT_A));
+    if (turn.enPassant() != noEnPassantTarget)
+        toggle(ExtraVectors(file(turn.enPassant()) + EN_PASSANT_A));
 
     // Cancel any castling rights according to the move squares.
-    toggle(position.turn.castling() & castlingMask(mv.from, mv.to));
+    toggle(turn.castling() & castlingMask(mv.from, mv.to));
 
     switch (mv.kind) {
     case MoveKind::Quiet_Move: break;
@@ -60,7 +69,6 @@ void Hash::applyMove(const Position& position, Move mv) {
         // destination square.
         {
             auto targetSquare = makeSquare(file(mv.to), rank(mv.from));
-            target = board[targetSquare];
             toggle(target, targetSquare);
         }
         break;
