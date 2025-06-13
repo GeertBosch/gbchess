@@ -2,7 +2,7 @@
  *  Implement our own SSE2 functions for non-x86 systems
  *
  *  The compiler should compile most to native SIMD instructions, where available.
- *  Results on my Apple Silicon M1 exceed current on my x86 using native SSE2.
+ *  Results on my Apple Silicon M1 exceed those on my x86 using native SSE2.
  */
 
 #pragma once

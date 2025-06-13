@@ -1,5 +1,7 @@
 #include <iomanip>
 #include <iostream>
+#include <ostream>
+#include <sstream>
 
 #include "common.h"
 #include "fen.h"
@@ -7,6 +9,19 @@
 #include "moves.h"
 
 namespace {
+std::string toHex(HashValue value) {
+    using Limb = uint32_t;
+    constexpr size_t limbCount = sizeof(HashValue) / sizeof(Limb);
+    std::array<Limb, limbCount> limbs;
+    for (auto it = limbs.rbegin(); it != limbs.rend(); ++it, value >>= 8 * sizeof(Limb))
+        *it = static_cast<Limb>(value);
+
+    std::ostringstream oss;
+    for (auto limb : limbs)
+        oss << std::hex << std::setw(sizeof(Limb) * 2) << std::setfill('0') << limb;
+    return oss.str();
+}
+
 using changes = std::vector<int>;
 std::string hashVectorName(int i) {
     switch (i) {
@@ -46,16 +61,16 @@ void reportChanges(const changes& changed) {
     }
     std::cout << "\n";
 }
-void findOneChange(uint64_t diff) {
+void findOneChange(HashValue diff) {
     for (int i = 0; i < kNumHashVectors; ++i)
         if (diff == hashVectors[i]) reportChanges({i});
 }
-void findTwoChanges(uint64_t diff) {
+void findTwoChanges(HashValue diff) {
     for (int i = 0; i < kNumHashVectors; ++i)
         for (int j = i + 1; j < kNumHashVectors; ++j)
             if (diff == (hashVectors[i] ^ hashVectors[j])) reportChanges({i, j});
 }
-void findThreeChanges(uint64_t diff) {
+void findThreeChanges(HashValue diff) {
     for (int i = 0; i < kNumHashVectors; ++i)
         for (int j = i + 1; j < kNumHashVectors; ++j)
             for (int k = j + 1; k < kNumHashVectors; ++k)
@@ -67,11 +82,9 @@ bool checkSameHash(Hash hash1, Hash hash2) {
     if (auto diff = hash1() ^ hash2()) {
         // Print both hashes and their difference using 16 hex digits each.
         std::cout << "Hash mismatch:\n";
-        std::cout << std::hex;
-        std::cout << "Hash 1: " << std::setw(16) << std::setfill('0') << hash1() << "\n";
-        std::cout << "Hash 2: " << std::setw(16) << std::setfill('0') << hash2() << "\n";
-        std::cout << "Diff:   " << std::setw(16) << std::setfill('0') << diff << "\n";
-        std::cout << std::dec;
+        std::cout << "Hash 1: " << toHex(hash1()) << "\n";
+        std::cout << "Hash 2: " << toHex(hash2()) << "\n";
+        std::cout << "Diff:   " << toHex(diff) << "\n";
 
         findOneChange(diff);
         findTwoChanges(diff);
@@ -165,6 +178,17 @@ void testHashApplyMove() {
     checkApplyMove("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1", "e1c1");
 }
 
+void testSameHash() {
+    // Move count doesn't change hashes
+    std::string fen1 = "rnbqkbnr/pppppppp/8/8/8/P7/1PPPPPPP/RNBQKBNR b KQkq - 0 1";
+    std::string fen2 = "rnbqkbnr/pppppppp/8/8/8/P7/1PPPPPPP/RNBQKBNR b KQkq - 4 3";
+    Position pos1 = fen::parsePosition(fen1);
+    Position pos2 = fen::parsePosition(fen2);
+    auto hash1 = Hash(pos1);
+    auto hash2 = Hash(pos2);
+    assert(hash1() == hash2());
+}
+
 void testPromotionKind() {
     Square from = a7;
     Square to = a8;
@@ -172,12 +196,24 @@ void testPromotionKind() {
     assert(isPromotion(move.kind));
     assert(promotionType(move.kind) == PieceType::QUEEN);
 }
+void printHashedArgument(int argc, char** argv) {
+    std::string fen = argv[1];
+    auto position = fen::parsePosition(fen);
+    for (int i = 1; i < argc; ++i) {
+        if (i > 1) position = applyUCIMove(position, argv[i]);
+        auto hash = Hash(position);
+        std::cout << toHex(hash()) << " " << fen::to_string(position) << "\n";
+    }
+    std::cout << "\n";
+}
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc >= 2) printHashedArgument(argc, argv);
     testPromotionKind();
     testTrivialHash();
     testBasicHash();
+    testSameHash();
     testToggleCastlingRights();
     testEnPassant();
     testHashApplyMove();

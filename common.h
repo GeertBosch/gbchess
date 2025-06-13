@@ -279,6 +279,12 @@ struct FromTo {
     Square to : 8;
 };
 
+struct MoveWithPieces {
+    Move move;
+    Piece piece;
+    Piece captured;
+};
+
 /**
  * Succinct representation of data needed to make or unmake a move. It is sufficient to recreate a
  * Board from before the move, starting from a board after the move was made and the other way
@@ -363,6 +369,11 @@ public:
         active = !active;
         fullmoveNumber += active == Color::w;
     }
+    bool operator==(const Turn& other) const {
+        return enPassantTarget == other.enPassantTarget && halfmoveClock == other.halfmoveClock &&
+            castlingAvailability == other.castlingAvailability &&
+            fullmoveNumber == other.fullmoveNumber && active == other.active;
+    }
 };
 static_assert(sizeof(Turn) == 4);
 
@@ -370,4 +381,7 @@ struct alignas(8) Position {
     Board board;
     Turn turn = {Color::w};
     Color active() const { return turn.activeColor(); }
+    bool operator==(const Position& other) const {
+        return board == other.board && turn == other.turn;
+    }
 };

@@ -143,12 +143,6 @@ MoveVector allLegalMovesAndCaptures(Turn turn, Board& board);
  */
 bool mayHavePromoMove(Color side, Board& board, Occupancy occupancy);
 
-struct MoveWithPieces {
-    Move move;
-    Piece piece;
-    Piece captured;
-};
-
 using MoveFun = std::function<void(Board&, MoveWithPieces)>;
 void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun action);
 void forAllLegalMovesAndCaptures(Board& board, SearchState& state, MoveFun action);

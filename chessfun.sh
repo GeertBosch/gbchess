@@ -218,6 +218,23 @@ eval
 " | stockfish | grep "^NNUE eval"
 }
 
+# Use perft divisions to check against perft at lower depth
+echo "checkperft <fen> <depth>"
+checkperft() {
+    ./perft "$1" $2 | 
+    grep -iv nodes | tr ':' ' ' | 
+    while read move count ; do
+        echo "./perft -q \"$1\" $move $(($2 - 1)) $count" >&2
+        ./perft -q "$1" $move $(($2 - 1)) $count
+    done | 
+    awk '
+        /^applied move/ { move = $3 }
+        /^Nodes searched:/ { print move ": " $3; total += $3 }
+        NF == 2 { print }
+        END { print "Nodes searched: " total }
+    '
+}
+
 
 # Compare a perft run on a  base FEN position followed by some moves at the given depth
 perftdiff() {

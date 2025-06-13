@@ -13,7 +13,7 @@ DBGOBJ=build/dbg
 calc_objs=$(patsubst %.cpp,${$(1)OBJ}/%.o,$(2))
 calc_deps=${calc_objs:.o=.d}
 
-all: debug test build perft-bench perft-test mate123 mate45 puzzles evals
+all: debug test build perft-bench perft-test perft-debug-test mate123 mate45 puzzles evals
 	@echo "\n*** All tests passed! ***\n"
 
 -include $(call calc_deps,OPT,$(wildcard *.cpp))
@@ -29,8 +29,8 @@ ifeq ($(_system_type),Darwin)
     arch=$(shell uname -m)
     CLANGPP:=/usr/bin/clang++
     CCFLAGS:=${CCFLAGS} -isysroot ${sdk} -mmacosx-version-min=11.0 -target darwin17.0.0 -arch ${arch} -stdlib=libc++
- .  DEBUGFLAGS:=${DEBUGFLAGS} fsanitize=address
-    LINKFLAGS:=${LINKFLAGS} -stdlib=libc++ -Wl,-syslibroot,${sdk} -mmacosx-version-min=11.0 -target darwin17.0.0 -arch ${arch}
+    DEBUGFLAGS:=${DEBUGFLAGS} -fsanitize=address
+    LINKFLAGS:=${LINKFLAGS} -Wl,-syslibroot,${sdk},-dead_strip_dylibs -mmacosx-version-min=11.0 -target darwin17.0.0 -arch ${arch}
 endif
 
 ${OPTOBJ}/%.d: %.cpp
@@ -100,7 +100,7 @@ search-debug: $(call calc_objs,DBG,${SEARCH_SRCS})
 uci-test: $(call calc_objs,OPT,uci.cpp ${SEARCH_SRCS})
 uci-debug: $(call calc_objs,DBG,uci.cpp ${SEARCH_SRCS})
 
-PERFT_SRCS=perft.cpp ${MOVES_SRCS} fen.cpp
+PERFT_SRCS=perft.cpp ${MOVES_SRCS} fen.cpp hash.cpp
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
 perft: $(call calc_objs,OPT,${PERFT_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
@@ -108,13 +108,13 @@ perft-debug: $(call calc_objs,DBG,${PERFT_SRCS})
 	${GPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
 # Compare the perft tool with some different compilation options for speed comparison
-perft-clang-sse2: perft.cpp ${MOVES_SRCS} fen.cpp *.h
+perft-clang-sse2: ${PERFT_SRCS} *.h 
 	${CLANGPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
-perft-clang-emul: perft.cpp  ${MOVES_SRCS} fen.cpp *.h
+perft-clang-emul:  ${PERFT_SRCS} *.h
 	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
-perft-gcc-sse2: perft.cpp  ${MOVES_SRCS} fen.cpp *.h
+perft-gcc-sse2:  ${PERFT_SRCS} *.h
 	${GPP} -O3 ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
-perft-gcc-emul: perft.cpp  ${MOVES_SRCS} fen.cpp *.h
+perft-gcc-emul:  ${PERFT_SRCS} *.h
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
 
 perft-emul: perft-clang-emul perft-gcc-emul .PHONY
@@ -158,18 +158,13 @@ position4m="r2q1rk1/pP1p2pp/Q4n2/bbp1p3/Np6/1B3NBn/pPPP1PPP/R3K2R b KQ - 0 1"
 position5="rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8"
 position6="r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10"
 
-# Verify well-known perft results. Great for checking correct move generation.
-perft-test: perft perft-debug
-	./perft-debug 3
+perft-debug-test: perft-debug
 	./perft-debug 4 197281
+
+# Verify well-known perft results. Great for checking correct move generation.
+perft-test: perft
 	./perft -q 5 4865609
-	./perft -q "rnbqkbnr/1ppppppp/B7/p7/4P3/8/PPPP1PPP/RNBQK1NR b KQkq - 1 2" 4 509448
-	./perft -q ${kiwipete} 4 4085603
-	./perft -q ${position3} 5 674624
-	./perft -q ${position4} 4 422333
-	./perft -q ${position4m} 4 422333
-	./perft -q ${position5} 4 2103487
-	./perft -q ${position6} 4 3894594
+	./perft
 
 ${PUZZLES}:
 	mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) && wget https://database.lichess.org/$(notdir ${PUZZLES}).zst

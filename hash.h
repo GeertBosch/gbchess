@@ -2,32 +2,34 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <type_traits>
+#include <vector>
 
 #include "common.h"
+#include "options.h"
 
 // Implement a hashing method for chess positions using Zobrist hashing
 // https://en.wikipedia.org/wiki/Zobrist_hashing This relies just on the number of locations
-// ("squares") and number of pieces, where we assume piece 0 to be "no piece". The hash allows for
-// efficient incremental updating of the hash value when a move is made.
+// ("squares") and number of pieces. The hash allows for efficient incremental updating of the hash
+// value when a move is made.
 
 // 1 for black to move, 1 for each castling right, 8 for en passant file
 static constexpr int kNumExtraVectors = 24;
 static constexpr int kNumBoardVectors = kNumPieces * kNumSquares;
 static constexpr int kNumHashVectors = kNumBoardVectors + kNumExtraVectors;
 
-// A random 64-bit integer for each piece on each square, as well as the extra vectors. The first
-// piece is None, but it is not omitted here, as it allows removing a hard-to-predict branch in the
-// hash function.
-extern std::array<uint64_t, kNumHashVectors> hashVectors;
+using HashValue = std::conditional_t<options::hash128, __uint128_t, uint64_t>;
+
+// A random 64- or 128-bit integer for each piece on each square, as well as the extra vectors.
+extern std::array<HashValue, kNumHashVectors> hashVectors;
 
 constexpr PieceType promotionType(MoveKind kind) {
     return PieceType((index(kind) & 3) + 1);
 }
 
-// A Hash is a 64-bit integer that represents a position. It is the XOR of the hash vectors for
-// each piece on each square, as well as the applicable extra vectors.
+// A Hash is a 64- or 128-bit integer that represents a position. It is the XOR of the hash vectors
+// for each piece on each square, as well as the applicable extra vectors.
 class Hash {
-    uint64_t hash = 0;
 
 public:
     enum ExtraVectors {
@@ -49,7 +51,7 @@ public:
     Hash() = default;
     Hash(const Position& position);
 
-    size_t operator()() const { return hash; }
+    HashValue operator()() const { return hash; }
     bool operator==(const Hash& other) const { return hash == other.hash; }
 
     void move(Piece piece, int from, int to) {
@@ -78,11 +80,21 @@ public:
             if ((mask & CastlingMask(1 << i)) != CastlingMask::_)
                 toggle(ExtraVectors(CASTLING_0 + i));
     }
+
+private:
+    HashValue hash = 0;
 };
+
+// Updates the given hash at the given turn, based on the passed move.
+Hash applyMove(Hash hash, Turn turn, MoveWithPieces mwp);
 
 namespace std {
 template <>
 struct hash<Hash> {
-    std::size_t operator()(const Hash& h) const { return std::hash<uint64_t>()(h()); }
+    std::size_t operator()(const Hash& h) const { return static_cast<std::size_t>(h()); }
+};
+template <>
+struct hash<Position> {
+    std::size_t operator()(const Position& p) const { return static_cast<std::size_t>(Hash(p)()); }
 };
 }  // namespace std
