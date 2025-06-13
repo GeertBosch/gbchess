@@ -2,8 +2,6 @@
 #include <string>
 
 #include "eval_tables.h"
-#include "fen.h"
-#include "hash.h"
 #include "moves.h"
 
 #include "eval.h"
@@ -141,7 +139,7 @@ EvalTable::EvalTable(const Board& board, bool usePieceSquareTables) {
 
 Score evaluateBoard(const Board& board, const EvalTable& table) {
     Score value = 0_cp;
-    for (auto sq : SquareSet::occupancy(board)) value += table[board[sq]][sq];
+    for (auto sq : occupancy(board)) value += table[board[sq]][sq];
 
     return value;
 }
@@ -152,7 +150,7 @@ Score evaluateBoard(const Board& board, bool usePieceSquareTables) {
 }
 
 bool isInCheck(const Position& position) {
-    auto kingPos = SquareSet::find(position.board, addColor(PieceType::KING, position.active()));
+    auto kingPos = find(position.board, addColor(PieceType::KING, position.active()));
     return isAttacked(position.board, kingPos, Occupancy(position.board, position.active()));
 }
 

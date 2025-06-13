@@ -1,19 +1,19 @@
 #include <array>
-#include <random>
 
 #include "common.h"
 #include "hash.h"
 #include "moves.h"
+#include "random.h"
 
 std::array<uint64_t, kNumHashVectors> hashVectors = []() {
     std::array<uint64_t, kNumHashVectors> vectors;
-    std::mt19937_64 gen(0xbad5eed5bad5eed5ULL);  // 64-bit seed
+    xorshift gen;
     for (auto& v : vectors) v = gen();
     return vectors;
 }();
 
-Hash::Hash(Position position) {
-    for (auto square : SquareSet::occupancy(position.board)) toggle(position.board[square], square);
+Hash::Hash(const Position& position) {
+    for (auto square : occupancy(position.board)) toggle(position.board[square], square);
     if (position.active() == Color::b) toggle(BLACK_TO_MOVE);
     if (position.turn.castling() != CastlingMask::_) toggle(position.turn.castling());
     if (position.turn.enPassant())

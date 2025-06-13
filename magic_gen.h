@@ -136,4 +136,3 @@ constexpr uint64_t bishopMagic[64] = {
   0x0048400308010110ull,
   0x0004502081110200ull,
 };
-

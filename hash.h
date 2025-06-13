@@ -47,7 +47,7 @@ public:
     };
 
     Hash() = default;
-    Hash(Position position);
+    Hash(const Position& position);
 
     size_t operator()() const { return hash; }
     bool operator==(const Hash& other) const { return hash == other.hash; }

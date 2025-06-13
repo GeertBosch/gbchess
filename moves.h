@@ -1,3 +1,5 @@
+#pragma once
+
 #include <climits>
 #include <cstring>
 #include <functional>
@@ -6,116 +8,27 @@
 #include <vector>
 
 #include "common.h"
+#include "square_set.h"
 #include "sse2.h"
 
-#pragma once
 
 /**
- * Represents a set of squares on a chess board. This class is like std::set<Square>, but
- * uses a bitset represented by a uint64_t to store the squares, which is more efficient.
+ * Returns the set of squares between two squares, exclusive of the `to` square.
  */
-class SquareSet {
-    using T = uint64_t;
-    T _squares = 0;
-    static_assert(kNumSquares <= sizeof(T) * CHAR_BIT);
+SquareSet path(Square from, Square to);
 
-public:
-    SquareSet(uint64_t squares) : _squares(squares) {}
-    SquareSet(Square square) : _squares(1ull << square) {}
-    class iterator;
+/**
+ * Returns the set of squares between two squares, inclusive of the `to` square.
+ */
+SquareSet ipath(Square from, Square to);
 
-    SquareSet() = default;
+/**
+ * Returns the set of non-empty fields on the board, possibly limited to one color.
+ */
+SquareSet occupancy(const Board& board);
+SquareSet occupancy(const Board& board, Color color);
 
-    /**
-     * Returns the set of squares between two squares, exclusive of the `to` square.
-     */
-    static SquareSet path(Square from, Square to);
-
-    /**
-     * Returns the set of squares between two squares, inclusive of the `to` square.
-     */
-    static SquareSet ipath(Square from, Square to) {
-        return path(from, to) | SquareSet(from) | SquareSet(to);
-    }
-
-    /**
-     * Returns the set of non-empty fields on the board, possibly limited to one color.
-     */
-    static SquareSet occupancy(const Board& board);
-    static SquareSet occupancy(const Board& board, Color color);
-
-    static SquareSet find(const Board& board, Piece piece);
-    static SquareSet rank(int rank) {  //
-        int shift = rank * kNumFiles;
-        uint64_t ret = (1ull << kNumFiles) - 1;
-        ret <<= shift;
-        return SquareSet(ret);
-    }
-    static SquareSet file(int file) { return SquareSet(0x0101010101010101ull << file); }
-
-    static SquareSet valid(int rank, int file) {
-        return rank >= 0 && rank < kNumRanks && file >= 0 && file < kNumFiles
-            ? SquareSet(makeSquare(file, rank))
-            : SquareSet();
-    }
-    static SquareSet all() { return SquareSet(0xffff'ffff'ffff'ffffull); }
-
-    void erase(Square square) { _squares &= ~(1ull << square); }
-    void insert(Square square) { _squares |= (1ull << square); }
-    void insert(SquareSet other) { _squares |= other._squares; }
-
-    void insert(iterator begin, iterator end) {
-        for (auto it = begin; it != end; ++it) insert(*it);
-    }
-
-    explicit operator bool() const { return _squares; }
-    T bits() const { return _squares; }
-    bool empty() const { return _squares == 0; }
-    size_t size() const { return __builtin_popcountll(_squares); }
-    bool contains(Square square) const { return bool(*this & SquareSet(square)); }
-
-    SquareSet operator&(SquareSet other) const { return _squares & other._squares; }
-    SquareSet operator|(SquareSet other) const { return _squares | other._squares; }
-    SquareSet operator^(SquareSet other) const { return _squares ^ other._squares; }
-    SquareSet operator!(void) const { return ~_squares; }
-    SquareSet operator>>(int shift) const { return _squares >> shift; }
-    SquareSet operator<<(int shift) const { return _squares << shift; }
-    SquareSet operator-(SquareSet other) const {
-        auto inv = ~other._squares;
-        auto ret = _squares & inv;
-        return ret;
-    }
-
-    SquareSet operator|=(SquareSet other) { return _squares |= other._squares; }
-    SquareSet operator&=(SquareSet other) { return _squares &= other._squares; }
-    SquareSet operator^=(SquareSet other) { return _squares ^= other._squares; }
-    SquareSet operator-=(SquareSet other) { return _squares &= ~other._squares; }
-    SquareSet operator>>=(int shift) { return _squares >>= shift; }
-    SquareSet operator<<=(int shift) { return _squares <<= shift; }
-
-    bool operator==(SquareSet other) const { return _squares == other._squares; }
-
-    class iterator {
-        friend class SquareSet;
-        SquareSet::T _squares;
-        iterator(SquareSet squares) : _squares(squares._squares) {}
-        using iterator_category = std::forward_iterator_tag;
-
-    public:
-        iterator operator++() {
-            _squares &= _squares - 1;  // Clear the least significant bit
-            return *this;
-        }
-        Square operator*() {
-            return Square(__builtin_ctzll(_squares));  // Count trailing zeros
-        }
-        bool operator==(const iterator& other) { return _squares == other._squares; }
-        bool operator!=(const iterator& other) { return !(_squares == other._squares); }
-    };
-
-    iterator begin() const { return {*this}; }
-    iterator end() const { return SquareSet(); }
-};
+SquareSet find(const Board& board, Piece piece);
 
 class Occupancy {
     SquareSet _theirs;
@@ -127,8 +40,7 @@ class Occupancy {
 public:
     constexpr Occupancy() = default;
     Occupancy(const Board& board, Color activeColor)
-        : Occupancy(SquareSet::occupancy(board, !activeColor),
-                    SquareSet::occupancy(board, activeColor)) {}
+        : Occupancy(occupancy(board, !activeColor), occupancy(board, activeColor)) {}
 
     // Deltas may have corresponding elements set in both theirs and ourss
     static Occupancy delta(SquareSet theirs, SquareSet ours) { return Occupancy(theirs, ours); }
@@ -171,7 +83,7 @@ struct CastlingInfo {
           kingSide(color == Color::w ? CastlingMove{FromTo{e1, g1}, FromTo{h1, f1}}
                                      : CastlingMove{FromTo{e8, g8}, FromTo{h8, f8}}),
           queenSide(color == Color::w ? CastlingMove{FromTo{e1, c1}, FromTo{a1, d1}}
-                                      : CastlingMove{FromTo{e8, c8}, FromTo{a8, d8}}){};
+                                      : CastlingMove{FromTo{e8, c8}, FromTo{a8, d8}}) {};
 };
 
 struct MoveError : public std::exception {

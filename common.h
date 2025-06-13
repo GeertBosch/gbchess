@@ -18,8 +18,8 @@ constexpr bool debug = 0;
         if constexpr (debug) assert(condition); \
     };
 
-static constexpr uint8_t kNumFiles = 8, kNumRanks = 8;
-static constexpr uint8_t kNumSquares = kNumFiles * kNumRanks;
+static constexpr int kNumFiles = 8, kNumRanks = 8;
+static constexpr int kNumSquares = kNumFiles * kNumRanks;
 
 enum Square : uint16_t {
     // clang-format off
@@ -43,6 +43,11 @@ constexpr int rank(Square square) {
 }
 constexpr int file(Square square) {
     return int(square) % kNumRanks;
+}
+constexpr Square step(Square square, int fileStep, int rankStep) {
+    assert(file(square) + fileStep >= 0 && file(square) + fileStep < kNumFiles);
+    assert(rank(square) + rankStep >= 0 && rank(square) + rankStep < kNumRanks);
+    return makeSquare(file(square) + fileStep, rank(square) + rankStep);
 }
 
 /** Conversion to std::string: file to letter ('a' to 'h') and rank to digit ('1' to '8') */
@@ -270,8 +275,8 @@ inline CastlingMask operator~(CastlingMask lhs) {
 static constexpr auto noEnPassantTarget = Square(0);
 
 struct FromTo {
-    Square from;
-    Square to;
+    Square from : 8;
+    Square to : 8;
 };
 
 /**

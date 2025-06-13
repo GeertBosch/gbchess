@@ -23,10 +23,9 @@ uint64_t perft(Board& board, SearchState& state, int depth) {
     forAllLegalMovesAndCaptures(board, state, [&](Board& board, MoveWithPieces mwp) {
         auto delta = occupancyDelta(mwp.move);
         newState.occupancy = !(state.occupancy ^ delta);
-        newState.pawns = SquareSet::find(board, addColor(PieceType::PAWN, !state.active()));
+        newState.pawns = find(board, addColor(PieceType::PAWN, !state.active()));
         newState.turn = applyMove(state.turn, mwp);
-        newState.kingSquare =
-            *SquareSet::find(board, addColor(PieceType::KING, !state.active())).begin();
+        newState.kingSquare = *find(board, addColor(PieceType::KING, !state.active())).begin();
         newState.inCheck = isAttacked(board, newState.kingSquare, newState.occupancy);
         newState.pinned = pinnedPieces(board, newState.occupancy, newState.kingSquare);
         nodes += perft(board, newState, depth);

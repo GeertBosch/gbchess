@@ -1,10 +1,10 @@
 #include <cassert>
 #include <cstring>
 
+
 #include "common.h"
 #include "magic.h"
 #include "options.h"
-#include "sse2.h"
 
 #include "moves.h"
 
@@ -13,12 +13,14 @@
 constexpr bool haveSSE2 = true;
 
 struct CompoundMove {
-    Square to = Square(0);
+    Square to : 8;  // TODO C++20: Can use default initialization for bit-fields
     uint8_t promo = 0;
     FromTo second = {Square(0), Square(0)};
+    CompoundMove() = default;
+    CompoundMove(Square to, uint8_t promo, FromTo second) : to(to), promo(promo), second(second) {}
 };
 
-struct MovesTable {
+struct alignas(64) MovesTable {
     // precomputed possible moves for each piece type on each square
     SquareSet moves[kNumPieces][kNumSquares];
 
@@ -42,7 +44,7 @@ struct MovesTable {
     SquareSet enPassantFrom[2][kNumFiles];  // color, file
 
     // precompute compound moves for castling, en passant and promotions
-    CompoundMove compound[16][kNumSquares];  // moveKind, to square
+    CompoundMove compound[kNumMoveKinds][kNumSquares];  // moveKind, to square
 
     MovesTable();
 
@@ -96,11 +98,11 @@ SquareSet castlingPath(Color color, MoveKind side) {
 
     // Note the paths are reversed, so the start point is excluded and the endpoint included.
     if (side == MoveKind::O_O)
-        path |= SquareSet::path(info.kingSide[0].to, info.kingSide[0].from) |
-            SquareSet::path(info.kingSide[1].to, info.kingSide[1].from);
+        path |= ::path(info.kingSide[0].to, info.kingSide[0].from) |
+            ::path(info.kingSide[1].to, info.kingSide[1].from);
     else
-        path |= SquareSet::path(info.queenSide[0].to, info.queenSide[0].from) |
-            SquareSet::path(info.queenSide[1].to, info.queenSide[1].from);
+        path |= ::path(info.queenSide[0].to, info.queenSide[0].from) |
+            ::path(info.queenSide[1].to, info.queenSide[1].from);
 
     return path;
 }
@@ -202,34 +204,15 @@ SquareSet possibleCaptures(Piece piece, Square from) {
     }
     return {};
 }
-SquareSet path(Square from, Square to) {
-    SquareSet path;
-    int rankDiff = rank(to) - rank(from);
-    int fileDiff = file(to) - file(from);
-
-    // Check that the move is horizontal, vertical, or diagonal. If not, no path.
-    if (rankDiff && fileDiff && abs(rankDiff) != abs(fileDiff))
-        return {};  // It's not in straight line, thus no need to check further
-
-    // Calculate the direction of movement for rank and file
-    int rankStep = rankDiff ? rankDiff / abs(rankDiff) : 0;
-    int fileStep = fileDiff ? fileDiff / abs(fileDiff) : 0;
-
-    int rankPos = rank(from) + rankStep;
-    int filePos = file(from) + fileStep;
-
-    while (rankPos != rank(to) || filePos != file(to)) {
-        path.insert(makeSquare(filePos, rankPos));
-        rankPos += rankStep;
-        filePos += fileStep;
-    }
-    return path;
-}
 }  // namespace init
 
-SquareSet SquareSet::path(Square from, Square to) {
+SquareSet path(Square from, Square to) {
     return movesTable.paths[from][to];
 }
+SquareSet ipath(Square from, Square to) {
+    return path(from, to) | SquareSet(from) | SquareSet(to);
+}
+
 
 void MovesTable::initializePieceMovesAndCaptures() {
     for (auto piece : pieces) {
@@ -264,7 +247,7 @@ void MovesTable::initializePaths() {
     // Initialize paths
     for (int from = 0; from < kNumSquares; ++from)
         for (int to = 0; to < kNumSquares; ++to)
-            paths[from][to] = init::path(Square(from), Square(to));
+            paths[from][to] = SquareSet::makePath(Square(from), Square(to));
 }
 
 void MovesTable::initializeCastlingMasks() {
@@ -309,14 +292,14 @@ void MovesTable::initializeCompound() {
     auto epCompound = [=](Square to) -> CM { return {epTarget(to), 0, {epTarget(to), to}}; };
 
     // Initialize en passant capture for white
-    for (auto to : SquareSet::ipath(a6, h6) | SquareSet::ipath(a3, h3))
+    for (auto to : ipath(a6, h6) | ipath(a3, h3))
         compound[index(MK::En_Passant)][to] = epCompound(to);
 
     // Initialize promotion moves
     auto pm = index(MK::Knight_Promotion);
     auto pc = index(MK::Knight_Promotion_Capture);
     for (auto promo = index(PT::KNIGHT); promo <= index(PT::QUEEN); ++promo, ++pm, ++pc)
-        for (auto to : SquareSet::ipath(a8, h8) | SquareSet::ipath(a1, h1))
+        for (auto to : ipath(a8, h8) | ipath(a1, h1))
             compound[pc][to] = compound[pm][to] = {to, promo, {to, to}};
 }
 
@@ -439,16 +422,16 @@ uint64_t lessSet(std::array<Piece, 64> squares, Piece piece, bool invert) {
     return res;
 }
 
-SquareSet SquareSet::occupancy(const Board& board) {
+SquareSet occupancy(const Board& board) {
     return equalSet(board.squares(), Piece::_, true);
 }
 
-SquareSet SquareSet::occupancy(const Board& board, Color color) {
+SquareSet occupancy(const Board& board, Color color) {
     bool black = color == Color::b;
     return lessSet(board.squares(), black ? Piece::p : Piece::_, black);
 }
 
-SquareSet SquareSet::find(const Board& board, Piece piece) {
+SquareSet find(const Board& board, Piece piece) {
     return equalSet(board.squares(), piece, false);
 }
 
@@ -513,9 +496,9 @@ SquareSet pinnedPieces(const Board& board, Occupancy occupancy, Square kingSquar
 
 SearchState::SearchState(const Board& board, Turn turn)
     : occupancy(Occupancy(board, turn.activeColor())),
-      pawns(SquareSet::find(board, addColor(PieceType::PAWN, turn.activeColor()))),
+      pawns(find(board, addColor(PieceType::PAWN, turn.activeColor()))),
       turn(turn),
-      kingSquare(*SquareSet::find(board, addColor(PieceType::KING, turn.activeColor())).begin()),
+      kingSquare(*find(board, addColor(PieceType::KING, turn.activeColor())).begin()),
       inCheck(isAttacked(board, kingSquare, occupancy)),
       pinned(pinnedPieces(board, occupancy, kingSquare)) {}
 
@@ -563,7 +546,7 @@ void findPawnPushes(SearchState& state, const F& fun) {
     bool white = state.active() == Color::w;
     const auto doublePushRank = white ? SquareSet::rank(3) : SquareSet::rank(kNumRanks - 1 - 3);
     const auto promo = white ? SquareSet::rank(kNumRanks - 1) : SquareSet::rank(0);
-    auto free = !state.occupancy();
+    auto free = ~state.occupancy();
     auto singles = (white ? state.pawns << kNumRanks : state.pawns >> kNumRanks) & free;
     auto doubles = (white ? singles << kNumRanks : singles >> kNumRanks) & free & doublePushRank;
     auto piece = white ? Piece::P : Piece::p;
@@ -622,27 +605,28 @@ template <typename F>
 void findNonPawnMoves(const Board& board, SearchState& state, const F& fun) {
     for (auto from : state.occupancy.ours() - state.pawns) {
         auto piece = board[from];
-        if (sliders.contains(piece) && !state.pinned.contains(from) && !state.inCheck) {
-            // If the piece is a sliding piece, and not pinned, we can move it freely to all target
-            // squares for its piece type that are not occupied by our own pieces.
-            SquareSet toSquares;
-            if (PieceSet{PieceType::BISHOP, PieceType::QUEEN}.contains(piece))
-                toSquares |= targets(from, true, state.occupancy().bits());
-            if (PieceSet{PieceType::ROOK, PieceType::QUEEN}.contains(piece))
-                toSquares |= targets(from, false, state.occupancy().bits());
-            toSquares -= state.occupancy();
 
-            for (auto to : toSquares) {
-                assert(board[to] == Piece::_);
-                fun(piece, Move{from, to, MoveKind::Quiet_Move});
+        if (!state.pinned.contains(from) && !state.inCheck) {
+            if (sliders.contains(piece)) {
+                // If the piece is a sliding piece, and not pinned, we can move it freely to all
+                // target squares for its piece type that are not occupied by our own pieces.
+                SquareSet toSquares;
+                if (PieceSet{PieceType::BISHOP, PieceType::QUEEN}.contains(piece))
+                    toSquares |= targets(from, true, state.occupancy().bits());
+                if (PieceSet{PieceType::ROOK, PieceType::QUEEN}.contains(piece))
+                    toSquares |= targets(from, false, state.occupancy().bits());
+                toSquares -= state.occupancy();
+
+                for (auto to : toSquares) fun(piece, Move{from, to, MoveKind::Quiet_Move});
+            } else {
+                auto possibleSquares = movesTable.moves[index(piece)][from] - state.occupancy();
+                for (auto to : possibleSquares) fun(piece, Move{from, to, MoveKind::Quiet_Move});
             }
         } else {
             auto possibleSquares = movesTable.moves[index(piece)][from] - state.occupancy();
-            for (auto to : possibleSquares) {
-                // Check for moving through pieces
+            for (auto to : possibleSquares)  // Check for moving through pieces
                 if (clearPath(state.occupancy(), from, to))
                     fun(piece, Move{from, to, MoveKind::Quiet_Move});
-            }
         }
     }
 }
@@ -691,7 +675,7 @@ template <typename F>
 void findNonPawnCaptures(const Board& board, SearchState& state, const F& fun) {
     for (auto from : state.occupancy.ours() - state.pawns) {
         auto piece = board[from];
-        if (sliders.contains(piece) && !state.pinned.contains(from) && !state.inCheck && 1) {
+        if (sliders.contains(piece) && !state.pinned.contains(from) && !state.inCheck) {
             // If the piece is a sliding piece, and not pinned, we can move it freely to all target
             // squares for its piece type that are not occupied by our own pieces.
             SquareSet toSquares;
@@ -877,7 +861,7 @@ bool doesNotCheck(Board& board, const SearchState& state, Move move) {
 
     SquareSet checkSquares = state.kingSquare;
     if (from == state.kingSquare)
-        checkSquares = isCastles(kind) ? SquareSet::ipath(from, to) : to;
+        checkSquares = isCastles(kind) ? ipath(from, to) : to;
     else if (!state.pinned.contains(from) && !state.inCheck && kind != MoveKind::En_Passant)
         return true;
     auto delta = movesTable.occupancyDelta[noPromo(kind)][from][to];

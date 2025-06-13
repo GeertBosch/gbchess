@@ -20,17 +20,19 @@ uint64_t parallelDeposit(uint64_t value, uint64_t mask) {
 namespace {
 
 struct Magic {
-    uint64_t magic;               // Magic number for the piece type
-    uint64_t mask;                // Bitmask for the piece type
-    std::vector<uint64_t> table;  // Precomputed target tables for the piece type
-    int shift;                    // Number of bits used for indexing into the table
-    Magic(uint8_t square, bool bishop, uint64_t magic)
-        : magic(magic), mask(computeSliderBlockers(square, bishop)), shift(pop_count(~mask)) {
+    uint64_t magic;                // Magic number for the piece type
+    SquareSet mask;                // Bitmask for the piece type
+    std::vector<SquareSet> table;  // Precomputed target tables for the piece type
+    int shift;                     // Number of bits used for indexing into the table
+    Magic(Square square, bool bishop, uint64_t magic)
+        : magic(magic),
+          mask(computeSliderBlockers(square, bishop).bits()),
+          shift(64 - mask.size()) {
         int bits = 64 - shift;
         table.resize(1ull << bits, 0ull);
         for (int i = 0; i < (1 << bits); i++) {
-            auto targets = computeSliderTargets(square, bishop, parallelDeposit(i, mask));
-            auto blockers = parallelDeposit(i, mask);
+            auto targets = computeSliderTargets(square, bishop, parallelDeposit(i, mask.bits()));
+            auto blockers = parallelDeposit(i, mask.bits());
             if (auto& entry = table[(blockers * magic) >> shift])
                 assert(entry == targets);
             else
@@ -39,111 +41,105 @@ struct Magic {
     }
 
     // Computes the target square for this square and piece type, given the board occupancy.
-    uint64_t targets(uint64_t occupancy) const {
-        uint64_t blockers = occupancy & mask;
-        size_t index = (blockers * magic) >> shift;
+    SquareSet targets(SquareSet occupancy) const {
+        auto blockers = occupancy & mask;
+        size_t index = (blockers.bits() * magic) >> shift;
         return table[index];
     }
 };
 
 auto rookMagics = []() {
     std::vector<Magic> magics;
-    for (int sq = 0; sq < kNumSquares; ++sq) magics.emplace_back(sq, false, rookMagic[sq]);
+    for (auto square : SquareSet::all()) magics.emplace_back(square, false, rookMagic[square]);
     return magics;
 }();
 auto bishopMagics = []() {
     std::vector<Magic> magics;
-    for (int sq = 0; sq < kNumSquares; ++sq) magics.emplace_back(sq, true, bishopMagic[sq]);
+    for (auto square : SquareSet::all()) magics.emplace_back(square, true, bishopMagic[square]);
     return magics;
 }();
 
+const int kMaxRank = kNumRanks - 1;
+const int kMaxFile = kNumFiles - 1;
+
 }  // namespace
 
-uint64_t rookBlockers(uint8_t sq) {
-    uint64_t result = 0ull;
-    int rank = sq / 8;
-    int file = sq % 8;
+SquareSet rookBlockers(Square sq) {
+    SquareSet result;
 
-    for (int r = rank + 1; r <= 6; r++) result |= (1ull << (file + r * 8));
-    for (int r = rank - 1; r >= 1; r--) result |= (1ull << (file + r * 8));
-    for (int f = file + 1; f <= 6; f++) result |= (1ull << (f + rank * 8));
-    for (int f = file - 1; f >= 1; f--) result |= (1ull << (f + rank * 8));
+    // Up, Down, Right, Left
+    for (auto to = sq; rank(to) < kMaxRank - 1;) result.insert(to = step(to, 0, 1));
+    for (auto to = sq; rank(to) > 1;) result.insert(to = step(to, 0, -1));
+    for (auto to = sq; file(to) < kMaxFile - 1;) result.insert(to = step(to, 1, 0));
+    for (auto to = sq; file(to) > 1;) result.insert(to = step(to, -1, 0));
+
     return result;
 }
 
-uint64_t bishopBlockers(uint8_t sq) {
-    uint64_t result = 0ull;
-    int rank = sq / 8, file = sq % 8;
-    for (int r = rank + 1, f = file + 1; r <= 6 && f <= 6; r++, f++)
-        result |= (1ull << (f + r * 8));
-    for (int r = rank + 1, f = file - 1; r <= 6 && f >= 1; r++, f--)
-        result |= (1ull << (f + r * 8));
-    for (int r = rank - 1, f = file + 1; r >= 1 && f <= 6; r--, f++)
-        result |= (1ull << (f + r * 8));
-    for (int r = rank - 1, f = file - 1; r >= 1 && f >= 1; r--, f--)
-        result |= (1ull << (f + r * 8));
+SquareSet bishopBlockers(Square sq) {
+    SquareSet result;
+
+    // Up-Right, Up-Left, Down-Right, Down-Left
+    for (auto to = sq; rank(to) < kMaxRank - 1 && file(to) < kMaxFile - 1;)
+        result.insert(to = step(to, 1, 1));
+    for (auto to = sq; rank(to) < kMaxRank - 1 && file(to) > 1;)
+        result.insert(to = step(to, -1, 1));
+    for (auto to = sq; rank(to) > 1 && file(to) < kMaxFile - 1;)
+        result.insert(to = step(to, 1, -1));
+    for (auto to = sq; rank(to) > 1 && file(to) > 1;)  //
+        result.insert(to = step(to, -1, -1));
+
     return result;
 }
 
-uint64_t computeSliderBlockers(uint8_t square, bool bishop) {
+SquareSet computeSliderBlockers(Square square, bool bishop) {
     return bishop ? bishopBlockers(square) : rookBlockers(square);
 }
 
 /**
  *   Computes the rook attack bitboard for a given square and blocker configuration.
  */
-uint64_t computeRookTargets(uint8_t sq, uint64_t blockers) {
-    uint64_t result = 0ull;
-    int rk = sq / 8, fl = sq % 8, r, f;
-    for (r = rk + 1; r <= 7; r++) {
-        result |= (1ull << (fl + r * 8));
-        if (blockers & (1ull << (fl + r * 8))) break;
-    }
-    for (r = rk - 1; r >= 0; r--) {
-        result |= (1ull << (fl + r * 8));
-        if (blockers & (1ull << (fl + r * 8))) break;
-    }
-    for (f = fl + 1; f <= 7; f++) {
-        result |= (1ull << (f + rk * 8));
-        if (blockers & (1ull << (f + rk * 8))) break;
-    }
-    for (f = fl - 1; f >= 0; f--) {
-        result |= (1ull << (f + rk * 8));
-        if (blockers & (1ull << (f + rk * 8))) break;
-    }
+SquareSet computeRookTargets(Square sq, SquareSet blockers) {
+    SquareSet result;
+
+    // Up, Down, Right, Left - stop if we hit a blocker, after inserting that blocker
+    for (auto to = sq; rank(to) < kMaxRank;)
+        if (blockers.contains((result.insert(to = step(to, 0, 1)), to))) break;
+    for (auto to = sq; rank(to) > 0;)
+        if (blockers.contains((result.insert(to = step(to, 0, -1)), to))) break;
+    for (auto to = sq; file(to) < kMaxFile;)
+        if (blockers.contains((result.insert(to = step(to, 1, 0)), to))) break;
+    for (auto to = sq; file(to) > 0;)
+        if (blockers.contains((result.insert(to = step(to, -1, 0)), to))) break;
+
     return result;
 }
 
 /**
  *   Computes the bishop attack bitboard for a given square and blocker configuration.
  */
-uint64_t computeBishopTargets(uint8_t sq, uint64_t blockers) {
-    uint64_t result = 0ull;
-    int rk = sq / 8, fl = sq % 8, r, f;
-    for (r = rk + 1, f = fl + 1; r <= 7 && f <= 7; r++, f++) {
-        result |= (1ull << (f + r * 8));
-        if (blockers & (1ull << (f + r * 8))) break;
-    }
-    for (r = rk + 1, f = fl - 1; r <= 7 && f >= 0; r++, f--) {
-        result |= (1ull << (f + r * 8));
-        if (blockers & (1ull << (f + r * 8))) break;
-    }
-    for (r = rk - 1, f = fl + 1; r >= 0 && f <= 7; r--, f++) {
-        result |= (1ull << (f + r * 8));
-        if (blockers & (1ull << (f + r * 8))) break;
-    }
-    for (r = rk - 1, f = fl - 1; r >= 0 && f >= 0; r--, f--) {
-        result |= (1ull << (f + r * 8));
-        if (blockers & (1ull << (f + r * 8))) break;
-    }
+SquareSet computeBishopTargets(Square sq, SquareSet blockers) {
+    SquareSet result;
+
+    // Up-Right, Up-Left, Down-Right, Down-Left - stop if we hit a blocker, after inserting it
+    for (auto to = sq; rank(to) < kMaxRank && file(to) < kMaxFile;)
+        if (blockers.contains((result.insert(to = step(to, 1, 1)), to))) break;
+    for (auto to = sq; rank(to) < kMaxRank && file(to) > 0;)
+        if (blockers.contains((result.insert(to = step(to, -1, 1)), to))) break;
+    for (auto to = sq; rank(to) > 0 && file(to) < kMaxFile;)
+        if (blockers.contains((result.insert(to = step(to, 1, -1)), to))) break;
+    for (auto to = sq; rank(to) > 0 && file(to) > 0;)
+        if (blockers.contains((result.insert(to = step(to, -1, -1)), to))) break;
+
     return result;
 }
 
-uint64_t computeSliderTargets(uint8_t square, bool bishop, uint64_t blockers) {
-    return bishop ? computeBishopTargets(square, blockers) : computeRookTargets(square, blockers);
+SquareSet computeSliderTargets(Square square, bool bishop, SquareSet blockers) {
+    return bishop ? computeBishopTargets(square, blockers).bits()
+                  : computeRookTargets(square, blockers).bits();
 }
 
-uint64_t targets(uint8_t square, bool bishop, uint64_t occupancy) {
+SquareSet targets(Square square, bool bishop, SquareSet occupancy) {
     const auto& magics = bishop ? bishopMagics : rookMagics;
-    return magics[square].targets(occupancy);
+    return magics[square].targets(occupancy.bits());
 }

@@ -13,7 +13,7 @@ DBGOBJ=build/dbg
 calc_objs=$(patsubst %.cpp,${$(1)OBJ}/%.o,$(2))
 calc_deps=${calc_objs:.o=.d}
 
-all: debug test build perft-test mate123 mate45 puzzles evals
+all: debug test build perft-bench perft-test mate123 mate45 puzzles evals
 	@echo "\n*** All tests passed! ***\n"
 
 -include $(call calc_deps,OPT,$(wildcard *.cpp))
@@ -120,9 +120,12 @@ perft-gcc-emul: perft.cpp  ${MOVES_SRCS} fen.cpp *.h
 perft-emul: perft-clang-emul perft-gcc-emul .PHONY
 	./perft-clang-emul -q 5 4865609
 	./perft-gcc-emul -q 5 4865609
+
 perft-sse2: perft-clang-sse2 perft-gcc-sse2 .PHONY
 	./perft-clang-sse2 -q 5 4865609
 	./perft-gcc-sse2 -q 5 4865609
+
+perft-bench: perft-emul perft-sse2
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
 mate123: search-test ${PUZZLES} .PHONY
@@ -156,7 +159,7 @@ position5="rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8"
 position6="r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10"
 
 # Verify well-known perft results. Great for checking correct move generation.
-perft-test: perft perft-debug perft-sse2 perft-emul
+perft-test: perft perft-debug
 	./perft-debug 3
 	./perft-debug 4 197281
 	./perft -q 5 4865609

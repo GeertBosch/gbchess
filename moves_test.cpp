@@ -351,11 +351,11 @@ void testOccupancy() {
         board[c8] = Piece::b;
         board[d8] = Piece::q;
         board[e8] = Piece::k;
-        auto squares = SquareSet::occupancy(board);
+        auto squares = occupancy(board);
         assert(squares.size() == 20);
-        squares = SquareSet::occupancy(board, Color::w);
+        squares = occupancy(board, Color::w);
         assert(squares.size() == 9);
-        squares = SquareSet::occupancy(board, Color::b);
+        squares = occupancy(board, Color::b);
         assert(squares.size() == 11);
     }
     std::cout << "All occupancy tests passed!" << std::endl;
@@ -851,6 +851,7 @@ void testAllLegalMovesAndCaptures() {
 
         checkMovesAndCaptures(fen, 36, 7);
     }
+    checkMovesAndCaptures("2r3k1/6pp/p1q2r2/1pn2p2/1B1pPP2/3Pn1QB/1PP2R1P/6RK w - - 4 25", 29, 4);
 
     std::cout << "All allLegalMovesAndCaptures tests passed!" << std::endl;
 }
