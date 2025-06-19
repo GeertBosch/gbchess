@@ -235,10 +235,23 @@ void testTwoKings() {
               "' at depth 12, but got " + to_string(count));
 }
 
+void testMaxMoves() {
+    std::string fen = "R6R/3Q4/1Q4Q1/4Q3/2Q4Q/Q4Q2/pp1Q4/kBNN1KB w - - 0 1";
+    Position position = fen::parsePosition(fen);
+    NodeCount moves = perft(position, 1);
+    assert(moves == 218);  // Position with maximum number of legal moves
+    NodeCount count = perft(position, 5);
+    NodeCount expected = 13'853'661;
+    if (count != expected)
+        error("Expected " + to_string(expected) + " nodes for position '" + fen +
+              "' at depth 5, but got " + to_string(count));
+}
+
 int selfTests() {
     testStartingPosition(5);
     testKnownPositions();
     testTwoKings();
+    testMaxMoves();
     return 0;
 }
 
