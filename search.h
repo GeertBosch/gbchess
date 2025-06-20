@@ -1,7 +1,6 @@
 #pragma once
 
 #include <functional>
-#include <string>
 
 #include "common.h"
 #include "eval.h"
@@ -11,6 +10,10 @@
 namespace search {
 extern uint64_t evalCount;
 extern uint64_t cacheCount;
+
+constexpr bool transpositionTableDebug = false;
+constexpr bool alphaBetaDebug = false;
+
 
 /** Returns true iff search should be abandoned. String passed is UCI info string. */
 using InfoFn = std::function<bool(std::string info)>;

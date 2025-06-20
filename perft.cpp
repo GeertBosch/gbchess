@@ -15,7 +15,6 @@
 
 bool quiet = false;
 
-constexpr bool hashPerft = options::hash128;  // Not safe with 64-bit hash
 constexpr size_t MB = 1ull << 20;
 constexpr size_t hashTableMemory = 1024 * MB;
 using NodeCount = uint128_t;
@@ -38,7 +37,8 @@ struct HashTable {
         Key _key = 0;
         Value _value = 0;
     };
-    constexpr static size_t kHashTableSize = hashPerft ? hashTableMemory / sizeof(HashValue) : 1;
+    constexpr static size_t kHashTableSize =
+        options::cachePerft ? hashTableMemory / sizeof(HashValue) : 1;
 
     HashTable() {
         table.clear();
@@ -82,11 +82,11 @@ void error(const std::string& message) {
 NodeCount perft(Board& board, Hash hash, SearchState& state, int depth) {
     if (depth <= 1) return depth == 1 ? countLegalMovesAndCaptures(board, state) : 1;
 
-    dassert(!hashPerft || hash == Hash(Position{board, state.turn}));
+    dassert(!options::cachePerft || hash == Hash(Position{board, state.turn}));
 
     // Unlike normal Zobrist hashing, we need to include the level.
 
-    if constexpr (hashPerft)
+    if constexpr (options::cachePerft)
         if (auto entry = hashTable.lookup(hash(), depth))
             return cached += entry->value(), entry->value();
 
@@ -94,7 +94,7 @@ NodeCount perft(Board& board, Hash hash, SearchState& state, int depth) {
     auto newState = state;
     forAllLegalMovesAndCaptures(board, state, [&](Board& board, MoveWithPieces mwp) {
         auto delta = occupancyDelta(mwp.move);
-        auto newHash = hashPerft ? applyMove(hash, state.turn, mwp) : Hash();
+        auto newHash = options::cachePerft ? applyMove(hash, state.turn, mwp) : Hash();
         newState.occupancy = !(state.occupancy ^ delta);
         newState.pawns = find(board, addColor(PieceType::PAWN, !state.active()));
         newState.turn = applyMove(state.turn, mwp);
@@ -106,7 +106,7 @@ NodeCount perft(Board& board, Hash hash, SearchState& state, int depth) {
         if (newNodes < nodes) error("Node count overflow");
         nodes = newNodes;
     });
-    if (hashPerft && nodes > 100) hashTable.enter(hash(), depth, nodes);
+    if (options::cachePerft && nodes > 100) hashTable.enter(hash(), depth, nodes);
     return nodes;
 }
 
@@ -145,7 +145,7 @@ void perftWithDivide(Position position, int depth, NodeCount expectedCount) {
 
     std::cout << duration.count() / 1000 << " ms @ " << std::fixed << std::setprecision(1)
               << megarate << "M nodes/sec";
-    if (hashPerft) std::cout << ", " << pct(cached, count) << " cached";
+    if (options::cachePerft) std::cout << ", " << pct(cached, count) << " cached";
     std::cout << "\n";
 }
 
@@ -168,11 +168,16 @@ void testKnownPositions() {
     Known position5 = {"rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8", 4, 2103487};
     Known position6 = {
         "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10", 4, 3894594};
-    Known twoKingsRook = {"4k3/8/8/8/8/8/8/4Kr2 w - - 0 1", 7, 2362837};  // Many repeated positions
-    Known twoKings = {"4k3/8/8/8/8/8/8/4K3 w - - 0 1", 10, 122753895};  // Too slow without caching
 
     std::vector<Known> knownPositions = {
-        kiwipete, position3, position4, position4m, position5, position6, twoKingsRook, twoKings};
+        kiwipete, position3, position4, position4m, position5, position6};
+
+    if (options::cachePerft) {
+        Known twoKingsRook = {"4k3/8/8/8/8/8/8/4Kr2 w - - 0 1", 7, 2362837};
+        Known twoKings = {"4k3/8/8/8/8/8/8/4K3 w - - 0 1", 10, 122753895};
+        knownPositions.emplace_back(twoKingsRook);  // Many repeated positions
+        knownPositions.emplace_back(twoKings);      // Too slow without caching
+    }
 
     for (const auto& known : knownPositions) {
         Position position = fen::parsePosition(known.fen);
@@ -226,6 +231,7 @@ void testStartingPosition(int depth) {
 }
 
 void testTwoKings() {
+    if (!options::cachePerft) return;  // This test is too slow without caching
     std::string fen = "8/8/3k4/8/8/8/8/2K5 w - - 4 3";
     Position position = fen::parsePosition(fen);
     NodeCount count = perft(position, 12);

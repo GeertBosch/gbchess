@@ -13,7 +13,7 @@ DBGOBJ=build/dbg
 calc_objs=$(patsubst %.cpp,${$(1)OBJ}/%.o,$(2))
 calc_deps=${calc_objs:.o=.d}
 
-all: debug test build perft-bench perft-test perft-debug-test mate123 mate45 puzzles evals
+all: debug test build perft-test perft-debug-test perft-bench mate123 mate45 puzzles evals
 	@echo "\n*** All tests passed! ***\n"
 
 -include $(call calc_deps,OPT,$(wildcard *.cpp))
@@ -97,6 +97,10 @@ SEARCH_SRCS=${EVAL_SRCS} search.cpp
 search-test: $(call calc_objs,OPT,${SEARCH_SRCS})
 search-debug: $(call calc_objs,DBG,${SEARCH_SRCS})
 
+NNUE_SRCS=nnue.cpp
+nnue-test: $(call calc_objs,OPT,${NNUE_SRCS})
+nnue-debug: $(call calc_objs,DBG,${NNUE_SRCS})
+
 uci-test: $(call calc_objs,OPT,uci.cpp ${SEARCH_SRCS})
 uci-debug: $(call calc_objs,DBG,uci.cpp ${SEARCH_SRCS})
 
@@ -117,15 +121,10 @@ perft-gcc-sse2:  ${PERFT_SRCS} *.h
 perft-gcc-emul:  ${PERFT_SRCS} *.h
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
 
-perft-emul: perft-clang-emul perft-gcc-emul .PHONY
-	./perft-clang-emul -q 5 4865609
-	./perft-gcc-emul -q 5 4865609
+perft-%.ok: perft-%
+	./$< -q 5 4865609
 
-perft-sse2: perft-clang-sse2 perft-gcc-sse2 .PHONY
-	./perft-clang-sse2 -q 5 4865609
-	./perft-gcc-sse2 -q 5 4865609
-
-perft-bench: perft-emul perft-sse2
+perft-bench: perft-clang-emul.ok perft-gcc-emul.ok perft-clang-sse2.ok perft-gcc-sse2.ok
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
 mate123: search-test ${PUZZLES} .PHONY
