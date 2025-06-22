@@ -117,15 +117,10 @@ perft-gcc-sse2:  ${PERFT_SRCS} *.h
 perft-gcc-emul:  ${PERFT_SRCS} *.h
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -g -o $@ $(filter-out %.h,$^)
 
-perft-emul: perft-clang-emul perft-gcc-emul .PHONY
-	./perft-clang-emul -q 5 4865609
-	./perft-gcc-emul -q 5 4865609
+perft-%.ok: perft-%
+	./$< -q 5 4865609
 
-perft-sse2: perft-clang-sse2 perft-gcc-sse2 .PHONY
-	./perft-clang-sse2 -q 5 4865609
-	./perft-gcc-sse2 -q 5 4865609
-
-perft-bench: perft-emul perft-sse2
+perft-bench: perft-clang-emul.ok perft-gcc-emul.ok perft-clang-sse2.ok perft-gcc-sse2.ok
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
 mate123: search-test ${PUZZLES} .PHONY
