@@ -77,7 +77,7 @@ struct TranspositionTable {
     uint8_t numGenerations = 0;
 
     ~TranspositionTable() {
-        if (options::transpositionTableDebug) printStats();
+        if (transpositionTableDebug) printStats();
     }
 
     Eval find(Hash hash) {
@@ -144,7 +144,7 @@ struct TranspositionTable {
     }
 
     void clear() {
-        if (debug && options::transpositionTableDebug && numInserted) {
+        if (debug && transpositionTableDebug && numInserted) {
             printStats();
             std::cout << "Cleared transposition table\n";
         }
@@ -202,7 +202,7 @@ public:
         friend class Repetitions;
         Repetitions& repetitions;
         size_t count;
-        State(Repetitions& repetitions) : repetitions(repetitions), count(1){};
+        State(Repetitions& repetitions) : repetitions(repetitions), count(1) {};
 
     public:
         ~State() {
@@ -334,7 +334,8 @@ bool less(const Board& board, Move a, Move b) {
  * non-captures, and captures are sorted by victim value, attacker value, and move kind.
  */
 MoveIt sortCaptures(const Position& position, MoveIt begin, MoveIt end) {
-    std::stable_sort(begin, end, [&board = position.board](Move a, Move b) { return less(board, a, b); });
+    std::stable_sort(
+        begin, end, [&board = position.board](Move a, Move b) { return less(board, a, b); });
 
     return begin;
 }
@@ -620,7 +621,7 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
                                           : toplevelAlphaBeta(position, maxdepth, info);
 
     // Print beta cutoff statistics
-    if (options::alphaBetaDebug && totalMovesEvaluated > 0)
+    if (alphaBetaDebug && totalMovesEvaluated > 0)
         std::cout << "Beta cutoff moves: " << betaCutoffMoves << " / " << totalMovesEvaluated
                   << pct(betaCutoffMoves, totalMovesEvaluated) << std::endl;
 
