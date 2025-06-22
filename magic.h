@@ -4,13 +4,6 @@
 #include "square_set.h"
 
 /**
- *   Counts the number of set bits (population count) in a 64-bit integer.
- */
-constexpr int pop_count(uint64_t b) {
-    return __builtin_popcountll(b);
-}
-
-/**
  * Parallel deposit function that deposits bits from `value` into `result` according to the `mask`.
  * The mask specifies where to deposit bits from the value.
  */

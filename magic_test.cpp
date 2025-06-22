@@ -27,7 +27,7 @@ uint64_t randomMagic(SquareSet mask) {
     uint64_t magic;
     do {
         magic = gen() & gen() & gen();  // Evaluation order does not affect the result
-    } while (pop_count((mask.bits() * magic) & 0xff00'0000'0000'0000ull) < 6);
+    } while ((SquareSet(mask.bits() * magic) & SquareSet(0xff00'0000'0000'0000ull)).size() < 6);
     return magic;
 }
 /**
