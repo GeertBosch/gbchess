@@ -59,8 +59,8 @@ public:
 
     explicit operator bool() const { return _squares; }
     T bits() const { return _squares; }
-    bool empty() const { return _squares == 0; }
-    size_t size() const { return __builtin_popcountll(_squares); }
+    bool empty() const { return !_squares; }
+    size_t size() const { return std::distance(begin(), end()); }
     bool contains(Square square) const { return bool(*this & SquareSet(square)); }
 
     SquareSet operator&(SquareSet other) const { return _squares & other._squares; }
@@ -84,17 +84,21 @@ public:
     class iterator {
         friend class SquareSet;
         SquareSet::T _squares;
-        iterator(SquareSet squares) : _squares(squares._squares) {}
-        using iterator_category = std::forward_iterator_tag;
 
     public:
+        iterator(SquareSet squares) : _squares(squares._squares) {}
+        using iterator_category = std::forward_iterator_tag;
+        using difference_type = std::ptrdiff_t;
+        using value_type = Square;
+        using pointer = Square*;
+        using reference = Square&;
+
         iterator operator++() {
             _squares &= _squares - 1;  // Clear the least significant bit
             return *this;
         }
-        Square operator*() {
-            return Square(__builtin_ctzll(_squares));  // Count trailing zeros
-        }
+        // Count trailing zeros. TODO: C++20 use std::countr_zero
+        value_type operator*() { return Square(__builtin_ctzll(_squares)); }
         bool operator==(const iterator& other) { return _squares == other._squares; }
         bool operator!=(const iterator& other) { return !(_squares == other._squares); }
     };
