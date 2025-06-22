@@ -78,6 +78,9 @@ fen-debug: ${DBGOBJ}/fen.o
 
 MOVES_SRCS=moves.cpp magic.cpp
 
+nnue-test: ${OPTOBJ}/nnue.o
+nnue-debug: ${DBGOBJ}/nnue.o
+
 moves-test: $(call calc_objs,OPT,${MOVES_SRCS} fen.cpp) 
 moves-debug: $(call calc_objs,DBG,${MOVES_SRCS} fen.cpp)
 
@@ -216,6 +219,8 @@ test: build debug searches evals uci magic
 	./fen-test
 	./moves-test
 	./elo-test
+	./nnue-test
+	./hash-test
 	./eval-test "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1"
 
 coverage: test
@@ -223,5 +228,7 @@ coverage: test
 	llvm-cov report ./fen-test -instr-profile=coverage.profdata
 	llvm-cov report ./moves-test -instr-profile=coverage.profdata
 	llvm-cov report ./elo-test -instr-profile=coverage.profdata
+	llvm-cov report ./nnue-test -instr-profile=coverage.profdata
+	llvm-cov report ./hash-test -instr-profile=coverage.profdata
 	llvm-cov report ./eval-test -instr-profile=coverage.profdata
 	llvm-cov report ./search-debug -instr-profile=coverage.profdata
