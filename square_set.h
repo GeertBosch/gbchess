@@ -1,4 +1,7 @@
 #pragma once
+
+#include <climits>
+
 #include "common.h"
 
 /**

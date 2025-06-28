@@ -27,5 +27,7 @@
         {
             "text": "Avoid unneccesary braces or parentheses. Prefer early returns to deep nesting. Keep functions small and focused. For non-trivial functions, add a documentation comment using /** ... */ syntax, but do not add doxygen comments and do not add comments for trivial functions.",
         },
-    ]
+    ],
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "modificationsIfAvailable"
 }

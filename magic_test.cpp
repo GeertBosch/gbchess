@@ -33,8 +33,12 @@ uint64_t randomMagic(SquareSet mask) {
 /**
  *   Computes the table index for a given set of blockers, magic number, and number of bits.
  */
-inline size_t magicTableIndex(SquareSet blocked, uint64_t magic, int bits) {
+size_t magicTableIndex(SquareSet blocked, uint64_t magic, int bits) {
     return (blocked.bits() * magic) >> (64 - bits);
+}
+bool setMagicEntry(SquareSet& entry, SquareSet targets) {
+    if (entry.empty()) entry = targets;
+    return entry == targets;
 }
 
 uint64_t checkMagic(SquareSet* targets, SquareSet* blockers, uint64_t magic, SquareSet mask) {
@@ -42,14 +46,9 @@ uint64_t checkMagic(SquareSet* targets, SquareSet* blockers, uint64_t magic, Squ
     SquareSet table[kMaxMagicTableSize];
     int bits = mask.size();  // Theoretically could do better sometimes.
     int maskValues = 1 << bits;
-    memset(table, 0, sizeof(SquareSet) * maskValues);  // Initialize the table to zero
-    for (int i = 0; i < maskValues; i++) {
-        SquareSet& entry = table[magicTableIndex(blockers[i], magic, bits)];
-        if (entry.empty())
-            entry = targets[i];
-        else if (entry != targets[i])
+    for (int i = 0; i < maskValues; i++)
+        if (!setMagicEntry(table[magicTableIndex(blockers[i], magic, bits)], targets[i]))
             return 0;  // Collision found, magic is not valid
-    }
     return magic;
 }
 
@@ -81,17 +80,17 @@ void generateMagic(std::ostream& out) {
     out << "#include <cstdint>\n\n";
 
     out << "constexpr uint64_t rookMagic[" << kNumSquares << "] = {\n";
-    for (auto square : SquareSet::all()) {
+    for (auto square : SquareSet::all())
         out << "  0x" << std::setfill('0') << std::setw(16) << std::hex << std::nouppercase
             << findMagic(square, 0) << "ull,\n";
-    }
+
     out << "};\n\n" << std::dec;
 
     out << "constexpr uint64_t bishopMagic[" << kNumSquares << "] = {\n";
-    for (auto square : SquareSet::all()) {
+    for (auto square : SquareSet::all())
         out << "  0x" << std::setfill('0') << std::setw(16) << std::hex << std::nouppercase
             << findMagic(square, 1) << "ull,\n";
-    }
+
     out << "};\n" << std::dec;
 }
 
