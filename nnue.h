@@ -1,51 +1,35 @@
+#pragma once
+
 #include <cstdint>
 #include <string>
 #include <vector>
 
-namespace nnue {
-constexpr std::uint32_t kVersion = 0x7af32f16u;
+#include "common.h"
 
-// rough overview of the NNUE architecture:
-// Feature Transformer
-//   input 41024 dimensions
-//   output 2*256==512 dimensions, output type is uint8_t
-// Feature Transformer File Data
-//   uint32_t hash; // 0x5d69d5b8 ^ output dimensions == 5d69d7b8
-//   int16_t bias[256]; // 256 elements
-//   int16_t weights[256][41024]; // 256 rows, 41024 columns
-// Network Layers
-//   InputSlice[512]
-//   AffineLayer 32<-512
-//   ClippedReLU[32]
-//   AffineLayer 32<-32
-//   ClippedReLU[32]
-//   AffineLayer 1<-32
-// Network Layers File Data
-//   uint32_t hash // network hash
+namespace nnue {
+
+// Rough overview of the NNUE architecture:
 //
-// Accounting of the total file size of 21022697 bytes:
-//   Sum: 21022697 == 189 + 21004804 + 17704 bytes
-//   Header: 189 bytes
-//     Version: 4 bytes
-//     Hash: 4 bytes
-//     Name size: 4 bytes
-//     Name: 177 bytes
+// Position → Feature Extraction → InputTransform → Accumulator[512×int16_t]
+//                                                        ↓
+//                          Input Slice[256×uint8_t] ← ClippedReLU (perspective selection)
+//                                                        ↓
+//                               AffineLayer[32×int32_t] ← 32←256
+//                                                        ↓
+//                                ClippedReLU[32×uint8_t]
+//                                                        ↓
+//                               AffineLayer[32×int32_t] ← 32←32
+//                                                        ↓
+//                                ClippedReLU[32×uint8_t]
+//                                                        ↓
+//                               AffineLayer[1×int32_t] ← 1←32
+//                                                        ↓
+//                                     Final Score (centipawns)
 //
-//  Feature Transformer: 21004804 bytes
-//     Hash: 4 bytes
-//     Bias file size: 512
-//     Weight file size: 21004288
-//  Network Layers: 17704 == 4 + 16512 + 1152 + 36 bytes
-//     Hash: 4 bytes
-//     AffineTransform 32 <- 512: 16512 bytes
-//         Bias file size: 128
-//         Weight file size: 16384
-//     AffineTransform 32 <- 32: 1152 bytes
-//         Bias file size: 128
-//         Weight file size: 1024
-//     AffineTransform 1 <- 32: 36 bytes
-//         Bias file size: 4
-//         Weight file size: 32
+// The InputTransform takes HalfKP features and produces a 512-dimensional accumulator
+// (256 dimensions each for white and black perspectives). The network then selects
+// one perspective based on the side to move, applies ClippedReLU, and processes
+// through 3 affine layers with ClippedReLU activations to produce the final evaluation.
 
 struct InputTransform {
     constexpr static size_t kInputDimensions = 41024;
@@ -59,13 +43,47 @@ struct InputTransform {
     InputTransform() : bias(kHalfDimensions), weights(kHalfDimensions * kInputDimensions) {}
 };
 
+/** Feature represents a single HalfKP feature with both white and black perspective indices */
+struct Feature {
+    size_t whiteIndex;  // Feature index from white perspective
+    size_t blackIndex;  // Feature index from black perspective
+
+    constexpr Feature(size_t white, size_t black) : whiteIndex(white), blackIndex(black) {}
+    constexpr Feature(PieceType type)  // Create a feature from a piece type
+        : whiteIndex(index(type) * 128 + 1), blackIndex(whiteIndex) {}
+    constexpr Feature(Color color)  // Create a feature from a color
+        : whiteIndex(index(color) * 64), blackIndex(whiteIndex ^ 64) {}
+    constexpr Feature(Piece piece)  // Create a feature from a non-king piece
+        : Feature{Feature(type(piece)) + Feature(color(piece))} {}
+    Feature operator+(const Feature& other) const {
+        return Feature(whiteIndex + other.whiteIndex, blackIndex + other.blackIndex);
+    }
+    Feature operator*(const Feature& other) const {  // For deriving king features
+        return Feature(whiteIndex * other.whiteIndex, blackIndex * other.blackIndex);
+    }
+    constexpr bool operator==(const Feature& other) const {
+        return whiteIndex == other.whiteIndex && blackIndex == other.blackIndex;
+    }
+};
+
+/** Accumulator holds the result of affine transformation of input features of InputTransform */
+struct Accumulator {
+    constexpr static size_t kDimensions = InputTransform::kOutputDimensions;
+    std::vector<int16_t> values;  // [kDimensions]
+
+    /** Initialize accumulator with bias values from InputTransform */
+    explicit Accumulator(const InputTransform& inputTransform);
+};
+
 /** Affine layer: y = weights * x + bias */
 struct AffineLayer {
+    using Weight = int8_t;
+    using Bias = int32_t;
     AffineLayer(size_t in, size_t out) : in(in), out(out), weights(in * out), bias(out) {}
     const size_t in;
     const size_t out;
-    std::vector<int8_t> weights;  // flattened row-major: [out][in]
-    std::vector<int32_t> bias;
+    std::vector<Weight> weights;  // flattened row-major: [out][in]
+    std::vector<Bias> bias;
 };
 
 struct Network {
@@ -78,7 +96,7 @@ struct Network {
 struct FileHeader {
     static constexpr uint32_t kVersion = 0x7af32f16;
     static constexpr uint32_t kHash = InputTransform::kHash ^ Network::kHash;
-    std::string name;  // name string, only for diagnostic purposes
+    std::string name;  // name string for diagnostic purposes
 };
 
 /** NNUE network representation (no incremental accumulator yet) */
@@ -88,6 +106,45 @@ struct NNUE {
     InputTransform input;
     Network network;
 };
+
+// ClippedReLU activation function constants
+constexpr int kWeightScaleBits = 6;
+
+/**
+ * Apply ClippedReLU to a vector of int16_t values, producing uint8_t outputs.
+ */
+std::vector<uint8_t> applyClippedReLU(const std::vector<int16_t>& input);
+
+/**
+ * Select perspective from accumulator based on side to move.
+ * Returns 256 values from either white perspective (first half) or black perspective (second half).
+ */
+std::vector<int16_t> selectPerspective(const Accumulator& accumulator, Color sideToMove);
+
+/**
+ * Apply affine transformation: output = weights * input + bias
+ * Returns int32_t values before activation.
+ */
+std::vector<int32_t> affineForward(const std::vector<uint8_t>& input, const AffineLayer& layer);
+
+/**
+ * Complete NNUE evaluation for a position.
+ * Returns the final evaluation score in centipawns, from the white perspective.
+ */
+int32_t evaluate(const Position& position, const NNUE& network);
+
+/**
+ * Extract active features from a position using HalfKP feature set.
+ * Returns a vector of Feature objects containing both white and black perspective indices.
+ */
+std::vector<Feature> extractActiveFeatures(const Position& position);
+
+/**
+ * Transform position features through InputTransform to produce an Accumulator.
+ * No overflow occurs by construction - 16-bit ints are sufficient for any
+ * possible combination of enabled input features.
+ */
+Accumulator transform(const Position& position, const InputTransform& inputTransform);
 
 NNUE loadNNUE(const std::string& filename);
 }  // namespace nnue
