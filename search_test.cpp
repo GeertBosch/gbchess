@@ -11,6 +11,7 @@
 #include "eval.h"
 #include "fen.h"
 #include "moves.h"
+#include "nnue.h"
 #include "options.h"
 #include "pv.h"
 #include "search.h"
@@ -242,6 +243,7 @@ void testFromStdIn(int depth) {
     auto colRating = find(columns, "Rating");
     auto puzzleRating = ELO(kExpectedPuzzleRating);
     PuzzleStats stats;
+    nnue::resetTimingStats();
 
     while (std::cin) {
         std::getline(std::cin, line);
@@ -271,6 +273,7 @@ void testFromStdIn(int depth) {
     }
     std::cout << stats() << ", " << puzzleRating() << " rating\n";
     assert(puzzleRating() >= kExpectedPuzzleRating - ELO::K);
+    nnue::printTimingStats();
 }
 
 void testBasicPuzzles() {

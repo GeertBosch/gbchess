@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <chrono>
 #include <iostream>
+#include <optional>
 #include <sstream>
 #include <sys/types.h>
 #include <vector>
@@ -9,6 +10,7 @@
 #include "eval.h"
 #include "hash.h"
 #include "moves.h"
+#include "nnue.h"
 #include "options.h"
 #include "pv.h"
 
@@ -23,8 +25,11 @@ namespace {
 using namespace std::chrono;
 using clock = high_resolution_clock;
 using timepoint = clock::time_point;
+
 uint64_t searchEvalCount = 0;  // copy of evalCount at the start of the search
 timepoint searchStartTime = {};
+
+std::optional<nnue::NNUE> network;
 
 std::string pct(uint64_t some, uint64_t all) {
     return all ? " " + std::to_string((some * 100) / all) + "%" : "";
@@ -348,11 +353,20 @@ void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
 std::pair<UndoPosition, Score> makeMoveWithEval(Position& position, Move move, Score eval) {
     auto change = prepareMove(position.board, move);
     UndoPosition undo;
-    if constexpr (options::incrementalEvaluation) {
+    if constexpr (options::useNNUE) {
+        // Use NNUE evaluation, which is more accurate than the piece-square evaluation
+        if (!network) network = nnue::loadNNUE("nn-82215d0fd0df.nnue");
+        undo = makeMove(position, change, move);
+        eval = Score::fromCP(nnue::evaluate(position, *network));
+        // Note that we evaluated the board after the move, so our evaluation is the inverse
+        if (position.active() == Color::w) eval = -eval;
+    } else if constexpr (options::incrementalEvaluation) {
+        // Incremental evaluation of the piece-square evaluation
         eval += evaluateMove(position.board, position.active(), change, evalTable);
         undo = makeMove(position, change, move);
         dassert(-eval == evaluateBoard(position.board, position.active(), evalTable));
     } else {
+        // Use non-incremental piece-square evaluation, the simplest approach
         undo = makeMove(position, change, move);
         eval = evaluateBoard(position.board, !position.active(), evalTable);
     }

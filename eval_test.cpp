@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>  // For std::exit
 #include <fstream>
@@ -16,6 +17,7 @@ namespace {
 std::string cmdName = "eval-test";
 
 std::optional<nnue::NNUE> network;
+uint64_t numEvals = 0;
 
 using GridDrawing = std::array<std::string, 11>;
 GridDrawing gridDrawing = {
@@ -245,6 +247,7 @@ std::string computeStatistics(const std::vector<float>& diffs) {
 }
 
 void testFromStream(std::ifstream& stream) {
+    using namespace std::chrono;
     std::string line;
     std::getline(stream, line);
     auto columns = split(line, ',');
@@ -255,6 +258,7 @@ void testFromStream(std::ifstream& stream) {
 
     if (debug) std::cout << "Expected,Score,Diff,Phase,FEN\n";
 
+    auto startTime = high_resolution_clock::now();
     while (std::getline(stream, line)) {
         auto columns = split(line, ',');
         if (columns.size() < 2) continue;
@@ -262,6 +266,7 @@ void testFromStream(std::ifstream& stream) {
         auto fen = columns[fenCol];
         auto position = fen::parsePosition(fen);
         auto score = nnue::evaluate(position, *network);
+        ++numEvals;
         auto phase = computePhase(position.board);
         auto diff = expected - score;
         diffs.push_back(diff * 0.01);
@@ -269,6 +274,11 @@ void testFromStream(std::ifstream& stream) {
             std::cout << expected << "," << score << "," << diff << "," << phase << "," << fen
                       << "\n";
     }
+    auto endTime = high_resolution_clock::now();
+    auto duration = duration_cast<milliseconds>(endTime - startTime).count();
+    auto rate = numEvals ? static_cast<double>(numEvals) * 1000 / duration : 0;
+    std::cout << "Processed " << numEvals << " evaluations in " << duration << " ms, " << rate
+              << " evals/sec\n";
     std::cout << "Error stats: " << computeStatistics(diffs) << "\n";
 }
 
@@ -337,5 +347,12 @@ int main(int argc, char* argv[]) {
     }
 
     printAvailableMovesAndCaptures(position);
+    
+    // Display NNUE timing statistics
+    nnue::printTimingStats();
+    
+    // Display computational complexity analysis
+    nnue::analyzeComputationalComplexity();
+    
     return 0;
 }
