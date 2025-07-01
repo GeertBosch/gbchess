@@ -3,15 +3,19 @@
 #include <cstdlib>  // For std::exit
 #include <fstream>
 #include <iostream>
+#include <optional>
 #include <string>
 
 #include "common.h"
 #include "eval.h"
 #include "fen.h"
 #include "moves.h"
+#include "nnue.h"
 
 namespace {
 std::string cmdName = "eval-test";
+
+std::optional<nnue::NNUE> network;
 
 using GridDrawing = std::array<std::string, 11>;
 GridDrawing gridDrawing = {
@@ -235,6 +239,8 @@ std::string computeStatistics(const std::vector<float>& diffs) {
     double mean = sum / diffs.size();
     double variance = sum2 / diffs.size() - mean * mean;
     double stddev = std::sqrt(variance);
+    assert(stddev < 0.1 && "Standard deviation is too high, check your data");
+    assert(abs(mean) < 0.1 && "Mean is too far off, check your data");
     return "Mean: " + std::to_string(mean) + ", Standard Deviation: " + std::to_string(stddev);
 }
 
@@ -255,8 +261,7 @@ void testFromStream(std::ifstream& stream) {
         int expected = 100.0f * std::stof(columns[cpCol]);
         auto fen = columns[fenCol];
         auto position = fen::parsePosition(fen);
-        auto score = quiesce(position, Score::min(), Score::max(), 4).cp();
-        if (position.active() == Color::b) score = -score;
+        auto score = nnue::evaluate(position, *network);
         auto phase = computePhase(position.board);
         auto diff = expected - score;
         diffs.push_back(diff * 0.01);
@@ -299,6 +304,8 @@ int main(int argc, char* argv[]) {
     testMateScore();
     testEvaluateBoard();
 
+    network.emplace(nnue::loadNNUE("nn-82215d0fd0df.nnue"));
+
     if (argc && !fen::maybeFEN(*argv)) return testFromFiles(argc, argv);
 
     // Default FEN string to analyze
@@ -323,6 +330,11 @@ int main(int argc, char* argv[]) {
     auto quiesceEval = quiesce(position, Score::min(), Score::max(), 4);
     if (position.active() == Color::b) quiesceEval = -quiesceEval;
     std::cout << "Quiescence Evaluation: " << std::string(quiesceEval) << std::endl;
+
+    if (network) {
+        auto nnueEval = nnue::evaluate(position, *network);
+        std::cout << "NNUE Evaluation: " << nnueEval << " cp\n";
+    }
 
     printAvailableMovesAndCaptures(position);
     return 0;

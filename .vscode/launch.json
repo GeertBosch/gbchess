@@ -88,6 +88,16 @@
             ],
         },
         {
+            "name": "nnue-debug",
+            "type": "lldb-dap",
+            "request": "launch",
+            "initCommands": [
+                "command source ${workspaceRoot}/chess.lldbinit"
+            ],
+            "program": "${workspaceFolder}/nnue-debug",
+            "args": [],
+        },
+        {
             "name": "uci-debug",
             "type": "lldb-dap",
             "request": "launch",

@@ -78,8 +78,8 @@ fen-debug: ${DBGOBJ}/fen.o
 
 MOVES_SRCS=moves.cpp magic.cpp
 
-nnue-test: ${OPTOBJ}/nnue.o
-nnue-debug: ${DBGOBJ}/nnue.o
+nnue-test: $(call calc_objs,OPT,nnue.cpp ${MOVES_SRCS} fen.cpp)
+nnue-debug: $(call calc_objs,DBG,nnue.cpp ${MOVES_SRCS} fen.cpp)
 
 moves-test: $(call calc_objs,OPT,${MOVES_SRCS} fen.cpp) 
 moves-debug: $(call calc_objs,DBG,${MOVES_SRCS} fen.cpp)
@@ -90,7 +90,7 @@ hash-debug: $(call calc_objs,DBG,${MOVES_SRCS} hash.cpp fen.cpp)
 magic-test: $(call calc_objs,OPT,${MOVES_SRCS})
 magic-debug: $(call calc_objs,DBG,${MOVES_SRCS})
 
-EVAL_SRCS=eval.cpp hash.cpp fen.cpp ${MOVES_SRCS}
+EVAL_SRCS=eval.cpp hash.cpp fen.cpp nnue.cpp ${MOVES_SRCS}
 
 eval-test: $(call calc_objs,OPT,${EVAL_SRCS})
 eval-debug: $(call calc_objs,DBG,${EVAL_SRCS})
