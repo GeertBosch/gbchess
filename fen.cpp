@@ -148,6 +148,7 @@ Position parsePosition(std::stringstream ss) {
     std::string piecePlacementStr;
     // Read piece placement from the FEN string
     std::getline(ss, piecePlacementStr, ' ');
+    if (piecePlacementStr == "startpos") return parsePosition(fen::initialPosition);
     position.board = parsePiecePlacement(piecePlacementStr);
     position.turn = parseTurn(std::move(ss));
 
@@ -159,6 +160,7 @@ Position parsePosition(const std::string& fen) {
 }
 
 bool maybeFEN(std::string fen) {
+    if (fen == "startpos") return true;
     std::string startChars = "rnbqkpRNBQKP12345678";
     int slashCount = 0;
     for (char ch : fen) slashCount += ch == '/';
