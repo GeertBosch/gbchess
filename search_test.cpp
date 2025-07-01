@@ -376,7 +376,12 @@ int main(int argc, char* argv[]) {
     std::cout << "Quiescence search: " << std::string(quiescenceEval) << " (white side)\n";
 
     if (depth) {
+        nnue::resetTimingStats();
         printEvalRate([&]() { printBestMove(position, depth); });
+        if (nnue::g_totalEvaluations) {
+            nnue::printTimingStats();
+            nnue::analyzeComputationalComplexity();
+        }
         if (debug) printEvalRate([&]() { printAnalysis(position, depth); });
     }
     return 0;
