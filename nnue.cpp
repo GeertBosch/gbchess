@@ -16,7 +16,6 @@ namespace nnue {
 uint64_t g_transformTimeNanos = 0;
 uint64_t g_perspectiveTimeNanos = 0;
 uint64_t g_affineTimeNanos = 0;
-uint64_t g_clippedReluTimeNanos = 0;
 uint64_t g_totalEvaluations = 0;
 uint64_t g_totalActiveFeatures = 0;
 
@@ -56,6 +55,15 @@ std::string formatHeader(std::string text) {
     std::string padding((targetWidth - text.length()) / 2, '=');
 
     return padding + text + padding;
+}
+
+/** Update timing point and return elapsed nanoseconds */
+uint64_t updateTiming(std::chrono::high_resolution_clock::time_point& timePoint) {
+    using namespace std::chrono;
+    auto nextTimePoint = high_resolution_clock::now();
+    uint64_t elapsed = duration_cast<nanoseconds>(nextTimePoint - timePoint).count();
+    timePoint = nextTimePoint;
+    return elapsed;
 }
 
 /** Read binary data (little endian) */
@@ -132,7 +140,8 @@ void readInputTransform(std::ifstream& file, InputTransform& input) {
     readBinaryVector(file, input.weights);
 }
 
-void readAffineTransform(std::ifstream& file, AffineLayer& layer) {
+template <typename Layer>
+void readAffineTransform(std::ifstream& file, Layer& layer) {
     readBinaryVector(file, layer.bias);
     readBinaryVector(file, layer.weights);
 }
@@ -140,29 +149,34 @@ void readAffineTransform(std::ifstream& file, AffineLayer& layer) {
 void readNetwork(std::ifstream& file, Network& net) {
     checkHash(Network::kHash, readBinary<uint32_t>(file), "Network");
 
-    for (size_t i = 0; i < net.layers.size(); ++i) readAffineTransform(file, net.layers[i]);
+    readAffineTransform(file, net.layer0);
+    readAffineTransform(file, net.layer1);
+    readAffineTransform(file, net.layer2);
 }
-}  // namespace
 
-Accumulator::Accumulator(const InputTransform& inputTransform) : values(kDimensions) {
-    for (size_t i = 0; i < InputTransform::kHalfDimensions; ++i) {
-        values[i] = inputTransform.bias[i];                                    // White perspective
-        values[i + InputTransform::kHalfDimensions] = inputTransform.bias[i];  // Black perspective
+/** Feature represents a single HalfKP feature with both white and black perspective indices */
+struct Feature {
+    size_t whiteIndex;  // Feature index from white perspective
+    size_t blackIndex;  // Feature index from black perspective
+
+    constexpr Feature(size_t white, size_t black) : whiteIndex(white), blackIndex(black) {}
+    constexpr Feature(PieceType type)  // Create a feature from a piece type
+        : whiteIndex(index(type) * 128 + 1), blackIndex(whiteIndex) {}
+    constexpr Feature(Color color)  // Create a feature from a color
+        : whiteIndex(index(color) * 64), blackIndex(whiteIndex ^ 64) {}
+    constexpr Feature(Piece piece)  // Create a feature from a non-king piece
+        : Feature{Feature(type(piece)) + Feature(color(piece))} {}
+    Feature operator+(const Feature& other) const {
+        return Feature(whiteIndex + other.whiteIndex, blackIndex + other.blackIndex);
     }
-}
+    Feature operator*(const Feature& other) const {  // For deriving king features
+        return Feature(whiteIndex * other.whiteIndex, blackIndex * other.blackIndex);
+    }
+    constexpr bool operator==(const Feature& other) const {
+        return whiteIndex == other.whiteIndex && blackIndex == other.blackIndex;
+    }
+};
 
-NNUE loadNNUE(const std::string& filename) {
-    std::ifstream file(filename, std::ios::binary);
-    if (!file) throw std::runtime_error("Cannot open NNUE file: " + filename);
-    NNUE net;
-
-    net.header = readHeader(file);
-    readInputTransform(file, net.input);
-    readNetwork(file, net.network);
-    std::cout << "NNUE network loaded successfully from: " << filename << "\n";
-
-    return net;
-}
 
 /**
  * Extract active features from a position using HalfKP feature set.
@@ -203,6 +217,95 @@ void addFeature(Accumulator& accumulator,
             inputTransform.weights[blackOffset + j];
     }
 }
+uint8_t clippedReLU(int16_t value) {
+    // Stockfish uses max(0, min(127, value)) for accumulator -> uint8_t conversion
+    return static_cast<uint8_t>(std::clamp(value, int16_t(0), int16_t(127)));
+}
+
+/**
+ * Select perspective from accumulator based on side to move.
+ * Returns 512 values from either white perspective or black perspective.
+ */
+typename Network::Layer0::Input selectPerspective(const Accumulator& accumulator,
+                                                  Color sideToMove) {
+    typename Network::Layer0::Input perspective;
+
+    auto in1 = accumulator.values.begin();
+    auto in2 = accumulator.values.begin() + InputTransform::kHalfDimensions;
+    auto out = perspective.begin();
+
+    // Swap perspectives if black to move, so the first half is for us and second half for them
+    if (sideToMove == Color::b) std::swap(in1, in2);
+
+    for (size_t i = 0; i < InputTransform::kHalfDimensions; ++i) *out++ = clippedReLU(*in1++);
+    for (size_t i = 0; i < InputTransform::kHalfDimensions; ++i) *out++ = clippedReLU(*in2++);
+
+    return perspective;
+}
+/**
+ * Apply affine transformation: output = weights * input + bias
+ * Returns int32_t values before activation.
+ */
+template <typename Layer>
+typename Layer::Output affineForward(const typename Layer::Input input, const Layer& layer) {
+    typename Layer::Output output;
+    output.fill(0);  // Explicitly initialize to 0
+
+    // Add weighted inputs: output[i] = bias[i] + sum(weights[i][j] * input[j])
+    for (size_t i = 0; i < output.size(); ++i) {
+        size_t offset = i * Layer::kInputSize;
+        int32_t sum = layer.bias[i];  // Start with bias
+
+        for (size_t j = 0; j < Layer::kInputSize; ++j) {
+            sum += layer.weights[offset + j] * input[j];
+        }
+        output[i] = sum;
+    }
+
+    return output;
+}
+
+/** Optimized affine forward that directly outputs clipped ReLU values for hidden layers */
+template <typename Layer>
+typename Layer::Clipped affineForwardWithClippedReLU(const typename Layer::Input& input,
+                                                     const Layer& layer) {
+    typename Layer::Clipped output;
+
+    // Apply weights and clipped ReLU for each output
+    for (size_t i = 0; i < Layer::kOutputSize; ++i) {
+        int32_t sum = layer.bias[i];
+        for (size_t j = 0; j < Layer::kInputSize; ++j) {
+            sum += input[j] * layer.weights[i * Layer::kInputSize + j];
+        }
+        // Apply clipped ReLU directly to each scalar value
+        output[i] = static_cast<uint8_t>(std::clamp(sum >> 6, 0, 127));
+    }
+
+    return output;
+}
+
+}  // namespace
+
+Accumulator::Accumulator(const InputTransform& inputTransform) {
+    for (size_t i = 0; i < InputTransform::kHalfDimensions; ++i) {
+        values[i] = inputTransform.bias[i];                                    // White perspective
+        values[i + InputTransform::kHalfDimensions] = inputTransform.bias[i];  // Black perspective
+    }
+}
+
+NNUE loadNNUE(const std::string& filename) {
+    std::ifstream file(filename, std::ios::binary);
+    if (!file) throw std::runtime_error("Cannot open NNUE file: " + filename);
+    NNUE net;
+
+    net.header = readHeader(file);
+    readInputTransform(file, net.input);
+    readNetwork(file, net.network);
+    std::cout << "NNUE network loaded successfully from: " << filename << "\n";
+
+    return net;
+}
+
 
 Accumulator transform(const Position& position, const InputTransform& inputTransform) {
     Accumulator accumulator(inputTransform);
@@ -214,107 +317,30 @@ Accumulator transform(const Position& position, const InputTransform& inputTrans
     return accumulator;
 }
 
-std::vector<uint8_t> applyClippedReLU(const std::vector<int16_t>& input, int shift = 0) {
-    std::vector<uint8_t> output;
-    output.reserve(input.size());
-
-    for (int16_t value : input) {
-        // Stockfish uses max(0, min(127, value)) for accumulator -> uint8_t conversion
-        output.push_back(static_cast<uint8_t>(std::clamp(int(value >> shift), 0, 127)));
-    }
-
-    return output;
-}
-
-std::vector<int16_t> selectPerspective(const Accumulator& accumulator, Color sideToMove) {
-    std::vector<int16_t> perspective;
-    perspective.resize(InputTransform::kOutputDimensions);
-
-    auto in1 = accumulator.values.begin();
-    auto in2 = accumulator.values.begin() + InputTransform::kHalfDimensions;
-    auto out = perspective.begin();
-
-    if (sideToMove == Color::b) std::swap(in1, in2);  // Swap perspectives if black to move
-    // This way, we always take the first half for us and second half for them
-    for (size_t i = 0; i < InputTransform::kHalfDimensions; ++i) {
-        *out++ = static_cast<int16_t>(*in1++);
-    }
-    for (size_t i = 0; i < InputTransform::kHalfDimensions; ++i) {
-        *out++ = static_cast<int16_t>(*in2++);
-    }
-    return perspective;
-}
-
-std::vector<int32_t> affineForward(const std::vector<uint8_t>& input, const AffineLayer& layer) {
-    std::vector<int32_t> output(layer.out, 0);  // Explicitly initialize to 0
-
-    // Add weighted inputs: output[i] = bias[i] + sum(weights[i][j] * input[j])
-    for (size_t i = 0; i < layer.out; ++i) {
-        size_t offset = i * layer.in;
-        int32_t sum = layer.bias[i];  // Start with bias
-
-        for (size_t j = 0; j < layer.in; ++j) {
-            sum += layer.weights[offset + j] * input[j];
-        }
-        output[i] = sum;
-    }
-
-    return output;
-}
-
-int32_t evaluate(const Position& position, const NNUE& network) {
+int32_t evaluate(const Position& position, const NNUE& nnue) {
     using namespace std::chrono;
+    const Network& network = nnue.network;
 
     ++g_totalEvaluations;
 
     // Step 1: Get accumulator from input transform
     auto timePoint = high_resolution_clock::now();
-    Accumulator accumulator = transform(position, network.input);
-    auto nextTimePoint = high_resolution_clock::now();
-    g_transformTimeNanos += duration_cast<nanoseconds>(nextTimePoint - timePoint).count();
+    Accumulator accumulator = transform(position, nnue.input);
+    g_transformTimeNanos += updateTiming(timePoint);
 
-    // Step 2: Select perspective first, then apply ClippedReLU
-    timePoint = nextTimePoint;  // Reuse previous end time
-    std::vector<int16_t> perspective = selectPerspective(accumulator, position.active());
-    nextTimePoint = high_resolution_clock::now();
-    g_perspectiveTimeNanos += duration_cast<nanoseconds>(nextTimePoint - timePoint).count();
-
-    timePoint = nextTimePoint;  // Reuse previous end time
-    std::vector<uint8_t> layerInput = applyClippedReLU(perspective, 0);
-    nextTimePoint = high_resolution_clock::now();
-    g_clippedReluTimeNanos += duration_cast<nanoseconds>(nextTimePoint - timePoint).count();
+    // Step 2: Select perspective first while applying clippedReLU
+    typename Network::Layer0::Input input0 = selectPerspective(accumulator, position.active());
+    g_perspectiveTimeNanos += updateTiming(timePoint);
 
     // Step 3: Process through each affine layer with ClippedReLU activations
-    std::vector<int32_t> layerOutput;
-    for (size_t i = 0; i < network.network.layers.size(); ++i) {
-        const auto& layer = network.network.layers[i];
-
-        // Apply affine transformation
-        timePoint = nextTimePoint;  // Reuse previous end time
-        layerOutput = affineForward(layerInput, layer);
-        nextTimePoint = high_resolution_clock::now();
-        g_affineTimeNanos += duration_cast<nanoseconds>(nextTimePoint - timePoint).count();
-
-        if (i == network.network.layers.size()) break;
-
-        // Apply ClippedReLU for hidden layers (not the final output layer)
-        timePoint = nextTimePoint;  // Reuse previous end time
-        std::vector<int16_t> int16Output;
-        int16Output.reserve(layerOutput.size());
-        for (int32_t value : layerOutput) {
-            int16Output.push_back(static_cast<int16_t>(
-                std::clamp(value,
-                           static_cast<int32_t>(std::numeric_limits<int16_t>::min()),
-                           static_cast<int32_t>(std::numeric_limits<int16_t>::max()))));
-        }
-        layerInput = applyClippedReLU(int16Output, 6);
-        nextTimePoint = high_resolution_clock::now();
-        g_clippedReluTimeNanos += duration_cast<nanoseconds>(nextTimePoint - timePoint).count();
-    }
-    // if (debug) std::cout << "Final layer output: " << layerOutput[0] << std::endl;
+    auto input1 = affineForwardWithClippedReLU<typename Network::Layer0>(input0, network.layer0);
+    auto input2 = affineForwardWithClippedReLU<typename Network::Layer1>(input1, network.layer1);
+    auto output = affineForward<typename Network::Layer2>(input2, network.layer2);
+    g_affineTimeNanos += updateTiming(timePoint);
+    if constexpr (nnueDebug) std::cout << "Final layer output: " << output[0] << std::endl;
 
     double kScale = 0.0300682;  // Scale factor for centipawns closely approximating Stockfish 12
-    return layerOutput[0] * (position.active() == Color::b ? -kScale : kScale);
+    return output[0] * (position.active() == Color::b ? -kScale : kScale);
 }
 
 void printTimingStats() {
@@ -323,8 +349,7 @@ void printTimingStats() {
         return;
     }
 
-    uint64_t totalTime =
-        g_transformTimeNanos + g_perspectiveTimeNanos + g_affineTimeNanos + g_clippedReluTimeNanos;
+    uint64_t totalTime = g_transformTimeNanos + g_perspectiveTimeNanos + g_affineTimeNanos;
 
     std::cout << "\n" << formatHeader(" NNUE Evaluation Timing Statistics ") << std::endl;
     std::cout << "Total evaluations: " << g_totalEvaluations << std::endl;
@@ -344,9 +369,6 @@ void printTimingStats() {
               << std::endl;
     std::cout << "  Affine layers:  " << (g_affineTimeNanos / g_totalEvaluations) << " ns/eval ("
               << formatPercent(100.0 * g_affineTimeNanos / totalTime) << ")" << std::endl;
-    std::cout << "  ClippedReLU:    " << (g_clippedReluTimeNanos / g_totalEvaluations)
-              << " ns/eval (" << formatPercent(100.0 * g_clippedReluTimeNanos / totalTime) << ")"
-              << std::endl;
     std::cout << formatHeader("") << "\n" << std::endl;
 }
 
@@ -354,7 +376,6 @@ void resetTimingStats() {
     g_transformTimeNanos = 0;
     g_perspectiveTimeNanos = 0;
     g_affineTimeNanos = 0;
-    g_clippedReluTimeNanos = 0;
     g_totalEvaluations = 0;
     g_totalActiveFeatures = 0;
 }
@@ -439,8 +460,7 @@ void analyzeComputationalComplexity() {
     // Use actual eval rate if we have timing data, otherwise default to 100K
     double evalRate = 100000.0;  // Default 100K eval/sec
     if (g_totalEvaluations > 0) {
-        uint64_t totalTime = g_transformTimeNanos + g_perspectiveTimeNanos + g_affineTimeNanos +
-            g_clippedReluTimeNanos;
+        uint64_t totalTime = g_transformTimeNanos + g_perspectiveTimeNanos + g_affineTimeNanos;
         if (totalTime > 0) {
             evalRate = 1e9 * g_totalEvaluations / totalTime;
         }
@@ -452,12 +472,11 @@ void analyzeComputationalComplexity() {
 
     // Use timing percentages instead of operation percentages
     if (g_totalEvaluations > 0) {
-        uint64_t totalTime = g_transformTimeNanos + g_perspectiveTimeNanos + g_affineTimeNanos +
-            g_clippedReluTimeNanos;
+        uint64_t totalTime = g_transformTimeNanos + g_perspectiveTimeNanos + g_affineTimeNanos;
         if (totalTime > 0) {
             double transformPercent = 100.0 * g_transformTimeNanos / totalTime;
-            double networkPropagationPercent = 100.0 *
-                (g_perspectiveTimeNanos + g_affineTimeNanos + g_clippedReluTimeNanos) / totalTime;
+            double networkPropagationPercent =
+                100.0 * (g_perspectiveTimeNanos + g_affineTimeNanos) / totalTime;
             std::cout << "   Transform takes " << formatPercent(transformPercent)
                       << " of evaluation time" << std::endl;
             std::cout << "   Incremental evaluation can eliminate the transform cost," << std::endl;

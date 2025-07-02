@@ -22,6 +22,6 @@ constexpr int defaultMoveTime = 8'000;                      // Max time for a mo
 constexpr bool hash128 = true;                              // Use a 128-bit hash for  positions
 constexpr bool cachePerft = hash128;                        // Allow caching perft results
 constexpr bool useNNUE = true;                              // Use NNUE evaluation
-constexpr bool incrementalEvaluation = false;               // Compute QS evaluation using deltas
+constexpr bool incrementalEvaluation = true;                // Compute QS evaluation using deltas
 
 };  // namespace options

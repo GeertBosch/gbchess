@@ -141,8 +141,8 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
 
     // The moveList includes moves needed to get out of check; an empty list means mate
     auto moveList = allLegalQuiescentMoves(position.turn, position.board, depthleft);
-    if (moveList.empty() && isInCheck(position)) return Score::min();
 
+    if (moveList.empty()) return isInCheck(position) ? Score::min() : Score::draw();
 
     for (auto move : moveList) {
         // Compute the change to the board and evaluation that results from the move
@@ -347,12 +347,12 @@ int main(int argc, char* argv[]) {
     }
 
     printAvailableMovesAndCaptures(position);
-    
+
     // Display NNUE timing statistics
     nnue::printTimingStats();
-    
+
     // Display computational complexity analysis
     nnue::analyzeComputationalComplexity();
-    
+
     return 0;
 }
