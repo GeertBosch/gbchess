@@ -12,6 +12,7 @@
 #include "fen.h"
 #include "moves.h"
 #include "nnue.h"
+#include "nnue_stats.h"
 
 namespace {
 std::string cmdName = "eval-test";
