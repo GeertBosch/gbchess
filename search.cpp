@@ -29,7 +29,7 @@ using timepoint = clock::time_point;
 uint64_t searchEvalCount = 0;  // copy of evalCount at the start of the search
 timepoint searchStartTime = {};
 
-std::optional<nnue::NNUE> network;
+std::optional<nnue::NNUE> network = nnue::loadNNUE("nn-82215d0fd0df.nnue");
 
 std::string pct(uint64_t some, uint64_t all) {
     return all ? " " + std::to_string((some * 100) / all) + "%" : "";
@@ -355,7 +355,6 @@ std::pair<UndoPosition, Score> makeMoveWithEval(Position& position, Move move, S
     UndoPosition undo;
     if constexpr (options::useNNUE) {
         // Use NNUE evaluation, which is more accurate than the piece-square evaluation
-        if (!network) network = nnue::loadNNUE("nn-82215d0fd0df.nnue");
         undo = makeMove(position, change, move);
         eval = Score::fromCP(nnue::evaluate(position, *network));
         // Note that we evaluated the board after the move, so our evaluation is the inverse

@@ -32,7 +32,7 @@ std::string formatNanosPerOp(uint64_t totalNanos, size_t operations) {
     if (g_totalEvaluations == 0 || operations == 0) return "";
     double nanosPerOp = totalNanos / (double)(g_totalEvaluations * operations);
     std::ostringstream oss;
-    oss << std::fixed << std::setprecision(2) << " (" << nanosPerOp << " ns/op)";
+    oss << std::fixed << std::setprecision(3) << " (" << nanosPerOp << " ns/op)";
     return oss.str();
 }
 
@@ -143,7 +143,10 @@ void readInputTransform(std::ifstream& file, InputTransform& input) {
 template <typename Layer>
 void readAffineTransform(std::ifstream& file, Layer& layer) {
     readBinaryVector(file, layer.bias);
-    readBinaryVector(file, layer.weights);
+    // Read weights as a flat array and cast to 2D structure
+    file.read(reinterpret_cast<char*>(layer.weights.data()),
+              Layer::kWeightDimensions * sizeof(typename Layer::Weight));
+    if (!file) throw std::runtime_error("Unexpected EOF");
 }
 
 void readNetwork(std::ifstream& file, Network& net) {
@@ -176,7 +179,6 @@ struct Feature {
         return whiteIndex == other.whiteIndex && blackIndex == other.blackIndex;
     }
 };
-
 
 /**
  * Extract active features from a position using HalfKP feature set.
@@ -217,9 +219,13 @@ void addFeature(Accumulator& accumulator,
             inputTransform.weights[blackOffset + j];
     }
 }
-uint8_t clippedReLU(int16_t value) {
+uint8_t activate(int16_t value) {
     // Stockfish uses max(0, min(127, value)) for accumulator -> uint8_t conversion
     return static_cast<uint8_t>(std::clamp(value, int16_t(0), int16_t(127)));
+}
+
+uint8_t activate(int32_t value) {
+    return static_cast<uint8_t>(std::clamp(value >> 6, 0, 127));
 }
 
 /**
@@ -237,60 +243,56 @@ typename Network::Layer0::Input selectPerspective(const Accumulator& accumulator
     // Swap perspectives if black to move, so the first half is for us and second half for them
     if (sideToMove == Color::b) std::swap(in1, in2);
 
-    for (size_t i = 0; i < InputTransform::kHalfDimensions; ++i) *out++ = clippedReLU(*in1++);
-    for (size_t i = 0; i < InputTransform::kHalfDimensions; ++i) *out++ = clippedReLU(*in2++);
+    for (size_t i = 0; i < InputTransform::kHalfDimensions; ++i) *out++ = activate(*in1++);
+    for (size_t i = 0; i < InputTransform::kHalfDimensions; ++i) *out++ = activate(*in2++);
 
     return perspective;
 }
 /**
+ * Compute the inner product of two vectors. Returns the sum of element-wise products as int32_t.
+ */
+template <typename V, typename U>
+int32_t innerProduct(const V& v, const U& u) {
+    int32_t sum = 0;
+
+    for (size_t i = 0; i < v.size(); ++i) sum += v[i] * u[i];
+
+    return sum;
+}
+
+/**
  * Apply affine transformation: output = weights * input + bias
- * Returns int32_t values before activation.
+ * Returns int32_t values without activation.
  */
 template <typename Layer>
-typename Layer::Output affineForward(const typename Layer::Input input, const Layer& layer) {
+auto affineForward(const typename Layer::Input& input, const Layer& layer) {
     typename Layer::Output output;
-    output.fill(0);  // Explicitly initialize to 0
 
-    // Add weighted inputs: output[i] = bias[i] + sum(weights[i][j] * input[j])
-    for (size_t i = 0; i < output.size(); ++i) {
-        size_t offset = i * Layer::kInputSize;
-        int32_t sum = layer.bias[i];  // Start with bias
-
-        for (size_t j = 0; j < Layer::kInputSize; ++j) {
-            sum += layer.weights[offset + j] * input[j];
-        }
-        output[i] = sum;
-    }
+    for (size_t i = 0; i < Layer::kOutputSize; ++i)
+        output[i] = innerProduct(input, layer.weights[i]) + layer.bias[i];
 
     return output;
 }
 
-/** Optimized affine forward that directly outputs clipped ReLU values for hidden layers */
+/**
+ * Apply affine transformation with activation: output = activate(weights * input + bias)
+ * Returns values after clipped ReLU activation.
+ */
 template <typename Layer>
-typename Layer::Clipped affineForwardWithClippedReLU(const typename Layer::Input& input,
-                                                     const Layer& layer) {
+auto affineForwardAndActivate(const typename Layer::Input& input, const Layer& layer) {
     typename Layer::Clipped output;
 
-    // Apply weights and clipped ReLU for each output
-    for (size_t i = 0; i < Layer::kOutputSize; ++i) {
-        int32_t sum = layer.bias[i];
-        for (size_t j = 0; j < Layer::kInputSize; ++j) {
-            sum += input[j] * layer.weights[i * Layer::kInputSize + j];
-        }
-        // Apply clipped ReLU directly to each scalar value
-        output[i] = static_cast<uint8_t>(std::clamp(sum >> 6, 0, 127));
-    }
+    for (size_t i = 0; i < Layer::kOutputSize; ++i)
+        output[i] = activate(innerProduct(input, layer.weights[i]) + layer.bias[i]);
 
     return output;
 }
-
 }  // namespace
 
 Accumulator::Accumulator(const InputTransform& inputTransform) {
-    for (size_t i = 0; i < InputTransform::kHalfDimensions; ++i) {
-        values[i] = inputTransform.bias[i];                                    // White perspective
-        values[i + InputTransform::kHalfDimensions] = inputTransform.bias[i];  // Black perspective
-    }
+    auto out1 = values.begin(), out2 = values.begin() + InputTransform::kHalfDimensions;
+
+    for (auto bias : inputTransform.bias) *out1++ = *out2++ = bias;
 }
 
 NNUE loadNNUE(const std::string& filename) {
@@ -305,7 +307,6 @@ NNUE loadNNUE(const std::string& filename) {
 
     return net;
 }
-
 
 Accumulator transform(const Position& position, const InputTransform& inputTransform) {
     Accumulator accumulator(inputTransform);
@@ -333,10 +334,11 @@ int32_t evaluate(const Position& position, const NNUE& nnue) {
     g_perspectiveTimeNanos += updateTiming(timePoint);
 
     // Step 3: Process through each affine layer with ClippedReLU activations
-    auto input1 = affineForwardWithClippedReLU<typename Network::Layer0>(input0, network.layer0);
-    auto input2 = affineForwardWithClippedReLU<typename Network::Layer1>(input1, network.layer1);
-    auto output = affineForward<typename Network::Layer2>(input2, network.layer2);
+    auto input1 = affineForwardAndActivate(input0, network.layer0);
+    auto input2 = affineForwardAndActivate(input1, network.layer1);
+    auto output = affineForward(input2, network.layer2);
     g_affineTimeNanos += updateTiming(timePoint);
+
     if constexpr (nnueDebug) std::cout << "Final layer output: " << output[0] << std::endl;
 
     double kScale = 0.0300682;  // Scale factor for centipawns closely approximating Stockfish 12
@@ -471,33 +473,21 @@ void analyzeComputationalComplexity() {
               << " million ops/sec" << std::endl;
 
     // Use timing percentages instead of operation percentages
-    if (g_totalEvaluations > 0) {
-        uint64_t totalTime = g_transformTimeNanos + g_perspectiveTimeNanos + g_affineTimeNanos;
-        if (totalTime > 0) {
-            double transformPercent = 100.0 * g_transformTimeNanos / totalTime;
-            double networkPropagationPercent =
-                100.0 * (g_perspectiveTimeNanos + g_affineTimeNanos) / totalTime;
-            std::cout << "   Transform takes " << formatPercent(transformPercent)
-                      << " of evaluation time" << std::endl;
-            std::cout << "   Incremental evaluation can eliminate the transform cost," << std::endl;
-            std::cout << "   but network propagation (" << formatPercent(networkPropagationPercent)
-                      << " of time) still needs optimization" << std::endl;
-        } else {
-            std::cout << "   Transform is only "
-                      << formatPercent(100.0 * transformOps /
-                                       (transformOps + total_mults + total_adds))
-                      << " of total operations" << std::endl;
-            std::cout << "   Incremental evaluation can eliminate the transform cost," << std::endl;
-            std::cout << "   but network propagation ("
-                      << formatPercent(100.0 * (total_mults + total_adds) /
-                                       (transformOps + total_mults + total_adds))
-                      << " of ops) still needs optimization" << std::endl;
-        }
+    uint64_t totalTime = g_transformTimeNanos + g_perspectiveTimeNanos + g_affineTimeNanos;
+    if (g_totalEvaluations > 0 && totalTime > 0) {
+        double transformPercent = 100.0 * g_transformTimeNanos / totalTime;
+        double networkPropagationPercent =
+            100.0 * (g_perspectiveTimeNanos + g_affineTimeNanos) / totalTime;
+        std::cout << "   Transform takes " << formatPercent(transformPercent)
+                  << " of evaluation time" << std::endl;
+        std::cout << "   Incremental evaluation can reduce the transform cost," << std::endl;
+        std::cout << "   but network propagation (" << formatPercent(networkPropagationPercent)
+                  << " of time) still needs optimization" << std::endl;
     } else {
         std::cout << "   Transform is only "
                   << formatPercent(100.0 * transformOps / (transformOps + total_mults + total_adds))
                   << " of total operations" << std::endl;
-        std::cout << "   Incremental evaluation can eliminate the transform cost," << std::endl;
+        std::cout << "   Incremental evaluation can reduce the transform cost," << std::endl;
         std::cout << "   but network propagation ("
                   << formatPercent(100.0 * (total_mults + total_adds) /
                                    (transformOps + total_mults + total_adds))

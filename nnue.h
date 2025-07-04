@@ -72,11 +72,11 @@ struct AffineLayer {
     static constexpr size_t kOutputDimensions = out;
     static constexpr size_t kWeightDimensions = in * out;
 
-    std::array<Weight, kWeightDimensions> weights;  // flattened row-major: [out][in]
+    std::array<std::array<Weight, in>, out> weights;  // [out][in] - row-major
     std::array<Bias, out> bias;
 };
 
-struct Network {
+struct alignas(64) Network {
     static constexpr std::array<size_t, 3> out = {32, 32, 1};
     static constexpr uint32_t kHash = 0x63337156u;
     using Layer0 = AffineLayer<InputTransform::kOutputDimensions, out[0]>;
@@ -122,7 +122,6 @@ NNUE loadNNUE(const std::string& filename);
 extern uint64_t g_transformTimeNanos;
 extern uint64_t g_perspectiveTimeNanos;
 extern uint64_t g_affineTimeNanos;
-extern uint64_t g_clippedReluTimeNanos;
 extern uint64_t g_totalEvaluations;
 extern uint64_t g_totalActiveFeatures;
 
