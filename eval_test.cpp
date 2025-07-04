@@ -257,6 +257,7 @@ void testFromStream(std::ifstream& stream) {
     std::vector<float> diffs;
 
     if (debug) std::cout << "Expected,Score,Diff,Phase,FEN\n";
+    nnue::resetTimingStats();
 
     auto startTime = high_resolution_clock::now();
     while (std::getline(stream, line)) {
@@ -275,11 +276,12 @@ void testFromStream(std::ifstream& stream) {
                       << "\n";
     }
     auto endTime = high_resolution_clock::now();
-    auto duration = duration_cast<milliseconds>(endTime - startTime).count();
-    auto rate = numEvals ? static_cast<double>(numEvals) * 1000 / duration : 0;
-    std::cout << "Processed " << numEvals << " evaluations in " << duration << " ms, " << rate
-              << " evals/sec\n";
+    auto duration = duration_cast<microseconds>(endTime - startTime).count();
+    auto rate = numEvals ? static_cast<double>(numEvals) * 1'000'000 / duration : 0;
+    std::cout << "Processed " << numEvals << " evaluations in " << duration * 0.001 << " ms, "
+              << rate << " evals/sec\n";
     std::cout << "Error stats: " << computeStatistics(diffs) << "\n";
+    if (!debug) nnue::printTimingStats();
 }
 
 bool parseFEN(Position& position, int* argc, char** argv[]) {
