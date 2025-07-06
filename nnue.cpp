@@ -14,6 +14,9 @@ namespace nnue {
 
 namespace {
 
+// Activation function constant
+constexpr int kWeightScaleBits = 6;
+
 /** Update timing point and return elapsed nanoseconds */
 uint64_t updateTiming(std::chrono::high_resolution_clock::time_point& timePoint) {
     using namespace std::chrono;
@@ -182,15 +185,14 @@ uint8_t activate(int16_t value) {
 }
 
 uint8_t activate(int32_t value) {
-    return static_cast<uint8_t>(std::clamp(value >> 6, 0, 127));
+    return static_cast<uint8_t>(std::clamp(value >> kWeightScaleBits, 0, 127));
 }
 
 /**
  * Select perspective from accumulator based on side to move.
  * Returns 512 values from either white perspective or black perspective.
  */
-typename Network::Layer0::Input selectPerspective(const Accumulator& accumulator,
-                                                  Color sideToMove) {
+auto selectPerspective(const Accumulator& accumulator, Color sideToMove) {
     typename Network::Layer0::Input perspective;
 
     auto in1 = accumulator.values.begin();
@@ -205,6 +207,7 @@ typename Network::Layer0::Input selectPerspective(const Accumulator& accumulator
 
     return perspective;
 }
+
 /**
  * Compute the inner product of two vectors. Returns the sum of element-wise products as int32_t.
  */

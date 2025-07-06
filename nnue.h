@@ -100,9 +100,6 @@ struct NNUE {
     Network network;
 };
 
-// ClippedReLU activation function constants
-constexpr int kWeightScaleBits = 6;
-
 /**
  * Complete NNUE evaluation for a position.
  * Returns the final evaluation score in centipawns, from the white perspective.

@@ -591,9 +591,9 @@ void findNonPawnMoves(const Board& board, SearchState& state, const F& fun) {
                 // target squares for its piece type that are not occupied by our own pieces.
                 SquareSet toSquares;
                 if (PieceSet{PieceType::BISHOP, PieceType::QUEEN}.contains(piece))
-                    toSquares |= targets(from, true, state.occupancy().bits());
+                    toSquares |= targets(from, true, state.occupancy());
                 if (PieceSet{PieceType::ROOK, PieceType::QUEEN}.contains(piece))
-                    toSquares |= targets(from, false, state.occupancy().bits());
+                    toSquares |= targets(from, false, state.occupancy());
                 toSquares -= state.occupancy();
 
                 for (auto to : toSquares) fun(piece, Move{from, to, MoveKind::Quiet_Move});
