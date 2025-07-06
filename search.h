@@ -10,6 +10,7 @@
 namespace search {
 extern uint64_t evalCount;
 extern uint64_t cacheCount;
+extern uint64_t quiescenceCount;
 
 constexpr bool transpositionTableDebug = false;
 constexpr bool alphaBetaDebug = false;

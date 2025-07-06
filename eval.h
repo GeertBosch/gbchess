@@ -172,6 +172,13 @@ Score evaluateBoard(const Board& board, Color activePlayer, TableArg&& arg) {
 }
 
 /**
+ * Static Exchange Evaluation (SEE) - evaluates the material outcome of a capture sequence
+ * on a given square. Returns the net material gain/loss from the perspective of the
+ * side to move. Used in quiescence search to determine if a capture is worth considering.
+ */
+Score staticExchangeEvaluation(const Board& board, Square from, Square to);
+
+/**
  * Returns true if and only if the side whose turn it is is in check.
  */
 bool isInCheck(const Position& position);

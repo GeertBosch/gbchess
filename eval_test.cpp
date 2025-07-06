@@ -214,6 +214,23 @@ void testCheckAndMate() {
     assert(!isInCheck(stalemate));
 }
 
+void testStaticExchangeEvaluation() {
+    {
+        auto position = fen::parsePosition("1k1r4/1pp4p/p7/4p3/8/P5P1/1PP4P/2K1R3 w - - 0 1");
+        // Try Rook captures e5
+        auto score = staticExchangeEvaluation(position.board, e1, e5);
+        assert(score == 100_cp);
+    }
+    {
+        auto position =
+            fen::parsePosition("1k1r3q/1ppn3p/p4b2/4p3/8/P2N2P1/1PP1R1BP/2K1Q3 w - - 0 1");
+        // Try Knight captures e5
+        auto score = staticExchangeEvaluation(position.board, d3, e5);
+        assert(score == -200_cp);
+    }
+    std::cout << "Static exchange evaluation tests passed" << std::endl;
+}
+
 int parseMoves(Position& position, int* argc, char** argv[]) {
     int moves = 0;
     for (; *argc > 0; ++moves, --*argc, ++*argv) {
@@ -316,6 +333,7 @@ int main(int argc, char* argv[]) {
     testCheckAndMate();
     testMateScore();
     testEvaluateBoard();
+    testStaticExchangeEvaluation();
 
     network.emplace(nnue::loadNNUE("nn-82215d0fd0df.nnue"));
 

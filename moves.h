@@ -121,6 +121,17 @@ bool isAttacked(const Board& board, Square square, Occupancy occupancy);
 bool isAttacked(const Board& board, SquareSet squares, Occupancy occupancy);
 bool isAttacked(const Board& board, SquareSet squares, Color opponentColor);
 
+/**
+ * Returns the set of squares that is attacking the given square, including pieces of both
+ * sides.
+ */
+SquareSet attackers(const Board& board, Square square, SquareSet occupancy);
+
+/**
+ * Returns whether the piece on 'from' can attack the square 'to', ignoring occupancy or en passant.
+ */
+bool attacks(const Board& board, Square from, Square to);
+
 /** Returns the set of pieces that would result in the king being checked,
     if the piece where to be removed from the board. */
 SquareSet pinnedPieces(const Board& board, Occupancy occupancy, Square kingSquare);

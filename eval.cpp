@@ -2,6 +2,7 @@
 #include <string>
 
 #include "eval_tables.h"
+#include "magic.h"
 #include "moves.h"
 
 #include "eval.h"
@@ -166,4 +167,92 @@ bool isCheckmate(const Position& position) {
 
 bool isStalemate(const Position& position) {
     return !isInCheck(position) && isMate(position);
+}
+
+/**
+ * Returns new discovered attackers of square 'to' due to x-rays
+ * revealed after removing a piece from the board.
+ */
+SquareSet discoverXRayAttackers(const Board& board, Square to, SquareSet occ, Color side) {
+    SquareSet xrayAttackers;
+
+    // Diagonal directions (bishop, queen)
+    SquareSet bishopAttackers = targets(to, /*bishop=*/true, occ) & occ;
+    PieceSet bishopPieces = {addColor(PieceType::BISHOP, side), addColor(PieceType::QUEEN, side)};
+    for (auto from : bishopAttackers)
+        if (bishopPieces.contains(board[from])) xrayAttackers.insert(from);
+
+    // Orthogonal directions (rook, queen)
+    SquareSet rookAttackers = targets(to, /*bishop=*/false, occ) & occ;
+    PieceSet rookPieces = {addColor(PieceType::ROOK, side), addColor(PieceType::QUEEN, side)};
+    for (auto from : rookAttackers)
+        if (rookPieces.contains(board[from])) xrayAttackers.insert(from);
+
+    return xrayAttackers;
+}
+
+SquareSet leastValuableAttacker(const Board& board,
+                                SquareSet attackers,
+                                Color side,
+                                Piece& nextAttacker) {
+    int bestValue = 0;
+    Square nextSquare;
+    nextAttacker = Piece::_;
+
+    for (Square sq : attackers) {
+        Piece piece = board[sq];
+        if (color(piece) != side) continue;
+
+        int val = std::abs(pieceValues[index(piece)].cp());
+        if (bestValue && bestValue <= val) continue;
+
+        bestValue = val;
+        nextSquare = sq;
+        nextAttacker = piece;
+    }
+
+    return bestValue ? SquareSet{nextSquare} : SquareSet{};
+}
+
+/**
+ * Static Exchange Evaluation - the standard algorithm
+ * Returns the material gain/loss from the perspective of the active player.
+ */
+Score staticExchangeEvaluation(const Board& board, Square from, Square to) {
+    int gain[32];  // Max number of piece on the board
+    int depth = 0;
+
+    Piece attacker = board[from];
+    Piece target = board[to];
+
+    PieceSet mayXray = {PieceType::PAWN, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN};
+    SquareSet occ = occupancy(board);
+    SquareSet attackers = ::attackers(board, to, occ);
+    SquareSet fromBB = SquareSet{from};
+
+    gain[depth] = std::abs(pieceValues[index(target)].cp());
+    Color sideToMove = color(attacker);
+
+    Piece nextPiece = attacker;
+
+    do {
+        ++depth;
+        gain[depth] = std::abs(pieceValues[index(nextPiece)].cp()) - gain[depth - 1];
+
+        // Remove piece from occupancy and attackers
+        occ ^= fromBB;
+        attackers ^= fromBB;
+
+        // If piece removed may reveal x-rays, re-scan x-ray attacks
+        if (mayXray.contains(nextPiece))
+            attackers |= discoverXRayAttackers(board, to, occ, sideToMove);
+
+        // Get least valuable attacker of the opposite side
+        fromBB = leastValuableAttacker(board, attackers, !sideToMove, nextPiece);
+        sideToMove = !sideToMove;
+    } while (!fromBB.empty());
+
+    // Minimax backward resolution of speculative scores
+    while (--depth) gain[depth - 1] = -std::max(-gain[depth - 1], gain[depth]);
+    return Score::fromCP(gain[0]);
 }

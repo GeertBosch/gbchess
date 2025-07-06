@@ -11,7 +11,6 @@
 #include "eval.h"
 #include "fen.h"
 #include "moves.h"
-#include "nnue.h"
 #include "nnue_stats.h"
 #include "options.h"
 #include "pv.h"
@@ -91,18 +90,22 @@ void printEvalRate(const F& fun) {
     auto startTime = std::chrono::high_resolution_clock::now();
     auto startEvals = search::evalCount;
     auto startCache = search::cacheCount;
+    auto startQuiescence = search::quiescenceCount;
     fun();
     auto endTime = std::chrono::high_resolution_clock::now();
     auto endEvals = search::evalCount;
     auto endCache = search::cacheCount;
+    auto endQuiescence = search::quiescenceCount;
 
+    auto quiesce = endQuiescence - startQuiescence;
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
     auto evals = endEvals - startEvals;
     auto cached = endCache - startCache;
     auto evalRate = evals / (duration.count() / 1000'000.0);  // evals per second
 
-    std::cerr << evals << " evals, " << cached << " cached in " << duration.count() / 1000
-              << " ms @ " << evalRate / 1000.0 << "K evals/sec" << std::endl;
+    std::cerr << evals << " evals, " << cached << " cached, " << quiesce << " quiesced in "
+              << duration.count() / 1000 << " ms @ " << evalRate / 1000.0 << "K evals/sec"
+              << std::endl;
 }
 
 void printBestMove(Position position, int maxdepth) {

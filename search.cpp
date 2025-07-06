@@ -19,6 +19,7 @@
 namespace search {
 EvalTable evalTable;
 uint64_t evalCount = 0;
+uint64_t quiescenceCount = 0;
 uint64_t cacheCount = 0;
 
 namespace {
@@ -26,7 +27,10 @@ using namespace std::chrono;
 using clock = high_resolution_clock;
 using timepoint = clock::time_point;
 
-uint64_t searchEvalCount = 0;  // copy of evalCount at the start of the search
+// Copy various counters at the start of the search, so they can be reported later
+uint64_t searchEvalCount = 0;
+uint64_t searchQuiescenceCount = 0;
+uint64_t searchCacheCount = 0;
 timepoint searchStartTime = {};
 
 std::optional<nnue::NNUE> network = nnue::loadNNUE("nn-82215d0fd0df.nnue");
@@ -351,7 +355,7 @@ void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
 }
 
 std::pair<UndoPosition, Score> makeMoveWithEval(Position& position, Move move, Score eval) {
-    auto change = prepareMove(position.board, move);
+    BoardChange change = prepareMove(position.board, move);
     UndoPosition undo;
     if constexpr (options::useNNUE) {
         // Use NNUE evaluation, which is more accurate than the piece-square evaluation
@@ -381,23 +385,29 @@ bool isQuiet(Position& position, int depthleft) {
     return true;
 }
 
-Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depthleft) {
-    Score stand_pat = eval;
+Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
+    ++evalCount;
+
+    Score stand_pat = evaluateBoard(position.board, position.active(), evalTable);
 
     if (!depthleft) return stand_pat;
 
     if (stand_pat >= beta && isQuiet(position, depthleft)) return beta;
 
-    if (alpha < stand_pat && isQuiet(position, depthleft)) alpha = stand_pat;
+    if (stand_pat > alpha && isQuiet(position, depthleft)) alpha = stand_pat;
 
     // The moveList includes moves needed to get out of check; an empty list means mate
     auto moveList = allLegalQuiescentMoves(position.turn, position.board, depthleft);
     if (moveList.empty() && isInCheck(position)) return Score::min();
     sortCaptures(position, moveList.begin(), moveList.end());
     for (auto move : moveList) {
+        if (options::staticExchangeEvaluation && isCapture(move.kind) &&
+            staticExchangeEvaluation(position.board, move.from, move.to) < 0_cp)
+            continue;  // Don't consider captures that lose material
+
         // Compute the change to the board and evaluation that results from the move
-        auto [undo, newEval] = makeMoveWithEval(position, move, eval);
-        auto score = -quiesce(position, -newEval, -beta, -alpha, depthleft - 1);
+        auto [undo, newEval] = makeMoveWithEval(position, move, stand_pat);
+        auto score = -quiesce(position, -beta, -alpha, depthleft - 1);
         unmakeMove(position, undo);
 
         if (score >= beta) return beta;
@@ -406,29 +416,26 @@ Score quiesce(Position& position, Score eval, Score alpha, Score beta, int depth
     return alpha;
 }
 
-Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
-    ++evalCount;
-
-    auto eval = evaluateBoard(position.board, position.active(), evalTable);
-    eval = quiesce(position, eval, alpha, beta, depthleft);
-    if (eval.mate() && !isCheckmate(position)) eval = std::clamp(eval, -1000_cp, 1000_cp);
-
-    return eval;
-}
-
-Score quiesce(Position& position, int depthleft) {
-    return search::quiesce(position, Score::min(), Score::max(), depthleft);
-}
-
 struct Depth {
     int current;
     int left;
     Depth operator+(int i) const { return {current + i, left - i}; }
 };
 
+Score quiesce(Position& position, Score alpha, Score beta, Depth depth) {
+    ++quiescenceCount;  // Increment quiescence count
+    int qdepth = std::clamp(3, depth.current, options::quiescenceDepth);
+    return search::quiesce(position, alpha, beta, qdepth);
+}
+
+Score quiesce(Position& position, int depthleft) {
+    return quiesce(position, Score::min(), Score::max(), depthleft);
+}
+
 bool betaCutoff(Score score, Score beta, Move move, Color side, int depthleft) {
     if (score < beta) return false;  // No beta cutoff
-    ++betaCutoffMoves;               // Increment beta cutoff moves
+    ++betaCutoffMoves;
+
     if (options::historyStore && !isCapture(move.kind))
         history[int(side)][move.from][move.to] += depthleft * depthleft;
     return true;
@@ -441,7 +448,7 @@ bool betaCutoff(Score score, Score beta, Move move, Color side, int depthleft) {
  * the best score that the current player can guarantee, assuming the opponent plays optimally.
  */
 PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score beta, Depth depth) {
-    if (depth.left <= 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
+    if (depth.left <= 0) return {{}, quiesce(position, alpha, beta, depth)};
 
     // Check the transposition table, which may tighten one or both search bounds
     transpositionTable.refineAlphaBeta(hash, depth.left, alpha, beta);
@@ -533,8 +540,8 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
 
 PrincipalVariation toplevelAlphaBeta(
     Position& position, Score alpha, Score beta, int depthleft, InfoFn info) {
-    if (depthleft <= 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
     Depth depth = {0, depthleft};
+    if (depthleft <= 0) return {{}, quiesce(position, alpha, beta, depth)};
 
     Hash hash(position);
 
@@ -602,7 +609,7 @@ PrincipalVariation aspirationWindows(Position position, Score expected, int maxd
 }
 
 PrincipalVariation iterativeDeepening(Position& position, int maxdepth, InfoFn info) {
-    PrincipalVariation pv = {{}, quiesce(position, options::quiescenceDepth)};
+    PrincipalVariation pv = {{}, evaluateBoard(position.board, position.active(), evalTable)};
     for (auto depth = 1; depth <= maxdepth; ++depth) {
         auto newpv = aspirationWindows(position, pv.score, depth, info);
         if (pvInfo(info, depth, newpv.score, newpv.moves)) break;
@@ -621,6 +628,9 @@ void newGame() {
 PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector moves, InfoFn info) {
     evalTable = EvalTable{position.board, true};
     searchEvalCount = evalCount;
+    searchQuiescenceCount = quiescenceCount;
+    searchCacheCount = cacheCount;
+
     searchStartTime = clock::now();
     ++transpositionTable.numGenerations;
 

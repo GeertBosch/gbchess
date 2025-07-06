@@ -825,6 +825,34 @@ bool isAttacked(const Board& board, SquareSet squares, Color opponentColor) {
     return isAttacked(board, squares, occupancy);
 }
 
+bool attacks(const Board& board, Square from, Square to) {
+    return movesTable.captures[index(board[from])][from].contains(to);
+}
+
+SquareSet attackers(const Board& board, Square target, SquareSet occupancy) {
+    SquareSet result;
+
+    auto knightAttackers = movesTable.captures[index(Piece::N)][target] & occupancy;
+    for (auto from : knightAttackers)
+        if (type(board[from]) == PieceType::KNIGHT) result |= from;
+
+    auto rookAttackers = targets(target, false, occupancy);
+    auto rookPieces = PieceSet{PieceType::ROOK, PieceType::QUEEN};
+    for (auto from : rookAttackers)
+        if (rookPieces.contains(board[from])) result |= from;
+
+    auto bishopAttackers = targets(target, true, occupancy);
+    auto bishopPieces = PieceSet{PieceType::BISHOP, PieceType::QUEEN};
+    for (auto from : bishopAttackers)
+        if (bishopPieces.contains(board[from])) result |= from;
+
+    // See if there are pawns or kings that can attack the square.
+    auto otherAttackers = (occupancy - result) & movesTable.captures[index(Piece::K)][target];
+    for (auto from : otherAttackers)
+        if (attacks(board, from, target)) result |= from;
+    return result;
+}
+
 Move checkMove(Position position, Move move) {
     auto moves = allLegalMovesAndCaptures(position.turn, position.board);
 
