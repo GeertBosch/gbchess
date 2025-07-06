@@ -254,7 +254,7 @@ void testMaxMoves() {
 }
 
 int selfTests() {
-    testStartingPosition(5);
+    testStartingPosition(6);
     testKnownPositions();
     testTwoKings();
     testMaxMoves();
