@@ -178,6 +178,11 @@ Score evaluateBoard(const Board& board, Color activePlayer, TableArg&& arg) {
  */
 Score staticExchangeEvaluation(const Board& board, Square from, Square to);
 
+/** The following three functions return a relative score for moves for ordering */
+int scoreMVVLVA(const Board& board, Move move);
+int scoreSEE(const Board& board, Move move);
+int scoreMove(const Board& board, Move move);
+
 /**
  * Returns true if and only if the side whose turn it is is in check.
  */

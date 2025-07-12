@@ -74,7 +74,7 @@ constexpr int index(Color color) {
     return static_cast<int>(color);
 }
 
-enum class PieceType : uint8_t { PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING };
+enum class PieceType : uint8_t { PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING, EMPTY };
 constexpr uint8_t index(PieceType type) {
     return static_cast<uint8_t>(type);
 }

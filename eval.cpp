@@ -1,9 +1,11 @@
+#include "common.h"
 #include <algorithm>
 #include <string>
 
 #include "eval_tables.h"
 #include "magic.h"
 #include "moves.h"
+#include "options.h"
 
 #include "eval.h"
 
@@ -255,4 +257,85 @@ Score staticExchangeEvaluation(const Board& board, Square from, Square to) {
     // Minimax backward resolution of speculative scores
     while (--depth) gain[depth - 1] = -std::max(-gain[depth - 1], gain[depth]);
     return Score::fromCP(gain[0]);
+}
+namespace {
+/**
+ * Base scores for move ordering based on move kind.
+ * Higher scores indicate moves that should be searched first.
+ */
+constexpr int moveKindBaseScores[kNumMoveKinds] = {
+    // Non-capturing, non-promoting moves
+    0,        // Quiet_Move
+    0,        // Double_Push
+    400'000,  // O_O (castling)
+    400'000,  // O_O_O (castling)
+
+    // Captures that don't promote
+    1'000'000,  // Capture
+    1'000'000,  // En_Passant
+    0,
+    0,  // unused slots
+
+    // Promotions that don't capture
+    5'000'300,   // Knight_Promotion (5M base + 300 piece value)
+    5'000'300,   // Bishop_Promotion (5M base + 300 piece value)
+    5'000'500,   // Rook_Promotion (5M base + 500 piece value)
+    10'000'000,  // Queen_Promotion (10M base for queen promotions)
+
+    // Promotions that capture
+    6'000'300,   // Knight_Promotion_Capture (5M base + 300 piece + 1M capture)
+    6'000'300,   // Bishop_Promotion_Capture (5M base + 300 piece + 1M capture)
+    6'000'500,   // Rook_Promotion_Capture (5M base + 500 piece + 1M capture)
+    11'000'000,  // Queen_Promotion_Capture (10M base + 1M capture)
+};
+
+}  // namespace
+
+int scoreSEE(const Board& board, Move move) {
+    auto score = staticExchangeEvaluation(board, move.from, move.to).cp();
+    if (score < 0) score -= 500'000;  // Bad captures get lower priority but still above quiet moves
+    return score;
+};
+
+/**
+ * Calculates MVV-LVA (Most Valuable Victim - Least Valuable Attacker) score for a capture move.
+ * Returns the MVV-LVA score component (not including base capture score).
+ * Used as a fallback when Static Exchange Evaluation is disabled.
+ */
+int scoreMVVLVA(const Board& board, Move move) {
+    Piece victim = board[move.to];
+    Piece attacker = board[move.from];
+
+    // Piece values for MVV-LVA: P=100, N=300, B=300, R=500, Q=900, K=10000
+    auto getSimpleValue = [](Piece piece) -> int {
+        switch (type(piece)) {
+        case PieceType::PAWN: return 100;
+        case PieceType::KNIGHT: return 300;
+        case PieceType::BISHOP: return 300;
+        case PieceType::ROOK: return 500;
+        case PieceType::QUEEN: return 900;
+        case PieceType::KING: return 10000;
+        case PieceType::EMPTY: return 100;  // Empty square indicates en passant capture
+        }
+    };
+
+    int victimValue = getSimpleValue(victim);
+    int attackerValue = getSimpleValue(attacker);
+    return victimValue * 10 - attackerValue;
+}
+
+/**
+ * Calculates a score for move ordering. Higher scores indicate moves that should be searched first.
+ */
+int scoreMove(const Board& board, Move move) {
+    // Start with base score from move kind table
+    int baseScore = moveKindBaseScores[index(move.kind)];
+
+    // For captures, add MVV-LVA or SEE score
+    if (isCapture(move.kind))
+        baseScore += options::staticExchangeEvaluation
+            ? scoreSEE(board, move)      // Use SEE if enabled
+            : scoreMVVLVA(board, move);  // Fallback to MVV-LVA
+
+    return baseScore;
 }
