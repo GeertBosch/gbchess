@@ -332,10 +332,61 @@ void testMateInOne() {
     assert(ss.str() == "mate 1 pv a5c3");
 }
 
+void testMVVLVA() {
+    // Test 1: Queen takes pawn
+    {
+        Board board = {};
+        board[e4] = Piece::Q;  // White queen
+        board[e5] = Piece::p;  // Black pawn
+        Move move = {e4, e5, MoveKind::Capture};
+
+        // Queen takes pawn: victim=100, attacker=900, score = 100*10 - 900 = 100
+        int score = search::scoreMVVLVA(board, move);
+        assert(score == 100);
+    }
+
+    // Test 2: Pawn takes queen
+    {
+        Board board = {};
+        board[d4] = Piece::P;  // White pawn
+        board[e5] = Piece::q;  // Black queen
+        Move move = {d4, e5, MoveKind::Capture};
+
+        // Pawn takes queen: victim=900, attacker=100, score = 900*10 - 100 = 8900
+        int score = search::scoreMVVLVA(board, move);
+        assert(score == 8900);
+    }
+
+    // Test 3: En passant capture (victim should be empty square)
+    {
+        Board board = {};
+        board[e5] = Piece::P;  // White pawn doing en passant
+        Move move = {e5, d6, MoveKind::En_Passant};
+
+        int score = search::scoreMVVLVA(board, move);
+        assert(score == 100);
+    }
+
+    // Test 4: Knight takes bishop (should be equal piece values)
+    {
+        Board board = {};
+        board[b1] = Piece::N;  // White knight
+        board[c3] = Piece::b;  // Black bishop
+        Move move = {b1, c3, MoveKind::Capture};
+
+        // Bishop=300, Knight=300, score = 300*10 - 300 = 2700
+        int score = search::scoreMVVLVA(board, move);
+        assert(score == 2700);
+    }
+
+    std::cout << "MVV-LVA scoring test passed!\n";
+}
+
 void testBasicSearch() {
     testMissingPV();
     testCheckMated();
     testMateInOne();
+    testMVVLVA();
     if (debug) std::cout << "Basic search test passed!\n";
 }
 

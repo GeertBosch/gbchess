@@ -55,4 +55,11 @@ void newGame();
  */
 Score quiesce(Position& position, int depthleft);
 
+/**
+ * Calculates MVV-LVA (Most Valuable Victim - Least Valuable Attacker) score for a capture move.
+ * Returns the MVV-LVA score component (not including base capture score).
+ * Used as a fallback when Static Exchange Evaluation is disabled.
+ */
+int scoreMVVLVA(const Board& board, Move move);
+
 }  // namespace search

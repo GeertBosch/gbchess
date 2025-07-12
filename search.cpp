@@ -175,6 +175,9 @@ struct TranspositionTable {
     }
 } transpositionTable;
 
+/**
+ * History table for move ordering.
+ */
 size_t history[2][kNumSquares][kNumSquares] = {{{0}}};
 
 /**
@@ -249,54 +252,100 @@ public:
 
 using MoveIt = MoveVector::iterator;
 
-// Scores for sorting moves are not meant to be related to pawn values, but just as relative
-// precedence for maximum chance of a beta cut-off.
-const int kCapturePromoScore = 2'100'000'000;  // a bit below INT_MAX
-const int kEnPassantScore = 2'099'999'999;     // a bit below kCapturePromoScore
-const int kCaptureScore = 2'000'000'000;       // a bit below kEnPassantScore
-const int kPromoScore = 1'950'000'000;         // a bit below kCaptureScore
-constexpr int kind[16] = {
-    0,                       // Quiet_Move
-    -3,                      // Double_Push
-    -1,                      // O_O
-    -2,                      // O_O_O
-    kCaptureScore,           // Capture
-    kEnPassantScore,         // En_Passant, close to promo
-    0,                       // unused (6)
-    0,                       // unused (7)
-    kPromoScore + 7,         // KNIGHT_PROMO, second most common after queen
-    kPromoScore + 3,         // BISHOP_PROMO
-    kPromoScore + 5,         // ROOK_PROMO
-    kPromoScore + 9,         // QUEEN_PROMO
-    kCapturePromoScore + 7,  // KNIGHT_PROMO_CAPTURE
-    kCapturePromoScore + 3,  // BISHOP_PROMO_CAPTURE
-    kCapturePromoScore + 5,  // ROOK_PROMO_CAPTURE
-    kCapturePromoScore + 9,  // QUEEN_PROMO_CAPTURE
-};
-// Capture scores for piece capturing piece to achieve MVV/LVA
-int xx[6][6] = {
-    // P, N, B, R, Q, K
-    {0, 10, 20, 30, 40, 0},  // pawn captures
-    {-3, 7, 17, 27, 37, 0},  // knight captures
-    {-3, 7, 17, 27, 37, 0},  // bishop captures
-    {-5, 5, 15, 25, 35, 0},  // rook captures
-    {-9, 1, 11, 21, 31, 0},  // queen captures
-    {0, 10, 20, 30, 40, 0},  // king captures
-};
-
+/**
+ * Calculates a score for move ordering. Higher scores indicate moves that should be searched first.
+ * Uses a comprehensive scoring system prioritizing promotions, good captures, and history.
+ */
 int score(const Board& board, Move move) {
-    int base = kind[int(move.kind)];
-    auto piece = board[move.from];
-    auto side = color(piece);
+    // Queen promotions get highest priority
+    if (move.kind == MoveKind::Queen_Promotion || move.kind == MoveKind::Queen_Promotion_Capture) {
+        return 10000000 + (isCapture(move.kind) ? 1000000 : 0);
+    }
 
-    return base +
-        (isCapture(move.kind)
-             ? xx[index(type(piece))][index(type(board[move.to]))]
-             : (options::historyStore ? history[int(side)][move.from][move.to] : 0));
+    // Other promotions get high priority
+    if (isPromotion(move.kind)) {
+        int promoValue = 0;
+        switch (move.kind) {
+        case MoveKind::Rook_Promotion:
+        case MoveKind::Rook_Promotion_Capture: promoValue = 500; break;
+        case MoveKind::Bishop_Promotion:
+        case MoveKind::Bishop_Promotion_Capture: promoValue = 300; break;
+        case MoveKind::Knight_Promotion:
+        case MoveKind::Knight_Promotion_Capture: promoValue = 300; break;
+        default: break;
+        }
+        return 5000000 + promoValue + (isCapture(move.kind) ? 1000000 : 0);
+    }
+
+    // Captures: use SEE if available, otherwise fall back to MVV-LVA
+    if (isCapture(move.kind)) {
+        if constexpr (options::staticExchangeEvaluation) {
+            // Use SEE score directly - it's more accurate than MVV-LVA
+            auto seeScore = staticExchangeEvaluation(board, move.from, move.to);
+            if (seeScore < 0_cp) {
+                // Bad captures get lower priority but still above quiet moves
+                return 500000 + seeScore.cp();
+            }
+            // Good captures: base score + SEE value
+            return 1000000 + seeScore.cp();
+        } else {
+            // Fall back to MVV-LVA when SEE is not available
+            return 1000000 + scoreMVVLVA(board, move);
+        }
+    }
+
+    // Castling moves get moderate priority
+    if (isCastles(move.kind)) {
+        return 400000;
+    }
+
+    // Quiet moves: use history heuristic
+    auto historyScore = history[int(color(board[move.from]))][move.from][move.to];
+    return static_cast<int>(historyScore);
 }
+
+/**
+ * Comparison function for move ordering. Returns true if move a should be searched before move b.
+ */
+bool less(const Board& board, const Move& a, const Move& b) {
+    return score(board, a) > score(board, b);
+}
+
 uint64_t totalMovesEvaluated = 0;
 uint64_t betaCutoffMoves = 0;
 }  // namespace
+
+/**
+ * Calculates MVV-LVA (Most Valuable Victim - Least Valuable Attacker) score for a capture move.
+ * Returns the MVV-LVA score component (not including base capture score).
+ * Used as a fallback when Static Exchange Evaluation is disabled.
+ */
+int scoreMVVLVA(const Board& board, Move move) {
+    Piece victim = board[move.to];
+    Piece attacker = board[move.from];
+
+    if (victim == Piece::_) {
+        // En passant capture - always captures a pawn
+        return 100;  // Base value for capturing a pawn
+    }
+
+    // Piece values for MVV-LVA: P=100, N=300, B=300, R=500, Q=900, K=10000
+    auto getSimpleValue = [](Piece piece) -> int {
+        switch (type(piece)) {
+        case PieceType::PAWN: return 100;
+        case PieceType::KNIGHT: return 300;
+        case PieceType::BISHOP: return 300;
+        case PieceType::ROOK: return 500;
+        case PieceType::QUEEN: return 900;
+        case PieceType::KING: return 10000;
+        default: return 0;
+        }
+    };
+
+    int victimValue = getSimpleValue(victim);
+    int attackerValue = getSimpleValue(attacker);
+    return victimValue * 10 - attackerValue;
+}
 
 /**
  * Sorts the moves (including captures) in the range [begin, end) in place, so that the move or
@@ -317,41 +366,23 @@ MoveIt sortTransposition(Hash hash, MoveIt begin, MoveIt end) {
     return begin;
 }
 
-bool less(const Board& board, Move a, Move b) {
-    // For non-captures, sort by history score
-    if (!isCapture(a.kind))
-        return options::historyStore ? score(board, a) > score(board, b) : false;
-
-    // Most valuable victims first
-    auto ato = board[a.to];
-    auto bto = board[b.to];
-    if (bto < ato) return true;
-    if (ato < bto) return false;
-
-    // Least valuable attackers next
-    auto afrom = board[a.from];
-    auto bfrom = board[b.from];
-    if (afrom < bfrom) return true;
-    if (bfrom < afrom) return false;
-
-    // Otherwise, sort by move kind, highest first
-    return b.kind < a.kind;
-}
-
 /**
  * Sorts the moves in the range [begin, end) in place, so that the capture come before
  * non-captures, and captures are sorted by victim value, attacker value, and move kind.
  */
-MoveIt sortCaptures(const Position& position, MoveIt begin, MoveIt end) {
+MoveIt sortMoves(const Position& position, MoveIt begin, MoveIt end) {
+    if (begin == end) return begin;
+
+    // Sort moves using extracted comparison function
     std::stable_sort(
-        begin, end, [&board = position.board](Move a, Move b) { return less(board, a, b); });
+        begin, end, [&](const Move& a, const Move& b) { return less(position.board, a, b); });
 
     return begin;
 }
 
 void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
     begin = sortTransposition(hash, begin, end);
-    begin = sortCaptures(position, begin, end);
+    begin = sortMoves(position, begin, end);
 }
 
 std::pair<UndoPosition, Score> makeMoveWithEval(Position& position, Move move, Score eval) {
@@ -399,7 +430,7 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     // The moveList includes moves needed to get out of check; an empty list means mate
     auto moveList = allLegalQuiescentMoves(position.turn, position.board, depthleft);
     if (moveList.empty() && isInCheck(position)) return Score::min();
-    sortCaptures(position, moveList.begin(), moveList.end());
+    sortMoves(position, moveList.begin(), moveList.end());
     for (auto move : moveList) {
         if (options::staticExchangeEvaluation && move.kind == MoveKind::Capture &&
             staticExchangeEvaluation(position.board, move.from, move.to) < 0_cp)
