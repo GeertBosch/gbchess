@@ -13,6 +13,7 @@ constexpr int quiescenceDepth = 5;                          // Depth of the quie
 constexpr bool iterativeDeepening = true;                   // Aspiration windows need this
 constexpr bool lateMoveReductions = true;                   // Reduce moves at the end of the search
 constexpr bool staticExchangeEvaluation = true;             // Use static exchange evaluation
+constexpr bool useKillerMoves = true;                       // Use the killer move heuristic
 constexpr bool historyStore = true;                         // Use beta cutoffs for move ordering
 constexpr std::array<int, 2> aspirationWindows{30, 125};    // Given in centipawns, {} disables
 constexpr int aspirationWindowMinDepth = 2;                 // Minimum depth for aspiration windows

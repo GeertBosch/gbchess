@@ -181,6 +181,27 @@ struct TranspositionTable {
 size_t history[2][kNumSquares][kNumSquares] = {{{0}}};
 
 /**
+ * Killer move heuristic: stores the best quiet moves that caused beta cutoffs at each depth.
+ */
+constexpr int MAX_KILLER_MOVES = 2;
+constexpr int MAX_DEPTH = 64;
+Move killerMoves[MAX_DEPTH][MAX_KILLER_MOVES] = {{{}}};
+
+void storeKillerMove(Move move, int depth) {
+    if (depth >= MAX_DEPTH || depth < 0) return;
+
+    // Only store quiet moves (not captures, promotions, or castling)
+    if (move.kind != MoveKind::Quiet_Move && move.kind != MoveKind::Double_Push) return;
+
+    // Don't store if it's already the first killer move
+    if (killerMoves[depth][0] == move) return;
+
+    // Shift moves: second becomes first, new move becomes second
+    killerMoves[depth][1] = killerMoves[depth][0];
+    killerMoves[depth][0] = move;
+}
+
+/**
  * The repetition table stores the hashes of all positions played so far in the game, so we can
  * detect repetitions and apply the rule that a third repetition is a draw.
  */
@@ -252,6 +273,25 @@ public:
 
 using MoveIt = MoveVector::iterator;
 
+MoveIt sortKillerMoves(int depth, MoveIt begin, MoveIt end) {
+    if (depth >= MAX_DEPTH) return begin;
+
+    MoveIt current = begin;
+
+    // Try to find and move killer moves to the front
+    for (int i = 0; i < MAX_KILLER_MOVES && current < end; ++i) {
+        Move killer = killerMoves[depth][i];
+        if (!killer) continue;
+
+        auto it = std::find(current, end, killer);
+        if (it != end) {
+            std::swap(*current++, *it);
+        }
+    }
+
+    return current;
+}
+
 uint64_t totalMovesEvaluated = 0;
 uint64_t betaCutoffMoves = 0;
 }  // namespace
@@ -277,29 +317,38 @@ MoveIt sortTransposition(Hash hash, MoveIt begin, MoveIt end) {
 
 
 /**
- * Sorts the moves in the range [begin, end) in place, so that the capture come before
+ * Sorts the moves in the range [begin, end) in place, so that captures come before
  * non-captures, and captures are sorted by victim value, attacker value, and move kind.
+ * Killer moves are placed among the quiet moves.
  */
-MoveIt sortMoves(const Position& position, MoveIt begin, MoveIt end) {
+MoveIt sortMoves(const Position& position, MoveIt begin, MoveIt end, int depth = 0) {
     if (begin == end) return begin;
 
-    // Sort moves based on score, or history heuristic for quiet moves
-    std::stable_sort(begin, end, [&](const Move& a, const Move& b) {
-        auto aScore = scoreMove(position.board, a);
-        auto bScore = scoreMove(position.board, b);
-        if (!aScore && !bScore)
-            // If both moves have no score, use history heuristic
-            return history[int(position.active())][a.from][a.to] >
-                history[int(position.active())][b.from][b.to];
-        return aScore > bScore;
+    // First, partition captures from quiet moves using MoveKind
+    auto quietBegin = std::partition(begin, end, [](const Move& move) {
+        return move.kind != MoveKind::Quiet_Move && move.kind != MoveKind::Double_Push;
+    });
+
+    // Sort captures/promotions by their score (highest first)
+    std::stable_sort(begin, quietBegin, [&](const Move& a, const Move& b) {
+        return scoreMove(position.board, a) > scoreMove(position.board, b);
+    });
+
+    // For quiet moves, first try to place killer moves at the front
+    if constexpr (options::useKillerMoves) quietBegin = sortKillerMoves(depth, quietBegin, end);
+
+    // Then sort remaining quiet moves by history heuristic
+    std::stable_sort(quietBegin, end, [&](const Move& a, const Move& b) {
+        return history[int(position.active())][a.from][a.to] >
+            history[int(position.active())][b.from][b.to];
     });
 
     return begin;
 }
 
-void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end) {
+void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end, int depth = 0) {
     begin = sortTransposition(hash, begin, end);
-    begin = sortMoves(position, begin, end);
+    begin = sortMoves(position, begin, end, depth);
 }
 
 std::pair<UndoPosition, Score> makeMoveWithEval(Position& position, Move move, Score eval) {
@@ -347,7 +396,7 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     // The moveList includes moves needed to get out of check; an empty list means mate
     auto moveList = allLegalQuiescentMoves(position.turn, position.board, depthleft);
     if (moveList.empty() && isInCheck(position)) return Score::min();
-    sortMoves(position, moveList.begin(), moveList.end());
+    sortMoves(position, moveList.begin(), moveList.end());  // No killer moves in quiescence
     for (auto move : moveList) {
         if (options::staticExchangeEvaluation && move.kind == MoveKind::Capture &&
             staticExchangeEvaluation(position.board, move.from, move.to) < 0_cp)
@@ -384,8 +433,11 @@ bool betaCutoff(Score score, Score beta, Move move, Color side, int depthleft) {
     if (score < beta) return false;  // No beta cutoff
     ++betaCutoffMoves;
 
-    if (options::historyStore && !isCapture(move.kind))
-        history[int(side)][move.from][move.to] += depthleft * depthleft;
+    // Only apply heuristics to quiet moves
+    if (move.kind == MoveKind::Quiet_Move || move.kind == MoveKind::Double_Push) {
+        if (options::historyStore) history[int(side)][move.from][move.to] += depthleft * depthleft;
+        storeKillerMove(move, depthleft);
+    }
     return true;
 }
 
@@ -414,7 +466,7 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
     auto drawState = repetitions.enter(hash);
     if (drawState.drawn(position.turn.halfmove())) return {{}, Score()};
 
-    sortMoves(position, hash, moveList.begin(), moveList.end());
+    sortMoves(position, hash, moveList.begin(), moveList.end(), depth.current);
 
     PrincipalVariation pv;
     int moveCount = 0;
@@ -442,7 +494,7 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
         unmakeMove(position, undo);
 
         if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
-        if (betaCutoff(pv.score, beta, move, position.active(), depth.left)) break;
+        if (betaCutoff(pv.score, beta, move, position.active(), depth.current)) break;
     }
 
     if (moveList.empty() && !isInCheck(position)) pv.score = Score();  // Stalemate
@@ -501,7 +553,7 @@ PrincipalVariation toplevelAlphaBeta(
     if (moveList.size() == 1) ++depth.left;
 
     // computeBestMove already entered the current position in the repetition table
-    sortMoves(position, hash, moveList.begin(), moveList.end());
+    sortMoves(position, hash, moveList.begin(), moveList.end(), depthleft);
     PrincipalVariation pv;
 
     int currmovenumber = 0;
@@ -516,7 +568,7 @@ PrincipalVariation toplevelAlphaBeta(
         auto newVar =
             -alphaBeta(newPosition, newHash, -beta, -std::max(alpha, pv.score), depth + 1);
         if (newVar.score > pv.score || !pv.front()) pv = {move, newVar};
-        if (betaCutoff(pv.score, beta, move, position.active(), depth.left)) break;
+        if (betaCutoff(pv.score, beta, move, position.active(), depth.current)) break;
     }
     if (moveList.empty() && !isInCheck(position)) pv = {Move(), Score()};
     transpositionTable.insert(hash, {pv.front(), pv.score}, depthleft, alpha, beta);
@@ -571,6 +623,9 @@ void newGame() {
     transpositionTable.clear();
     repetitions.clear();
     std::fill(&history[0][0][0], &history[0][0][0] + sizeof(history) / sizeof(history[0][0][0]), 0);
+    std::fill(&killerMoves[0][0],
+              &killerMoves[0][0] + sizeof(killerMoves) / sizeof(killerMoves[0][0]),
+              Move());
 }
 
 PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector moves, InfoFn info) {
