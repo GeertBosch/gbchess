@@ -401,9 +401,9 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     if (moveList.empty() && isInCheck(position)) return Score::min();
     sortCaptures(position, moveList.begin(), moveList.end());
     for (auto move : moveList) {
-        if (options::staticExchangeEvaluation && isCapture(move.kind) &&
+        if (options::staticExchangeEvaluation && move.kind == MoveKind::Capture &&
             staticExchangeEvaluation(position.board, move.from, move.to) < 0_cp)
-            continue;  // Don't consider captures that lose material
+            continue;  // Don't consider simple captures that lose material
 
         // Compute the change to the board and evaluation that results from the move
         auto [undo, newEval] = makeMoveWithEval(position, move, stand_pat);
@@ -425,7 +425,7 @@ struct Depth {
 Score quiesce(Position& position, Score alpha, Score beta, Depth depth) {
     ++quiescenceCount;  // Increment quiescence count
     int qdepth = std::clamp(3, depth.current, options::quiescenceDepth);
-    return search::quiesce(position, alpha, beta, qdepth);
+    return quiesce(position, alpha, beta, qdepth);
 }
 
 Score quiesce(Position& position, int depthleft) {

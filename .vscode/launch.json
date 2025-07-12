@@ -106,7 +106,7 @@
             ],
             "program": "${workspaceFolder}/uci-debug",
             "args": [
-                "${workspaceFolder}/ut5.in",
+                "${workspaceFolder}/ut6.in",
             ],
         }
     ]

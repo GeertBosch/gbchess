@@ -215,7 +215,7 @@ SquareSet leastValuableAttacker(const Board& board,
 }
 
 /**
- * Static Exchange Evaluation - the standard algorithm
+ * Static Exchange Evaluation - see https://www.chessprogramming.org/SEE_-_The_Swap_Algorithm
  * Returns the material gain/loss from the perspective of the active player.
  */
 Score staticExchangeEvaluation(const Board& board, Square from, Square to) {
@@ -228,7 +228,7 @@ Score staticExchangeEvaluation(const Board& board, Square from, Square to) {
     PieceSet mayXray = {PieceType::PAWN, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN};
     SquareSet occ = occupancy(board);
     SquareSet attackers = ::attackers(board, to, occ);
-    SquareSet fromBB = SquareSet{from};
+    SquareSet fromSet = SquareSet{from};
 
     gain[depth] = std::abs(pieceValues[index(target)].cp());
     Color sideToMove = color(attacker);
@@ -240,17 +240,17 @@ Score staticExchangeEvaluation(const Board& board, Square from, Square to) {
         gain[depth] = std::abs(pieceValues[index(nextPiece)].cp()) - gain[depth - 1];
 
         // Remove piece from occupancy and attackers
-        occ ^= fromBB;
-        attackers ^= fromBB;
+        occ ^= fromSet;
+        attackers ^= fromSet;
 
         // If piece removed may reveal x-rays, re-scan x-ray attacks
         if (mayXray.contains(nextPiece))
             attackers |= discoverXRayAttackers(board, to, occ, sideToMove);
 
         // Get least valuable attacker of the opposite side
-        fromBB = leastValuableAttacker(board, attackers, !sideToMove, nextPiece);
+        fromSet = leastValuableAttacker(board, attackers, !sideToMove, nextPiece);
         sideToMove = !sideToMove;
-    } while (!fromBB.empty());
+    } while (!fromSet.empty());
 
     // Minimax backward resolution of speculative scores
     while (--depth) gain[depth - 1] = -std::max(-gain[depth - 1], gain[depth]);
