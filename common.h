@@ -369,6 +369,15 @@ public:
         active = !active;
         fullmoveNumber += active == Color::w;
     }
+
+    /** Make a null move (switch sides without actually moving a piece) */
+    void makeNullMove() {
+        active = !active;
+        enPassantTarget = noEnPassantTarget;  // Reset en passant target
+        ++halfmoveClock;
+        fullmoveNumber += active == Color::w;
+    }
+
     bool operator==(const Turn& other) const {
         return enPassantTarget == other.enPassantTarget && halfmoveClock == other.halfmoveClock &&
             castlingAvailability == other.castlingAvailability &&

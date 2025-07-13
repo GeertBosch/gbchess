@@ -339,3 +339,18 @@ int scoreMove(const Board& board, Move move) {
 
     return baseScore;
 }
+
+bool hasNonPawnMaterial(const Position& position) {
+    Color activeColor = position.active();
+
+    for (Square sq : Range(Square(0), Square(kNumSquares - 1))) {
+        Piece piece = position.board[sq];
+        if (piece == Piece::_ || color(piece) != activeColor) continue;
+
+        PieceType pieceType = type(piece);
+        if (pieceType != PieceType::PAWN && pieceType != PieceType::KING) {
+            return true;  // Found a non-pawn, non-king piece
+        }
+    }
+    return false;  // Only pawns and king remaining
+}

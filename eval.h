@@ -201,3 +201,9 @@ bool isCheckmate(const Position& position);
  * Returns true if and only if the game is in stalemate.
  */
 bool isStalemate(const Position& position);
+
+/**
+ * Returns true if the side to move has non-pawn material (useful for null move pruning).
+ * In positions with only pawns and king, null move pruning can be unreliable due to zugzwang.
+ */
+bool hasNonPawnMaterial(const Position& position);

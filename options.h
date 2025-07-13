@@ -25,5 +25,8 @@ constexpr bool hash128 = true;                              // Use a 128-bit has
 constexpr bool cachePerft = hash128;                        // Allow caching perft results
 constexpr bool useNNUE = true;                              // Use NNUE evaluation
 constexpr bool incrementalEvaluation = true;                // Compute QS evaluation using deltas
+constexpr bool nullMovePruning = true;                      // Enable null move pruning
+constexpr int nullMoveReduction = 3;                        // Depth reduction for null move search
+constexpr int nullMoveMinDepth = 3;                         // Minimum depth to try null move
 
 };  // namespace options

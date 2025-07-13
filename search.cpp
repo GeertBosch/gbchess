@@ -457,6 +457,30 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
     if (alpha >= beta)
         if (auto eval = transpositionTable.find(hash)) return {{eval.move}, alpha};
 
+    // Null move pruning
+    if (options::nullMovePruning && depth.left >= options::nullMoveMinDepth &&
+        !isInCheck(position) && beta > Score::min() + 100_cp &&  // Avoid null move near mate
+        hasNonPawnMaterial(position)) {                          // Don't do null move in endgame
+
+        // Make null move using RAII
+        Turn savedTurn = position.turn;
+        position.turn.makeNullMove();
+        Hash nullHash = hash.makeNullMove();
+
+        // Search with reduced depth
+        auto nullResult =
+            -alphaBeta(position,
+                       nullHash,
+                       -beta,
+                       -beta + 1_cp,  // Null window search for efficiency
+                       {depth.current + 1, depth.left - 1 - options::nullMoveReduction});
+
+        position.turn = savedTurn;  // Restore turn after null move search
+
+        // If null move search fails high, we can prune
+        if (nullResult.score >= beta) return {{}, beta};  // Null move cutoff
+    }
+
     auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
 
     // Forced moves don't count towards depth

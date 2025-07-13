@@ -81,6 +81,13 @@ public:
                 toggle(ExtraVectors(CASTLING_0 + i));
     }
 
+    /** Create a hash for a null move (only flip side to move) */
+    Hash makeNullMove() const {
+        Hash result = *this;
+        result.toggle(BLACK_TO_MOVE);
+        return result;
+    }
+
 private:
     HashValue hash = 0;
 };
