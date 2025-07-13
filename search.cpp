@@ -382,16 +382,14 @@ bool isQuiet(Position& position, int depthleft) {
     return true;
 }
 
-Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
+Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score standPat) {
     ++evalCount;
 
-    Score stand_pat = evaluateBoard(position.board, position.active(), evalTable);
+    if (!depthleft) return standPat;
 
-    if (!depthleft) return stand_pat;
+    if (standPat >= beta && isQuiet(position, depthleft)) return beta;
 
-    if (stand_pat >= beta && isQuiet(position, depthleft)) return beta;
-
-    if (stand_pat > alpha && isQuiet(position, depthleft)) alpha = stand_pat;
+    if (standPat > alpha && isQuiet(position, depthleft)) alpha = standPat;
 
     // The moveList includes moves needed to get out of check; an empty list means mate
     auto moveList = allLegalQuiescentMoves(position.turn, position.board, depthleft);
@@ -403,14 +401,26 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
             continue;  // Don't consider simple captures that lose material
 
         // Compute the change to the board and evaluation that results from the move
-        auto [undo, newEval] = makeMoveWithEval(position, move, stand_pat);
-        auto score = -quiesce(position, -beta, -alpha, depthleft - 1);
+        auto [undo, newEval] = makeMoveWithEval(position, move, standPat);
+        auto score = -quiesce(position, -beta, -alpha, depthleft - 1, -newEval);
         unmakeMove(position, undo);
 
         if (score >= beta) return beta;
         if (score > alpha) alpha = score;
     }
     return alpha;
+}
+
+Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
+    Score stand_pat;
+    if (options::useNNUE)
+        // Use NNUE evaluation, which is more accurate than the piece-square evaluation
+        stand_pat = Score::fromCP(nnue::evaluate(position, *network));
+    else
+        // Use simple piece-square evaluation
+        stand_pat = evaluateBoard(position.board);
+    if (position.active() == Color::b) stand_pat = -stand_pat;
+    return quiesce(position, alpha, beta, depthleft, stand_pat);
 }
 
 struct Depth {
