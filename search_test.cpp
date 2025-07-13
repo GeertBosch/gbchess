@@ -10,6 +10,7 @@
 #include "elo.h"
 #include "eval.h"
 #include "fen.h"
+#include "hash.h"
 #include "moves.h"
 #include "nnue_stats.h"
 #include "options.h"
@@ -332,10 +333,48 @@ void testMateInOne() {
     assert(ss.str() == "mate 1 pv a5c3");
 }
 
+void testNullMoveHash() {
+    // Test position with en passant possibility (from previous analysis)
+    Position position =
+        fen::parsePosition("rnbqkbnr/pppp1ppp/8/4p3/2P1P3/8/PP1P1PPP/RNBQKBNR b KQkq e3 0 2");
+
+    // Get the original hash
+    Hash originalHash(position);
+
+    // Make null move on position and hash
+    Turn savedTurn = position.turn;
+    Hash nullHash = originalHash.makeNullMove(position.turn);
+    position.turn.makeNullMove();
+
+    // Hash should match position after null move
+    Hash recomputedHash(position);
+    assert(nullHash == recomputedHash);
+
+    // Restore position
+    position.turn = savedTurn;
+
+    // Test another position without en passant
+    position = fen::parsePosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    Hash startHash(position);
+
+    savedTurn = position.turn;
+    Hash nullHashNoEP = startHash.makeNullMove(position.turn);
+    position.turn.makeNullMove();
+
+    Hash recomputedHashNoEP(position);
+    assert(nullHashNoEP == recomputedHashNoEP);
+
+    // Restore position
+    position.turn = savedTurn;
+
+    if (debug) std::cout << "Null move hash test passed!\n";
+}
+
 void testBasicSearch() {
     testMissingPV();
     testCheckMated();
     testMateInOne();
+    testNullMoveHash();
     if (debug) std::cout << "Basic search test passed!\n";
 }
 

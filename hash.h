@@ -81,10 +81,13 @@ public:
                 toggle(ExtraVectors(CASTLING_0 + i));
     }
 
-    /** Create a hash for a null move (only flip side to move) */
-    Hash makeNullMove() const {
+    /** Create a hash for a null move (flip side to move and clear en passant) */
+    Hash makeNullMove(const Turn& turn) const {
         Hash result = *this;
         result.toggle(BLACK_TO_MOVE);
+        // Clear en passant hash if it was set (matching Turn::makeNullMove behavior)
+        if (turn.enPassant() != noEnPassantTarget)
+            result.toggle(ExtraVectors(file(turn.enPassant()) + EN_PASSANT_A));
         return result;
     }
 

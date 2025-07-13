@@ -474,8 +474,9 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
 
         // Make null move using RAII
         Turn savedTurn = position.turn;
+        Hash nullHash = hash.makeNullMove(position.turn);  // Pass original turn before null move
         position.turn.makeNullMove();
-        Hash nullHash = hash.makeNullMove();
+        dassert(nullHash == Hash(position));  // Ensure hash matches position after null move
 
         // Search with reduced depth
         auto nullResult =
