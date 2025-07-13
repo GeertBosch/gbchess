@@ -282,14 +282,12 @@ void testFromStdIn(int depth) {
 }
 
 void testBasicPuzzles() {
-    {
-        auto puzfen = "4r3/1k6/pp3P2/1b5p/3R1p2/P1R2P2/1P4PP/6K1 b - - 0 35";
-        auto puzpos = fen::parsePosition(puzfen);
-        auto puzmoves = MoveVector{{e8, e1, MoveKind::Quiet_Move},
-                                   {g1, f2, MoveKind::Quiet_Move},
-                                   {e1, f1, MoveKind::Quiet_Move}};
-        assert(doPuzzle("000Zo, ranking 1311", puzpos, puzmoves, 5) == NO_ERROR);
-    }
+    auto puzfen = "4r3/1k6/pp3P2/1b5p/3R1p2/P1R2P2/1P4PP/6K1 b - - 0 35";
+    auto puzpos = fen::parsePosition(puzfen);
+    auto puzmoves = MoveVector{{e8, e1, MoveKind::Quiet_Move},
+                               {g1, f2, MoveKind::Quiet_Move},
+                               {e1, f1, MoveKind::Quiet_Move}};
+    assert(doPuzzle("000Zo, ranking 1311", puzpos, puzmoves, 5) == NO_ERROR);
 
     if (debug) std::cout << "Basic puzzle test passed!\n";
 }
@@ -304,10 +302,8 @@ void testMissingPV() {
 
 void testCheckMated() {
     // Test a position where black already is check mate
-    PrincipalVariation pv;
-    std::string fen = "1k6/1Q6/1K6/8/8/8/8/8 b - - 0 1";
-    Position position = fen::parsePosition(fen);
-    pv = search::computeBestMove(position, 1);
+    auto position = fen::parsePosition("1k6/1Q6/1K6/8/8/8/8/8 b - - 0 1");
+    auto pv = search::computeBestMove(position, 1);
     {
         // Test the correct pv when we lost
         std::stringstream ss;
@@ -324,10 +320,9 @@ void testCheckMated() {
 
 void testMateInOne() {
     // Test a mate-in-1
-    PrincipalVariation pv;
     std::string fen = "N6r/1p1k1ppp/2np4/b3p3/4P1b1/N1Q5/P4PPP/R3KB1R b KQ - 0 18";
-    Position position = fen::parsePosition(fen);
-    pv = search::computeBestMove(position, 1);
+    auto position = fen::parsePosition(fen);
+    auto pv = search::computeBestMove(position, 1);
     std::stringstream ss;
     ss << pv;
     assert(ss.str() == "mate 1 pv a5c3");
@@ -335,7 +330,7 @@ void testMateInOne() {
 
 void testNullMoveHash() {
     // Test position with en passant possibility (from previous analysis)
-    Position position =
+    auto position =
         fen::parsePosition("rnbqkbnr/pppp1ppp/8/4p3/2P1P3/8/PP1P1PPP/RNBQKBNR b KQkq e3 0 2");
 
     // Get the original hash
@@ -397,17 +392,10 @@ int main(int argc, char* argv[]) {
     if (!isAllDigits(argv[1]) && !fen::maybeFEN(argv[1])) usage(argv[0], "invalid argument");
 
     // If the last argument is a number, it's the search depth
-    int depth = 0;
-    if (isAllDigits(argv[argc - 1])) {
-        depth = std::stoi(argv[argc - 1]);
-        --argc;
-    }
+    int depth = isAllDigits(argv[argc - 1]) ? std::stoi(argv[--argc]) : 0;
 
     // Special puzzle test mode reading from stdin
-    if (argc == 1) {
-        printEvalRate([depth]() { testFromStdIn(depth); });
-        std::exit(0);
-    }
+    if (argc == 1) return printEvalRate([depth]() { testFromStdIn(depth); }), 0;
 
     std::string fen(argv[1]);
 
