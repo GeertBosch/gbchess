@@ -152,6 +152,12 @@ Score evaluateBoard(const Board& board, bool usePieceSquareTables) {
     return evaluateBoard(board, table);
 }
 
+Score evaluateBoardSimple(const Board& board) {
+    return evaluateBoard(board, false);
+}
+Score evaluateBoard(const Board& board) {
+    return evaluateBoard(board, true);
+}
 bool isInCheck(const Position& position) {
     auto kingPos = find(position.board, addColor(PieceType::KING, position.active()));
     return isAttacked(position.board, kingPos, Occupancy(position.board, position.active()));

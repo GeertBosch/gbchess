@@ -86,7 +86,6 @@ constexpr Score operator"" _cp(unsigned long long value) {
     return Score(value);
 }
 
-
 using SquareTable = std::array<Score, kNumSquares>;
 SquareTable operator+(SquareTable lhs, Score rhs);
 SquareTable operator+(SquareTable lhs, SquareTable rhs);
@@ -145,21 +144,20 @@ inline Score evaluateMove(const Board& board,
     return activePlayer == Color::w ? eval : -eval;
 }
 
-
 /**
  * This function iterates over each square in the board, uses the pieceValues map to find
  * the value of the piece on that square, and adjusts the total value accordingly. White
  * pieces have positive values, and black pieces have negative values, so the returned value
  * represents the advantage to the white player: positive for white's advantage, negative
  * for black's advantage.
- * If usePieceSquareTables is true, additionally adjust the evaluation of each piece based on
- * its position and the phase of the game.
  */
-Score evaluateBoard(const Board& board, bool usePieceSquareTables);
+Score evaluateBoardSimple(const Board& board);
+
 
 /**
- * Same as above, but uses a pre-computed evaluation table.
+ * Similar to above, but using a piece-square evaluation table, with piece values per square.
  */
+Score evaluateBoard(const Board& board);
 Score evaluateBoard(const Board& board, const EvalTable& table);
 
 /**

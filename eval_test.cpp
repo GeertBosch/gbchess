@@ -131,7 +131,7 @@ std::vector<std::string> split(std::string line, char delim) {
 }
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
-    Score stand_pat = evaluateBoard(position.board, true);
+    Score stand_pat = evaluateBoard(position.board);
     if (position.active() == Color::b) stand_pat = -stand_pat;
 
     if (!depthleft) return stand_pat;
@@ -191,10 +191,10 @@ void testMateScore() {
 void testEvaluateBoard() {
     std::string piecePlacement = "8/8/8/8/4p3/5pNN/4p3/2K1k3";
     auto board = fen::parsePiecePlacement(piecePlacement);
-    auto score = evaluateBoard(board, false);
+    auto score = evaluateBoardSimple(board);
     assert(score == 300_cp);  // 2 knights vs 3 pawns
     board = fen::parsePiecePlacement(fen::initialPiecePlacement);
-    score = evaluateBoard(board, true);
+    score = evaluateBoard(board);
     assert(score == 0_cp);
     std::cout << "evaluateBoard tests passed" << std::endl;
 }
@@ -403,10 +403,10 @@ int main(int argc, char* argv[]) {
     printBoard(std::cout, position.board);
 
     // Evaluate the board
-    Score simpleEval = evaluateBoard(position.board, false);
+    Score simpleEval = evaluateBoardSimple(position.board);
     std::cout << "Simple Board Evaluation: " << std::string(simpleEval) << std::endl;
 
-    Score pieceSquareEval = evaluateBoard(position.board, true);
+    Score pieceSquareEval = evaluateBoard(position.board);
     std::cout << "Piece-Square Board Evaluation: " << std::string(pieceSquareEval) << std::endl;
 
     auto quiesceEval = quiesce(position, Score::min(), Score::max(), 4);
