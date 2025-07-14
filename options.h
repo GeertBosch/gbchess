@@ -24,6 +24,7 @@ constexpr int defaultMoveTime = 20'000;                     // Max time for a mo
 constexpr bool hash128 = true;                              // Use a 128-bit hash for  positions
 constexpr bool cachePerft = hash128;                        // Allow caching perft results
 constexpr bool useNNUE = true;                              // Use NNUE evaluation
+constexpr bool incrementalNNUE = false;  // Use incremental NNUE updates (experimental)
 constexpr bool incrementalEvaluation = true;                // Compute QS evaluation using deltas
 constexpr bool nullMovePruning = true;                      // Enable null move pruning
 constexpr int nullMoveReduction = 3;                        // Depth reduction for null move search

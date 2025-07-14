@@ -9,6 +9,7 @@ log.*
 *.log
 *.out
 build
+dairy.md
 evals
 game.*
 perft

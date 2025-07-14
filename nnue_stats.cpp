@@ -14,6 +14,10 @@ uint64_t g_affineTimeNanos = 0;
 uint64_t g_totalEvaluations = 0;
 uint64_t g_totalActiveFeatures = 0;
 
+// Global variables for incremental analysis
+uint64_t g_totalMoves = 0;
+uint64_t g_totalFeatureChanges = 0;
+
 namespace {
 
 /** Format percentage to one decimal place */
@@ -117,6 +121,8 @@ void analyzeComputationalComplexity() {
     }
     std::cout << "   Operations per transform: ~" << transformOps << " additions"
               << formatNanosPerOp(g_transformTimeNanos, transformOps) << std::endl;
+    std::cout << "   Incremental potential: HIGH (only changed features need recomputation)"
+              << std::endl;
 
     // Perspective selection - reorganizing 512 values (both perspectives)
     std::cout << "\n2. Perspective Selection:" << std::endl;
@@ -126,15 +132,15 @@ void analyzeComputationalComplexity() {
     // Affine layers
     std::cout << "\n3. Affine Layers:" << std::endl;
 
-    // Layer 1: 512 → 32
+    // Layer 1: 512 → 32 (NOT incremental - dense matrix multiplication)
     size_t layer1_in = outputDims;  // 512 (full perspective output)
     size_t layer1_out = 32;
     size_t layer1_mults = layer1_in * layer1_out;    // 512 × 32 = 16,384
     size_t layer1_adds = layer1_mults + layer1_out;  // multiplications + bias additions
     std::cout << "   Layer 1 (512→32): " << layer1_mults << " multiplications, " << layer1_adds
-              << " additions" << std::endl;
+              << " additions (NOT incremental - dense matrix)" << std::endl;
 
-    // Layer 2: 32 → 32
+    // Layer 2: 32 → 32 (NOT incremental - depends on full layer 1 output)
     size_t layer2_in = 32;
     size_t layer2_out = 32;
     size_t layer2_mults = layer2_in * layer2_out;  // 32 × 32 = 1,024
@@ -142,7 +148,7 @@ void analyzeComputationalComplexity() {
     std::cout << "   Layer 2 (32→32): " << layer2_mults << " multiplications, " << layer2_adds
               << " additions" << std::endl;
 
-    // Layer 3: 32 → 1
+    // Layer 3: 32 → 1 (NOT incremental - depends on full layer 2 output)
     size_t layer3_in = 32;
     size_t layer3_out = 1;
     size_t layer3_mults = layer3_in * layer3_out;  // 32 × 1 = 32
@@ -153,18 +159,27 @@ void analyzeComputationalComplexity() {
     // Total affine operations
     size_t total_mults = layer1_mults + layer2_mults + layer3_mults;
     size_t total_adds = layer1_adds + layer2_adds + layer3_adds;
+
     std::cout << "   Total affine: " << total_mults << " multiplications, " << total_adds
               << " additions" << formatNanosPerOp(g_affineTimeNanos, total_mults + total_adds)
+              << std::endl;
+    std::cout << "   Incremental potential: NONE in affine layers (all require full dense matrix "
+                 "computation)"
               << std::endl;
 
     // Summary
     std::cout << "\n4. Summary per evaluation:" << std::endl;
     std::cout << "   Transform: ~" << transformOps << " operations (incremental helps here)"
               << std::endl;
-    std::cout << "   Affine layers: ~" << (total_mults + total_adds)
-              << " operations (incremental doesn't help)" << std::endl;
+    std::cout << "   All affine layers: ~" << (total_mults + total_adds)
+              << " operations (incremental CANNOT help - all dense matrices)" << std::endl;
     std::cout << "   Total operations: ~" << (transformOps + total_mults + total_adds)
               << " arithmetic operations" << std::endl;
+
+    size_t incrementalOps = transformOps;  // Only transform can be incremental
+    size_t totalOps = transformOps + total_mults + total_adds;
+    std::cout << "   Actually incremental: ~" << incrementalOps << " operations ("
+              << formatPercent(100.0 * incrementalOps / totalOps) << " of total)" << std::endl;
 
     // Performance analysis
     std::cout << "\n5. Performance perspective:" << std::endl;
@@ -179,32 +194,70 @@ void analyzeComputationalComplexity() {
     }
 
     std::cout << "   At ~" << static_cast<int>(evalRate) << " eval/sec: ~"
-              << (transformOps + total_mults + total_adds) * evalRate / 1000000.0
-              << " million ops/sec" << std::endl;
+              << totalOps * evalRate / 1000000.0 << " million ops/sec" << std::endl;
 
     // Use timing percentages instead of operation percentages
     uint64_t totalTime = g_transformTimeNanos + g_perspectiveTimeNanos + g_affineTimeNanos;
     if (g_totalEvaluations > 0 && totalTime > 0) {
         double transformPercent = 100.0 * g_transformTimeNanos / totalTime;
-        double networkPropagationPercent =
-            100.0 * (g_perspectiveTimeNanos + g_affineTimeNanos) / totalTime;
+        double affinePercent = 100.0 * g_affineTimeNanos / totalTime;
+
         std::cout << "   Transform takes " << formatPercent(transformPercent)
+                  << " of evaluation time (this is what incremental can help with)" << std::endl;
+        std::cout << "   Affine layers take " << formatPercent(affinePercent)
+                  << " of evaluation time (incremental CANNOT help with this)" << std::endl;
+        std::cout << "   Potentially incremental computation: ~" << formatPercent(transformPercent)
                   << " of evaluation time" << std::endl;
-        std::cout << "   Incremental evaluation can reduce the transform cost," << std::endl;
-        std::cout << "   but network propagation (" << formatPercent(networkPropagationPercent)
-                  << " of time) still needs optimization" << std::endl;
+        std::cout << "   With incremental updates, only ~"
+                  << formatPercent(100.0 - transformPercent) << " of computation would remain"
+                  << std::endl;
     } else {
-        std::cout << "   Transform is only "
-                  << formatPercent(100.0 * transformOps / (transformOps + total_mults + total_adds))
-                  << " of total operations" << std::endl;
-        std::cout << "   Incremental evaluation can reduce the transform cost," << std::endl;
-        std::cout << "   but network propagation ("
-                  << formatPercent(100.0 * (total_mults + total_adds) /
-                                   (transformOps + total_mults + total_adds))
-                  << " of ops) still needs optimization" << std::endl;
+        std::cout << "   Potentially incremental: "
+                  << formatPercent(100.0 * incrementalOps / totalOps) << " of total operations"
+                  << std::endl;
+        std::cout << "   With incremental updates, only "
+                  << formatPercent(100.0 * (totalOps - incrementalOps) / totalOps)
+                  << " of computation would remain" << std::endl;
     }
 
-    std::cout << formatHeader("") << "\n" << std::endl;
+    // Incremental update analysis
+    std::cout << "\n" << formatHeader(" Incremental Update Analysis ") << std::endl;
+
+    double avgFeatureChanges = ::nnue::getAverageFeatureChanges();
+    std::cout << "\n6. Realistic incremental savings:" << std::endl;
+    std::cout << "   Average feature changes per move: ~" << (int)avgFeatureChanges
+              << (g_totalMoves ? " (measured)" : " (typical estimate)") << std::endl;
+
+    // For transform: only changed features need recomputation
+    size_t incrementalTransformOps = (size_t)(avgFeatureChanges * outputDims);
+    double transformSavings = (transformOps > incrementalTransformOps)
+        ? 100.0 * (transformOps - incrementalTransformOps) / transformOps
+        : 0.0;
+
+    std::cout << "   Transform incremental ops: ~" << incrementalTransformOps << " (saves "
+              << formatPercent(transformSavings) << ")" << std::endl;
+    std::cout << "   Affine layers: " << (total_mults + total_adds)
+              << " ops (NO savings possible - dense matrix computation required)" << std::endl;
+
+    size_t totalIncrementalOps = incrementalTransformOps + (total_mults + total_adds);
+    double totalSavings = (totalOps > totalIncrementalOps)
+        ? 100.0 * (totalOps - totalIncrementalOps) / totalOps
+        : 0.0;
+
+    std::cout << "   Total with incremental: ~" << totalIncrementalOps << " operations"
+              << std::endl;
+    std::cout << "   Overall computational savings: " << formatPercent(totalSavings) << std::endl;
+    std::cout << "   Realistic speedup potential: " << std::fixed << std::setprecision(1)
+              << (totalOps / (double)totalIncrementalOps) << "x (modest improvement)" << std::endl;
+}
+
+void recordMove(size_t featureChanges) {
+    ++g_totalMoves;
+    g_totalFeatureChanges += featureChanges;
+}
+
+double getAverageFeatureChanges() {
+    return g_totalMoves ? (double)g_totalFeatureChanges / g_totalMoves : 4.0;  // Typical estimate
 }
 
 }  // namespace nnue
