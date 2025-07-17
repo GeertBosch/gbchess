@@ -6,10 +6,17 @@ This directory contains Rust implementations of the GB Chess Engine components, 
 
 ```
 rust/
-├── elo-test/         # ELO rating system (first migrated component)
+├── elo/              # ELO rating system (first migrated component)
 │   ├── src/
 │   │   ├── main.rs   # Integration tests matching C++ behavior
 │   │   └── elo.rs    # ELO rating calculation module
+│   └── Cargo.toml
+├── fen/              # FEN parsing and chess types (second migrated component)
+│   ├── src/
+│   │   ├── main.rs   # Integration tests and examples
+│   │   ├── types.rs  # Chess types (Square, Piece, Color, etc.)
+│   │   ├── board.rs  # Board representation and game state
+│   │   └── fen.rs    # FEN string parsing and generation
 │   └── Cargo.toml
 └── (future components)
 ```
@@ -47,9 +54,9 @@ cargo run --bin elo-test
 
 ## Migration Status
 
-- ✅ **elo-test**: Complete - ELO rating calculations with unit tests
-- ⏳ **fen**: Next priority - FEN string parsing and board representation
-- ⏳ **hash**: Planned - Hash table implementations
+- ✅ **elo**: Complete - ELO rating calculations with unit tests
+- ✅ **fen**: Complete - FEN string parsing, board representation, and chess types
+- ⏳ **hash**: Next priority - Hash table implementations
 - ⏳ **moves**: Planned - Move generation and validation
 - ⏳ **eval**: Planned - Position evaluation
 - ⏳ **nnue**: Planned - Neural network evaluation

@@ -1,7 +1,10 @@
 [workspace]
 resolver = "2"
 
-members = ["rust/elo-test"]
+members = [
+    "rust/elo",
+    "rust/fen",
+]
 
 # Shared dependencies and settings for all workspace members
 [workspace.dependencies]

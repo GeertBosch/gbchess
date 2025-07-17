@@ -9,7 +9,7 @@ OPTOBJ=build/opt
 DBGOBJ=build/dbg
 
 # Rust configuration
-RUST_TARGETS=elo-test
+RUST_TARGETS=elo-test fen-test
 RUST_BUILD_TARGETS=$(patsubst %,build/%-rust,$(RUST_TARGETS))
 
 # First argument is DBG or OPT, second is list of source files
@@ -232,6 +232,7 @@ magic: build/magic-test
 
 test: build debug searches evals uci magic rust-build
 	./build/fen-test
+	./build/fen-test-rust
 	./build/moves-test
 	./build/elo-test
 	./build/elo-test-rust

@@ -3,5 +3,9 @@
 version = 4
 
 [[package]]
-name = "elo-test"
+name = "elo"
+version = "0.1.0"
+
+[[package]]
+name = "fen"
 version = "0.1.0"

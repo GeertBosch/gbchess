@@ -1,11 +1,11 @@
 [package]
-name = "elo-test"
+name = "fen"
 version.workspace = true
 edition.workspace = true
 
 [[bin]]
-name = "elo-test"
+name = "fen-test"
 path = "src/main.rs"
 
 [dependencies]
-# No external dependencies needed for this simple crate
+# No external dependencies needed for this crate
