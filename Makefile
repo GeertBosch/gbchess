@@ -169,10 +169,8 @@ evals: build/eval-test ${EVALS} .PHONY
 
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:
-	@echo "\n*** Excluding Tests ***\n"
-	cloc --by-percent cmb `find src -name \*.cpp -o -name \*.h | egrep -v '_test[.]|debug'`
-	@echo "\n*** Just Tests ***\n"
-	cloc --by-percent cmb `find src -name \*.cpp -o -name \*.h | egrep '_test[.]|debug'`
+	@echo "\n*** Combined C++ and Rust Source Code ***\n"
+	cloc --by-percent cmb `find src -name \*.cpp -o -name \*.h | egrep -v '_test[.]|debug'` `find rust -name \*.rs` 2>/dev/null || echo "Error combining source files"
 
 build/perft-debug-test: build/perft-debug
 	./build/perft-debug 4 197281
