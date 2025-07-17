@@ -18,6 +18,11 @@ rust/
 │   │   ├── board.rs  # Board representation and game state
 │   │   └── fen.rs    # FEN string parsing and generation
 │   └── Cargo.toml
+├── hash/             # Zobrist hashing for positions (third migrated component)
+│   ├── src/
+│   │   ├── main.rs   # Integration tests and examples
+│   │   └── hash.rs   # Hash implementation with move types
+│   └── Cargo.toml
 └── (future components)
 ```
 
@@ -56,8 +61,8 @@ cargo run --bin elo-test
 
 - ✅ **elo**: Complete - ELO rating calculations with unit tests
 - ✅ **fen**: Complete - FEN string parsing, board representation, and chess types
-- ⏳ **hash**: Next priority - Hash table implementations
-- ⏳ **moves**: Planned - Move generation and validation
+- ✅ **hash**: Complete - Zobrist hashing for chess positions with incremental updates
+- ⏳ **moves**: Next priority - Move generation and validation
 - ⏳ **eval**: Planned - Position evaluation
 - ⏳ **nnue**: Planned - Neural network evaluation
 - ⏳ **search**: Planned - Alpha-beta search algorithm

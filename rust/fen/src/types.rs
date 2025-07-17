@@ -3,6 +3,10 @@ use std::fmt;
 pub const NUM_FILES: usize = 8;
 pub const NUM_RANKS: usize = 8;
 pub const NUM_SQUARES: usize = NUM_FILES * NUM_RANKS;
+/// Number of different piece types (including Empty).
+/// This constant is part of the public API for other crates (e.g., hash crate).
+#[allow(dead_code)]
+pub const NUM_PIECES: usize = 13; // P, N, B, R, Q, K, Empty, p, n, b, r, q, k
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
@@ -72,6 +76,19 @@ impl fmt::Display for Color {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
+#[allow(dead_code)] // Some piece types not used yet during migration
+pub enum PieceType {
+    Pawn,
+    Knight,
+    Bishop,
+    Rook,
+    Queen,
+    King,
+    Empty,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 #[allow(non_camel_case_types)]
 pub enum Piece {
     P,
@@ -109,6 +126,13 @@ impl Piece {
         }
     }
 
+    /// Returns the numeric index of this piece type.
+    /// This method is part of the public API for other crates (e.g., hash crate).
+    #[allow(dead_code)]
+    pub fn index(self) -> usize {
+        self as usize
+    }
+
     pub fn to_char(self) -> char {
         match self {
             Piece::P => 'P',
@@ -125,5 +149,81 @@ impl Piece {
             Piece::k => 'k',
             Piece::Empty => '.',
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_piece_index() {
+        // Test that each piece has a unique index
+        assert_eq!(Piece::P.index(), 0);
+        assert_eq!(Piece::N.index(), 1);
+        assert_eq!(Piece::B.index(), 2);
+        assert_eq!(Piece::R.index(), 3);
+        assert_eq!(Piece::Q.index(), 4);
+        assert_eq!(Piece::K.index(), 5);
+        assert_eq!(Piece::Empty.index(), 6);
+        assert_eq!(Piece::p.index(), 7);
+        assert_eq!(Piece::n.index(), 8);
+        assert_eq!(Piece::b.index(), 9);
+        assert_eq!(Piece::r.index(), 10);
+        assert_eq!(Piece::q.index(), 11);
+        assert_eq!(Piece::k.index(), 12);
+        
+        // Verify that index is consistent with enum ordering
+        assert_eq!(Piece::P.index(), Piece::P as usize);
+        assert_eq!(Piece::k.index(), Piece::k as usize);
+    }
+
+    #[test]
+    fn test_square_make_and_properties() {
+        let square = Square::make_square(0, 0);
+        assert_eq!(square, Square::A1);
+        assert_eq!(square.file(), 0);
+        assert_eq!(square.rank(), 0);
+        
+        let square = Square::make_square(7, 7);
+        assert_eq!(square, Square::H8);
+        assert_eq!(square.file(), 7);
+        assert_eq!(square.rank(), 7);
+        
+        let square = Square::make_square(4, 3);
+        assert_eq!(square, Square::E4);
+        assert_eq!(square.file(), 4);
+        assert_eq!(square.rank(), 3);
+    }
+
+    #[test]
+    fn test_color_operations() {
+        assert_eq!(!Color::White, Color::Black);
+        assert_eq!(!Color::Black, Color::White);
+        
+        assert_eq!(Color::White.to_string(), "w");
+        assert_eq!(Color::Black.to_string(), "b");
+    }
+
+    #[test]
+    fn test_piece_char_conversion() {
+        // Test round-trip conversion
+        for &piece in &[Piece::P, Piece::N, Piece::B, Piece::R, Piece::Q, Piece::K,
+                       Piece::p, Piece::n, Piece::b, Piece::r, Piece::q, Piece::k, Piece::Empty] {
+            let ch = piece.to_char();
+            assert_eq!(Piece::from_char(ch), Some(piece));
+        }
+        
+        // Test invalid characters
+        assert_eq!(Piece::from_char('x'), None);
+        assert_eq!(Piece::from_char('1'), None);
+    }
+
+    #[test]
+    fn test_constants() {
+        assert_eq!(NUM_FILES, 8);
+        assert_eq!(NUM_RANKS, 8);
+        assert_eq!(NUM_SQUARES, 64);
+        assert_eq!(NUM_PIECES, 13);
     }
 }

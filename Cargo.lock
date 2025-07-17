@@ -9,3 +9,10 @@ version = "0.1.0"
 [[package]]
 name = "fen"
 version = "0.1.0"
+
+[[package]]
+name = "hash"
+version = "0.1.0"
+dependencies = [
+ "fen",
+]

@@ -9,7 +9,7 @@ OPTOBJ=build/opt
 DBGOBJ=build/dbg
 
 # Rust configuration
-RUST_TARGETS=elo-test fen-test
+RUST_TARGETS=elo-test fen-test hash-test
 RUST_BUILD_TARGETS=$(patsubst %,build/%-rust,$(RUST_TARGETS))
 
 # First argument is DBG or OPT, second is list of source files
@@ -238,4 +238,5 @@ test: build debug searches evals uci magic rust-build
 	./build/elo-test-rust
 	./build/nnue-test
 	./build/hash-test
+	./build/hash-test-rust
 	./build/eval-test "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1"

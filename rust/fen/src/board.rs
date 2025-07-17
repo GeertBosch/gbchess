@@ -113,7 +113,6 @@ pub struct Turn {
     fullmove_number: u16,
 }
 
-#[allow(dead_code)] // Methods will be used as migration progresses
 impl Turn {
     pub fn new(
         active_color: Color,
@@ -139,53 +138,19 @@ impl Turn {
         self.active_color
     }
 
-    pub fn set_active(&mut self, color: Color) {
-        self.active_color = color;
-    }
-
     pub fn castling(&self) -> CastlingMask {
         self.castling_mask
-    }
-
-    pub fn set_castling(&mut self, castling: CastlingMask) {
-        self.castling_mask = castling;
     }
 
     pub fn en_passant(&self) -> Option<Square> {
         self.en_passant_target
     }
-
-    pub fn set_en_passant(&mut self, square: Option<Square>) {
-        self.en_passant_target = square;
-    }
-
     pub fn halfmove(&self) -> u8 {
         self.halfmove_clock
     }
 
-    pub fn reset_halfmove(&mut self) {
-        self.halfmove_clock = 0;
-    }
-
     pub fn fullmove(&self) -> u16 {
         self.fullmove_number
-    }
-
-    pub fn tick(&mut self) {
-        self.halfmove_clock += 1;
-        self.active_color = !self.active_color;
-        if self.active_color == Color::White {
-            self.fullmove_number += 1;
-        }
-    }
-
-    pub fn make_null_move(&mut self) {
-        self.active_color = !self.active_color;
-        self.en_passant_target = None;
-        self.halfmove_clock += 1;
-        if self.active_color == Color::White {
-            self.fullmove_number += 1;
-        }
     }
 }
 
@@ -195,7 +160,6 @@ pub struct Position {
     pub turn: Turn,
 }
 
-#[allow(dead_code)] // Methods will be used as migration progresses
 impl Position {
     pub fn new() -> Self {
         Self {
@@ -204,13 +168,68 @@ impl Position {
         }
     }
 
+    /// Returns the active color for the current position.
+    /// This method is part of the public API for other crates (e.g., hash crate).
+    #[allow(dead_code)]
     pub fn active(&self) -> Color {
-        self.turn.active_color()
+        self.turn.active_color
     }
 }
 
 impl Default for Position {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::{Color, Square};
+
+    #[test]
+    fn test_position_active_color() {
+        let position = Position::new();
+        assert_eq!(position.active(), Color::White);
+        
+        // Test with a position where black is active
+        let mut turn = Turn::initial();
+        turn.active_color = Color::Black;
+        let position = Position {
+            board: Board::new(),
+            turn,
+        };
+        assert_eq!(position.active(), Color::Black);
+    }
+
+    #[test]
+    fn test_board_indexing() {
+        let mut board = Board::new();
+        
+        // Test reading from empty board
+        assert_eq!(board[Square::A1], crate::types::Piece::Empty);
+        assert_eq!(board[Square::E4], crate::types::Piece::Empty);
+        
+        // Test writing to board
+        board[Square::A1] = crate::types::Piece::K;
+        assert_eq!(board[Square::A1], crate::types::Piece::K);
+        
+        board[Square::E4] = crate::types::Piece::p;
+        assert_eq!(board[Square::E4], crate::types::Piece::p);
+    }
+
+    #[test]
+    fn test_castling_mask_operations() {
+        let mask = CastlingMask::K | CastlingMask::Q;
+        assert!(mask.has_white_kingside());
+        assert!(mask.has_white_queenside());
+        assert!(!mask.has_black_kingside());
+        assert!(!mask.has_black_queenside());
+        
+        let full_mask = CastlingMask::KQ_kq;
+        assert!(full_mask.has_white_kingside());
+        assert!(full_mask.has_white_queenside());
+        assert!(full_mask.has_black_kingside());
+        assert!(full_mask.has_black_queenside());
     }
 }

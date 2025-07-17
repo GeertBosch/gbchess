@@ -4,6 +4,7 @@ resolver = "2"
 members = [
     "rust/elo",
     "rust/fen",
+    "rust/hash",
 ]
 
 # Shared dependencies and settings for all workspace members
