@@ -1,5 +1,3 @@
-*-test
-*-debug
 *.swp
 *.dSYM
 .DS_Store
@@ -12,9 +10,10 @@ build
 dairy.md
 evals
 game.*
+nn-*.nnue
 perft
 perft-*
 puzzles
 puzzles.csv
 players.dat
-nn-*.nnue
+target

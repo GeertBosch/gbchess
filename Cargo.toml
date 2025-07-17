@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+
+members = ["rust/elo-test"]
+
+# Shared dependencies and settings for all workspace members
+[workspace.dependencies]
+# Common dependencies that multiple crates might use
+clap = "4.0"      # Command line argument parsing
+anyhow = "1.0"    # Error handling
+serde = "1.0"     # Serialization
+criterion = "0.5" # Benchmarking
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+license = "MIT"

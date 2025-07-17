@@ -8,11 +8,15 @@ DEBUGFLAGS=-DDEBUG -O0 -g
 OPTOBJ=build/opt
 DBGOBJ=build/dbg
 
+# Rust configuration
+RUST_TARGETS=elo-test
+RUST_BUILD_TARGETS=$(patsubst %,build/%-rust,$(RUST_TARGETS))
+
 # First argument is DBG or OPT, second is list of source files
 calc_objs=$(patsubst src/%.cpp,${$(1)OBJ}/%.o,$(2))
 calc_deps=${calc_objs:.o=.d}
 
-all: debug test perft-bench perft-test perft-debug-test mate123 mate45 puzzles evals
+all: debug test rust-test perft-bench perft-test perft-debug-test mate123 mate45 puzzles evals
 	@echo "\n*** All tests passed! ***\n"
 
 -include $(call calc_deps,OPT,${ALLSRCS})
@@ -52,6 +56,24 @@ build/%-debug: ${DBGOBJ}/%_test.o
 	@mkdir -p build
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
+# Rust build rules
+.PHONY: rust-build rust-test rust-clean
+rust-build:
+	cargo build --release
+	@mkdir -p build
+	@for target in $(RUST_TARGETS); do \
+		cp target/release/$$target build/$$target-rust; \
+	done
+
+rust-test:
+	cargo test
+
+rust-clean:
+	cargo clean
+
+build/%-rust: rust-build
+	@# This rule ensures rust targets are up to date
+
 ALLSRCS=$(wildcard src/*.cpp)
 
 .deps: $(call calc_deps,OPT,${ALLSRCS}) $(call calc_deps,DBG,${ALLSRCS})
@@ -59,7 +81,7 @@ ALLSRCS=$(wildcard src/*.cpp)
 .SUFFIXES: # Delete the default suffix rules
 .PHONY:
 
-clean: .PHONY
+clean: .PHONY rust-clean
 	rm -fr build
 	rm -f *.log
 	rm -f core *.core puzzles.actual perf.data* *.ii *.bc *.s
@@ -210,10 +232,11 @@ magic: build/magic-test
 	@(./build/magic-test | diff -u src/magic_gen.h -) && echo Magic tests passed || \
 	(echo "\n*** To accept these changes, pipe this output to the patch command ***" && false)
 
-test: build debug searches evals uci magic
+test: build debug searches evals uci magic rust-build
 	./build/fen-test
 	./build/moves-test
 	./build/elo-test
+	./build/elo-test-rust
 	./build/nnue-test
 	./build/hash-test
 	./build/eval-test "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1"
