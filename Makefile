@@ -5,7 +5,6 @@ CCFLAGS=-std=c++17 -Werror -Wall -Wextra
 CLANGPP=clang++
 GPP=g++
 DEBUGFLAGS=-DDEBUG -O0 -g
-# -fprofile-instr-generate -fcoverage-mapping
 OPTOBJ=build/opt
 DBGOBJ=build/dbg
 
@@ -18,9 +17,6 @@ all: debug test perft-bench perft-test perft-debug-test mate123 mate45 puzzles e
 
 -include $(call calc_deps,OPT,${ALLSRCS})
 -include $(call calc_deps,DBG,${ALLSRCS})
-
-export LLVM_PROFILE_FILE=coverage-%m.profraw
-LLVM-MERGE=llvm-profdata merge -sparse coverage-*.profraw -o coverage.profdata
 
 # MacOS specific stuff - why can't thinks just work  by default?
 ifeq ($(_system_type),Darwin)
@@ -67,7 +63,6 @@ clean: .PHONY
 	rm -fr build
 	rm -f *.log
 	rm -f core *.core puzzles.actual perf.data* *.ii *.bc *.s
-	rm -f *.profraw *.profdata *.gcda *.gcno lcov.info
 	rm -f game.??? log.??? players.dat # XBoard outputs
 	rm -f ut*.out
 	rm -f puzzles.csv
@@ -224,20 +219,9 @@ magic: build/magic-test
 	(echo "\n*** To accept these changes, pipe this output to the patch command ***" && false)
 
 test: build debug searches evals uci magic
-	rm -f coverage-*.profraw
 	./build/fen-test
 	./build/moves-test
 	./build/elo-test
 	./build/nnue-test
 	./build/hash-test
 	./build/eval-test "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1"
-
-coverage: test
-	${LLVM-MERGE}
-	llvm-cov report ./build/fen-test -instr-profile=coverage.profdata
-	llvm-cov report ./build/moves-test -instr-profile=coverage.profdata
-	llvm-cov report ./build/elo-test -instr-profile=coverage.profdata
-	llvm-cov report ./build/nnue-test -instr-profile=coverage.profdata
-	llvm-cov report ./build/hash-test -instr-profile=coverage.profdata
-	llvm-cov report ./build/eval-test -instr-profile=coverage.profdata
-	llvm-cov report ./build/search-debug -instr-profile=coverage.profdata
