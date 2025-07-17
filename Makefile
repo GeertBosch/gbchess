@@ -64,8 +64,8 @@ clean: .PHONY
 	rm -f *.log
 	rm -f core *.core puzzles.actual perf.data* *.ii *.bc *.s
 	rm -f game.??? log.??? players.dat # XBoard outputs
-	rm -f ut*.out
-	rm -f puzzles.csv
+	rm -f test/ut*.out
+	rm -f puzzles/puzzles.csv
 	rm -rf *.dSYM .DS_Store
 
 build/fen-test: ${OPTOBJ}/fen.o
@@ -136,10 +136,10 @@ mate123: build/search-test ${PUZZLES} .PHONY
 mate45: build/search-test ${PUZZLES} .PHONY
 	egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -101 | ./build/search-test 9
 
-puzzles.csv: ${PUZZLES} Makefile
+puzzles/puzzles.csv: ${PUZZLES} Makefile
 	egrep -v "mateIn[12345]" ${PUZZLES} | head -101 > $@
 
-puzzles: puzzles.csv build/search-test .PHONY
+puzzles: puzzles/puzzles.csv build/search-test .PHONY
 	./build/search-test 6 < $<
 
 evals: build/eval-test ${EVALS} .PHONY
@@ -195,7 +195,7 @@ searches6: build/search-test
 
 searches: searches1 searches2 searches3 searches4 searches5 searches6
 
-ut%.out: ut%.in build/uci-debug
+test/ut%.out: test/ut%.in build/uci-debug
 	@./build/uci-debug $< 2>&1 | grep -wv "expect" > "$@"
 	@grep -w "^expect" $< | \
 	while read expect pattern ; do \
@@ -203,7 +203,7 @@ ut%.out: ut%.in build/uci-debug
 			(echo "$@: no match for \"$$pattern\"" && cat "$@" && rm -f "$@" && false) ; \
 	done
 
-uci: $(patsubst ut%.in,ut%.out,$(wildcard ut*.in))
+uci: $(patsubst test/ut%.in,test/ut%.out,$(wildcard test/ut*.in))
 
 magic: build/magic-test
 # To accept any changes on test failure, pipe the output to the `patch` command
