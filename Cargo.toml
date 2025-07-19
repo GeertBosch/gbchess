@@ -6,6 +6,7 @@ members = [
     "rust/fen",
     "rust/hash",
     "rust/square_set",
+    "rust/magic",
 ]
 
 # Shared dependencies and settings for all workspace members

@@ -1,6 +1,7 @@
 # Rust Components of GB Chess Engine
 
-This directory contains Rust implementations of the GB Chess Engine components, developed alongside the existing C++ codebase as part of a gradual migration.
+This directory contains Rust implementations of the GB Chess Engine components, developed alongside
+the existing C++ codebase as part of a gradual migration.
 
 ## Structure
 
@@ -22,6 +23,19 @@ rust/
 │   ├── src/
 │   │   ├── main.rs   # Integration tests and examples
 │   │   └── hash.rs   # Hash implementation with move types
+│   └── Cargo.toml
+├── square_set/       # Bitboard operations (fourth migrated component)
+│   ├── src/
+│   │   ├── main.rs   # Integration tests and examples
+│   │   └── square_set.rs # Bitboard utilities and square set operations
+│   └── Cargo.toml
+├── magic/            # Magic bitboard generation (fifth migrated component)
+│   ├── src/
+│   │   ├── lib.rs    # Library entry point
+│   │   ├── main.rs   # Magic number generator tool
+│   │   ├── magic.rs  # Core magic bitboard implementation
+│   │   ├── magic_gen.rs # Auto-generated magic constants
+│   │   └── integration_test.rs # Integration tests
 │   └── Cargo.toml
 └── (future components)
 ```
@@ -63,9 +77,9 @@ cargo run --bin elo-test
 - ✅ **fen**: Complete - FEN string parsing, board representation, and chess types
 - ✅ **hash**: Complete - Zobrist hashing for chess positions with incremental updates
 - ✅ **square_set**: Complete - Bitboard operations and square set manipulation
-- ⏳ **magic**: Planned - Magic bitboard generation for sliding piece attacks
+- ✅ **magic**: Complete - Magic bitboard generation for sliding piece attacks
 - ⏳ **moves**: Next priority - Move generation and validation
-- ⏳ **perft**: Planned - Performance testing for comprehensive move generation validation
+- ⏳ **perft**: Planned - Correcctness testing for comprehensive move generation validation
 - ⏳ **eval**: Planned - Position evaluation
 - ⏳ **nnue**: Planned - Neural network evaluation
 - ⏳ **search**: Planned - Alpha-beta search algorithm
