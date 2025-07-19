@@ -10,7 +10,8 @@ DBGOBJ=build/dbg
 
 # Rust configuration
 RUST_TARGETS=elo-test fen-test hash-test
-RUST_BUILD_TARGETS=$(patsubst %,build/%-rust,$(RUST_TARGETS))
+RUST_BUILD_DIR=rust-build
+RUST_BUILD_TARGETS=$(patsubst %,$(RUST_BUILD_DIR)/%-rust,$(RUST_TARGETS))
 
 # First argument is DBG or OPT, second is list of source files
 calc_objs=$(patsubst src/%.cpp,${$(1)OBJ}/%.o,$(2))
@@ -36,6 +37,7 @@ endif
 ${OPTOBJ}/%.d: src/%.cpp
 	@mkdir -p ${OPTOBJ}
 	${GPP} -MT $(subst .d,.o,$@) -MM ${CCFLAGS} -Isrc -o $@ $< > $@
+
 ${OPTOBJ}/%.o: src/%.cpp ${OPTOBJ}/%.d
 	@mkdir -p ${OPTOBJ}
 	${GPP} -c ${CCFLAGS} -Isrc -O2 -o $@ $<
@@ -57,32 +59,35 @@ build/%-debug: ${DBGOBJ}/%_test.o
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
 # Rust build rules
-.PHONY: rust-build rust-test rust-clean
-rust-build:
+
+# Build all Rust executables in one go to avoid parallel compilation issues
+rust-build: $(RUST_BUILD_DIR)/.rust-built
+
+# Sentinel file to track when Rust build is complete
+$(RUST_BUILD_DIR)/.rust-built:
 	cargo build --release
-	@mkdir -p build
+	@mkdir -p $(RUST_BUILD_DIR)
 	@for target in $(RUST_TARGETS); do \
-		cp target/release/$$target build/$$target-rust; \
+		cp target/release/$$target $(RUST_BUILD_DIR)/$$target-rust; \
 	done
+	@touch $(RUST_BUILD_DIR)/.rust-built
 
-rust-test:
+# Individual targets depend on the completed build
+$(RUST_BUILD_TARGETS): $(RUST_BUILD_DIR)/.rust-built
+
+rust-test: $(RUST_BUILD_DIR)/.rust-built
 	cargo test
-
-rust-clean:
-	cargo clean
-
-build/%-rust: rust-build
-	@# This rule ensures rust targets are up to date
 
 ALLSRCS=$(wildcard src/*.cpp)
 
 .deps: $(call calc_deps,OPT,${ALLSRCS}) $(call calc_deps,DBG,${ALLSRCS})
 
 .SUFFIXES: # Delete the default suffix rules
-.PHONY:
 
-clean: .PHONY rust-clean
-	rm -fr build
+clean: 
+	cargo clean
+	@rm -f $(RUST_BUILD_DIR)/.rust-built
+	rm -fr build $(RUST_BUILD_DIR)
 	rm -f *.log
 	rm -f core *.core puzzles.actual perf.data* *.ii *.bc *.s
 	rm -f game.??? log.??? players.dat # XBoard outputs
@@ -152,19 +157,19 @@ perft-test: build/perft-test
 perft-debug-test: build/perft-debug-test
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
-mate123: build/search-test ${PUZZLES} .PHONY
+mate123: build/search-test ${PUZZLES}
 	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -1001 | ./build/search-test 5
 
-mate45: build/search-test ${PUZZLES} .PHONY
+mate45: build/search-test ${PUZZLES}
 	egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -101 | ./build/search-test 9
 
 puzzles/puzzles.csv: ${PUZZLES} Makefile
 	egrep -v "mateIn[12345]" ${PUZZLES} | head -101 > $@
 
-puzzles: puzzles/puzzles.csv build/search-test .PHONY
+puzzles: puzzles/puzzles.csv build/search-test
 	./build/search-test 6 < $<
 
-evals: build/eval-test ${EVALS} .PHONY
+evals: build/eval-test ${EVALS}
 	./build/eval-test ${EVALS}
 
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
@@ -230,13 +235,18 @@ magic: build/magic-test
 	@(./build/magic-test | diff -u src/magic_gen.h -) && echo Magic tests passed || \
 	(echo "\n*** To accept these changes, pipe this output to the patch command ***" && false)
 
-test: build debug searches evals uci magic rust-build
-	./build/fen-test
-	./build/fen-test-rust
-	./build/moves-test
-	./build/elo-test
-	./build/elo-test-rust
-	./build/nnue-test
-	./build/hash-test
-	./build/hash-test-rust
-	./build/eval-test "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1"
+	@echo "Running Rust tests..."
+	cargo test --release
+	for target in $(RUST_TARGETS); do \
+		./$(RUST_BUILD_DIR)/$$target-rust; \
+	done
+
+test: build debug searches evals uci magic
+	@echo "Running C++ test executables..."
+	for file in build/*-test; do \
+		echo $$file ; ./$$file < /dev/null > /dev/null || ./$$file </dev/null; \
+	done
+	@echo "Running Rust test executables..."
+	for target in $(RUST_TARGETS); do \
+		echo $$target ; ./$(RUST_BUILD_DIR)/$$target-rust; \
+	done
