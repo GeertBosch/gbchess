@@ -62,7 +62,10 @@ cargo run --bin elo-test
 - ✅ **elo**: Complete - ELO rating calculations with unit tests
 - ✅ **fen**: Complete - FEN string parsing, board representation, and chess types
 - ✅ **hash**: Complete - Zobrist hashing for chess positions with incremental updates
+- ✅ **square_set**: Complete - Bitboard operations and square set manipulation
+- ⏳ **magic**: Planned - Magic bitboard generation for sliding piece attacks
 - ⏳ **moves**: Next priority - Move generation and validation
+- ⏳ **perft**: Planned - Performance testing for comprehensive move generation validation
 - ⏳ **eval**: Planned - Position evaluation
 - ⏳ **nnue**: Planned - Neural network evaluation
 - ⏳ **search**: Planned - Alpha-beta search algorithm

@@ -5,6 +5,7 @@ members = [
     "rust/elo",
     "rust/fen",
     "rust/hash",
+    "rust/square_set",
 ]
 
 # Shared dependencies and settings for all workspace members
