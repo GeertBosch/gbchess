@@ -98,10 +98,15 @@ clean:
 build/fen-test: ${OPTOBJ}/fen.o
 build/fen-debug: ${DBGOBJ}/fen.o
 
-MOVES_SRCS=src/moves.cpp src/magic.cpp
+build/square_set-test: $(call calc_objs,OPT,src/square_set.cpp  src/fen.cpp)
+build/square_set-debug: $(call calc_objs,DBG,src/square_set.cpp src/fen.cpp)
 
-build/nnue-test: $(call calc_objs,OPT,src/nnue.cpp src/nnue_stats.cpp src/nnue_incremental.cpp ${MOVES_SRCS} src/fen.cpp)
-build/nnue-debug: $(call calc_objs,DBG,src/nnue.cpp src/nnue_stats.cpp src/nnue_incremental.cpp ${MOVES_SRCS} src/fen.cpp)
+NNUE_SRCS=src/nnue.cpp src/nnue_stats.cpp src/nnue_incremental.cpp src/square_set.cpp src/fen.cpp
+
+build/nnue-test: $(call calc_objs,OPT,${NNUE_SRCS})
+build/nnue-debug: $(call calc_objs,DBG,${NNUE_SRCS})
+
+MOVES_SRCS=src/moves.cpp src/magic.cpp src/square_set.cpp
 
 build/moves-test: $(call calc_objs,OPT,${MOVES_SRCS} src/fen.cpp) 
 build/moves-debug: $(call calc_objs,DBG,${MOVES_SRCS} src/fen.cpp)
@@ -147,7 +152,7 @@ build/perft-gcc-emul:  ${PERFT_SRCS} src/*.h
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
 
 build/perft-%.ok: build/perft-%
-	./$< -q 5 4865609
+	./$< 5 4865609 | grep nodes/sec
 
 # Aliases for perft test targets
 perft-bench: build/perft-clang-emul.ok build/perft-gcc-emul.ok build/perft-clang-sse2.ok build/perft-gcc-sse2.ok

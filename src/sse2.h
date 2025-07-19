@@ -5,3 +5,7 @@
 #else
 #include "sse2emul.h"
 #endif
+
+// Unconditionally use actual SSE2 or emulated SSE2: it turns out that the emulated CPU has more
+// benefits for ARM (on at least Apple Silicon M1) than real SSE2 has for x86.
+constexpr bool haveSSE2 = true;

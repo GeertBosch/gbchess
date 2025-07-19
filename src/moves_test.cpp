@@ -257,38 +257,6 @@ void testSquare() {
     std::cout << "All Square tests passed!" << std::endl;
 }
 
-void testOccupancy() {
-    {
-        Board board;
-        board[a3] = Piece::P;
-        board[b4] = Piece::P;
-        board[a1] = Piece::R;
-        board[d2] = Piece::N;
-        board[c2] = Piece::B;
-        board[d1] = Piece::Q;
-        board[e1] = Piece::K;
-        board[f2] = Piece::B;
-        board[g2] = Piece::N;
-        board[h5] = Piece::r;
-        board[d7] = Piece::p;
-        board[e5] = Piece::p;
-        board[f7] = Piece::p;
-        board[g7] = Piece::p;
-        board[h7] = Piece::p;
-        board[a8] = Piece::r;
-        board[b8] = Piece::n;
-        board[c8] = Piece::b;
-        board[d8] = Piece::q;
-        board[e8] = Piece::k;
-        auto squares = occupancy(board);
-        assert(squares.size() == 20);
-        squares = occupancy(board, Color::w);
-        assert(squares.size() == 9);
-        squares = occupancy(board, Color::b);
-        assert(squares.size() == 11);
-    }
-    std::cout << "All occupancy tests passed!" << std::endl;
-}
 
 bool has(const MoveVector& moves, Move move) {
     return std::find(moves.begin(), moves.end(), move) != moves.end();
@@ -833,7 +801,6 @@ int main(int argc, char* argv[]) {
     testColor();
     testPossibleMoves();
     testPossibleCaptures();
-    testOccupancy();
     testDoesNotCheck();
     testPinnedPieces();
     testLegalPawnMoves();

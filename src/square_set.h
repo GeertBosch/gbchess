@@ -109,3 +109,11 @@ public:
     iterator begin() const { return {*this}; }
     iterator end() const { return SquareSet(); }
 };
+
+/**
+ * Returns the set of non-empty fields on the board, possibly limited to one color.
+ */
+SquareSet occupancy(const Board& board);
+SquareSet occupancy(const Board& board, Color color);
+
+SquareSet find(const Board& board, Piece piece);

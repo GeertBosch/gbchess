@@ -9,8 +9,6 @@
 
 #include "common.h"
 #include "square_set.h"
-#include "sse2.h"
-
 
 /**
  * Returns the set of squares between two squares, exclusive of the `to` square.
@@ -22,13 +20,6 @@ SquareSet path(Square from, Square to);
  */
 SquareSet ipath(Square from, Square to);
 
-/**
- * Returns the set of non-empty fields on the board, possibly limited to one color.
- */
-SquareSet occupancy(const Board& board);
-SquareSet occupancy(const Board& board, Color color);
-
-SquareSet find(const Board& board, Piece piece);
 
 struct PieceSet {
     uint16_t pieces = 0;
