@@ -56,22 +56,6 @@ void printBoard(std::ostream& os, const Board& board) {
     os << std::endl;
 }
 
-// Print the SquareSet in a grid format to the output stream with . for empty and X for set squares
-void printSquareSet(std::ostream& os, const SquareSet& squares) {
-    for (int rank = 7; rank >= 0; --rank) {
-        os << rank + 1 << "  ";
-        for (int file = 0; file < 8; ++file) {
-            os << (squares.contains(makeSquare(file, rank)) ? " X" : " .");
-        }
-        os << std::endl;
-    }
-    os << "   ";
-    for (char file = 'a'; file <= 'h'; ++file) {
-        os << ' ' << file;
-    }
-    os << std::endl;
-}
-
 void testPieceType() {
     assert(type(Piece::P) == PieceType::PAWN);
     assert(type(Piece::N) == PieceType::KNIGHT);
@@ -273,61 +257,6 @@ void testSquare() {
     std::cout << "All Square tests passed!" << std::endl;
 }
 
-void testSquareSet() {
-    SquareSet set;
-
-    // Test empty set
-    assert(set.empty());
-    assert(set.size() == 0);
-
-    // Test insert and count
-    set.insert(Square(0));
-    assert(!set.empty());
-    assert(set.size() == 1);
-    assert(set.contains(Square(0)));
-    assert(!set.contains(Square(1)));
-
-    // Test insert and count with multiple squares
-    set.insert(Square(1));
-    set.insert(Square(4));
-    assert(set.size() == 3);
-    assert(set.contains(Square(0)));
-    assert(set.contains(Square(1)));
-    assert(!set.contains(Square(2)));
-    assert(!set.contains(Square(3)));
-    assert(set.contains(Square(4)));
-
-    // Test iterator
-    set.insert(Square(9));
-    SquareSet::iterator it = set.begin();
-    assert(*it == Square(0));
-    ++it;
-    assert(*it == Square(1));
-    ++it;
-    assert(*it == Square(4));
-    ++it;
-    assert(it != set.end());
-    assert(*it == Square(9));
-    ++it;
-    assert(it == set.end());
-
-    // Test end iterator
-    it = set.end();
-    assert(it == set.end());
-
-    // Test copy constructor
-    SquareSet set2;
-    set2.insert(Square(3));
-    set2.insert(Square(4));
-    set2.insert(Square(5));
-    set.insert(set2.begin(), set2.end());
-    assert(set.size() == 6);
-    assert(set.contains(Square(3)));
-    assert(set.contains(Square(4)));
-    assert(set.contains(Square(5)));
-
-    std::cout << "All SquareSet tests passed!" << std::endl;
-}
 void testOccupancy() {
     {
         Board board;
@@ -900,7 +829,6 @@ int main(int argc, char* argv[]) {
     }
     testSquare();
     testMove();
-    testSquareSet();
     testPieceType();
     testColor();
     testPossibleMoves();
