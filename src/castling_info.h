@@ -23,3 +23,4 @@ struct CastlingInfo {
           queenSide(color == Color::w ? CastlingMove{FromTo{e1, c1}, FromTo{a1, d1}}
                                       : CastlingMove{FromTo{e8, c8}, FromTo{a8, d8}}) {};
 };
+static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::w), CastlingInfo(Color::b)};

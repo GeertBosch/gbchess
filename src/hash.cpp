@@ -24,10 +24,6 @@ Hash::Hash(const Position& position) {
         toggle(ExtraVectors(file(position.turn.enPassant()) + EN_PASSANT_A));
 }
 
-namespace {
-static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::w), CastlingInfo(Color::b)};
-}  // namespace
-
 void Hash::applyMove(const Position& position, Move mv) {
     auto piece = position.board[mv.from];
     auto target =

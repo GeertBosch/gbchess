@@ -11,6 +11,7 @@
 #include "eval.h"
 #include "fen.h"
 #include "moves.h"
+#include "moves_gen.h"
 #include "nnue.h"
 #include "nnue_stats.h"
 

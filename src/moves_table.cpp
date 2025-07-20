@@ -10,10 +10,6 @@ namespace details {
 MovesTable movesTable;
 }  // namespace details
 
-namespace {
-static constexpr CastlingInfo castlingInfo[2] = {CastlingInfo(Color::w), CastlingInfo(Color::b)};
-}  // namespace
-
 namespace init {
 using namespace details;
 /** Compute the delta in occupancy for the given move */
@@ -25,13 +21,13 @@ Occupancy occupancyDelta(Move move) {
     SquareSet theirs;
     switch (kind) {
     case MoveKind::O_O: {
-        auto info = castlingInfo[rank(from) != 0];
+        auto& info = castlingInfo[rank(from) != 0];
         ours.insert(info.kingSide[1].to);
         ours.insert(info.kingSide[1].from);
         break;
     }
     case MoveKind::O_O_O: {
-        auto info = castlingInfo[rank(from) != 0];
+        auto& info = castlingInfo[rank(from) != 0];
         ours.insert(info.queenSide[1].to);
         ours.insert(info.queenSide[1].from);
         break;

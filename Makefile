@@ -13,11 +13,17 @@ RUST_TARGETS=elo-test fen-test hash-test
 RUST_BUILD_DIR=rust-build
 RUST_BUILD_TARGETS=$(patsubst %,$(RUST_BUILD_DIR)/%-rust,$(RUST_TARGETS))
 
+# CPP Tests
+CPP_TEST_SRCS=$(wildcard src/*_test.cpp)
+CPP_TESTS=$(patsubst src/%_test.cpp,build/%-test,$(CPP_TEST_SRCS))
+
+$(info CPP Tests: $(CPP_TESTS))
+
 # First argument is DBG or OPT, second is list of source files
 calc_objs=$(patsubst src/%.cpp,${$(1)OBJ}/%.o,$(2))
 calc_deps=${calc_objs:.o=.d}
 
-all: debug test rust-test perft-bench perft-test perft-debug-test mate123 mate45 puzzles evals
+all: debug test rust-test perft-bench perft-test perft-debug-test mate123 mate45 puzzles evals searches evals magic uci
 	@echo "\n*** All tests passed! ***\n"
 
 -include $(call calc_deps,OPT,${ALLSRCS})
@@ -106,7 +112,13 @@ NNUE_SRCS=src/nnue.cpp src/nnue_stats.cpp src/nnue_incremental.cpp src/square_se
 build/nnue-test: $(call calc_objs,OPT,${NNUE_SRCS})
 build/nnue-debug: $(call calc_objs,DBG,${NNUE_SRCS})
 
-MOVES_SRCS=src/moves.cpp src/moves_table.cpp src/magic.cpp src/square_set.cpp
+build/moves_table-test: $(call calc_objs,OPT,src/moves_table.cpp src/fen.cpp)
+build/moves_table-debug: $(call calc_objs,DBG,src/moves_table.cpp src/fen.cpp)
+
+MOVES_SRCS=src/moves.cpp src/moves_table.cpp src/moves_gen.cpp src/magic.cpp src/square_set.cpp
+
+build/moves_gen-test: $(call calc_objs,OPT,${MOVES_SRCS} src/fen.cpp)
+build/moves_gen-debug: $(call calc_objs,DBG,${MOVES_SRCS} src/fen.cpp)
 
 build/moves-test: $(call calc_objs,OPT,${MOVES_SRCS} src/fen.cpp) 
 build/moves-debug: $(call calc_objs,DBG,${MOVES_SRCS} src/fen.cpp)
@@ -240,18 +252,14 @@ magic: build/magic-test
 	@(./build/magic-test | diff -u src/magic_gen.h -) && echo Magic tests passed || \
 	(echo "\n*** To accept these changes, pipe this output to the patch command ***" && false)
 
-	@echo "Running Rust tests..."
-	cargo test --release
-	for target in $(RUST_TARGETS); do \
-		./$(RUST_BUILD_DIR)/$$target-rust; \
-	done
-
-test: build debug searches evals uci magic
+test: build rust-build debug ${CPP_TESTS}
 	@echo "Running C++ test executables..."
-	for file in build/*-test; do \
-		echo $$file ; ./$$file < /dev/null > /dev/null || ./$$file </dev/null; \
+	@for file in ${CPP_TESTS}; do \
+		/bin/echo -n Run $$file ; \
+		(./$$file < /dev/null > /dev/null && echo " passed") || ./$$file </dev/null; \
 	done
 	@echo "Running Rust test executables..."
-	for target in $(RUST_TARGETS); do \
-		echo $$target ; ./$(RUST_BUILD_DIR)/$$target-rust; \
+	@for target in $(RUST_BUILD_TARGETS); do \
+		/bin/echo -n Run $$target ; \
+		(./$$target < /dev/null > /dev/null && echo " passed") || ./$$target </dev/null; \
 	done

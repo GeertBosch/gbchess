@@ -39,54 +39,11 @@ bool attacks(const Board& board, Square from, Square to);
     if the piece where to be removed from the board. */
 SquareSet pinnedPieces(const Board& board, Occupancy occupancy, Square kingSquare);
 
-struct SearchState {
-    SearchState(const Board& board, Turn turn);
-    Color active() const { return turn.activeColor(); }
-
-    Occupancy occupancy;
-    SquareSet pawns;
-    Turn turn;
-    Square kingSquare;
-    bool inCheck;
-    SquareSet pinned;
-};
-
-/**
- * Returns true if the given move does not leave the king in check.
- */
-bool doesNotCheck(Board& board, const SearchState& state, Move move);
-
-/**
- * Computes all legal moves from a given chess position. This function checks for moves
- * that do not leave or place the king of the active color in check, including the special
- * case of castling.
- */
-MoveVector allLegalMovesAndCaptures(Turn turn, Board& board);
-
 /**
  * Returns true if the given side has a pawn that may promote on the next move.
  * Does not check for legality of the promotion move.
  */
 bool mayHavePromoMove(Color side, Board& board, Occupancy occupancy);
-
-using MoveFun = std::function<void(Board&, MoveWithPieces)>;
-void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun action);
-void forAllLegalMovesAndCaptures(Board& board, SearchState& state, MoveFun action);
-inline void forAllLegalMovesAndCaptures(Turn turn, Board& board, MoveFun action) {
-    auto state = SearchState(board, turn);
-    forAllLegalMovesAndCaptures(board, state, action);
-}
-
-size_t countLegalMovesAndCaptures(Board& board, SearchState& state);
-
-MoveVector allLegalQuiescentMoves(Turn turn, Board& board, int depthleft);
-
-struct UndoPosition {
-    UndoPosition() : board(), turn(Color::w) {}
-    UndoPosition(BoardChange board, Turn turn) : board(board), turn(turn) {}
-    BoardChange board;
-    Turn turn;
-};
 
 /**
  * Decompose a possibly complex move (castling, promotion, en passant) into two simpler moves
@@ -100,6 +57,14 @@ BoardChange prepareMove(Board& board, Move move);
  */
 BoardChange makeMove(Board& board, Move move);
 BoardChange makeMove(Board& board, BoardChange change);
+
+
+struct UndoPosition {
+    UndoPosition() : board(), turn(Color::w) {}
+    UndoPosition(BoardChange board, Turn turn) : board(board), turn(turn) {}
+    BoardChange board;
+    Turn turn;
+};
 
 /**
  * Like the above, but also updates per turn state (active color, castling availability,
@@ -121,7 +86,6 @@ void unmakeMove(Position& position, UndoPosition undo);
 [[nodiscard]] Position applyMove(Position position, Move move);
 
 Turn applyMove(Turn turn, MoveWithPieces mwp);
-void applyMove(SearchState& state, MoveWithPieces mwp);
 
 /**
  *  Returns the castling mask for the castling rights cancelled by the given move.

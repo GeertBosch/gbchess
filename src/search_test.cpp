@@ -12,6 +12,7 @@
 #include "fen.h"
 #include "hash.h"
 #include "moves.h"
+#include "moves_gen.h"
 #include "nnue_stats.h"
 #include "options.h"
 #include "pv.h"

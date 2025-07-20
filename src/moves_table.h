@@ -55,6 +55,7 @@ private:
 // Global instance of the moves table
 extern MovesTable movesTable;
 }  // namespace details
+
 inline SquareSet attackers(Square to) {
     return details::movesTable.attackers[to];
 }
@@ -101,4 +102,7 @@ inline SquareSet possibleCaptures(Piece piece, Square from) {
 
 inline SquareSet possibleMoves(Piece piece, Square from) {
     return details::movesTable.moves[index(piece)][from];
+}
+inline bool clearPath(SquareSet occupancy, Square from, Square to) {
+    return (occupancy & path(from, to)).empty();
 }
