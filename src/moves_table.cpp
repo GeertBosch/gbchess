@@ -5,13 +5,7 @@
 
 #include "moves_table.h"
 
-namespace details {
-// Global instance of the moves table
-MovesTable movesTable;
-}  // namespace details
-
 namespace init {
-using namespace details;
 /** Compute the delta in occupancy for the given move */
 Occupancy occupancyDelta(Move move) {
     auto [from, to, kind] = move;
@@ -49,11 +43,11 @@ SquareSet castlingPath(Color color, MoveKind side) {
 
     // Note the paths are reversed, so the start point is excluded and the endpoint included.
     if (side == MoveKind::O_O)
-        path |= movesTable.paths[info.kingSide[0].to][info.kingSide[0].from] |
-            movesTable.paths[info.kingSide[1].to][info.kingSide[1].from];
+        path |= MovesTable::path(info.kingSide[0].to, info.kingSide[0].from) |
+            MovesTable::path(info.kingSide[1].to, info.kingSide[1].from);
     else
-        path |= movesTable.paths[info.queenSide[0].to][info.queenSide[0].from] |
-            movesTable.paths[info.queenSide[1].to][info.queenSide[1].from];
+        path |= MovesTable::path(info.queenSide[0].to, info.queenSide[0].from) |
+            MovesTable::path(info.queenSide[1].to, info.queenSide[1].from);
 
     return path;
 }
@@ -158,12 +152,11 @@ SquareSet possibleCaptures(Piece piece, Square from) {
 }
 }  // namespace init
 
-namespace details {
 void MovesTable::initializePieceMovesAndCaptures() {
     for (auto piece : pieces) {
         for (auto from : SquareSet::all()) {
-            moves[int(piece)][from] = init::possibleMoves(Piece(piece), from);
-            captures[int(piece)][from] = init::possibleCaptures(Piece(piece), from);
+            _moves[int(piece)][from] = init::possibleMoves(Piece(piece), from);
+            _captures[int(piece)][from] = init::possibleCaptures(Piece(piece), from);
         }
     }
 }
@@ -173,9 +166,9 @@ void MovesTable::initializeAttackers() {
     for (auto from : SquareSet::all()) {
         SquareSet toSquares;
         // Gather all possible squares that can be attacked by any piece
-        for (auto piece : pieces) toSquares |= captures[int(piece)][from];
+        for (auto piece : pieces) toSquares |= _captures[int(piece)][from];
         // Distribute attackers over the target squares
-        for (auto to : toSquares) attackers[to].insert(from);
+        for (auto to : toSquares) _attackers[to].insert(from);
     }
 }
 
@@ -184,7 +177,7 @@ void MovesTable::initializeOccupancyDeltas() {
     for (int moveKind = 0; moveKind < kNumNoPromoMoveKinds; ++moveKind)
         for (int from = 0; from < kNumSquares; ++from)
             for (int to = 0; to < kNumSquares; ++to)
-                occupancyDelta[moveKind][from][to] =
+                _occupancyDelta[moveKind][from][to] =
                     init::occupancyDelta(Move{Square(from), Square(to), MoveKind(moveKind)});
 }
 
@@ -198,9 +191,9 @@ void MovesTable::initializePaths() {
 void MovesTable::initializeCastlingMasks() {
     // Initialize castling masks and en passant from squares
     for (int color = 0; color < 2; ++color) {
-        castlingClear[color][index(MoveKind::O_O_O)] =
+        _castlingClear[color][index(MoveKind::O_O_O)] =
             init::castlingPath(Color(color), MoveKind::O_O_O);
-        castlingClear[color][index(MoveKind::O_O)] =
+        _castlingClear[color][index(MoveKind::O_O)] =
             init::castlingPath(Color(color), MoveKind::O_O);
     }
 }
@@ -210,7 +203,7 @@ void MovesTable::initializeEnPassantFrom() {
     for (int color = 0; color < 2; ++color) {
         int fromRank = color == 0 ? kNumRanks - 4 : 3;  // skipping 3 ranks from either side
         for (int fromFile = 0; fromFile < kNumFiles; ++fromFile)
-            enPassantFrom[color][fromFile] = {SquareSet::valid(fromRank, fromFile - 1) |
+            _enPassantFrom[color][fromFile] = {SquareSet::valid(fromRank, fromFile - 1) |
                                               SquareSet::valid(fromRank, fromFile + 1)};
     }
 }
@@ -260,4 +253,5 @@ MovesTable::MovesTable() {
     initializeCompound();
 }
 
-}  // namespace details
+// Define the static member
+MovesTable MovesTable::movesTable;

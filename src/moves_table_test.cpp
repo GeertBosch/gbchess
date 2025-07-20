@@ -6,7 +6,7 @@
 void testPossibleMoves() {
     // Test rook moves
     {
-        auto moves = possibleMoves(Piece::R, a1);
+        auto moves = MovesTable::possibleMoves(Piece::R, a1);
         assert(moves.size() == 14);
         assert(moves.contains(h1));
         assert(moves.contains(a8));
@@ -14,14 +14,14 @@ void testPossibleMoves() {
 
     // Test bishop moves
     {
-        auto moves = possibleMoves(Piece::b, a1);
+        auto moves = MovesTable::possibleMoves(Piece::b, a1);
         assert(moves.size() == 7);
         assert(moves.contains(h8));
     }
 
     // Test knight moves
     {
-        auto moves = possibleMoves(Piece::N, a1);
+        auto moves = MovesTable::possibleMoves(Piece::N, a1);
         assert(moves.size() == 2);
         assert(moves.contains(c2));
         assert(moves.contains(b3));
@@ -29,19 +29,19 @@ void testPossibleMoves() {
 
     // Test king moves
     {
-        auto moves = possibleMoves(Piece::k, a1);
+        auto moves = MovesTable::possibleMoves(Piece::k, a1);
         assert(moves.size() == 3);
     }
 
     // Test queen moves
     {
-        auto moves = possibleMoves(Piece::Q, a1);
+        auto moves = MovesTable::possibleMoves(Piece::Q, a1);
         assert(moves.size() == 21);
     }
 
     // Test white pawn moves
     {
-        auto moves = possibleMoves(Piece::P, a2);
+        auto moves = MovesTable::possibleMoves(Piece::P, a2);
         assert(moves.size() == 2);
         assert(moves.contains(a3));
         assert(moves.contains(a4));
@@ -49,7 +49,7 @@ void testPossibleMoves() {
 
     // Test black pawn moves
     {
-        auto moves = possibleMoves(Piece::p, a7);
+        auto moves = MovesTable::possibleMoves(Piece::p, a7);
         assert(moves.size() == 2);
         assert(moves.contains(a6));
         assert(moves.contains(a5));
@@ -60,7 +60,7 @@ void testPossibleMoves() {
 
 void testPossibleCaptures() {
     // Knight tests
-    auto moves = possibleCaptures(Piece::N, makeSquare(4, 4));
+    auto moves = MovesTable::possibleCaptures(Piece::N, makeSquare(4, 4));
     assert(moves.contains(makeSquare(3, 2)));
     assert(moves.contains(makeSquare(5, 2)));
     assert(moves.contains(makeSquare(3, 6)));
@@ -71,18 +71,18 @@ void testPossibleCaptures() {
     assert(moves.contains(makeSquare(6, 5)));
 
     // Edge cases for knight
-    moves = possibleCaptures(Piece::n, makeSquare(7, 7));
+    moves = MovesTable::possibleCaptures(Piece::n, makeSquare(7, 7));
     assert(moves.contains(makeSquare(6, 5)));
     assert(moves.contains(makeSquare(5, 6)));
 
     // Bishop tests
-    moves = possibleCaptures(Piece::B, makeSquare(4, 4));
+    moves = MovesTable::possibleCaptures(Piece::B, makeSquare(4, 4));
     assert(moves.contains(makeSquare(3, 3)));
     assert(moves.contains(makeSquare(2, 2)));
     // ... Add more assertions for all possible squares
 
     // Rook tests
-    moves = possibleCaptures(Piece::r, makeSquare(4, 4));
+    moves = MovesTable::possibleCaptures(Piece::r, makeSquare(4, 4));
     assert(moves.contains(makeSquare(0, 4)));
     assert(moves.contains(makeSquare(1, 4)));
     assert(moves.contains(makeSquare(2, 4)));
@@ -90,24 +90,24 @@ void testPossibleCaptures() {
     // ... Add more assertions for all possible squares
 
     // Queen tests (combination of Rook and Bishop)
-    moves = possibleCaptures(Piece::Q, makeSquare(4, 4));
+    moves = MovesTable::possibleCaptures(Piece::Q, makeSquare(4, 4));
     assert(moves.contains(makeSquare(3, 3)));
     assert(moves.contains(makeSquare(0, 4)));
     // ... Add more assertions for all possible squares
 
     // King tests
-    moves = possibleCaptures(Piece::k, makeSquare(4, 4));
+    moves = MovesTable::possibleCaptures(Piece::k, makeSquare(4, 4));
     assert(moves.contains(makeSquare(4, 3)));
     assert(moves.contains(makeSquare(3, 4)));
     // ... Add more assertions for all possible squares
 
     // Pawn tests (White Pawn)
-    moves = possibleCaptures(Piece::P, makeSquare(4, 4));
+    moves = MovesTable::possibleCaptures(Piece::P, makeSquare(4, 4));
     assert(moves.contains(makeSquare(3, 5)));
     assert(moves.contains(makeSquare(5, 5)));
 
     // Pawn tests (Black Pawn)
-    moves = possibleCaptures(Piece::p, makeSquare(4, 4));
+    moves = MovesTable::possibleCaptures(Piece::p, makeSquare(4, 4));
     assert(moves.contains(makeSquare(3, 3)));
     assert(moves.contains(makeSquare(5, 3)));
 

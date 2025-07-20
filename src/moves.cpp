@@ -27,7 +27,7 @@ SquareSet pinnedPieces(const Board& board,
         // Check if the pin is a valid sliding piece
         if (!pinData.pinningPieces.contains(board[pinner])) continue;
 
-        auto pieces = occupancy() & path(kingSquare, pinner);
+        auto pieces = occupancy() & MovesTable::path(kingSquare, pinner);
         if (pieces.size() == 1) pinned.insert(pieces);
     }
     return pinned & occupancy.ours();
@@ -38,8 +38,8 @@ SquareSet pinnedPieces(const Board& board, Occupancy occupancy, Square kingSquar
 
     // Define pinning piece sets and corresponding capture sets
     PinData pinData[] = {
-        {possibleCaptures(Piece::R, kingSquare), {PieceType::ROOK, PieceType::QUEEN}},
-        {possibleCaptures(Piece::B, kingSquare), {PieceType::BISHOP, PieceType::QUEEN}}};
+        {MovesTable::possibleCaptures(Piece::R, kingSquare), {PieceType::ROOK, PieceType::QUEEN}},
+        {MovesTable::possibleCaptures(Piece::B, kingSquare), {PieceType::BISHOP, PieceType::QUEEN}}};
 
     auto pinned = SquareSet();
 
@@ -56,7 +56,7 @@ BoardChange prepareMove(Board& board, Move move) {
     // Lookup the compound move for the given move kind and target square. This breaks moves like
     // castling, en passant and promotion into a simple capture/move and a second move that can be a
     // no-op move, a quiet move or a promotion. The target square is taken from the compound move.
-    auto compound = compoundMove(move);
+    auto compound = MovesTable::compoundMove(move);
     auto captured = board[compound.to];
     BoardChange undo = {captured, compound.promo, {move.from, compound.to}, compound.second};
     return undo;
@@ -159,9 +159,9 @@ Position applyMove(Position position, Move move) {
 bool isAttacked(const Board& board, Square square, Occupancy occupancy) {
     // We're using this function to find out if empty squares are attacked for determining
     // legality of castling, so we can't assume that the capture square is occupied.
-    for (auto from : occupancy.theirs() & attackers(square))
+    for (auto from : occupancy.theirs() & MovesTable::attackers(square))
         if (clearPath(occupancy(), from, square) &&
-            possibleCaptures(board[from], from).contains(square))
+            MovesTable::possibleCaptures(board[from], from).contains(square))
             return true;
 
     return false;
@@ -180,13 +180,13 @@ bool isAttacked(const Board& board, SquareSet squares, Color opponentColor) {
 }
 
 bool attacks(const Board& board, Square from, Square to) {
-    return possibleCaptures(board[from], from).contains(to);
+    return MovesTable::possibleCaptures(board[from], from).contains(to);
 }
 
 SquareSet attackers(const Board& board, Square target, SquareSet occupancy) {
     SquareSet result;
 
-    auto knightAttackers = possibleCaptures(Piece::N, target) & occupancy;
+    auto knightAttackers = MovesTable::possibleCaptures(Piece::N, target) & occupancy;
     for (auto from : knightAttackers)
         if (type(board[from]) == PieceType::KNIGHT) result |= from;
 
@@ -201,7 +201,7 @@ SquareSet attackers(const Board& board, Square target, SquareSet occupancy) {
         if (bishopPieces.contains(board[from])) result |= from;
 
     // See if there are pawns or kings that can attack the square.
-    auto otherAttackers = (occupancy - result) & possibleCaptures(Piece::K, target);
+    auto otherAttackers = (occupancy - result) & MovesTable::possibleCaptures(Piece::K, target);
     for (auto from : otherAttackers)
         if (attacks(board, from, target)) result |= from;
     return result;

@@ -9,7 +9,7 @@ using namespace moves;
 
 namespace {
 SquareSet ipath(Square from, Square to) {
-    return path(from, to) | SquareSet(from) | SquareSet(to);
+    return MovesTable::path(from, to) | SquareSet(from) | SquareSet(to);
 }
 
 template <typename F>
@@ -96,11 +96,11 @@ void findNonPawnMoves(const Board& board, SearchState& state, const F& fun) {
 
                 for (auto to : toSquares) fun(piece, Move{from, to, MoveKind::Quiet_Move});
             } else {
-                auto possibleSquares = possibleMoves(piece, from) - state.occupancy();
+                auto possibleSquares = MovesTable::possibleMoves(piece, from) - state.occupancy();
                 for (auto to : possibleSquares) fun(piece, Move{from, to, MoveKind::Quiet_Move});
             }
         } else {
-            auto possibleSquares = possibleMoves(piece, from) - state.occupancy();
+            auto possibleSquares = MovesTable::possibleMoves(piece, from) - state.occupancy();
             for (auto to : possibleSquares)  // Check for moving through pieces
                 if (clearPath(state.occupancy(), from, to))
                     fun(piece, Move{from, to, MoveKind::Quiet_Move});
@@ -136,13 +136,13 @@ void findCastles(SearchState& state, const F& fun) {
 
     // Check for king side castling
     if ((turn.castling() & info.kingSideMask) != CastlingMask::_) {
-        auto path = castlingClear(color, MoveKind::O_O);
+        auto path = MovesTable::castlingClear(color, MoveKind::O_O);
         if ((occupancy() & path).empty())
             fun(info.king, {info.kingSide[0].from, info.kingSide[0].to, MoveKind::O_O});
     }
     // Check for queen side castling
     if ((turn.castling() & info.queenSideMask) != CastlingMask::_) {
-        auto path = castlingClear(color, MoveKind::O_O_O);
+        auto path = MovesTable::castlingClear(color, MoveKind::O_O_O);
         if ((occupancy() & path).empty())
             fun(info.king, Move{info.queenSide[0].from, info.queenSide[0].to, MoveKind::O_O_O});
     }
@@ -164,7 +164,8 @@ void findNonPawnCaptures(const Board& board, SearchState& state, const F& fun) {
 
             for (auto to : toSquares) fun(piece, Move{from, to, MoveKind::Capture});
         } else {
-            auto possibleSquares = possibleCaptures(piece, from) & state.occupancy.theirs();
+            auto possibleSquares =
+                MovesTable::possibleCaptures(piece, from) & state.occupancy.theirs();
             for (auto to : possibleSquares) {
                 // Exclude captures that move through pieces
                 if (clearPath(state.occupancy(), from, to))
@@ -190,7 +191,7 @@ void findEnPassant(const Board& board, Turn turn, const F& fun) {
     auto active = turn.activeColor();
     auto pawn = addColor(PieceType::PAWN, active);
 
-    for (auto from : enPassantFrom(active, enPassantTarget))
+    for (auto from : MovesTable::enPassantFrom(active, enPassantTarget))
         if (board[from] == pawn) fun(pawn, {from, enPassantTarget, MoveKind::En_Passant});
 }
 }  // namespace
@@ -213,7 +214,7 @@ bool doesNotCheck(Board& board, const SearchState& state, Move move) {
         checkSquares = isCastles(kind) ? ipath(from, to) : to;
     else if (!state.pinned.contains(from) && !state.inCheck && kind != MoveKind::En_Passant)
         return true;
-    auto delta = occupancyDelta(move);
+    auto delta = MovesTable::occupancyDelta(move);
     auto check = isAttacked(board, checkSquares, state.occupancy ^ delta);
     return !check;
 }

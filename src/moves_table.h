@@ -13,61 +13,6 @@ struct CompoundMove {
     CompoundMove(Square to, uint8_t promo, FromTo second) : to(to), promo(promo), second(second) {}
 };
 
-namespace details {
-struct alignas(64) MovesTable {
-    // precomputed possible moves for each piece type on each square
-    SquareSet moves[kNumPieces][kNumSquares];
-
-    // precomputed possible captures for each piece type on each square
-    SquareSet captures[kNumPieces][kNumSquares];
-
-    // precomputed possible squares that each square can be attacked from
-    SquareSet attackers[kNumSquares];
-
-    // precomputed delta in occupancy as result of a move, but only for non-promotion moves
-    // to save on memory: convert promotion kinds using the noPromo function
-    Occupancy occupancyDelta[kNumNoPromoMoveKinds][kNumSquares][kNumSquares];  // moveKind, from, to
-
-    // precomputed horizontal, diagonal and vertical paths from each square to each other square
-    SquareSet paths[kNumSquares][kNumSquares];  // from, to
-
-    // precomputed squares required to be clear for castling
-    SquareSet castlingClear[2][index(MoveKind::O_O_O) + 1];  // color, moveKind
-
-    // precomputed from squares for en passant targets
-    SquareSet enPassantFrom[2][kNumFiles];  // color, file
-
-    // precompute compound moves for castling, en passant and promotions
-    CompoundMove compound[kNumMoveKinds][kNumSquares];  // moveKind, to square
-
-    MovesTable();
-
-private:
-    void initializePieceMovesAndCaptures();
-    void initializeAttackers();
-    void initializeOccupancyDeltas();
-    void initializePaths();
-    void initializeCastlingMasks();
-    void initializeEnPassantFrom();
-    void initializeCompound();
-};
-
-// Global instance of the moves table
-extern MovesTable movesTable;
-}  // namespace details
-
-inline SquareSet attackers(Square to) {
-    return details::movesTable.attackers[to];
-}
-inline SquareSet castlingClear(Color color, MoveKind side) {
-    return details::movesTable.castlingClear[int(color)][index(side)];
-}
-inline CompoundMove compoundMove(Move move) {
-    return details::movesTable.compound[index(move.kind)][move.to];
-}
-inline SquareSet enPassantFrom(Color color, Square from) {
-    return details::movesTable.enPassantFrom[int(color)][int(file(from))];
-}
 inline int noPromo(MoveKind kind) {
     constexpr MoveKind noPromoKinds[] = {MoveKind::Quiet_Move,
                                          MoveKind::Double_Push,
@@ -88,21 +33,77 @@ inline int noPromo(MoveKind kind) {
     return index(noPromoKinds[index(kind)]);
 }
 
-inline Occupancy occupancyDelta(Move move) {
-    return details::movesTable.occupancyDelta[noPromo(move.kind)][move.from][move.to];
-}
+/** The MovesTable class holds precomputed move data for all pieces. */
 
-inline SquareSet path(Square from, Square to) {
-    return details::movesTable.paths[from][to];
-}
+class alignas(64) MovesTable {
+public:
+    MovesTable();
 
-inline SquareSet possibleCaptures(Piece piece, Square from) {
-    return details::movesTable.captures[index(piece)][from];
-}
+    static const MovesTable& instance() { return movesTable; }
 
-inline SquareSet possibleMoves(Piece piece, Square from) {
-    return details::movesTable.moves[index(piece)][from];
-}
+    static SquareSet attackers(Square to) { return instance()._attackers[to]; }
+    static SquareSet castlingClear(Color color, MoveKind side) {
+        return instance()._castlingClear[int(color)][index(side)];
+    }
+    static CompoundMove compoundMove(Move move) {
+        return movesTable.compound[index(move.kind)][move.to];
+    }
+    static SquareSet enPassantFrom(Color color, Square from) {
+        return movesTable._enPassantFrom[int(color)][int(file(from))];
+    }
+    static Occupancy occupancyDelta(Move move) {
+        return movesTable._occupancyDelta[noPromo(move.kind)][move.from][move.to];
+    }
+
+    static SquareSet path(Square from, Square to) { return movesTable.paths[from][to]; }
+
+    static SquareSet possibleCaptures(Piece piece, Square from) {
+        return movesTable._captures[index(piece)][from];
+    }
+
+    static SquareSet possibleMoves(Piece piece, Square from) {
+        return movesTable._moves[index(piece)][from];
+    }
+
+private:
+    static MovesTable movesTable;
+
+    // precomputed possible moves for each piece type on each square
+    SquareSet _moves[kNumPieces][kNumSquares];
+
+    // precomputed possible captures for each piece type on each square
+    SquareSet _captures[kNumPieces][kNumSquares];
+
+    // precomputed possible squares that each square can be attacked from
+    SquareSet _attackers[kNumSquares];
+
+    // precomputed delta in occupancy as result of a move, but only for non-promotion moves
+    // to save on memory: convert promotion kinds using the noPromo function
+    Occupancy _occupancyDelta[kNumNoPromoMoveKinds][kNumSquares]
+                             [kNumSquares];  // moveKind, from, to
+
+    // precomputed horizontal, diagonal and vertical paths from each square to each other square
+    SquareSet paths[kNumSquares][kNumSquares];  // from, to
+
+    // precomputed squares required to be clear for castling
+    SquareSet _castlingClear[2][index(MoveKind::O_O_O) + 1];  // color, moveKind
+
+    // precomputed from squares for en passant targets
+    SquareSet _enPassantFrom[2][kNumFiles];  // color, file
+
+    // precompute compound moves for castling, en passant and promotions
+    CompoundMove compound[kNumMoveKinds][kNumSquares];  // moveKind, to square
+
+    void initializePieceMovesAndCaptures();
+    void initializeAttackers();
+    void initializeOccupancyDeltas();
+    void initializePaths();
+    void initializeCastlingMasks();
+    void initializeEnPassantFrom();
+    void initializeCompound();
+};
+
+
 inline bool clearPath(SquareSet occupancy, Square from, Square to) {
-    return (occupancy & path(from, to)).empty();
+    return (occupancy & MovesTable::path(from, to)).empty();
 }

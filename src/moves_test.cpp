@@ -48,7 +48,7 @@ void testMakeAndUnmakeMove(Board& board, Move move) {
     auto originalBoard = board;
     auto activeColor = color(board[move.from]);
     auto occupancy = Occupancy(board, activeColor);
-    auto delta = occupancyDelta(move);
+    auto delta = MovesTable::occupancyDelta(move);
     auto undo = makeMove(board, move);
     auto expected = Occupancy(board, !activeColor);
     auto actual = !(occupancy ^ delta);
