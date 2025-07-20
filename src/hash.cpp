@@ -1,5 +1,6 @@
 #include <array>
 
+#include "castling_info.h"
 #include "common.h"
 #include "hash.h"
 #include "moves.h"

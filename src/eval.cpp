@@ -6,6 +6,7 @@
 #include "magic.h"
 #include "moves.h"
 #include "options.h"
+#include "piece_set.h"
 
 #include "eval.h"
 

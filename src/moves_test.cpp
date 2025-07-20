@@ -5,9 +5,8 @@
 #include "common.h"
 #include "fen.h"
 #include "moves.h"
+#include "moves_table.h"
 #include "options.h"
-
-using namespace for_test;
 
 std::string toString(SquareSet squares) {
     std::string str;
@@ -27,17 +26,6 @@ std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     }
     os << "]";
     return os;
-}
-bool lesssq(Square left, Square right) {
-    return file(left) < file(right) || (file(left) == file(right) && rank(left) < rank(right));
-}
-bool less(Move left, Move right) {
-    return lesssq(left.from, right.from) || (left.from == right.from && lesssq(left.to, right.to));
-}
-
-MoveVector sort(MoveVector moves) {
-    std::stable_sort(moves.begin(), moves.end(), less);
-    return moves;
 }
 
 void printBoard(std::ostream& os, const Board& board) {
@@ -256,7 +244,6 @@ void testSquare() {
 
     std::cout << "All Square tests passed!" << std::endl;
 }
-
 
 bool has(const MoveVector& moves, Move move) {
     return std::find(moves.begin(), moves.end(), move) != moves.end();

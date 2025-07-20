@@ -11,6 +11,7 @@
 #include "fen.h"
 #include "hash.h"
 #include "moves.h"
+#include "moves_table.h"
 #include "uint128_t.h"
 
 bool quiet = false;

@@ -106,7 +106,7 @@ NNUE_SRCS=src/nnue.cpp src/nnue_stats.cpp src/nnue_incremental.cpp src/square_se
 build/nnue-test: $(call calc_objs,OPT,${NNUE_SRCS})
 build/nnue-debug: $(call calc_objs,DBG,${NNUE_SRCS})
 
-MOVES_SRCS=src/moves.cpp src/magic.cpp src/square_set.cpp
+MOVES_SRCS=src/moves.cpp src/moves_table.cpp src/magic.cpp src/square_set.cpp
 
 build/moves-test: $(call calc_objs,OPT,${MOVES_SRCS} src/fen.cpp) 
 build/moves-debug: $(call calc_objs,DBG,${MOVES_SRCS} src/fen.cpp)
