@@ -6,6 +6,8 @@
 #include "moves.h"
 #include "moves_table.h"
 
+using namespace moves;
+
 std::string toString(SquareSet squares) {
     std::string str;
     for (Square sq : squares) {

@@ -353,7 +353,8 @@ void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end, in
     begin = sortMoves(position, begin, end, depth);
 }
 
-std::pair<UndoPosition, Score> makeMoveWithEval(Position& position, Move move, Score eval) {
+std::pair<moves::UndoPosition, Score> makeMoveWithEval(Position& position, Move move, Score eval) {
+    using namespace moves;
     BoardChange change = prepareMove(position.board, move);
     UndoPosition undo;
     if constexpr (options::useNNUE) {
@@ -378,7 +379,7 @@ std::pair<UndoPosition, Score> makeMoveWithEval(Position& position, Move move, S
 bool isQuiet(Position& position, int depthleft) {
     if (isInCheck(position)) return false;
     if (depthleft <= options::promotionMinDepthLeft) return true;
-    if (mayHavePromoMove(
+    if (moves::mayHavePromoMove(
             !position.active(), position.board, Occupancy(position.board, !position.active())))
         return false;
     return true;
@@ -394,7 +395,7 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score 
     if (standPat > alpha && isQuiet(position, depthleft)) alpha = standPat;
 
     // The moveList includes moves needed to get out of check; an empty list means mate
-    auto moveList = allLegalQuiescentMoves(position.turn, position.board, depthleft);
+    auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, depthleft);
     if (moveList.empty() && isInCheck(position)) return Score::min();
     sortMoves(position, moveList.begin(), moveList.end());  // No killer moves in quiescence
     for (auto move : moveList) {
@@ -494,7 +495,7 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
         if (nullResult.score >= beta) return {{}, beta};  // Null move cutoff
     }
 
-    auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
+    auto moveList = moves::allLegalMovesAndCaptures(position.turn, position.board);
 
     // Forced moves don't count towards depth
     if (moveList.size() == 1) ++depth.left;
@@ -513,7 +514,7 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
         ++moveCount;
         auto newHash = hash;
         newHash.applyMove(position, move);
-        auto undo = makeMove(position, move);
+        auto undo = moves::makeMove(position, move);
         dassert(newHash == Hash(position));
         auto newAlpha = std::max(alpha, pv.score);
 
@@ -584,7 +585,7 @@ PrincipalVariation toplevelAlphaBeta(
 
     transpositionTable.refineAlphaBeta(hash, depth.left, alpha, beta);
 
-    auto moveList = allLegalMovesAndCaptures(position.turn, position.board);
+    auto moveList = moves::allLegalMovesAndCaptures(position.turn, position.board);
 
     // Forced moves don't count towards depth
     if (moveList.size() == 1) ++depth.left;
@@ -600,7 +601,7 @@ PrincipalVariation toplevelAlphaBeta(
 
         auto newHash = hash;
         newHash.applyMove(position, move);
-        auto newPosition = applyMove(position, move);
+        auto newPosition = moves::applyMove(position, move);
         dassert(newHash == Hash(newPosition));
         auto newVar =
             -alphaBeta(newPosition, newHash, -beta, -std::max(alpha, pv.score), depth + 1);
@@ -701,7 +702,7 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
 
     auto drawState = repetitions.enter(Hash(position));
     for (auto move : moves) {
-        position = applyMove(position, move);
+        position = moves::applyMove(position, move);
         repetitions.enter(drawState, Hash(position));
     }
 

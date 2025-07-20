@@ -62,7 +62,7 @@ PrincipalVariation analyzeMoves(Position position, int maxdepth) {
     MoveVector moves;
     PrincipalVariation pv;
 
-    if (maxdepth > 0) moves = allLegalMovesAndCaptures(position.turn, position.board);
+    if (maxdepth > 0) moves = moves::allLegalMovesAndCaptures(position.turn, position.board);
 
     if (debugAnalysis)
         std::cout << "Analyzing " << moves.size() << " moves from " << fen::to_string(position)
@@ -73,7 +73,7 @@ PrincipalVariation analyzeMoves(Position position, int maxdepth) {
     for (auto move : moves) {
         if (debugAnalysis)
             std::cout << "    Considering " << move << " depth " << maxdepth - 1 << "\n";
-        auto newPosition = applyMove(position, move);
+        auto newPosition = moves::applyMove(position, move);
         auto newVariation = PrincipalVariation{move, -analyzePosition(newPosition, maxdepth - 1)};
         if (debugAnalysis)
             std::cout << "    Evaluated " << move << " as " << newVariation.score << "\n";
@@ -152,7 +152,7 @@ int find(T t, std::string what) {
 }
 
 Position applyMoves(Position position, MoveVector const& moves) {
-    for (auto move : moves) position = applyMove(position, move);
+    for (auto move : moves) position = moves::applyMove(position, move);
 
     return position;
 }
@@ -262,7 +262,7 @@ void testFromStdIn(int depth) {
         MoveVector moves;
         for (auto move : split(columns[colMoves], ' ')) {
             moves.emplace_back(fen::parseUCIMove(currentPosition.board, move));
-            currentPosition = applyMove(currentPosition, moves.back());
+            currentPosition = moves::applyMove(currentPosition, moves.back());
             // In puzzles, the first move is just to establish the initial position
             if (moves.size() == 1) initialPosition = currentPosition;
         }

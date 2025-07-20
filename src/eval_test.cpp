@@ -81,7 +81,7 @@ void usage(std::string cmdName, std::string errmsg) {
 
 void printAvailableMovesAndCaptures(const Position& position) {
     auto [board, turn] = position;
-    MoveVector moves = allLegalMovesAndCaptures(turn, board);
+    MoveVector moves = moves::allLegalMovesAndCaptures(turn, board);
 
     std::cout << "Captures: [ ";
     for (auto move : moves)
@@ -142,13 +142,13 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     if (alpha < stand_pat) alpha = stand_pat;
 
     // The moveList includes moves needed to get out of check; an empty list means mate
-    auto moveList = allLegalQuiescentMoves(position.turn, position.board, depthleft);
+    auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, depthleft);
 
     if (moveList.empty()) return isInCheck(position) ? Score::min() : Score::draw();
 
     for (auto move : moveList) {
         // Compute the change to the board and evaluation that results from the move
-        auto change = makeMove(position, move);
+        auto change = moves::makeMove(position, move);
         auto score = -quiesce(position, -beta, -alpha, depthleft - 1);
         unmakeMove(position, change);
 
@@ -287,7 +287,7 @@ int parseMoves(Position& position, int* argc, char** argv[]) {
     for (; *argc > 0; ++moves, --*argc, ++*argv) {
         auto move = fen::parseUCIMove(position.board, **argv);
         if (!move) usage(cmdName, std::string(**argv) + " is not a valid move");
-        position = applyMove(position, move);
+        position = moves::applyMove(position, move);
     }
     return moves;
 }

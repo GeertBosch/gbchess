@@ -81,7 +81,7 @@ void error(const std::string& message) {
  *  leaf nodes of a certain depth, which can be compared to predetermined values and used to isolate
  *  bugs. (See https://www.chessprogramming.org/Perft)
  */
-NodeCount perft(Board& board, Hash hash, SearchState& state, int depth) {
+NodeCount perft(Board& board, Hash hash, moves::SearchState& state, int depth) {
     if (depth <= 1) return depth == 1 ? countLegalMovesAndCaptures(board, state) : 1;
 
     dassert(!options::cachePerft || hash == Hash(Position{board, state.turn}));
@@ -99,10 +99,10 @@ NodeCount perft(Board& board, Hash hash, SearchState& state, int depth) {
         auto newHash = options::cachePerft ? applyMove(hash, state.turn, mwp) : Hash();
         newState.occupancy = !(state.occupancy ^ delta);
         newState.pawns = find(board, addColor(PieceType::PAWN, !state.active()));
-        newState.turn = applyMove(state.turn, mwp);
+        newState.turn = moves::applyMove(state.turn, mwp);
         newState.kingSquare = *find(board, addColor(PieceType::KING, !state.active())).begin();
-        newState.inCheck = isAttacked(board, newState.kingSquare, newState.occupancy);
-        newState.pinned = pinnedPieces(board, newState.occupancy, newState.kingSquare);
+        newState.inCheck = moves::isAttacked(board, newState.kingSquare, newState.occupancy);
+        newState.pinned = moves::pinnedPieces(board, newState.occupancy, newState.kingSquare);
 
         auto newNodes = nodes + perft(board, newHash, newState, depth - 1);
         if (newNodes < nodes) error("Node count overflow");
@@ -113,7 +113,7 @@ NodeCount perft(Board& board, Hash hash, SearchState& state, int depth) {
 }
 
 NodeCount perft(Position position, int depth) {
-    auto state = SearchState(position.board, position.turn);
+    auto state = moves::SearchState(position.board, position.turn);
     return perft(position.board, Hash{position}, state, depth);
 }
 
@@ -126,8 +126,8 @@ void perftWithDivide(Position position, int depth, NodeCount expectedCount) {
 
     auto startTime = std::chrono::high_resolution_clock::now();
     NodeCount count = 0;
-    for (auto move : allLegalMovesAndCaptures(position.turn, position.board)) {
-        auto newCount = perft(applyMove(position, move), depth - 1);
+    for (auto move : moves::allLegalMovesAndCaptures(position.turn, position.board)) {
+        auto newCount = perft(moves::applyMove(position, move), depth - 1);
         if (!quiet) std::cout << to_string(move) << ": " << to_string(newCount) << "\n";
         divisions.push_back({move, newCount});
         if (count + newCount < count) error("Node count overflow");
@@ -298,7 +298,7 @@ int main(int argc, char** argv) {
 
         while (maybeMove(arg())) {
             Move move = fen::parseUCIMove(positions.back().board, shift());
-            auto pos = applyMove(positions.back(), move);
+            auto pos = moves::applyMove(positions.back(), move);
             std::cout << "applied move " << to_string(move) << "\n";
             positions.back() = pos;
         }

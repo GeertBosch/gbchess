@@ -44,7 +44,7 @@ Hash applyMove(Hash hash, Turn turn, MoveWithPieces mwp) {
         hash.toggle(Hash::ExtraVectors(file(turn.enPassant()) + Hash::EN_PASSANT_A));
 
     // Cancel any castling rights according to the move squares.
-    hash.toggle(turn.castling() & castlingMask(mv.from, mv.to));
+    hash.toggle(turn.castling() & moves::castlingMask(mv.from, mv.to));
 
     switch (mv.kind) {
     case MoveKind::Quiet_Move: break;

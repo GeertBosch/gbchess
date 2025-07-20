@@ -1,3 +1,5 @@
+#pragma once
+
 /**
  *  Implement our own SSE2 functions for non-x86 systems
  *
@@ -5,7 +7,6 @@
  *  Results on my Apple Silicon M1 exceed those on my x86 using native SSE2.
  */
 
-#pragma once
 #include <cstring>
 
 

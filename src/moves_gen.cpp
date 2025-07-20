@@ -5,6 +5,8 @@
 #include "options.h"
 #include "piece_set.h"
 
+using namespace moves;
+
 namespace {
 SquareSet ipath(Square from, Square to) {
     return path(from, to) | SquareSet(from) | SquareSet(to);
@@ -193,6 +195,7 @@ void findEnPassant(const Board& board, Turn turn, const F& fun) {
 }
 }  // namespace
 
+namespace moves {
 SearchState::SearchState(const Board& board, Turn turn)
     : occupancy(Occupancy(board, turn.activeColor())),
       pawns(find(board, addColor(PieceType::PAWN, turn.activeColor()))),
@@ -214,7 +217,6 @@ bool doesNotCheck(Board& board, const SearchState& state, Move move) {
     auto check = isAttacked(board, checkSquares, state.occupancy ^ delta);
     return !check;
 }
-
 
 void forAllLegalQuiescentMoves(Turn turn,
                                Board& board,
@@ -310,3 +312,4 @@ MoveVector allLegalMovesAndCaptures(Turn turn, Board& board) {
         turn, board, [&](Board&, MoveWithPieces move) { legalMoves.emplace_back(move.move); });
     return legalMoves;
 }
+}  // namespace moves

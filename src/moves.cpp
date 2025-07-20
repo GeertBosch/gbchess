@@ -17,6 +17,7 @@ struct PinData {
 };
 }  // namespace
 
+namespace moves {
 SquareSet pinnedPieces(const Board& board,
                        Occupancy occupancy,
                        Square kingSquare,
@@ -107,7 +108,7 @@ void unmakeMove(Position& position, UndoPosition undo) {
 }
 
 CastlingMask castlingMask(Square from, Square to) {
-    const struct MaskTable {
+    constexpr struct MaskTable {
         using CM = CastlingMask;
         std::array<CM, kNumSquares> mask;
         constexpr MaskTable() : mask{} {
@@ -224,3 +225,4 @@ bool mayHavePromoMove(Color side, Board& board, Occupancy occupancy) {
         if (board[square] == pawn) return true;
     return false;
 }
+}  // namespace moves

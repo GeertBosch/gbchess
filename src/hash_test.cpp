@@ -101,8 +101,8 @@ void testTrivialHash() {
 }
 
 Position applyUCIMove(Position position, const std::string& move) {
-    return applyMove(position, fen::parseUCIMove(position.board, move));
-    throw MoveError("Invalid move: " + move);
+    return moves::applyMove(position, fen::parseUCIMove(position.board, move));
+    throw moves::MoveError("Invalid move: " + move);
 }
 
 void testBasicHash() {
@@ -147,7 +147,7 @@ void testEnPassant() {
     auto move = fen::parseUCIMove(pos1.board, "e5f6");
     assert(move.kind == MoveKind::En_Passant);
 
-    auto pos2 = applyMove(pos1, move);
+    auto pos2 = moves::applyMove(pos1, move);
     assert(pos2.turn.enPassant() == noEnPassantTarget);
     auto hash2 = Hash(pos2);
     assert(hash1() != hash2());
@@ -161,7 +161,7 @@ void checkApplyMove(std::string position, std::string move) {
     Hash hash(pos1);
     auto mv = fen::parseUCIMove(pos1.board, move);
     hash.applyMove(pos1, mv);
-    auto pos2 = applyMove(pos1, mv);
+    auto pos2 = moves::applyMove(pos1, mv);
     bool ok = checkSameHash(hash, Hash(pos2));
     if (!ok) std::cout << "Failed to apply move " << move << " on position " << position << "\n";
     assert(ok);

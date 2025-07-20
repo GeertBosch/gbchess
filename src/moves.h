@@ -11,6 +11,7 @@
 #include "occupancy.h"
 #include "square_set.h"
 
+namespace moves {
 struct MoveError : public std::exception {
     std::string message;
     MoveError(std::string message) : message(message) {}
@@ -58,7 +59,6 @@ BoardChange prepareMove(Board& board, Move move);
 BoardChange makeMove(Board& board, Move move);
 BoardChange makeMove(Board& board, BoardChange change);
 
-
 struct UndoPosition {
     UndoPosition() : board(), turn(Color::w) {}
     UndoPosition(BoardChange board, Turn turn) : board(board), turn(turn) {}
@@ -91,3 +91,4 @@ Turn applyMove(Turn turn, MoveWithPieces mwp);
  *  Returns the castling mask for the castling rights cancelled by the given move.
  */
 CastlingMask castlingMask(Square from, Square to);
+}  // namespace moves

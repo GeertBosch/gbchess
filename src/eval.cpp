@@ -162,12 +162,12 @@ Score evaluateBoard(const Board& board) {
 }
 bool isInCheck(const Position& position) {
     auto kingPos = find(position.board, addColor(PieceType::KING, position.active()));
-    return isAttacked(position.board, kingPos, Occupancy(position.board, position.active()));
+    return moves::isAttacked(position.board, kingPos, Occupancy(position.board, position.active()));
 }
 
 bool isMate(const Position& position) {
     auto board = position.board;
-    auto state = SearchState(board, position.turn);
+    auto state = moves::SearchState(board, position.turn);
     return countLegalMovesAndCaptures(board, state) == 0;
 }
 
@@ -237,7 +237,7 @@ Score staticExchangeEvaluation(const Board& board, Square from, Square to) {
 
     PieceSet mayXray = {PieceType::PAWN, PieceType::BISHOP, PieceType::ROOK, PieceType::QUEEN};
     SquareSet occ = occupancy(board);
-    SquareSet attackers = ::attackers(board, to, occ);
+    SquareSet attackers = moves::attackers(board, to, occ);
     SquareSet fromSet = SquareSet{from};
 
     gain[depth] = std::abs(pieceValues[index(target)].cp());

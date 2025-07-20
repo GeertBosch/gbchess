@@ -6,6 +6,8 @@
 #include "fen.h"
 #include "options.h"
 
+using namespace moves;
+
 bool has(const MoveVector& moves, Move move) {
     return std::find(moves.begin(), moves.end(), move) != moves.end();
 };
@@ -156,7 +158,7 @@ void testAllLegalMovesAndCaptures() {
         assert(castles.kind == MoveKind::O_O_O);
         auto legalMoves = allLegalMovesAndCaptures(position.turn, position.board);
         assert(std::count(legalMoves.begin(), legalMoves.end(), castles) == 1);
-        auto castled = applyMove(position, castles);
+        auto castled = moves::applyMove(position, castles);
 
         // Check that pieces moved correctly
         assert(castled.board[c8] == Piece::k);

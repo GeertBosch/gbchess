@@ -22,7 +22,8 @@ namespace {
 MoveVector parseUCIMoves(Position position, const std::vector<std::string>& moves) {
     MoveVector vector;
     for (auto uci : moves)
-        position = applyMove(position, vector.emplace_back(fen::parseUCIMove(position.board, uci)));
+        position =
+            moves::applyMove(position, vector.emplace_back(fen::parseUCIMove(position.board, uci)));
 
     return vector;
 }
