@@ -216,13 +216,13 @@ void MovesTable::initializeCompound() {
     // Initialize non-compound moves
     for (auto kind = 0; kind < kNumMoveKinds; ++kind)
         for (auto to = 0; to < kNumSquares; ++to)
-            compound[kind][to] = {Square(to), 0, {Square(to), Square(to)}};
+            _compound[kind][to] = {Square(to), 0, {Square(to), Square(to)}};
 
     // Initialize castles
-    compound[index(MK::O_O)][g1] = {g1, 0, {h1, f1}};
-    compound[index(MK::O_O)][g8] = {g8, 0, {h8, f8}};
-    compound[index(MK::O_O_O)][c1] = {c1, 0, {a1, d1}};
-    compound[index(MK::O_O_O)][c8] = {c8, 0, {a8, d8}};
+    _compound[index(MK::O_O)][g1] = {g1, 0, {h1, f1}};
+    _compound[index(MK::O_O)][g8] = {g8, 0, {h8, f8}};
+    _compound[index(MK::O_O_O)][c1] = {c1, 0, {a1, d1}};
+    _compound[index(MK::O_O_O)][c8] = {c8, 0, {a8, d8}};
 
     // En passant helper functions
     auto epRank = [](int rank) -> int { return rank < kNumRanks / 2 ? rank + 1 : rank - 1; };
@@ -232,7 +232,7 @@ void MovesTable::initializeCompound() {
     // Initialize en passant capture for white and black
     for (auto to : (paths[a6][h6] | SquareSet(a6) | SquareSet(h6)) |
              (paths[a3][h3] | SquareSet(a3) | SquareSet(h3)))
-        compound[index(MK::En_Passant)][to] = epCompound(to);
+        _compound[index(MK::En_Passant)][to] = epCompound(to);
 
     // Initialize promotion moves
     auto pm = index(MK::Knight_Promotion);
@@ -240,7 +240,7 @@ void MovesTable::initializeCompound() {
     for (auto promo = index(PT::KNIGHT); promo <= index(PT::QUEEN); ++promo, ++pm, ++pc)
         for (auto to : (paths[a8][h8] | SquareSet(a8) | SquareSet(h8)) |
                  (paths[a1][h1] | SquareSet(a1) | SquareSet(h1)))
-            compound[pc][to] = compound[pm][to] = {to, promo, {to, to}};
+            _compound[pc][to] = _compound[pm][to] = {to, promo, {to, to}};
 }
 
 MovesTable::MovesTable() {

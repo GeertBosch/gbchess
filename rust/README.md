@@ -37,6 +37,11 @@ rust/
 │   │   ├── magic_gen.rs # Auto-generated magic constants
 │   │   └── integration_test.rs # Integration tests
 │   └── Cargo.toml
+├── moves_table/      # Move lookup tables (sixth migrated component)
+│   ├── src/
+│   │   ├── lib.rs    # Move tables and precomputed patterns
+│   │   └── main.rs   # Integration tests and examples
+│   └── Cargo.toml
 └── (future components)
 ```
 
@@ -78,7 +83,9 @@ cargo run --bin elo-test
 - ✅ **hash**: Complete - Zobrist hashing for chess positions with incremental updates
 - ✅ **square_set**: Complete - Bitboard operations and square set manipulation
 - ✅ **magic**: Complete - Magic bitboard generation for sliding piece attacks
-- ⏳ **moves**: Next priority - Move generation and validation
+- ✅ **moves_table**: Complete - Move lookup tables and precomputed move patterns
+- ⏳ **moves**: Next priority - Core move representation, validation, and basic operations
+- ⏳ **moves_gen**: Planned - Complete move generation algorithms
 - ⏳ **perft**: Planned - Correcctness testing for comprehensive move generation validation
 - ⏳ **eval**: Planned - Position evaluation
 - ⏳ **nnue**: Planned - Neural network evaluation

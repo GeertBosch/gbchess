@@ -181,6 +181,54 @@ members = [
 3. Implement "Hello, World!" to verify setup
 4. Start with elo-test migration as proof of concept
 
+## Migration Status
+
+### Completed Components
+- ✅ **Phase 1**: Environment Setup and Hello World - COMPLETE
+- ✅ **elo_test**: ELO calculation system with probability functions, K-factor adjustments, and comprehensive testing
+- ✅ **fen**: FEN string parsing and generation with position validation, board representation, and move parsing
+- ✅ **hash**: Zobrist hashing implementation with piece-square tables, castling, en passant, and turn hashing
+- ✅ **square_set**: Efficient bitboard operations for square sets with rank/file/diagonal operations
+- ✅ **magic**: Magic bitboard generation for sliding piece attack lookups (rooks and bishops)
+- ✅ **moves_table**: Precomputed move/capture tables for all pieces with path finding and attacker detection
+
+### Component Details
+
+#### moves_table (Latest Migration)
+- **Status**: COMPLETE ✅
+- **Location**: `/rust/moves_table/`
+- **Features**:
+  - Precomputed move tables for all piece types (pawns, knights, bishops, rooks, queens, kings)
+  - Separate capture tables for pieces with different move/capture patterns (pawns)
+  - Path finding between squares for sliding pieces
+  - Attacker detection for given squares
+  - Full integration with fen and square_set crates
+  - Comprehensive unit and integration tests
+- **Tests**: All passing (5 unit tests + integration test binary)
+- **API**: Compatible with chess engine requirements, supports both white and black pieces
+
+#### Current Workspace Structure
+```
+rust/
+├── elo/           # ELO calculation system
+├── fen/           # FEN parsing and board representation  
+├── hash/          # Zobrist hashing for positions
+├── magic/         # Magic bitboard generation
+├── moves_table/   # Move/capture table generation
+└── square_set/    # Bitboard square set operations
+```
+
+### In Progress
+- None currently
+
+### Remaining Components
+- **moves_gen**: Move generation using moves_table and magic bitboards
+- **eval**: Position evaluation functions  
+- **nnue**: Neural network evaluation
+- **search**: Main search algorithm (minimax, alpha-beta, etc.)
+- **uci**: UCI protocol implementation
+- **Integration**: Final chess engine binary
+
 ---
 
 *This plan will be updated as we progress through the migration and learn more about the specific challenges and opportunities in converting this chess engine to Rust.*

@@ -46,7 +46,7 @@ public:
         return instance()._castlingClear[int(color)][index(side)];
     }
     static CompoundMove compoundMove(Move move) {
-        return movesTable.compound[index(move.kind)][move.to];
+        return movesTable._compound[index(move.kind)][move.to];
     }
     static SquareSet enPassantFrom(Color color, Square from) {
         return movesTable._enPassantFrom[int(color)][int(file(from))];
@@ -92,7 +92,7 @@ private:
     SquareSet _enPassantFrom[2][kNumFiles];  // color, file
 
     // precompute compound moves for castling, en passant and promotions
-    CompoundMove compound[kNumMoveKinds][kNumSquares];  // moveKind, to square
+    CompoundMove _compound[kNumMoveKinds][kNumSquares];  // moveKind, to square
 
     void initializePieceMovesAndCaptures();
     void initializeAttackers();
@@ -102,7 +102,6 @@ private:
     void initializeEnPassantFrom();
     void initializeCompound();
 };
-
 
 inline bool clearPath(SquareSet occupancy, Square from, Square to) {
     return (occupancy & MovesTable::path(from, to)).empty();

@@ -17,8 +17,6 @@ RUST_BUILD_TARGETS=$(patsubst %,$(RUST_BUILD_DIR)/%-rust,$(RUST_TARGETS))
 CPP_TEST_SRCS=$(wildcard src/*_test.cpp)
 CPP_TESTS=$(patsubst src/%_test.cpp,build/%-test,$(CPP_TEST_SRCS))
 
-$(info CPP Tests: $(CPP_TESTS))
-
 # First argument is DBG or OPT, second is list of source files
 calc_objs=$(patsubst src/%.cpp,${$(1)OBJ}/%.o,$(2))
 calc_deps=${calc_objs:.o=.d}
