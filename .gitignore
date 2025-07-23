@@ -12,9 +12,6 @@ evals
 game.*
 nn-*.nnue
 rust-build
-perft
-perft-*
 puzzles
-puzzles.csv
 players.dat
 target
