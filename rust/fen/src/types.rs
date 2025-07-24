@@ -150,6 +150,76 @@ impl Piece {
             Piece::Empty => '.',
         }
     }
+
+    /// Returns the color of this piece.
+    /// This method is part of the public API for other crates (e.g., moves crate).
+    #[allow(dead_code)]
+    pub fn color(self) -> Color {
+        match self {
+            Piece::P | Piece::N | Piece::B | Piece::R | Piece::Q | Piece::K => Color::White,
+            Piece::p | Piece::n | Piece::b | Piece::r | Piece::q | Piece::k => Color::Black,
+            Piece::Empty => unreachable!("Empty piece has no color"),
+        }
+    }
+
+    /// Returns the piece type of this piece.
+    /// This method is part of the public API for other crates (e.g., moves crate).
+    #[allow(dead_code)]
+    pub fn piece_type(self) -> PieceType {
+        match self {
+            Piece::P | Piece::p => PieceType::Pawn,
+            Piece::N | Piece::n => PieceType::Knight,
+            Piece::B | Piece::b => PieceType::Bishop,
+            Piece::R | Piece::r => PieceType::Rook,
+            Piece::Q | Piece::q => PieceType::Queen,
+            Piece::K | Piece::k => PieceType::King,
+            Piece::Empty => PieceType::Empty,
+        }
+    }
+
+    /// Creates a piece from its numeric index.
+    /// This method is part of the public API for other crates (e.g., moves crate).
+    #[allow(dead_code)]
+    pub fn from_index(index: usize) -> Self {
+        match index {
+            0 => Piece::P,
+            1 => Piece::N,
+            2 => Piece::B,
+            3 => Piece::R,
+            4 => Piece::Q,
+            5 => Piece::K,
+            6 => Piece::Empty,
+            7 => Piece::p,
+            8 => Piece::n,
+            9 => Piece::b,
+            10 => Piece::r,
+            11 => Piece::q,
+            12 => Piece::k,
+            _ => panic!("Invalid piece index: {}", index),
+        }
+    }
+
+    /// Creates a piece from piece type and color.
+    /// This method is part of the public API for other crates (e.g., moves crate).
+    #[allow(dead_code)]
+    pub fn from_type_and_color(piece_type: PieceType, color: Color) -> Self {
+        match (piece_type, color) {
+            (PieceType::Pawn, Color::White) => Piece::P,
+            (PieceType::Knight, Color::White) => Piece::N,
+            (PieceType::Bishop, Color::White) => Piece::B,
+            (PieceType::Rook, Color::White) => Piece::R,
+            (PieceType::Queen, Color::White) => Piece::Q,
+            (PieceType::King, Color::White) => Piece::K,
+            (PieceType::Pawn, Color::Black) => Piece::p,
+            (PieceType::Knight, Color::Black) => Piece::n,
+            (PieceType::Bishop, Color::Black) => Piece::b,
+            (PieceType::Rook, Color::Black) => Piece::r,
+            (PieceType::Queen, Color::Black) => Piece::q,
+            (PieceType::King, Color::Black) => Piece::k,
+            (PieceType::Empty, _) => Piece::Empty,
+        }
+    }
+
 }
 
 #[cfg(test)]
