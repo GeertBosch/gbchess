@@ -42,14 +42,19 @@ This document outlines the step-by-step plan to migrate the GB Chess Engine from
 ## Phase 3: Incremental Component Migration
 
 ### 3.1 Priority Order for Migration
-1. **elo_test** (standalone, good starter)
-2. **fen** (fundamental, used by many components)
-3. **hash** (utility component with clear interface)
-4. **moves** (core engine logic, complex but well-defined)
-5. **eval** (evaluation functions)
-6. **nnue** (neural network evaluation)
-7. **search** (main search algorithm)
-8. **uci** (UCI protocol implementation)
+1. **elo_test** (standalone, good starter) ✅ COMPLETE
+2. **fen** (fundamental, used by many components) ✅ COMPLETE
+3. **hash** (utility component with clear interface) ✅ COMPLETE
+4. **square_set** (bitboard operations) ✅ COMPLETE
+5. **magic** (magic bitboard generation) ✅ COMPLETE
+6. **moves_table** (precomputed move tables) ✅ COMPLETE
+7. **moves** (core move logic) ✅ COMPLETE
+8. **moves_gen** (move generation algorithms) ⏳ NEXT
+9. **perft** (move generation validation and testing) ⏳ HIGH PRIORITY
+10. **eval** (evaluation functions) 📋 PLANNED
+11. **nnue** (neural network evaluation) 📋 PLANNED
+12. **search** (main search algorithm) 📋 PLANNED
+13. **uci** (UCI protocol implementation) 📋 PLANNED
 
 ### 3.2 Migration Strategy per Component
 - Create separate Rust crate for each major component
@@ -57,21 +62,29 @@ This document outlines the step-by-step plan to migrate the GB Chess Engine from
 - Use integration tests to verify equivalent behavior
 - Gradually replace C++ dependencies with Rust equivalents
 
+**Special Note on Perft**: The perft component is critical for validating move generation correctness. It performs exhaustive tree searches to count all possible moves at various depths, making it an excellent debugging tool for finding edge cases in move generation algorithms. This should be implemented immediately after moves_gen to catch any bugs early.
+
 ## Phase 4: Build System Integration
 
 ### 4.1 Cargo Workspace Configuration
 ```toml
 [workspace]
 members = [
-    "rust/elo-test",
+    "rust/elo",
     "rust/fen",
     "rust/hash",
+    "rust/magic",
     "rust/moves",
-    "rust/eval",
-    "rust/nnue", 
-    "rust/search",
-    "rust/uci",
-    "rust/chess-engine"
+    "rust/moves_table",
+    "rust/square_set",
+    # Future components:
+    # "rust/moves_gen",
+    # "rust/perft",
+    # "rust/eval",
+    # "rust/nnue", 
+    # "rust/search",
+    # "rust/uci",
+    # "rust/chess-engine"
 ]
 ```
 
@@ -191,10 +204,11 @@ members = [
 - ✅ **square_set**: Efficient bitboard operations for square sets with rank/file/diagonal operations
 - ✅ **magic**: Magic bitboard generation for sliding piece attack lookups (rooks and bishops)
 - ✅ **moves_table**: Precomputed move/capture tables for all pieces with path finding and attacker detection
+- ✅ **moves**: Core move representation, make/unmake operations, position updates, and attack detection
 
 ### Component Details
 
-#### moves_table (Latest Migration)
+#### moves_table (Sixth Migration)
 - **Status**: COMPLETE ✅
 - **Location**: `/rust/moves_table/`
 - **Features**:
@@ -207,6 +221,22 @@ members = [
 - **Tests**: All passing (5 unit tests + integration test binary)
 - **API**: Compatible with chess engine requirements, supports both white and black pieces
 
+#### moves (Seventh Migration - Latest)
+- **Status**: COMPLETE ✅  
+- **Location**: `/rust/moves/`
+- **Features**:
+  - Complete Move type with from/to squares and move kinds (quiet, capture, castling, en passant, promotions)
+  - Null move representation (from == to == A1) matching C++ behavior
+  - BoardChange and compound move system for complex moves (castling, en passant, promotions)
+  - make_move/unmake_move functions for board state updates
+  - Position updates with turn state (active color, castling rights, en passant target, clocks)
+  - Attack detection and pinned piece calculation
+  - Castling mask calculations for rights management
+  - **Critical Fix**: En passant capture logic corrected to properly remove captured pawns
+- **Tests**: All passing, including complex en passant scenarios
+- **API**: Faithful port of C++ moves namespace with identical behavior
+- **Display**: Move formatting with UCI notation and null move ("0000") support
+
 #### Current Workspace Structure
 ```
 rust/
@@ -214,6 +244,7 @@ rust/
 ├── fen/           # FEN parsing and board representation  
 ├── hash/          # Zobrist hashing for positions
 ├── magic/         # Magic bitboard generation
+├── moves/         # Core move operations and position updates
 ├── moves_table/   # Move/capture table generation
 └── square_set/    # Bitboard square set operations
 ```
@@ -222,12 +253,19 @@ rust/
 - None currently
 
 ### Remaining Components
-- **moves_gen**: Move generation using moves_table and magic bitboards
+- **moves_gen**: Move generation using moves_table and magic bitboards (next priority)
+- **perft**: Move generation validation and correctness testing (critical for move_gen validation)
 - **eval**: Position evaluation functions  
 - **nnue**: Neural network evaluation
 - **search**: Main search algorithm (minimax, alpha-beta, etc.)
 - **uci**: UCI protocol implementation
 - **Integration**: Final chess engine binary
+
+### Recent Achievements
+- **En Passant Fix**: Resolved critical bug in Rust moves implementation where en passant captures weren't properly removing the captured pawn. The compound move system now correctly handles the complex two-step process of en passant.
+- **API Completeness**: The moves crate now provides full parity with the C++ implementation, including all move types, position updates, and edge cases.
+- **Test Coverage**: All move-related tests pass, including complex scenarios like castling, en passant, and promotions.
+- **Quiet Mode**: Updated magic test generator to match C++ behavior with quiet default mode and `--verbose` flag for statistics.
 
 ---
 
