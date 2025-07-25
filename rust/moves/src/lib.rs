@@ -2,7 +2,7 @@ pub mod moves;
 
 pub use moves::*;
 
-use fen::{Board, Color, Piece, PieceType, Square};
+use fen::{Board, Color, Piece, Square};
 use square_set::SquareSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,6 +83,12 @@ impl Move {
 
     pub fn is_null(self) -> bool {
         self.from == self.to
+    }
+
+    /// Returns true if this is a valid move (not a null move)
+    /// This matches the C++ operator bool() behavior
+    pub fn is_valid(self) -> bool {
+        !self.is_null()
     }
 }
 
@@ -420,26 +426,25 @@ impl UndoPosition {
     }
 }
 
-impl std::fmt::Display for Move {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+use std::fmt;
+
+impl fmt::Display for Move {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_null() {
-            return write!(f, "0000");
+            write!(f, "0000")
+        } else {
+            let mut result = format!("{}{}", self.from, self.to);
+            if self.kind.is_promotion() {
+                let promo_piece = match self.kind.index() & 3 {
+                    0 => 'n', // Knight
+                    1 => 'b', // Bishop  
+                    2 => 'r', // Rook
+                    3 => 'q', // Queen
+                    _ => unreachable!(),
+                };
+                result.push(promo_piece);
+            }
+            write!(f, "{}", result)
         }
-
-        write!(f, "{}{}", self.from, self.to)?;
-
-        if self.kind.is_promotion() {
-            let piece_type = match self.kind.index() & 3 {
-                0 => PieceType::Knight,
-                1 => PieceType::Bishop,
-                2 => PieceType::Rook,
-                3 => PieceType::Queen,
-                _ => unreachable!(),
-            };
-            let piece = Piece::from_type_and_color(piece_type, Color::Black);
-            write!(f, "{}", piece.to_char())?;
-        }
-
-        Ok(())
     }
 }

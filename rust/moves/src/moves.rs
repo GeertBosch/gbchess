@@ -239,11 +239,11 @@ fn compound_move(mv: Move) -> CompoundMove {
                 Square::make_square(mv.to.file(), mv.to.rank() + 1)
             };
             CompoundMove {
-                to: mv.to,
+                to: captured_square,
                 promo: 0,
                 second: FromTo {
                     from: captured_square,
-                    to: captured_square, // Remove the captured pawn
+                    to: mv.to,
                 },
             }
         }
