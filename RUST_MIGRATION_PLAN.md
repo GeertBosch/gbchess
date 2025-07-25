@@ -49,8 +49,8 @@ This document outlines the step-by-step plan to migrate the GB Chess Engine from
 5. **magic** (magic bitboard generation) ✅ COMPLETE
 6. **moves_table** (precomputed move tables) ✅ COMPLETE
 7. **moves** (core move logic) ✅ COMPLETE
-8. **moves_gen** (move generation algorithms) ⏳ NEXT
-9. **perft** (move generation validation and testing) ⏳ HIGH PRIORITY
+8. **moves_gen** (move generation algorithms) ✅ COMPLETE
+9. **perft** (move generation validation and testing) ⏳ NEXT - HIGH PRIORITY
 10. **eval** (evaluation functions) 📋 PLANNED
 11. **nnue** (neural network evaluation) 📋 PLANNED
 12. **search** (main search algorithm) 📋 PLANNED
@@ -77,8 +77,8 @@ members = [
     "rust/moves",
     "rust/moves_table",
     "rust/square_set",
+    "rust/moves_gen",
     # Future components:
-    # "rust/moves_gen",
     # "rust/perft",
     # "rust/eval",
     # "rust/nnue", 
@@ -198,6 +198,33 @@ members = [
 
 ### Completed Components
 - ✅ **Phase 1**: Environment Setup and Hello World - COMPLETE
+- ✅ **elo**: ELO rating calculations - COMPLETE
+- ✅ **fen**: FEN parsing and board representation - COMPLETE  
+- ✅ **hash**: Hash table and transposition table - COMPLETE
+- ✅ **square_set**: Bitboard operations and square sets - COMPLETE
+- ✅ **magic**: Magic bitboard generation - COMPLETE
+- ✅ **moves_table**: Precomputed move lookup tables - COMPLETE
+- ✅ **moves**: Core move data structures and operations - COMPLETE
+- ✅ **moves_gen**: Move generation algorithms - COMPLETE ✨ **NEW**
+
+#### moves_gen Migration Details (Completed)
+**Duration**: 1 day  
+**Key Features Implemented**:
+- ✅ Complete pawn move generation (single/double pushes, captures, en passant, promotions)
+- ✅ Piece move generation for all piece types (sliding and non-sliding)
+- ✅ Castling logic (king-side and queen-side)
+- ✅ Legal move validation with check detection
+- ✅ Move counting for search algorithms
+- ✅ Integration with existing Rust chess infrastructure
+
+**API Functions**:
+- `all_legal_moves_and_captures()` - Generate all legal moves
+- `all_legal_captures()` - Generate only capture moves  
+- `all_legal_moves()` - Generate only non-capture moves
+- `SearchState` - Maintain search context and game state
+- `does_not_check()` - Validate moves don't leave king in check
+
+**Testing**: Comprehensive test suite with multiple chess positions validates correctness.
 - ✅ **elo_test**: ELO calculation system with probability functions, K-factor adjustments, and comprehensive testing
 - ✅ **fen**: FEN string parsing and generation with position validation, board representation, and move parsing
 - ✅ **hash**: Zobrist hashing implementation with piece-square tables, castling, en passant, and turn hashing
