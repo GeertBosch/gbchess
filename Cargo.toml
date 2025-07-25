@@ -9,6 +9,7 @@ members = [
     "rust/magic",
     "rust/moves_table",
     "rust/moves",
+    "rust/moves_gen",
 ]
 
 # Shared dependencies and settings for all workspace members

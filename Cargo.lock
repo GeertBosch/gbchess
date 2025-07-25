@@ -278,6 +278,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "moves_gen"
+version = "0.1.0"
+dependencies = [
+ "fen",
+ "magic",
+ "moves",
+ "moves_table",
+ "square_set",
+]
+
+[[package]]
 name = "moves_table"
 version = "0.1.0"
 dependencies = [
