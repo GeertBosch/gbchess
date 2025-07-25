@@ -138,13 +138,21 @@ fn is_attacked(board: &Board, square: Square, occupancy: &Occupancy) -> bool {
 
         // Check if this piece can attack the target square
         let attacks = if SLIDERS.contains(piece) {
+            let mut attack_squares = SquareSet::new();
+
+            // For bishops and queens, check diagonal attacks
             if matches!(piece, Piece::B | Piece::b | Piece::Q | Piece::q) {
-                targets(from, true, occupancy.all()) & SquareSet::from_square(square)
-            } else if matches!(piece, Piece::R | Piece::r | Piece::Q | Piece::q) {
-                targets(from, false, occupancy.all()) & SquareSet::from_square(square)
-            } else {
-                SquareSet::new()
+                attack_squares = attack_squares
+                    | (targets(from, true, occupancy.all()) & SquareSet::from_square(square));
             }
+
+            // For rooks and queens, check straight-line attacks
+            if matches!(piece, Piece::R | Piece::r | Piece::Q | Piece::q) {
+                attack_squares = attack_squares
+                    | (targets(from, false, occupancy.all()) & SquareSet::from_square(square));
+            }
+
+            attack_squares
         } else {
             table.possible_captures(piece, from) & SquareSet::from_square(square)
         };
@@ -513,10 +521,20 @@ where
  * Returns true if the given move does not leave the king in check.
  */
 pub fn does_not_check(board: &mut Board, state: &SearchState, mv: Move) -> bool {
-    // Simplified implementation - actually apply and test
     let change = make_move(board, mv);
     let new_occupancy = Occupancy::from_board(board, state.turn.active_color());
-    let result = !is_attacked(board, state.king_square, &new_occupancy);
+
+    // Determine which square(s) to check for attack
+    let check_square = if mv.from == state.king_square {
+        // If the king moved, check the destination square
+        // TODO: Handle castling path checking (ipath) when castling is implemented
+        mv.to
+    } else {
+        // If another piece moved, check the original king square
+        state.king_square
+    };
+
+    let result = !is_attacked(board, check_square, &new_occupancy);
     moves::unmake_move_board(board, change);
     result
 }
@@ -666,4 +684,8 @@ fn may_have_promo_move(color: Color, board: &Board, _occupancy: &Occupancy) -> b
         }
     }
     false
+}
+
+pub fn is_attacked_debug(board: &Board, square: Square, occupancy: &Occupancy) -> bool {
+    is_attacked(board, square, occupancy)
 }

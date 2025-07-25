@@ -185,6 +185,20 @@ void testPinnedPieces() {
     std::cout << "All pinned pieces tests passed!" << std::endl;
 }
 
+void testKingInCheck() {
+    // Test position where black king is in check from white queen
+    // Position: 4k3/8/4Qn2/3K4/8/8/8/8 b - - 0 1
+    // - Black king on e8
+    // - White queen on e6 (giving check along the e-file)
+    // - Black knight on f6 (cannot move as it would leave king in check)
+    // - White king on d5
+    // Only legal moves should be king moves to safe squares (d8, f8)
+    // No captures are possible
+    checkMovesAndCaptures("4k3/8/4Qn2/3K4/8/8/8/8 b - - 0 1", 2, 0);
+
+    std::cout << "All king in check tests passed!" << std::endl;
+}
+
 int main(int argc, char* argv[]) {
     if (argc == 2) {
         std::string fen = argv[1];
@@ -200,6 +214,7 @@ int main(int argc, char* argv[]) {
     testAllLegalMovesAndCaptures();
     testAllLegalQuiescentMoves();
     testDoesNotCheck();
+    testKingInCheck();
     testPinnedPieces();
 
     std::cout << "All moves_gen tests passed!" << std::endl;
