@@ -98,8 +98,11 @@ void generateMagic(std::ostream& out) {
  *   Main function that generates and prints magic numbers for all squares for both
  *   rook and bishop pieces.
  */
-int main() {
+int main(int argc, char* argv[]) {
+    bool verbose = argc > 1 && std::string(argv[1]) == "--verbose";
     generateMagic(std::cout);
+
+    if (!debug && !verbose) return 0;
     std::cerr << "Generated " << attempts << " attempts to find " << magics << " magic numbers.\n";
     std::cerr << "Magic numbers generated successfully.\n";
 

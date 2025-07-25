@@ -247,7 +247,7 @@ uci: $(patsubst test/ut%.in,test/ut%.out,$(wildcard test/ut*.in))
 
 magic: build/magic-test
 # To accept any changes on test failure, pipe the output to the `patch` command
-	@(./build/magic-test | diff -u src/magic_gen.h -) && echo Magic tests passed || \
+	@(./build/magic-test --verbose | diff -u src/magic_gen.h -) && echo Magic tests passed || \
 	(echo "\n*** To accept these changes, pipe this output to the patch command ***" && false)
 
 test: build rust-build debug ${CPP_TESTS}
