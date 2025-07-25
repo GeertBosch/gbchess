@@ -13,3 +13,7 @@ moves_table = { path = "../moves_table" }
 
 [dev-dependencies]
 criterion.workspace = true
+
+[[bin]]
+name = "moves-test"
+path = "src/main.rs"
