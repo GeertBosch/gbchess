@@ -147,6 +147,11 @@ build/perft: $(call calc_objs,OPT,${PERFT_SRCS})
 build/perft-debug: $(call calc_objs,DBG,${PERFT_SRCS})
 	${GPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
+PERFT_SIMPLE_SRCS=src/perft_simple.cpp ${MOVES_SRCS} src/fen.cpp
+# perft_simple is a simplified version without caching or 128-bit ints
+build/perft-simple: $(call calc_objs,OPT,${PERFT_SIMPLE_SRCS})
+	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+
 # Compare the perft tool with some different compilation options for speed comparison
 build/perft-clang-sse2: ${PERFT_SRCS} src/*.h 
 	@mkdir -p build

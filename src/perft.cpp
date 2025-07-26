@@ -75,7 +75,6 @@ void error(const std::string& message) {
     std::exit(1);
 }
 
-
 /**
  *  a debugging function to walk the move generation tree of strictly legal moves to count all the
  *  leaf nodes of a certain depth, which can be compared to predetermined values and used to isolate
