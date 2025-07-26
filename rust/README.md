@@ -184,11 +184,13 @@ All tests pass consistently and verify exact behavioral compatibility with the C
 - **Test Success Rate**: 100% (all 74 integration + unit tests passing)
 - **Build Success**: Clean compilation with no warnings in release mode
 - **API Compatibility**: Full behavioral parity with C++ implementation
+- **Type Architecture**: Canonical types documented to resolve duplication issues
 
 The migration has established a solid foundation with all core data structures, move operations, and
-move generation complete. The next critical component is **perft** for comprehensive move generation
-validation, followed by the remaining components (eval, nnue, search, uci) to create the complete
-chess engine.
+move generation complete. The type architecture has been documented to resolve duplication issues
+discovered during the `perft_simple` migration attempt. The next critical component is **perft** for 
+comprehensive move generation validation, followed by the remaining components (eval, nnue, search, uci) 
+to create the complete chess engine.
 
 ---
 
@@ -196,9 +198,19 @@ chess engine.
 
 ## Next Steps
 
-The next major component to migrate is **moves_gen** - the move generation algorithms that will use the completed `moves_table` and `magic` components to generate all legal moves for a given position. This represents moving from individual move operations to bulk move generation, a critical step toward a functional chess engine.
+✅ **Type Consolidation Complete**: The duplicate `Turn` and `Position` types have been successfully
+consolidated into canonical versions in the `fen` module. All modules now use consistent types.
 
-Immediately following moves_gen, **perft** should be implemented as it provides crucial validation for move generation correctness. Perft performs exhaustive tree searches counting all possible moves at various depths, making it an excellent tool for finding edge cases and bugs in the move generation algorithms.
+The next major component to migrate is **perft_simple** - a classic test that exhaustively validates
+move generation by counting positions at various search depths. With the type duplication issues now
+resolved, this migration can proceed smoothly using:
+
+- `Position` from `rust/fen/src/board.rs` (canonical)
+- `Turn` from `rust/fen/src/board.rs` (canonical)
+- `Move` and related types from `rust/moves/src/lib.rs`
+
+Following perft, the remaining components (eval, nnue, search, uci) can be migrated to complete
+the chess engine, all using the now-standardized type architecture.
 
 ## Code Style
 
@@ -241,3 +253,153 @@ The workspace uses minimal external dependencies to maintain build simplicity:
 - `anyhow` for error handling convenience
 
 See `Cargo.toml` in the root directory for the complete dependency specification.
+
+## Main Types and Architecture
+
+### Core Types Overview
+
+The Rust migration follows the C++ architecture with a single set of canonical types defined in
+specific modules. To avoid duplication issues encountered during the `perft_simple` migration, the
+following documents the authoritative location and usage of each main type:
+
+### Canonical Type Locations
+
+#### 1. Chess Basics (from `fen` module - `types.rs`)
+- **`Square`**: Enum representing chess board squares (A1-H8)
+  - **Location**: `rust/fen/src/types.rs`
+  - **Usage**: Used throughout all modules for board positions
+  - **Features**: File/rank calculations, display formatting, bounds checking
+
+- **`Color`**: Enum for piece colors (White/Black)
+  - **Location**: `rust/fen/src/types.rs`
+  - **Usage**: Player identification, turn management, piece ownership
+  - **Features**: Negation operator (`!color`) for switching sides
+
+- **`Piece`**: Enum for all chess pieces including Empty
+  - **Location**: `rust/fen/src/types.rs`
+  - **Usage**: Board representation, move validation, piece identification
+  - **Features**: Color and piece type extraction, display formatting
+
+- **`PieceType`**: Enum for piece types without color information
+  - **Location**: `rust/fen/src/types.rs`
+  - **Usage**: Move generation, piece-specific logic
+  - **Features**: Type classification for movement rules
+
+#### 2. Board Representation (from `fen` module - `board.rs`)
+- **`Board`**: Complete chess board state
+  - **Location**: `rust/fen/src/board.rs` ✅ **CANONICAL**
+  - **Usage**: Position representation, piece placement, board queries
+  - **Features**: Square indexing, piece placement, initial position setup
+  - **Import**: Used by `moves` module via `use fen::Board`
+
+#### 3. Game State Management (from `fen` module - `board.rs`) ✅ **CANONICAL**
+- **`Turn`**: Complete turn state including castling, en passant, clocks
+  - **Location**: `rust/fen/src/board.rs` ✅ **CANONICAL**
+  - **Usage**: Game state tracking, move legality, FEN parsing/generation
+  - **Features**: Castling rights, en passant target, halfmove/fullmove clocks
+  - **API**: Mutable methods for game state updates (`tick()`, `set_castling()`, etc.)
+
+- **`Position`**: Complete chess position (Board + Turn)
+  - **Location**: `rust/fen/src/board.rs` ✅ **CANONICAL**
+  - **Usage**: Full game state, position evaluation, search algorithms
+  - **Features**: Active player queries, position copying, state management
+
+- **`CastlingMask`**: Bitfield for castling availability
+  - **Location**: `rust/fen/src/board.rs` ✅ **CANONICAL**
+  - **Usage**: Castling rights tracking, move legality
+  - **Features**: Individual king/queen side rights for both colors
+
+#### 4. Move Representation (from `moves` module - `lib.rs`)
+- **`Move`**: Individual chess move with from/to squares and kind
+  - **Location**: `rust/moves/src/lib.rs`
+  - **Usage**: Move representation, UCI protocol, search algorithms
+  - **Features**: Null move detection, move validation, move kinds
+
+- **`MoveKind`**: Enum for all move types (quiet, capture, castling, promotion, etc.)
+  - **Location**: `rust/moves/src/lib.rs`
+  - **Usage**: Move classification, special move handling
+  - **Features**: 16 distinct move types including all promotions
+
+#### 5. Move Operations (from `moves` module)
+- **`BoardChange`**: Low-level representation of board modifications
+  - **Location**: `rust/moves/src/lib.rs`
+  - **Usage**: Make/unmake move operations, undo information
+  - **Features**: Compound moves (castling, en passant), piece capture tracking
+
+- **`UndoPosition`**: State needed to unmake a move
+  - **Location**: `rust/moves/src/lib.rs`
+  - **Usage**: Move undo operations, search tree traversal
+  - **Features**: Board state restoration, turn state preservation
+
+#### 6. Bitboard Operations (from `square_set` module)
+- **`SquareSet`**: 64-bit bitboard for efficient set operations
+  - **Location**: `rust/square_set/src/square_set.rs`
+  - **Usage**: Attack generation, piece location queries, set operations
+  - **Features**: Rank/file/diagonal manipulation, population counting
+
+#### 7. Magic Bitboards (from `magic` module)
+- **`Magic`**: Magic bitboard structure for sliding piece attacks
+  - **Location**: `rust/magic/src/magic.rs`
+  - **Usage**: Fast sliding piece attack generation
+  - **Features**: Bishop and rook attack computation, occupancy masking
+
+### Type Duplication Resolution
+
+**RESOLVED**: The duplicate `Turn` and `Position` types have been consolidated. All modules now use
+the canonical types from the `fen` module:
+
+#### ✅ Canonical Types (ALL MODULES USE THESE):
+- `Board`, `Color`, `Piece`, `PieceType`, `Square` from `rust/fen/src/` - Used throughout all modules
+- `Turn` from `rust/fen/src/board.rs` ✅ **CANONICAL** - Matches C++ `Turn` class in `common.h`
+- `Position` from `rust/fen/src/board.rs` ✅ **CANONICAL** - Matches C++ `Position` struct in `common.h`
+- `CastlingMask` from `rust/fen/src/board.rs` ✅ **CANONICAL** - Matches C++ `CastlingMask` enum
+
+#### ✅ Successfully Consolidated:
+- **Removed** duplicate `Turn` definition from `rust/moves/src/lib.rs`
+- **Removed** duplicate `Position` definition from `rust/moves/src/lib.rs`
+- **Removed** duplicate `CastlingMask` definition from `rust/moves/src/lib.rs`
+- **Updated** `moves` module to import and re-export canonical types from `fen`
+- **Enhanced** `fen` module's `Turn` with additional methods needed by `moves` module
+- **Unified** en passant representation to use `Square::A1` as "no target" marker
+
+#### Current Import Pattern:
+The `moves` module now correctly demonstrates the proper import pattern:
+```rust
+// In moves/src/lib.rs - re-export canonical types for public API
+pub use fen::{Turn, Position, CastlingMask};
+
+// In moves/src/moves.rs - import canonical types  
+use fen::{Board, Color, Piece, PieceType, Square, Turn, Position, CastlingMask};
+```
+
+This consolidation resolves the type duplication issues that were blocking the `perft_simple` migration.
+
+#### Migration Action Required:
+All modules should import `Turn` and `Position` from the `moves` crate to maintain consistency with
+the C++ implementation and avoid the duplication issues encountered during `perft_simple` migration.
+
+### Module Dependency Graph
+
+```
+fen (types: Square, Color, Piece, etc.) ─────┐
+fen (board: Board) ──────────────────────────┤
+                                             ├─→ moves (Turn, Position, operations)
+square_set (bitboards) ──────────────────────┤              │
+magic (sliding attacks) ─────────────────────┤              │
+moves_table (precomputed) ───────────────────┘              │
+                                                             ▼
+                                                      moves_gen (legal moves)
+                                                             │
+                                                             ▼
+                                                      perft (validation)
+```
+
+### API Consistency
+
+All modules follow consistent naming patterns:
+- **Functions**: `snake_case` (e.g., `make_move`, `is_legal`)
+- **Types**: `PascalCase` (e.g., `Position`, `MoveKind`)
+- **Constants**: `SCREAMING_SNAKE_CASE` (e.g., `NO_EN_PASSANT_TARGET`)
+- **Methods**: `snake_case` (e.g., `active_color()`, `is_valid()`)
+
+This architecture ensures type safety, prevents duplication, and maintains compatibility with the existing C++ implementation while providing the memory safety guarantees of Rust.

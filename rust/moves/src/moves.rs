@@ -1,8 +1,8 @@
 use crate::{
-    BoardChange, CastlingMask, FromTo, Move, MoveKind, MoveWithPieces, Occupancy, Position, Turn,
-    UndoPosition, NO_EN_PASSANT_TARGET,
+    BoardChange, FromTo, Move, MoveKind, MoveWithPieces, Occupancy,
+    UndoPosition,
 };
-use fen::{Board, Color, Piece, PieceType, Square};
+use fen::{Board, Color, Piece, PieceType, Square, Turn, Position, CastlingMask, NO_EN_PASSANT_TARGET};
 use moves_table::MovesTable;
 use square_set::SquareSet;
 

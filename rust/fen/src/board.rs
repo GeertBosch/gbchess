@@ -1,6 +1,9 @@
 use crate::types::{Color, Piece, Square, NUM_SQUARES};
 use std::ops::{Index, IndexMut};
 
+/// Constant representing no en passant target available
+pub const NO_EN_PASSANT_TARGET: Square = Square::A1;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Board {
     squares: [Piece; NUM_SQUARES],
@@ -45,6 +48,14 @@ impl CastlingMask {
     pub const k: Self = CastlingMask(4); // Black king-side
     pub const q: Self = CastlingMask(8); // Black queen-side
     
+    // Composite constants for moves module compatibility  
+    #[allow(dead_code)]
+    pub const KQ: Self = CastlingMask(Self::K.0 | Self::Q.0);   // White both sides
+    #[allow(dead_code)]
+    pub const kq: Self = CastlingMask(Self::k.0 | Self::q.0);   // Black both sides  
+    #[allow(dead_code)]
+    pub const None: Self = CastlingMask(0);                     // No castling rights (alias for EMPTY)
+    
     pub const KQ_kq: Self = CastlingMask(Self::K.0 | Self::Q.0 | Self::k.0 | Self::q.0); // All castling rights
 
     pub fn value(self) -> u8 {
@@ -65,6 +76,19 @@ impl CastlingMask {
 
     pub fn has_black_queenside(self) -> bool {
         self.0 & Self::q.0 != 0
+    }
+
+    /// Returns a CastlingMask with all castling rights enabled
+    /// Added for compatibility with moves module
+    #[allow(dead_code)]
+    pub fn all() -> Self {
+        Self::KQ_kq
+    }
+
+    /// Get the underlying u8 value for compatibility with moves module tests
+    #[allow(dead_code)]
+    pub fn as_u8(self) -> u8 {
+        self.0
     }
 }
 
@@ -108,7 +132,7 @@ impl std::ops::Not for CastlingMask {
 pub struct Turn {
     active_color: Color,
     castling_mask: CastlingMask,
-    en_passant_target: Option<Square>,
+    en_passant_target: Square,
     halfmove_clock: u8,
     fullmove_number: u16,
 }
@@ -117,7 +141,7 @@ impl Turn {
     pub fn new(
         active_color: Color,
         castling_mask: CastlingMask,
-        en_passant_target: Option<Square>,
+        en_passant_target: Square,
         halfmove_clock: u8,
         fullmove_number: u16,
     ) -> Self {
@@ -131,26 +155,63 @@ impl Turn {
     }
 
     pub fn initial() -> Self {
-        Self::new(Color::White, CastlingMask::KQ_kq, None, 0, 1)
+        Self::new(Color::White, CastlingMask::KQ_kq, NO_EN_PASSANT_TARGET, 0, 1)
     }
 
     pub fn active_color(&self) -> Color {
         self.active_color
     }
 
+    #[allow(dead_code)]
+    pub fn set_active_color(&mut self, color: Color) {
+        self.active_color = color;
+    }
+
     pub fn castling(&self) -> CastlingMask {
         self.castling_mask
     }
 
-    pub fn en_passant(&self) -> Option<Square> {
+    #[allow(dead_code)]
+    pub fn set_castling(&mut self, castling: CastlingMask) {
+        self.castling_mask = castling;
+    }
+
+    pub fn en_passant(&self) -> Square {
         self.en_passant_target
     }
+
+    #[allow(dead_code)]
+    pub fn set_en_passant(&mut self, square: Square) {
+        self.en_passant_target = square;
+    }
+
     pub fn halfmove(&self) -> u8 {
         self.halfmove_clock
     }
 
+    #[allow(dead_code)]
+    pub fn reset_halfmove(&mut self) {
+        self.halfmove_clock = 0;
+    }
+
     pub fn fullmove(&self) -> u16 {
         self.fullmove_number
+    }
+
+    /// Advance the turn (switch sides, update clocks)
+    #[allow(dead_code)]
+    pub fn tick(&mut self) {
+        self.halfmove_clock += 1;
+        self.active_color = !self.active_color;
+        if self.active_color == Color::White {
+            self.fullmove_number += 1;
+        }
+    }
+}
+
+impl Default for Turn {
+    fn default() -> Self {
+        Self::initial()
     }
 }
 

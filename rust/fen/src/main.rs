@@ -2,7 +2,7 @@ mod board;
 mod fen;
 mod types;
 
-use board::CastlingMask;
+use board::{CastlingMask, NO_EN_PASSANT_TARGET};
 use fen::{EMPTY_PIECE_PLACEMENT, INITIAL_PIECE_PLACEMENT, INITIAL_POSITION};
 use types::{Color, Piece, Square};
 
@@ -49,8 +49,11 @@ fn test_parse() -> Result<(), Box<dyn std::error::Error>> {
     println!("Castling Availability: {}", turn.castling().value());
     println!(
         "En Passant Target: {}",
-        turn.en_passant()
-            .map_or("-".to_string(), |sq| sq.to_string())
+        if turn.en_passant() == NO_EN_PASSANT_TARGET {
+            "-".to_string()
+        } else {
+            turn.en_passant().to_string()
+        }
     );
     println!("Halfmove Clock: {}", turn.halfmove());
     println!("Fullmove Number: {}", turn.fullmove());
@@ -72,7 +75,7 @@ fn test_initial_position() -> Result<(), Box<dyn std::error::Error>> {
     let turn = &position.turn;
     assert_eq!(turn.active_color(), Color::White);
     assert_eq!(turn.castling().value(), CastlingMask::KQ_kq.value());
-    assert_eq!(turn.en_passant(), None);
+    assert_eq!(turn.en_passant(), NO_EN_PASSANT_TARGET);
     assert_eq!(turn.halfmove(), 0);
     assert_eq!(turn.fullmove(), 1);
 

@@ -1,4 +1,4 @@
-use fen::{Board, Color, Piece, PieceType, Square, Turn};
+use fen::{Board, Color, Piece, PieceType, Square, Turn, NO_EN_PASSANT_TARGET};
 use magic::targets;
 use moves::{make_move, Move, MoveKind, MoveWithPieces, Occupancy};
 use moves_table::{clear_path, MovesTable};
@@ -482,10 +482,9 @@ where
     F: FnMut(Piece, Move),
 {
     let en_passant_target = turn.en_passant();
-    if en_passant_target.is_none() {
+    if en_passant_target == NO_EN_PASSANT_TARGET {
         return;
     }
-    let en_passant_target = en_passant_target.unwrap();
 
     let active = turn.active_color();
     let pawn = Piece::from_type_and_color(PieceType::Pawn, active);

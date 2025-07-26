@@ -187,7 +187,8 @@ impl Hash {
         hash.toggle_castling(position.turn.castling());
 
         // Hash en passant target
-        if let Some(en_passant_square) = position.turn.en_passant() {
+        let en_passant_square = position.turn.en_passant();
+        if en_passant_square != NO_EN_PASSANT_TARGET {
             let file_idx = en_passant_square.file();
             hash.toggle_vector(Self::EN_PASSANT_A + file_idx);
         }
@@ -242,7 +243,8 @@ impl Hash {
         result.toggle_vector(Self::BLACK_TO_MOVE);
 
         // Clear en passant hash if it was set
-        if let Some(en_passant_square) = turn.en_passant() {
+        let en_passant_square = turn.en_passant();
+        if en_passant_square != NO_EN_PASSANT_TARGET {
             let file_idx = en_passant_square.file();
             result.toggle_vector(Self::EN_PASSANT_A + file_idx);
         }

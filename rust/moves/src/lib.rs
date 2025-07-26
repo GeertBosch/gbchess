@@ -1,6 +1,8 @@
 pub mod moves;
 
 pub use moves::*;
+// Re-export types from fen that are now canonical
+pub use fen::{Turn, Position, CastlingMask, NO_EN_PASSANT_TARGET};
 
 use fen::{Board, Color, Piece, Square};
 use square_set::SquareSet;
@@ -95,66 +97,6 @@ impl Move {
 pub type MoveVector = Vec<Move>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-#[allow(non_camel_case_types)]
-pub enum CastlingMask {
-    // We follow the UCI standard naming for castling rights, even if it violates Rust naming
-    // conventions, so we silence the linter here.
-    None = 0,
-    K = 1,     // White kingside
-    Q = 2,     // White queenside
-    k = 4,     // Black kingside
-    q = 8,     // Black queenside
-    KQ = 3,    // White both sides (K | Q)
-    Kk = 5,    // White kingside + Black kingside (K | k)
-    Qk = 6,    // White queenside + Black kingside (Q | k)
-    KQk = 7,   // White both + Black kingside (K | Q | k)
-    Kq = 9,    // White kingside + Black queenside (K | q)
-    Qq = 10,   // White queenside + Black queenside (Q | q)
-    KQq = 11,  // White both + Black queenside (K | Q | q)
-    kq = 12,   // Black both sides (k | q)
-    Kkq = 13,  // White kingside + Black both (K | k | q)
-    Qkq = 14,  // White queenside + Black both (Q | k | q)
-    KQkq = 15, // All castling rights (K | Q | k | q)
-}
-
-impl CastlingMask {
-    pub fn all() -> Self {
-        CastlingMask::KQkq
-    }
-}
-
-impl std::ops::BitAnd for CastlingMask {
-    type Output = Self;
-
-    fn bitand(self, rhs: Self) -> Self {
-        // Safe cast because we're only using the lower 4 bits
-        unsafe { std::mem::transmute((self as u8) & (rhs as u8)) }
-    }
-}
-
-impl std::ops::BitOr for CastlingMask {
-    type Output = Self;
-
-    fn bitor(self, rhs: Self) -> Self {
-        // Safe cast because we're only using the lower 4 bits
-        unsafe { std::mem::transmute((self as u8) | (rhs as u8)) }
-    }
-}
-
-impl std::ops::Not for CastlingMask {
-    type Output = Self;
-
-    fn not(self) -> Self {
-        // Safe cast because we're only using the lower 4 bits
-        unsafe { std::mem::transmute(!(self as u8) & 0xF) }
-    }
-}
-
-/// No en passant target
-pub const NO_EN_PASSANT_TARGET: Square = Square::A1;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FromTo {
     pub from: Square,
     pub to: Square,
@@ -193,121 +135,6 @@ impl Default for FromTo {
             from: Square::A1,
             to: Square::A1,
         }
-    }
-}
-
-/// Game turn state including castling, en passant, etc.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Turn {
-    pub active_color: Color,
-    pub castling_availability: CastlingMask,
-    pub en_passant_target: Square,
-    pub halfmove_clock: u8,
-    pub fullmove_number: u16,
-}
-
-impl Turn {
-    pub fn new(
-        active_color: Color,
-        castling_availability: CastlingMask,
-        en_passant_target: Square,
-        halfmove_clock: u8,
-        fullmove_number: u16,
-    ) -> Self {
-        Self {
-            active_color,
-            castling_availability,
-            en_passant_target,
-            halfmove_clock,
-            fullmove_number,
-        }
-    }
-
-    pub fn new_starting_position() -> Self {
-        Self {
-            active_color: Color::White,
-            castling_availability: CastlingMask::all(),
-            en_passant_target: NO_EN_PASSANT_TARGET,
-            halfmove_clock: 0,
-            fullmove_number: 1,
-        }
-    }
-
-    pub fn active_color(&self) -> Color {
-        self.active_color
-    }
-
-    pub fn set_active_color(&mut self, color: Color) {
-        self.active_color = color;
-    }
-
-    pub fn castling(&self) -> CastlingMask {
-        self.castling_availability
-    }
-
-    pub fn set_castling(&mut self, castling: CastlingMask) {
-        self.castling_availability = castling;
-    }
-
-    pub fn en_passant(&self) -> Square {
-        self.en_passant_target
-    }
-
-    pub fn set_en_passant(&mut self, square: Square) {
-        self.en_passant_target = square;
-    }
-
-    pub fn halfmove(&self) -> u8 {
-        self.halfmove_clock
-    }
-
-    pub fn reset_halfmove(&mut self) {
-        self.halfmove_clock = 0;
-    }
-
-    pub fn fullmove(&self) -> u16 {
-        self.fullmove_number
-    }
-
-    /// Advance the turn (switch sides, update clocks)
-    pub fn tick(&mut self) {
-        self.halfmove_clock += 1;
-        self.active_color = !self.active_color;
-        if self.active_color == Color::White {
-            self.fullmove_number += 1;
-        }
-    }
-}
-
-impl Default for Turn {
-    fn default() -> Self {
-        Self::new_starting_position()
-    }
-}
-
-/// Complete game position
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Position {
-    pub board: Board,
-    pub turn: Turn,
-}
-
-impl Position {
-    pub fn new() -> Self {
-        Self {
-            board: Board::new(),
-            turn: Turn::new_starting_position(),
-        }
-    }
-
-    pub fn active(&self) -> Color {
-        self.turn.active_color()
-    }
-}
-
-impl Default for Position {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -417,11 +244,11 @@ impl MoveError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct UndoPosition {
     pub board: BoardChange,
-    pub turn: Turn,
+    pub turn: fen::Turn,
 }
 
 impl UndoPosition {
-    pub fn new(board: BoardChange, turn: Turn) -> Self {
+    pub fn new(board: BoardChange, turn: fen::Turn) -> Self {
         Self { board, turn }
     }
 }

@@ -335,7 +335,7 @@ fn test_castling_mask_tests() {
 
     {
         let mask = castling_mask(Square::A1, Square::A8);
-        assert_eq!(mask as u8, (CastlingMask::Q | CastlingMask::q) as u8);
+        assert_eq!(mask.as_u8(), (CastlingMask::Q | CastlingMask::q).as_u8());
     }
 
     println!("All castlingMask tests passed!");

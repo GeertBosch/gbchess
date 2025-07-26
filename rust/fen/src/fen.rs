@@ -1,4 +1,4 @@
-use crate::board::{Board, CastlingMask, Position, Turn};
+use crate::board::{Board, CastlingMask, Position, Turn, NO_EN_PASSANT_TARGET};
 use crate::types::{Color, Piece, Square};
 use std::fmt;
 
@@ -92,10 +92,11 @@ pub fn position_to_string(position: &Position) -> String {
 
     // En passant target
     result.push(' ');
-    if let Some(square) = position.turn.en_passant() {
-        result.push_str(&square.to_string());
-    } else {
+    let en_passant_square = position.turn.en_passant();
+    if en_passant_square == NO_EN_PASSANT_TARGET {
         result.push('-');
+    } else {
+        result.push_str(&en_passant_square.to_string());
     }
 
     // Halfmove clock
@@ -244,9 +245,9 @@ pub fn parse_position(fen: &str) -> Result<Position, ParseError> {
 
     // Parse en passant target
     let en_passant_target = if parts[3] == "-" {
-        None
+        NO_EN_PASSANT_TARGET
     } else {
-        Some(parse_square(parts[3])?)
+        parse_square(parts[3])?
     };
 
     // Parse halfmove clock
