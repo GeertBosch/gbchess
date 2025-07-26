@@ -1,0 +1,24 @@
+[package]
+name = "perft"
+version.workspace = true
+edition.workspace = true
+
+# Library target
+[lib]
+name = "perft"
+path = "src/lib.rs"
+
+# Binary target  
+[[bin]]
+name = "perft-test"
+path = "src/main.rs"
+
+[dependencies]
+# Use workspace dependencies
+fen = { path = "../fen" }
+moves = { path = "../moves" }
+moves_gen = { path = "../moves_gen" }
+square_set = { path = "../square_set" }
+magic = { path = "../magic" }
+moves_table = { path = "../moves_table" }
+anyhow.workspace = true
