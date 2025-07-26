@@ -24,6 +24,36 @@ void testLegalPawnMoves() {
     assert(has(moves, Move(a4, a5, MoveKind::Quiet_Move)));
 }
 
+void testDoublePawnPushes() {
+    // Test starting position - should have 8 double pawn pushes + 8 single pushes + 4 knight moves
+    // = 20 total
+    auto position = fen::parsePosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    MoveVector moves = allLegalMovesAndCaptures(position.turn, position.board);
+    assert(moves.size() == 20);
+
+    // Verify all 8 double pawn pushes are present
+    assert(has(moves, Move(a2, a4, MoveKind::Double_Push)));
+    assert(has(moves, Move(b2, b4, MoveKind::Double_Push)));
+    assert(has(moves, Move(c2, c4, MoveKind::Double_Push)));
+    assert(has(moves, Move(d2, d4, MoveKind::Double_Push)));
+    assert(has(moves, Move(e2, e4, MoveKind::Double_Push)));
+    assert(has(moves, Move(f2, f4, MoveKind::Double_Push)));
+    assert(has(moves, Move(g2, g4, MoveKind::Double_Push)));
+    assert(has(moves, Move(h2, h4, MoveKind::Double_Push)));
+
+    // Also verify all 8 single pawn pushes are present
+    assert(has(moves, Move(a2, a3, MoveKind::Quiet_Move)));
+    assert(has(moves, Move(b2, b3, MoveKind::Quiet_Move)));
+    assert(has(moves, Move(c2, c3, MoveKind::Quiet_Move)));
+    assert(has(moves, Move(d2, d3, MoveKind::Quiet_Move)));
+    assert(has(moves, Move(e2, e3, MoveKind::Quiet_Move)));
+    assert(has(moves, Move(f2, f3, MoveKind::Quiet_Move)));
+    assert(has(moves, Move(g2, g3, MoveKind::Quiet_Move)));
+    assert(has(moves, Move(h2, h3, MoveKind::Quiet_Move)));
+
+    std::cout << "Double pawn pushes test passed!" << std::endl;
+}
+
 
 void testLegalCaptures() {
     // Test case with a regular captures and one promoting a pawn while capturing
@@ -207,6 +237,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
     testLegalPawnMoves();
+    testDoublePawnPushes();
     testLegalCaptures();
     testLegalEnPassant();
     testAllLegalCastling();

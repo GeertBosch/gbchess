@@ -197,9 +197,9 @@ where
 {
     let white = state.active() == Color::White;
     let double_push_rank = if white {
-        SquareSet::rank(2) // 3rd rank (0-indexed)
+        SquareSet::rank(3) // 4th rank (0-indexed) - where white pawns can double push to
     } else {
-        SquareSet::rank(5) // 6th rank
+        SquareSet::rank(4) // 5th rank (0-indexed) - where black pawns can double push to
     };
     let promo_rank = if white {
         SquareSet::rank(7) // 8th rank

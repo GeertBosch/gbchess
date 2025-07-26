@@ -111,6 +111,12 @@ fn run_basic_tests() {
         test_king_in_check();
     }
 
+    // Test 6: Double pawn pushes from starting position
+    {
+        println!("Test 6: Double pawn pushes from starting position");
+        test_double_pawn_pushes();
+    }
+
     println!("\n✅ All basic tests completed!");
 }
 
@@ -150,6 +156,22 @@ fn test_king_in_check() {
     // No captures are possible
     check_moves_and_captures("4k3/8/4Qn2/3K4/8/8/8/8 b - - 0 1", 2, 0);
     println!("✓ King in check test passed");
+}
+
+/**
+ * Test double pawn pushes from starting position.
+ * From the starting position, white should have 8 double pawn pushes (a2-a4, b2-b4, ..., h2-h4)
+ * plus 8 single pawn pushes plus 4 knight moves = 20 total moves.
+ */
+fn test_double_pawn_pushes() {
+    // Starting position
+    check_moves_and_captures("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 20, 0);
+    
+    // Test a specific position with some pawns already moved
+    // This position should have fewer double pawn pushes available
+    check_moves_and_captures("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2", 29, 0);
+    
+    println!("✓ Double pawn pushes test passed");
 }
 
 fn main() {
