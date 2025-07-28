@@ -7,16 +7,16 @@
  */
 
 use fen::Position;
-use moves::{make_move_position, unmake_move_position};
+use moves::apply_move;
 use moves_gen::all_legal_moves_and_captures;
 
 pub type NodeCount = u64;
 
 /** 
  * Simple perft implementation without caching or incremental updates.
- * Uses make_move/unmake_move for board state management.
+ * Uses apply_move with position copying for simplified state management.
  */
-pub fn perft(position: &mut Position, depth: i32) -> NodeCount {
+pub fn perft(position: Position, depth: i32) -> NodeCount {
     if depth == 0 {
         return 1;
     }
@@ -25,9 +25,8 @@ pub fn perft(position: &mut Position, depth: i32) -> NodeCount {
     let move_list = all_legal_moves_and_captures(position.turn, &position.board);
 
     for mv in move_list {
-        let undo = make_move_position(position, mv);
-        nodes += perft(position, depth - 1);
-        unmake_move_position(position, undo);
+        let new_position = apply_move(position.clone(), mv);
+        nodes += perft(new_position, depth - 1);
     }
 
     nodes
@@ -37,7 +36,7 @@ pub fn perft(position: &mut Position, depth: i32) -> NodeCount {
  * Perft with divide - shows node count for each root move.
  * Returns the total number of nodes searched.
  */
-pub fn perft_with_divide(mut position: Position, depth: i32) -> NodeCount {
+pub fn perft_with_divide(position: Position, depth: i32) -> NodeCount {
     if depth == 0 {
         println!("Nodes searched: 1");
         return 1;
@@ -47,9 +46,8 @@ pub fn perft_with_divide(mut position: Position, depth: i32) -> NodeCount {
     let move_list = all_legal_moves_and_captures(position.turn, &position.board);
 
     for mv in move_list {
-        let undo = make_move_position(&mut position, mv);
-        let nodes = perft(&mut position, depth - 1);
-        unmake_move_position(&mut position, undo);
+        let new_position = apply_move(position.clone(), mv);
+        let nodes = perft(new_position, depth - 1);
 
         println!("{}: {}", mv, nodes);
         total_nodes += nodes;
@@ -66,16 +64,16 @@ mod tests {
 
     #[test]
     fn test_perft_depth_0() {
-        let mut position = parse_position(INITIAL_POSITION).unwrap();
-        assert_eq!(perft(&mut position, 0), 1);
+        let position = parse_position(INITIAL_POSITION).unwrap();
+        assert_eq!(perft(position, 0), 1);
     }
 
     #[test]
     fn test_perft_depth_1_startpos() {
-        let mut position = parse_position(INITIAL_POSITION).unwrap();
+        let position = parse_position(INITIAL_POSITION).unwrap();
         // Note: This currently fails because we're missing double pawn pushes
         // Expected: 20, but we get 12 due to missing move generation
-        let result = perft(&mut position, 1);
+        let result = perft(position, 1);
         // For now, just test that it runs without panicking
         assert!(result > 0);
     }
