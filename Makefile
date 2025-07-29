@@ -9,7 +9,7 @@ OPTOBJ=build/opt
 DBGOBJ=build/dbg
 
 # Rust configuration
-RUST_TARGETS=elo-test fen-test hash-test magic-test moves-table-test square_set-test moves-test
+RUST_TARGETS=elo-test fen-test hash-test magic-test moves-table-test square_set-test moves-test moves_gen-test
 RUST_BUILD_DIR=rust-build
 RUST_BUILD_TARGETS=$(patsubst %,$(RUST_BUILD_DIR)/%-rust,$(RUST_TARGETS))
 

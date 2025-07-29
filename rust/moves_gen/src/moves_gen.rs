@@ -1,6 +1,6 @@
 use fen::{Board, Color, Piece, PieceType, Square, Turn, NO_EN_PASSANT_TARGET};
 use magic::targets;
-use moves::{make_move, Move, MoveKind, MoveWithPieces, Occupancy};
+use moves::{is_attacked_squares, make_move, Move, MoveKind, MoveWithPieces, Occupancy};
 use moves_table::{clear_path, MovesTable};
 use square_set::{find_piece, SquareSet};
 
@@ -126,38 +126,14 @@ pub const SLIDERS: PieceSet =
 // Helper functions - removed unused functions for cleaner code
 
 fn is_attacked(board: &Board, square: Square, occupancy: &Occupancy) -> bool {
-    // Simple implementation - check if any opponent piece attacks this square
+    // Use the same logic as C++:
+    // We're using this function to find out if empty squares are attacked for determining
+    // legality of castling, so we can't assume that the capture square is occupied.
     let table = MovesTable::new();
-    let opponent_pieces = occupancy.theirs();
-
-    for from in opponent_pieces.iter() {
-        let piece = board[from];
-        if piece == Piece::Empty {
-            continue;
-        }
-
-        // Check if this piece can attack the target square
-        let attacks = if SLIDERS.contains(piece) {
-            let mut attack_squares = SquareSet::new();
-
-            // For bishops and queens, check diagonal attacks
-            if matches!(piece, Piece::B | Piece::b | Piece::Q | Piece::q) {
-                attack_squares = attack_squares
-                    | (targets(from, true, occupancy.all()) & SquareSet::from_square(square));
-            }
-
-            // For rooks and queens, check straight-line attacks
-            if matches!(piece, Piece::R | Piece::r | Piece::Q | Piece::q) {
-                attack_squares = attack_squares
-                    | (targets(from, false, occupancy.all()) & SquareSet::from_square(square));
-            }
-
-            attack_squares
-        } else {
-            table.possible_captures(piece, from) & SquareSet::from_square(square)
-        };
-
-        if !attacks.is_empty() && clear_path(occupancy.all(), from, square) {
+        
+    for from in (occupancy.theirs() & table.attackers(square)).iter() {
+        if clear_path(occupancy.all(), from, square) &&
+           table.possible_captures(board[from], from).contains(square) {
             return true;
         }
     }
@@ -519,23 +495,18 @@ where
 /**
  * Returns true if the given move does not leave the king in check.
  */
-pub fn does_not_check(board: &mut Board, state: &SearchState, mv: Move) -> bool {
-    let change = make_move(board, mv);
+pub fn does_not_check(board: &mut Board, state: &SearchState, mv: Move, table: &MovesTable) -> bool {
     let new_occupancy = Occupancy::from_board(board, state.turn.active_color());
 
     // Determine which square(s) to check for attack
-    let check_square = if mv.from == state.king_square {
+    let mut check_squares = SquareSet::from_square(state.king_square);
+    if mv.kind.is_castles() {
         // If the king moved, check the destination square
-        // TODO: Handle castling path checking (ipath) when castling is implemented
-        mv.to
-    } else {
-        // If another piece moved, check the original king square
-        state.king_square
-    };
+        check_squares = MovesTable::path(table, mv.from, mv.to) | SquareSet::from_square(mv.from) | SquareSet::from_square(mv.to);
+    }
 
-    let result = !is_attacked(board, check_square, &new_occupancy);
-    moves::unmake_move_board(board, change);
-    result
+    let check = is_attacked_squares(board, check_squares, new_occupancy);
+    !check
 }
 
 /**
@@ -581,9 +552,10 @@ pub fn count_legal_moves_and_captures(board: &mut Board, state: &SearchState) ->
     let mut count = 0;
     let state_clone = state.clone();
     let board_clone = board.clone();
+    let table = MovesTable::new();
     let mut count_move = |_piece: Piece, mv: Move| {
         let mut temp_board = board_clone.clone();
-        if does_not_check(&mut temp_board, &state_clone, mv) {
+        if does_not_check(&mut temp_board, &state_clone, mv, &table) {
             count += 1;
         }
     };
@@ -608,9 +580,10 @@ pub fn for_all_legal_quiescent_moves<F>(
 {
     let state = SearchState::new(board, turn);
     let board_clone = board.clone();
+    let table = MovesTable::new();
     let mut do_move = |_piece: Piece, mv: Move| {
         let change = make_move(board, mv);
-        if does_not_check(board, &state, mv) {
+        if does_not_check(board, &state, mv, &table) {
             action(mv);
         }
         moves::unmake_move_board(board, change);
@@ -639,9 +612,10 @@ where
 {
     let mut board_mut = board.clone();
     let board_ref = board.clone();
+    let table = MovesTable::new();
     let mut do_move = |piece: Piece, mv: Move| {
         let change = make_move(&mut board_mut, mv);
-        if does_not_check(&mut board_mut, state, mv) {
+        if does_not_check(&mut board_mut, state, mv, &table) {
             action(
                 &mut board_mut,
                 MoveWithPieces {
