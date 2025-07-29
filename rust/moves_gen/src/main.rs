@@ -155,6 +155,7 @@ fn test_king_in_check() {
     // Only legal moves should be king moves to safe squares (d8, f8)
     // No captures are possible
     check_moves_and_captures("4k3/8/4Qn2/3K4/8/8/8/8 b - - 0 1", 2, 0);
+    check_moves_and_captures("rnbqkbnr/ppp1pppp/3p4/8/Q7/2P5/PP1PPPPP/RNB1KBNR b KQkq - 1 2", 6, 0); 
     println!("✓ King in check test passed");
 }
 
