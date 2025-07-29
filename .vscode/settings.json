@@ -29,5 +29,14 @@
         },
     ],
     "editor.formatOnSave": true,
-    "editor.formatOnSaveMode": "modificationsIfAvailable"
+    "editor.formatOnSaveMode": "modificationsIfAvailable",
+    "[rust]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "rust-lang.rust-analyzer"
+    },
+    "rust-analyzer.rustfmt.overrideCommand": [
+        "rustfmt",
+        "--edition",
+        "2021"
+    ]
 }
