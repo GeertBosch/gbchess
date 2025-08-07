@@ -147,15 +147,12 @@ fn check_moves_and_captures(fen: &str, expected_moves: usize, expected_captures:
  * Test position where black king is in check from white queen
  */
 fn test_king_in_check() {
-    // Position: 4k3/8/4Qn2/3K4/8/8/8/8 b - - 0 1
-    // - Black king on e8
-    // - White queen on e6 (giving check along the e-file)
-    // - Black knight on f6 (cannot move as it would leave king in check)
-    // - White king on d5
     // Only legal moves should be king moves to safe squares (d8, f8)
     // No captures are possible
-    check_moves_and_captures("4k3/8/4Qn2/3K4/8/8/8/8 b - - 0 1", 2, 0);
-    check_moves_and_captures("rnbqkbnr/ppp1pppp/3p4/8/Q7/2P5/PP1PPPPP/RNB1KBNR b KQkq - 1 2", 6, 0); 
+    check_moves_and_captures("4k3/8/3KQn2/8/8/8/8/8 b - - 0 1", 2, 0);
+    check_moves_and_captures(
+        "rnbqkbnr/ppp1pppp/3p4/8/Q7/2P5/PP1PPPPP/RNB1KBNR b KQkq - 1 2", 6, 0
+    );
     println!("✓ King in check test passed");
 }
 
@@ -170,8 +167,9 @@ fn test_double_pawn_pushes() {
     
     // Test a specific position with some pawns already moved
     // This position should have fewer double pawn pushes available
-    check_moves_and_captures("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2", 29, 0);
-    
+    check_moves_and_captures(
+        "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2", 29, 0);
+
     println!("✓ Double pawn pushes test passed");
 }
 

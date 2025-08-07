@@ -225,7 +225,7 @@ void testKingInCheck() {
         // - White king on d5
         // Only legal moves should be king moves to safe squares (d8, f8)
         // No captures are possible
-        checkMovesAndCaptures("4k3/8/4Qn2/3K4/8/8/8/8 b - - 0 1", 2, 0);
+        checkMovesAndCaptures("4k3/8/3KQn2/8/8/8/8/8 b - - 0 1", 2, 0);
     }
     {
         checkMovesAndCaptures(
