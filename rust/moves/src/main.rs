@@ -1,5 +1,6 @@
 use fen::{Board, Color, Piece, Square};
-use moves::{make_move, unmake_move_board, Occupancy, Move, MoveKind, Position, Turn, CastlingMask, NO_EN_PASSANT_TARGET, apply_move, is_attacked_square, castling_mask};
+use moves::{make_move, unmake_move_board, Move, MoveKind, Position, Turn, CastlingMask, NO_EN_PASSANT_TARGET, apply_move, is_attacked_square, castling_mask};
+use moves_table::Occupancy;
 use square_set::SquareSet;
 
 #[allow(dead_code)]
@@ -194,7 +195,7 @@ fn test_make_and_unmake_move_tests() {
         let mut board = Board::new();
         board[Square::E1] = Piece::K;
         board[Square::H1] = Piece::R;
-        test_make_and_unmake_move(&mut board, Move::new(Square::E1, Square::G1, MoveKind::OO));
+        test_make_and_unmake_move(&mut board, Move::new(Square::E1, Square::G1, MoveKind::O_O));
         assert_eq!(board[Square::G1], Piece::K);
         assert_eq!(board[Square::F1], Piece::R);
         assert_eq!(board[Square::E1], Piece::Empty);
@@ -206,7 +207,7 @@ fn test_make_and_unmake_move_tests() {
         let mut board = Board::new();
         board[Square::E1] = Piece::K;
         board[Square::A1] = Piece::R;
-        test_make_and_unmake_move(&mut board, Move::new(Square::E1, Square::C1, MoveKind::OOO));
+        test_make_and_unmake_move(&mut board, Move::new(Square::E1, Square::C1, MoveKind::O_O_O));
         assert_eq!(board[Square::C1], Piece::K);
         assert_eq!(board[Square::D1], Piece::R);
         assert_eq!(board[Square::E1], Piece::Empty);

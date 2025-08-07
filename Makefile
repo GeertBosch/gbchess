@@ -264,5 +264,5 @@ test: build rust-build debug ${CPP_TESTS}
 	@echo "Running Rust test executables..."
 	@for target in $(RUST_BUILD_TARGETS); do \
 		/bin/echo -n Run $$target ; \
-		(./$$target < /dev/null > /dev/null && echo " passed") || ./$$target </dev/null; \
+		(./$$target < /dev/null > /dev/null && echo " passed") || RUST_BACKTRACE=1 ./$$target </dev/null; \
 	done

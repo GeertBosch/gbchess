@@ -1,5 +1,230 @@
-use fen::{Piece, Square};
+use fen::{Color, Piece, PieceType, Square, Board};
 use square_set::SquareSet;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+#[allow(non_camel_case_types)]
+pub enum MoveKind {
+    // Moves that don't capture or promote
+    QuietMove = 0,
+    DoublePush = 1,
+    O_O = 2,  // King-side castling
+    O_O_O = 3, // Queen-side castling
+
+    // Captures that don't promote
+    Capture = 4,
+    EnPassant = 5,
+
+    // Promotions that don't capture
+    KnightPromotion = 8,
+    BishopPromotion = 9,
+    RookPromotion = 10,
+    QueenPromotion = 11,
+
+    // Promotions that capture
+    KnightPromotionCapture = 12,
+    BishopPromotionCapture = 13,
+    RookPromotionCapture = 14,
+    QueenPromotionCapture = 15,
+}
+
+impl Default for MoveKind {
+    fn default() -> Self {
+        MoveKind::QuietMove
+    }
+}
+
+impl MoveKind {
+    pub const CAPTURE_MASK: u8 = 4;
+    pub const PROMOTION_MASK: u8 = 8;
+    pub const NUM_NO_PROMO_MOVE_KINDS: u8 = MoveKind::EnPassant as u8 + 1; // 6 kinds without promotion
+
+    pub fn index(self) -> u8 {
+        self as u8
+    }
+
+    pub fn make(kind: u8) -> Self {
+        match kind {
+            0 => MoveKind::QuietMove,
+            1 => MoveKind::DoublePush,
+            2 => MoveKind::O_O,
+            3 => MoveKind::O_O_O,
+            4 => MoveKind::Capture,
+            5 => MoveKind::EnPassant,
+            8 => MoveKind::KnightPromotion,
+            9 => MoveKind::BishopPromotion,
+            10 => MoveKind::RookPromotion,
+            11 => MoveKind::QueenPromotion,
+            12 => MoveKind::KnightPromotionCapture,
+            13 => MoveKind::BishopPromotionCapture,
+            14 => MoveKind::RookPromotionCapture,
+            15 => MoveKind::QueenPromotionCapture,
+            _ => panic!("Invalid move kind index"),
+        }
+    }
+
+    pub fn is_capture(self) -> bool {
+        (self.index() & Self::CAPTURE_MASK) != 0
+    }
+
+    pub fn is_promotion(self) -> bool {
+        (self.index() & Self::PROMOTION_MASK) != 0
+    }
+
+    pub fn is_castles(self) -> bool {
+        matches!(self, MoveKind::O_O | MoveKind::O_O_O)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FromTo {
+    pub from: Square,
+    pub to: Square,
+}
+
+impl Default for FromTo {
+    fn default() -> Self {
+        Self {
+            from: Square::A1,
+            to: Square::A1,
+        }
+    }
+}
+
+/// Occupancy represents which squares are occupied by each side
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Occupancy {
+    theirs: SquareSet,
+    ours: SquareSet,
+}
+
+impl Occupancy {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn from_board(board: &Board, active_color: Color) -> Self {
+        let mut ours = SquareSet::new();
+        let mut theirs = SquareSet::new();
+
+        for square_idx in 0..64 as u8 {
+            let square = unsafe { std::mem::transmute(square_idx) };
+            let piece = board[square];
+            if piece != Piece::Empty {
+                let piece_color = piece.color();
+                if piece_color == active_color {
+                    ours = ours | SquareSet::from_square(square);
+                } else {
+                    theirs = theirs | SquareSet::from_square(square);
+                }
+            }
+        }
+
+        Self { theirs, ours }
+    }
+
+    pub fn delta(theirs: SquareSet, ours: SquareSet) -> Self {
+        Self { theirs, ours }
+    }
+
+    pub fn theirs(&self) -> SquareSet {
+        self.theirs
+    }
+
+    pub fn ours(&self) -> SquareSet {
+        self.ours
+    }
+
+    pub fn all(&self) -> SquareSet {
+        self.theirs | self.ours
+    }
+
+    pub fn flip(&self) -> Self {
+        Self {
+            theirs: self.ours,
+            ours: self.theirs,
+        }
+    }
+}
+
+impl std::ops::BitXor for Occupancy {
+    type Output = Self;
+
+    fn bitxor(self, rhs: Self) -> Self {
+        Self {
+            theirs: self.theirs ^ rhs.theirs,
+            ours: self.ours ^ rhs.ours,
+        }
+    }
+}
+
+impl std::ops::BitXorAssign for Occupancy {
+    fn bitxor_assign(&mut self, rhs: Self) {
+        self.theirs ^= rhs.theirs;
+        self.ours ^= rhs.ours;
+    }
+}
+
+impl std::ops::Not for Occupancy {
+    type Output = Self;
+
+    fn not(self) -> Self {
+        self.flip()
+    }
+}
+
+// Castling information (from castling_info.h)
+#[derive(Debug, Clone, Copy)]
+pub struct CastlingInfo {
+    pub rook: Piece,
+    pub king: Piece,
+    pub king_side_mask: u8,
+    pub queen_side_mask: u8,
+    pub king_side: [FromTo; 2], // King and Rook moves
+    pub queen_side: [FromTo; 2],
+}
+
+impl CastlingInfo {
+    pub fn new(color: Color) -> Self {
+        let rook = Piece::from_type_and_color(PieceType::Rook, color);
+        let king = Piece::from_type_and_color(PieceType::King, color);
+        let (king_side_mask, queen_side_mask) = match color {
+            Color::White => (1, 2), // K, Q
+            Color::Black => (4, 8), // k, q
+        };
+        let (king_side, queen_side) = match color {
+            Color::White => ([
+                FromTo{from: Square::E1, to: Square::G1}, 
+                FromTo{from: Square::H1, to: Square::F1}],
+                [
+                FromTo{from: Square::E1, to: Square::C1},
+                FromTo{from: Square::A1, to: Square::D1}]
+            ),
+            Color::Black => ([
+                FromTo{from: Square::E8, to: Square::G8}, 
+                FromTo{from: Square::H8, to: Square::F8}
+                ],
+                [
+                FromTo{from: Square::E8, to: Square::C8},
+                FromTo{from: Square::A8, to: Square::D8}]
+            ),
+        };
+
+        Self {
+            rook,
+            king,
+            king_side_mask,
+            queen_side_mask,
+            king_side,
+            queen_side,
+        }
+    }
+}
+
+fn get_castling_info(color: Color) -> CastlingInfo {
+    CastlingInfo::new(color)
+}
+
 
 /// The MovesTable holds precomputed move data for all pieces
 pub struct MovesTable {
@@ -12,8 +237,44 @@ pub struct MovesTable {
     // Precomputed possible squares that each square can be attacked from
     attackers: [SquareSet; 64], // [square]
 
+    // precomputed delta in occupancy as result of a move, but only for non-promotion moves
+    // to save on memory: convert promotion kinds using the noPromo function
+    occupancy_delta: [[[Occupancy; 64]; 64]; MoveKind::NUM_NO_PROMO_MOVE_KINDS as usize], 
     // Precomputed paths between squares
     paths: [[SquareSet; 64]; 64], // [from][to]
+}
+
+/** Compute the delta in occupancy for the given move */
+fn occupancy_delta(kind: MoveKind, from: Square, to: Square) -> Occupancy {
+    let mut ours: SquareSet = SquareSet::new();
+    ours.insert(from);
+    ours.insert(to);
+    let mut theirs: SquareSet = SquareSet::new();
+    let side = if from.rank() == 0 { Color::White } else { Color::Black };
+    let info = get_castling_info(side);
+    match kind {
+    MoveKind::QuietMove |
+    MoveKind::DoublePush |
+    MoveKind::KnightPromotion |
+    MoveKind::BishopPromotion |
+    MoveKind::RookPromotion |
+    MoveKind::QueenPromotion => {}
+    MoveKind::O_O => {
+        ours.insert(info.king_side[1].to);
+        ours.insert(info.king_side[1].from);
+    }
+    MoveKind::O_O_O => {
+        ours.insert(info.queen_side[1].to);
+        ours.insert(info.queen_side[1].from);
+    }
+    MoveKind::Capture |
+    MoveKind::KnightPromotionCapture |
+    MoveKind::BishopPromotionCapture |
+    MoveKind::RookPromotionCapture |
+    MoveKind::QueenPromotionCapture => theirs.insert(to),
+    MoveKind::EnPassant => theirs.insert(Square::make_square(to.file(), from.rank()))
+    }
+    return Occupancy::delta(theirs, ours);
 }
 
 impl MovesTable {
@@ -23,11 +284,13 @@ impl MovesTable {
             moves: [[SquareSet::new(); 64]; 13],
             captures: [[SquareSet::new(); 64]; 13],
             attackers: [SquareSet::new(); 64],
+            occupancy_delta: [[[Occupancy::new(); 64]; 64]; MoveKind::NUM_NO_PROMO_MOVE_KINDS as usize],
             paths: [[SquareSet::new(); 64]; 64],
         };
 
         table.initialize_piece_moves_and_captures();
         table.initialize_attackers();
+        table.initialize_occupancy_delta();
         table.initialize_paths();
 
         table
@@ -43,6 +306,10 @@ impl MovesTable {
 
     pub fn attackers(&self, square: Square) -> SquareSet {
         self.attackers[square as usize]
+    }
+
+    pub fn occupancy_delta(&self, kind : MoveKind, from : Square, to: Square) -> Occupancy {
+        self.occupancy_delta[kind as usize][from as usize][to as usize]
     }
 
     pub fn path(&self, from: Square, to: Square) -> SquareSet {
@@ -75,6 +342,17 @@ impl MovesTable {
             for to in all_targets.iter() {
                 self.attackers[to as usize] =
                     self.attackers[to as usize] | SquareSet::from_square(from);
+            }
+        }
+    }
+
+    fn initialize_occupancy_delta(&mut self) {
+        // Initialize occupancy changes
+        for kind in 0..MoveKind::NUM_NO_PROMO_MOVE_KINDS as u8 {
+            for from in 0..64  {
+                for to in 0..64 {
+                    self.occupancy_delta[kind as usize][from][to] = occupancy_delta(MoveKind::make(kind), Square::from_int(from), Square::from_int(to));
+                }
             }
         }
     }

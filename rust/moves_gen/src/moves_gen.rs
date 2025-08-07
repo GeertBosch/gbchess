@@ -1,7 +1,7 @@
 use fen::{Board, Color, Piece, PieceType, Square, Turn, NO_EN_PASSANT_TARGET};
 use magic::targets;
-use moves::{is_attacked_squares, make_move, Move, MoveKind, MoveWithPieces, Occupancy};
-use moves_table::{clear_path, MovesTable};
+use moves::{is_attacked_squares, make_move, Move, MoveKind, MoveWithPieces};
+use moves_table::{clear_path, MovesTable, CastlingInfo, Occupancy};
 use square_set::{find_piece, SquareSet};
 
 pub type MoveVector = Vec<Move>;
@@ -50,50 +50,6 @@ impl SearchState {
     }
 }
 
-// Castling information (from castling_info.h)
-#[derive(Debug, Clone, Copy)]
-pub struct CastlingInfo {
-    pub rook: Piece,
-    pub king: Piece,
-    pub king_side_mask: u8,
-    pub queen_side_mask: u8,
-    pub king_side: [(Square, Square); 2], // King and Rook moves
-    pub queen_side: [(Square, Square); 2],
-}
-
-impl CastlingInfo {
-    pub fn new(color: Color) -> Self {
-        let rook = Piece::from_type_and_color(PieceType::Rook, color);
-        let king = Piece::from_type_and_color(PieceType::King, color);
-        let (king_side_mask, queen_side_mask) = match color {
-            Color::White => (1, 2), // K, Q
-            Color::Black => (4, 8), // k, q
-        };
-        let (king_side, queen_side) = match color {
-            Color::White => (
-                [(Square::E1, Square::G1), (Square::H1, Square::F1)],
-                [(Square::E1, Square::C1), (Square::A1, Square::D1)],
-            ),
-            Color::Black => (
-                [(Square::E8, Square::G8), (Square::H8, Square::F8)],
-                [(Square::E8, Square::C8), (Square::A8, Square::D8)],
-            ),
-        };
-
-        Self {
-            rook,
-            king,
-            king_side_mask,
-            queen_side_mask,
-            king_side,
-            queen_side,
-        }
-    }
-}
-
-fn get_castling_info(color: Color) -> CastlingInfo {
-    CastlingInfo::new(color)
-}
 
 #[derive(Debug, Clone, Copy)]
 pub struct PieceSet {
@@ -311,7 +267,7 @@ where
     for from in (state.occupancy.ours() & !state.pawns).iter() {
         let piece = board[from];
 
-        if SLIDERS.contains(piece) && !state.pinned.contains(from) && !state.in_check {
+        if false && SLIDERS.contains(piece) && !state.pinned.contains(from) && !state.in_check {
             // Sliding piece, not pinned
             let mut to_squares = SquareSet::new();
 
@@ -376,19 +332,19 @@ where
     }
 
     let color = state.turn.active_color();
-    let info = get_castling_info(color);
+    let info = CastlingInfo::new(color);
     let castling = state.turn.castling();
 
     // King side castling
     if (castling.value() & info.king_side_mask) != 0 {
         // Check if path is clear - simplified implementation
-        let king_to = info.king_side[0].1;
-        let rook_to = info.king_side[1].1;
+        let king_to = info.king_side[0].to;
+        let rook_to = info.king_side[1].to;
         let clear_squares = SquareSet::from_square(rook_to) | SquareSet::from_square(king_to);
         if (state.occupancy.all() & clear_squares).is_empty() {
             fun(
                 info.king,
-                Move::new(info.king_side[0].0, info.king_side[0].1, MoveKind::OO),
+                Move::new(info.king_side[0].from, info.king_side[0].to, MoveKind::O_O),
             );
         }
     }
@@ -396,15 +352,15 @@ where
     // Queen side castling
     if (castling.value() & info.queen_side_mask) != 0 {
         // Check if path is clear - simplified implementation
-        let king_to = info.queen_side[0].1;
-        let rook_to = info.queen_side[1].1;
+        let king_to = info.queen_side[0].to;
+        let rook_to = info.queen_side[1].to;
         let clear_squares = SquareSet::from_square(rook_to)
             | SquareSet::from_square(king_to)
             | SquareSet::from_square(Square::B1);
         if (state.occupancy.all() & clear_squares).is_empty() {
             fun(
                 info.king,
-                Move::new(info.queen_side[0].0, info.queen_side[0].1, MoveKind::OOO),
+                Move::new(info.queen_side[0].from, info.queen_side[0].to, MoveKind::O_O_O),
             );
         }
     }
@@ -496,16 +452,14 @@ where
  * Returns true if the given move does not leave the king in check.
  */
 pub fn does_not_check(board: &mut Board, state: &SearchState, mv: Move, table: &MovesTable) -> bool {
-    let new_occupancy = Occupancy::from_board(board, state.turn.active_color());
-
-    // Determine which square(s) to check for attack
     let mut check_squares = SquareSet::from_square(state.king_square);
-    if mv.kind.is_castles() {
+    if mv.from == state.king_square {
         // If the king moved, check the destination square
-        check_squares = MovesTable::path(table, mv.from, mv.to) | SquareSet::from_square(mv.from) | SquareSet::from_square(mv.to);
+        let to = SquareSet::from_square(mv.to);
+        check_squares = if mv.kind.is_castles() { MovesTable::path(table, mv.from, mv.to) | SquareSet::from_square(mv.from) | to } else { to };
     }
-
-    let check = is_attacked_squares(board, check_squares, new_occupancy);
+    let delta = MovesTable::occupancy_delta(table, mv.kind, mv.from, mv.to);
+    let check = is_attacked_squares(board, check_squares, state.occupancy ^ delta);
     !check
 }
 

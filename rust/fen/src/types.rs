@@ -23,11 +23,17 @@ pub enum Square {
     A8, B8, C8, D8, E8, F8, G8, H8,
 }
 
+#[allow(dead_code)] // from_int used elsewhere
 impl Square {
     pub fn make_square(file: usize, rank: usize) -> Self {
         assert!(file < NUM_FILES && rank < NUM_RANKS);
         // Safe cast because we validate bounds above
         unsafe { std::mem::transmute((rank * NUM_FILES + file) as u8) }
+    }
+
+    pub fn from_int(int: usize) -> Self {
+        assert!(int < NUM_SQUARES);
+        unsafe { std::mem::transmute(int as u8) }
     }
 
     pub fn rank(self) -> usize {

@@ -109,6 +109,15 @@
             "args": [
                 "${workspaceFolder}/ut6.in",
             ],
+        },
+        {
+            "name": "moves_gen-test-rust",
+            "type": "lldb-dap",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/moves_gen-test",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "rust: cargo build moves_gen"
         }
     ]
 }

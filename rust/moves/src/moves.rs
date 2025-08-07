@@ -1,9 +1,6 @@
-use crate::{
-    BoardChange, FromTo, Move, MoveKind, MoveWithPieces, Occupancy,
-    UndoPosition,
-};
+use crate::{BoardChange, FromTo, Move, MoveKind, MoveWithPieces, UndoPosition,};
 use fen::{Board, Color, Piece, PieceType, Square, Turn, Position, CastlingMask, NO_EN_PASSANT_TARGET};
-use moves_table::MovesTable;
+use moves_table::{MovesTable, Occupancy};
 use square_set::SquareSet;
 
 struct PinData {
@@ -185,7 +182,7 @@ struct CompoundMove {
 /// Get the compound move information for a given move
 fn compound_move(mv: Move) -> CompoundMove {
     match mv.kind {
-        MoveKind::OO => {
+        MoveKind::O_O => {
             // King-side castling
             match mv.from {
                 Square::E1 => CompoundMove {
@@ -207,7 +204,7 @@ fn compound_move(mv: Move) -> CompoundMove {
                 _ => unreachable!("Invalid king-side castling from square"),
             }
         }
-        MoveKind::OOO => {
+        MoveKind::O_O_O => {
             // Queen-side castling
             match mv.from {
                 Square::E1 => CompoundMove {
