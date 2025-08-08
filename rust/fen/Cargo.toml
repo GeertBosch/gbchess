@@ -8,4 +8,4 @@ name = "fen-test"
 path = "src/main.rs"
 
 [dependencies]
-# No external dependencies needed for this crate
+num_enum = "0.7"
