@@ -1,4 +1,5 @@
 use std::fmt;
+use num_enum::TryFromPrimitive;
 
 pub const NUM_FILES: usize = 8;
 pub const NUM_RANKS: usize = 8;
@@ -8,7 +9,7 @@ pub const NUM_SQUARES: usize = NUM_FILES * NUM_RANKS;
 #[allow(dead_code)]
 pub const NUM_PIECES: usize = 13; // P, N, B, R, Q, K, Empty, p, n, b, r, q, k
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, TryFromPrimitive)]
 #[repr(u8)]
 #[allow(dead_code)] // Many squares not used yet during migration
 #[rustfmt::skip]    // Keep 8x8 grid layout
@@ -27,13 +28,13 @@ pub enum Square {
 impl Square {
     pub fn make_square(file: usize, rank: usize) -> Self {
         assert!(file < NUM_FILES && rank < NUM_RANKS);
-        // Safe cast because we validate bounds above
-        unsafe { std::mem::transmute((rank * NUM_FILES + file) as u8) }
+        let index = rank * NUM_FILES + file;
+        Self::try_from(index as u8).expect("Square index out of bounds")
     }
 
     pub fn from_int(int: usize) -> Self {
         assert!(int < NUM_SQUARES);
-        unsafe { std::mem::transmute(int as u8) }
+        Self::try_from(int as u8).expect("Square index out of bounds")
     }
 
     pub fn rank(self) -> usize {
