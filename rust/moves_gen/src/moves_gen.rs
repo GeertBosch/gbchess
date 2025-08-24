@@ -337,11 +337,13 @@ where
 
     // King side castling
     if (castling.value() & info.king_side_mask) != 0 {
-        // Check if path is clear - simplified implementation
-        let king_to = info.king_side[0].to;
-        let rook_to = info.king_side[1].to;
-        let clear_squares = SquareSet::from_square(rook_to) | SquareSet::from_square(king_to);
-        if (state.occupancy.all() & clear_squares).is_empty() {
+        // Calculate the proper castling path - squares that must be clear
+        // Path from king destination back to king source + path from rook destination back to rook source
+        let king_path = moves_table().path(info.king_side[0].to, info.king_side[0].from);
+        let rook_path = moves_table().path(info.king_side[1].to, info.king_side[1].from);
+        let clear_path = king_path | rook_path;
+        
+        if (state.occupancy.all() & clear_path).is_empty() {
             fun(
                 info.king,
                 Move::new(info.king_side[0].from, info.king_side[0].to, MoveKind::O_O),
@@ -351,13 +353,13 @@ where
 
     // Queen side castling
     if (castling.value() & info.queen_side_mask) != 0 {
-        // Check if path is clear - simplified implementation
-        let king_to = info.queen_side[0].to;
-        let rook_to = info.queen_side[1].to;
-        let clear_squares = SquareSet::from_square(rook_to)
-            | SquareSet::from_square(king_to)
-            | SquareSet::from_square(Square::B1);
-        if (state.occupancy.all() & clear_squares).is_empty() {
+        // Calculate the proper castling path - squares that must be clear
+        // Path from king destination back to king source + path from rook destination back to rook source
+        let king_path = moves_table().path(info.queen_side[0].to, info.queen_side[0].from);
+        let rook_path = moves_table().path(info.queen_side[1].to, info.queen_side[1].from);
+        let clear_path = king_path | rook_path;
+        
+        if (state.occupancy.all() & clear_path).is_empty() {
             fun(
                 info.king,
                 Move::new(info.queen_side[0].from, info.queen_side[0].to, MoveKind::O_O_O),
