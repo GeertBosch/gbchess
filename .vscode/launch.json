@@ -117,7 +117,11 @@
             "program": "${workspaceFolder}/target/debug/moves_gen-test",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "rust: cargo build moves_gen"
+            "preLaunchTask": "rust: cargo build moves_gen",
+            "initCommands": [
+                "breakpoint set --name rust_panic",
+                "breakpoint set --name rust_begin_unwind",
+            ],
         }
     ]
 }
