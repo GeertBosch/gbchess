@@ -95,18 +95,14 @@ members = [
     # "rust/eval",
     # "rust/search",
     # "rust/uci",
-    # "rust/nnue", ]
+    # "rust/nnue", 
+]
 ```
 
 ### 4.2 Makefile Integration
 - Update Makefile to build both C++ and Rust components
 - Configure output to same `build/` directory
 - Maintain existing test targets and workflows
-
-### 4.3 Cross-Language Integration
-- Use C FFI when needed for gradual migration
-- Create wrapper functions for interfacing between C++ and Rust
-- Plan for eventual complete replacement
 
 ## Phase 5: Rust-Specific Optimizations
 
@@ -196,13 +192,6 @@ members = [
 5. Clean, idiomatic Rust code
 6. Comprehensive documentation
 7. Streamlined build process
-
-## Next Steps
-
-1. Begin with Phase 1: Install Rust toolchain and set up development environment
-2. Create initial project structure
-3. Implement "Hello, World!" to verify setup
-4. Start with elo-test migration as proof of concept
 
 ## Migration Status
 
