@@ -1,6 +1,6 @@
 use crate::{BoardChange, FromTo, Move, MoveKind, MoveWithPieces, UndoPosition,};
 use fen::{Board, Color, Piece, PieceType, Square, Turn, Position, CastlingMask, NO_EN_PASSANT_TARGET};
-use moves_table::{MovesTable, Occupancy};
+use moves_table::{moves_table, Occupancy};
 use square_set::SquareSet;
 
 struct PinData {
@@ -11,7 +11,7 @@ struct PinData {
 /// Returns the set of pieces that would result in the king         (Square::E8, CastlingMask::kq),   // Black Kingeing checked,
 /// if the piece were to be removed from the board.
 pub fn pinned_pieces(board: &Board, occupancy: Occupancy, king_square: Square) -> SquareSet {
-    let table = MovesTable::new(); // TODO: Use a global instance for performance
+    let table = moves_table();
 
     let pin_data = [
         PinData {
@@ -44,12 +44,12 @@ pub fn pinned_pieces(board: &Board, occupancy: Occupancy, king_square: Square) -
     pinned & occupancy.ours()
 }
 
-/// Returns true if the given square is attacked by a piece of the given opponent color.
-pub fn is_attacked_square(board: &Board, square: Square, occupancy: Occupancy) -> bool {
-    let table = MovesTable::new(); // TODO: Use a global instance for performance
+/// Returns if the square is under attack from pieces of the given color.
+pub fn is_attacked_square(board: &Board, square: Square, opponent: Occupancy) -> bool {
+    let table = moves_table();
 
-    for from in (occupancy.theirs() & table.attackers(square)).iter() {
-        if clear_path(occupancy.all(), from, square)
+    for from in (opponent.theirs() & table.attackers(square)).iter() {
+        if clear_path(opponent.all(), from, square)
             && table.possible_captures(board[from], from).contains(square)
         {
             return true;
@@ -76,13 +76,12 @@ pub fn is_attacked_by_color(board: &Board, squares: SquareSet, opponent_color: C
 
 /// Returns whether the piece on 'from' can attack the square 'to', ignoring occupancy or en passant.
 pub fn attacks(board: &Board, from: Square, to: Square) -> bool {
-    let table = MovesTable::new(); // TODO: Use a global instance for performance
-    table.possible_captures(board[from], from).contains(to)
+    moves_table().possible_captures(board[from], from).contains(to)
 }
 
 /// Returns the set of squares that is attacking the given square, including pieces of both sides.
 pub fn attackers(board: &Board, target: Square, occupancy: SquareSet) -> SquareSet {
-    let table = MovesTable::new(); // TODO: Use a global instance for performance
+    let table = moves_table();
     let mut result = SquareSet::new();
 
     // Knight attackers
@@ -416,7 +415,6 @@ pub fn castling_mask(from: Square, to: Square) -> CastlingMask {
 
 /// Helper function to check if there's a clear path between two squares
 fn clear_path(occupancy: SquareSet, from: Square, to: Square) -> bool {
-    let table = MovesTable::new(); // TODO: Use a global instance for performance
-    let path = table.path(from, to);
+    let path = moves_table().path(from, to);
     (path & occupancy).len() == 0
 }

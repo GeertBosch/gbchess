@@ -1,5 +1,6 @@
 use fen::{Color, Piece, PieceType, Square, Board};
 use square_set::SquareSet;
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -595,6 +596,49 @@ impl MovesTable {
     fn queen_moves(from: Square) -> SquareSet {
         Self::rook_moves(from) | Self::bishop_moves(from)
     }
+}
+
+/// Global singleton instance of MovesTable for performance
+static MOVES_TABLE: OnceLock<Box<MovesTable>> = OnceLock::new();
+
+/// Initialize the global moves table. This should be called once at program startup.
+/// 
+/// # Returns
+/// * `true` if initialization was successful
+/// * `false` if the table was already initialized
+/// 
+/// # Example
+/// ```no_run
+/// use moves_table::initialize_moves_table;
+/// 
+/// fn main() {
+///     // Initialize at program startup for best performance
+///     if initialize_moves_table() {
+///         println!("Moves table initialized successfully");
+///     }
+///     // ... rest of program
+/// }
+/// ```
+pub fn initialize_moves_table() -> bool {
+    MOVES_TABLE.set(Box::new(MovesTable::new())).is_ok()
+}
+
+/// Get a reference to the global moves table.
+/// 
+/// This function will initialize the table on first access if it wasn't 
+/// explicitly initialized with `initialize_moves_table()`. For best performance,
+/// call `initialize_moves_table()` once at program startup.
+/// 
+/// # Example
+/// ```no_run
+/// use moves_table::moves_table;
+/// use fen::{Piece, Square};
+/// 
+/// let table = moves_table();
+/// let moves = table.possible_moves(Piece::R, Square::A1);
+/// ```
+pub fn moves_table() -> &'static MovesTable {
+    MOVES_TABLE.get_or_init(|| Box::new(MovesTable::new()))
 }
 
 impl Default for MovesTable {
