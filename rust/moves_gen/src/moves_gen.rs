@@ -1,7 +1,7 @@
 use fen::{Board, Color, Piece, PieceType, Square, Turn, NO_EN_PASSANT_TARGET};
 use magic::targets;
 use moves::{is_attacked_squares, make_move, Move, MoveKind, MoveWithPieces};
-use moves_table::{clear_path, MovesTable, CastlingInfo, Occupancy};
+use moves_table::{clear_path, MovesTable, moves_table, CastlingInfo, Occupancy};
 use square_set::{find_piece, SquareSet};
 
 pub type MoveVector = Vec<Move>;
@@ -85,7 +85,7 @@ fn is_attacked(board: &Board, square: Square, occupancy: &Occupancy) -> bool {
     // Use the same logic as C++:
     // We're using this function to find out if empty squares are attacked for determining
     // legality of castling, so we can't assume that the capture square is occupied.
-    let table = MovesTable::new();
+    let table = moves_table();
         
     for from in (occupancy.theirs() & table.attackers(square)).iter() {
         if clear_path(occupancy.all(), from, square) &&
@@ -262,7 +262,7 @@ fn find_non_pawn_moves<F>(board: &Board, state: &mut SearchState, fun: &mut F)
 where
     F: FnMut(Piece, Move),
 {
-    let table = MovesTable::new();
+    let table = moves_table();
 
     for from in (state.occupancy.ours() & !state.pawns).iter() {
         let piece = board[from];
@@ -370,8 +370,6 @@ fn find_non_pawn_captures<F>(board: &Board, state: &mut SearchState, fun: &mut F
 where
     F: FnMut(Piece, Move),
 {
-    let table = MovesTable::new();
-
     for from in (state.occupancy.ours() & !state.pawns).iter() {
         let piece = board[from];
 
@@ -391,7 +389,7 @@ where
                 fun(piece, Move::new(from, to, MoveKind::Capture));
             }
         } else {
-            let possible_squares = table.possible_captures(piece, from) & state.occupancy.theirs();
+            let possible_squares = moves_table().possible_captures(piece, from) & state.occupancy.theirs();
             for to in possible_squares.iter() {
                 if clear_path(state.occupancy.all(), from, to) {
                     fun(piece, Move::new(from, to, MoveKind::Capture));
@@ -456,9 +454,9 @@ pub fn does_not_check(board: &mut Board, state: &SearchState, mv: Move, table: &
     if mv.from == state.king_square {
         // If the king moved, check the destination square
         let to = SquareSet::from_square(mv.to);
-        check_squares = if mv.kind.is_castles() { MovesTable::path(table, mv.from, mv.to) | SquareSet::from_square(mv.from) | to } else { to };
+        check_squares = if mv.kind.is_castles() { table.path(mv.from, mv.to) | SquareSet::from_square(mv.from) | to } else { to };
     }
-    let delta = MovesTable::occupancy_delta(table, mv.kind, mv.from, mv.to);
+    let delta = table.occupancy_delta(mv.kind, mv.from, mv.to);
     let check = is_attacked_squares(board, check_squares, state.occupancy ^ delta);
     !check
 }
@@ -506,10 +504,9 @@ pub fn count_legal_moves_and_captures(board: &mut Board, state: &SearchState) ->
     let mut count = 0;
     let state_clone = state.clone();
     let board_clone = board.clone();
-    let table = MovesTable::new();
     let mut count_move = |_piece: Piece, mv: Move| {
         let mut temp_board = board_clone.clone();
-        if does_not_check(&mut temp_board, &state_clone, mv, &table) {
+        if does_not_check(&mut temp_board, &state_clone, mv, moves_table()) {
             count += 1;
         }
     };
@@ -534,10 +531,9 @@ pub fn for_all_legal_quiescent_moves<F>(
 {
     let state = SearchState::new(board, turn);
     let board_clone = board.clone();
-    let table = MovesTable::new();
     let mut do_move = |_piece: Piece, mv: Move| {
         let change = make_move(board, mv);
-        if does_not_check(board, &state, mv, &table) {
+        if does_not_check(board, &state, mv, moves_table()) {
             action(mv);
         }
         moves::unmake_move_board(board, change);
@@ -566,10 +562,9 @@ where
 {
     let mut board_mut = board.clone();
     let board_ref = board.clone();
-    let table = MovesTable::new();
     let mut do_move = |piece: Piece, mv: Move| {
         let change = make_move(&mut board_mut, mv);
-        if does_not_check(&mut board_mut, state, mv, &table) {
+        if does_not_check(&mut board_mut, state, mv, moves_table()) {
             action(
                 &mut board_mut,
                 MoveWithPieces {

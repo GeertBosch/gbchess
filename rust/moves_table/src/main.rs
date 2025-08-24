@@ -1,26 +1,31 @@
-use moves_table::{MovesTable, clear_path};
+use moves_table::{MovesTable, initialize_moves_table, moves_table, clear_path};
 use fen::{Square, Piece};
 use square_set::SquareSet;
 
 fn main() {
     println!("Testing moves table implementation...");
     
-    let table = MovesTable::new();
+    // Initialize the global moves table at startup
+    println!("Initializing moves table...");
+    let init_result = initialize_moves_table();
+    println!("Initialization {}", if init_result { "successful" } else { "already done" });
+    
+    let table = moves_table();
     
     // Test piece moves
-    test_possible_moves(&table);
+    test_possible_moves(table);
     
     // Test piece captures
-    test_possible_captures(&table);
+    test_possible_captures(table);
     
     // Test path calculations
-    test_paths(&table);
+    test_paths(table);
     
     // Test attackers
-    test_attackers(&table);
+    test_attackers(table);
     
     // Test utility functions
-    test_utilities(&table);
+    test_utilities(table);
     
     println!("All moves table tests passed!");
 }
