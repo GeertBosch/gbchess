@@ -43,6 +43,28 @@ impl MoveKind {
         self as u8
     }
 
+    /// Strips any promotion from moves, mapping promotion moves to their basic equivalents
+    pub fn no_promo(self) -> MoveKind {
+        match self {
+            MoveKind::QuietMove => MoveKind::QuietMove,
+            MoveKind::DoublePush => MoveKind::DoublePush,
+            MoveKind::O_O => MoveKind::O_O,
+            MoveKind::O_O_O => MoveKind::O_O_O,
+            MoveKind::Capture => MoveKind::Capture,
+            MoveKind::EnPassant => MoveKind::EnPassant,
+            // Map all promotion moves to QuietMove
+            MoveKind::KnightPromotion |
+            MoveKind::BishopPromotion |
+            MoveKind::RookPromotion |
+            MoveKind::QueenPromotion => MoveKind::QuietMove,
+            // Map all promotion captures to Capture
+            MoveKind::KnightPromotionCapture |
+            MoveKind::BishopPromotionCapture |
+            MoveKind::RookPromotionCapture |
+            MoveKind::QueenPromotionCapture => MoveKind::Capture,
+        }
+    }
+
     pub fn make(kind: u8) -> Self {
         match kind {
             0 => MoveKind::QuietMove,
@@ -309,7 +331,7 @@ impl MovesTable {
     }
 
     pub fn occupancy_delta(&self, kind : MoveKind, from : Square, to: Square) -> Occupancy {
-        self.occupancy_delta[kind as usize][from as usize][to as usize]
+        self.occupancy_delta[kind.no_promo() as usize][from as usize][to as usize]
     }
 
     pub fn path(&self, from: Square, to: Square) -> SquareSet {
