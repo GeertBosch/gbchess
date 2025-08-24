@@ -14,64 +14,12 @@
 #include "moves_gen.h"
 #include "nnue.h"
 #include "nnue_stats.h"
+#include "options.h"
 
 namespace {
 std::string cmdName = "eval-test";
 
-std::optional<nnue::NNUE> network;
 uint64_t numEvals = 0;
-
-using GridDrawing = std::array<std::string, 11>;
-GridDrawing gridDrawing = {
-    " ┌─",
-    "─",
-    "─┬─",
-    "─┐ ",
-    " │ ",
-    " ├─",
-    "─┼─",
-    "─┤ ",
-    " └─",
-    "─┴─",
-    "─┘ ",
-};
-
-std::string operator*(std::string str, int n) {
-    if (!n) return "";
-    return n == 1 ? str : str * (n / 2) + str * (n - n / 2);
-}
-
-std::string gridTop(int width) {
-    std::string res;
-    res += gridDrawing[0];
-    res += (gridDrawing[1] + gridDrawing[2]) * (width - 1);
-    res += gridDrawing[1] + gridDrawing[3];
-    return res;
-}
-std::string gridRow(std::string row) {
-    std::string res;
-    res += gridDrawing[4];
-    for (size_t i = 0; i < row.size(); ++i) {
-        res += row[i];
-        if (i < row.size() - 1) res += gridDrawing[4];
-    }
-    res += gridDrawing[4];
-    return res;
-}
-std::string gridMiddle(int width) {
-    std::string res;
-    res += gridDrawing[5];
-    res += (gridDrawing[1] + gridDrawing[6]) * (width - 1);
-    res += gridDrawing[1] + gridDrawing[7];
-    return res;
-}
-std::string gridBottom(int width) {
-    std::string res;
-    res += gridDrawing[8];
-    res += (gridDrawing[1] + gridDrawing[9]) * (width - 1);
-    res += gridDrawing[1] + gridDrawing[10];
-    return res;
-}
 
 void usage(std::string cmdName, std::string errmsg) {
     std::cerr << "Error: " << errmsg << "\n\n";
@@ -93,29 +41,6 @@ void printAvailableMovesAndCaptures(const Position& position) {
     std::cout << "]\n";
 }
 
-/**
- * Prints the chess board to the specified output stream in grid notation.
- */
-void printBoard(std::ostream& os, const Board& board) {
-    os << " " << gridTop(kNumFiles) << std::endl;
-    for (int rank = kNumRanks - 1; rank >= 0; --rank) {
-        os << rank + 1;
-        std::string row;
-        for (int file = 0; file < kNumFiles; ++file) {
-            auto piece = board[makeSquare(file, rank)];
-            row.push_back(to_char(piece));
-        }
-        os << gridRow(row) << std::endl;
-        if (rank > 0) os << " " << gridMiddle(kNumFiles) << std::endl;
-    }
-    os << " " << gridBottom(kNumFiles) << std::endl;
-    os << " ";
-    for (char file = 'a'; file <= 'h'; ++file) {
-        os << "   " << file;
-    }
-    os << std::endl;
-}
-
 std::vector<std::string> split(std::string line, char delim) {
     std::vector<std::string> res;
     std::string word;
@@ -131,6 +56,9 @@ std::vector<std::string> split(std::string line, char delim) {
     return res;
 }
 
+/**
+ * Simplistic quiescence search for evaluation test purposes.
+ */
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     Score stand_pat = evaluateBoard(position.board);
     if (position.active() == Color::b) stand_pat = -stand_pat;
@@ -144,7 +72,7 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     // The moveList includes moves needed to get out of check; an empty list means mate
     auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, depthleft);
 
-    if (moveList.empty()) return isInCheck(position) ? Score::min() : Score::draw();
+    if (moveList.empty()) return isInCheck(position) ? Score::min() : stand_pat;
 
     for (auto move : moveList) {
         // Compute the change to the board and evaluation that results from the move
@@ -315,7 +243,7 @@ std::string computeStatistics(const std::vector<float>& diffs) {
     return "Mean: " + std::to_string(mean) + ", Standard Deviation: " + std::to_string(stddev);
 }
 
-void testFromStream(std::ifstream& stream) {
+void testFromStream(nnue::NNUE& network, std::ifstream& stream) {
     using namespace std::chrono;
     std::string line;
     std::getline(stream, line);
@@ -335,7 +263,7 @@ void testFromStream(std::ifstream& stream) {
         int expected = 100.0f * std::stof(columns[cpCol]);
         auto fen = columns[fenCol];
         auto position = fen::parsePosition(fen);
-        auto score = nnue::evaluate(position, *network);
+        auto score = nnue::evaluate(position, network);
         ++numEvals;
         auto phase = computePhase(position.board);
         auto diff = expected - score;
@@ -361,7 +289,7 @@ bool parseFEN(Position& position, int* argc, char** argv[]) {
     return true;
 }
 
-int testFromFiles(int argc, char* argv[]) {
+int testFromFiles(nnue::NNUE& network, int argc, char* argv[]) {
     for (; argc; --argc, ++argv) {
         std::string name = *argv;
         std::ifstream stream(name);
@@ -370,7 +298,7 @@ int testFromFiles(int argc, char* argv[]) {
             return 1;
         }
         std::cout << "Testing " << name << std::endl;
-        testFromStream(stream);
+        testFromStream(network, stream);
     }
     return 0;
 }
@@ -387,9 +315,13 @@ int main(int argc, char* argv[]) {
     testStaticExchangeEvaluation();
     testMVVLVA();
 
-    network.emplace(nnue::loadNNUE("nn-82215d0fd0df.nnue"));
+    std::optional<nnue::NNUE> network;
+    if (options::useNNUE)
+        network.emplace(nnue::loadNNUE("nn-82215d0fd0df.nnue"));
+    else
+        std::cout << "\n*** Skipping NNUE evaluation as it is disabled in options. ***\n";
 
-    if (argc && !fen::maybeFEN(*argv)) return testFromFiles(argc, argv);
+    if (argc && !fen::maybeFEN(*argv)) return network ? testFromFiles(*network, argc, argv) : 0;
 
     // Default FEN string to analyze
     auto position = fen::parsePosition("6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1");
@@ -399,9 +331,6 @@ int main(int argc, char* argv[]) {
         std::cout << "New position: " << fen::to_string(position) << "\n";
     else
         std::cout << "Position: " << fen::to_string(position) << "\n";
-
-    // Print the board in grid notation
-    printBoard(std::cout, position.board);
 
     // Evaluate the board
     Score simpleEval = evaluateBoardSimple(position.board);
@@ -417,15 +346,15 @@ int main(int argc, char* argv[]) {
     if (network) {
         auto nnueEval = nnue::evaluate(position, *network);
         std::cout << "NNUE Evaluation: " << nnueEval << " cp\n";
+
+        // Display NNUE timing statistics
+        nnue::printTimingStats();
+
+        // Display computational complexity analysis
+        nnue::analyzeComputationalComplexity();
     }
 
     printAvailableMovesAndCaptures(position);
-
-    // Display NNUE timing statistics
-    nnue::printTimingStats();
-
-    // Display computational complexity analysis
-    nnue::analyzeComputationalComplexity();
 
     return 0;
 }
