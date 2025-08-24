@@ -50,8 +50,8 @@ This document outlines the step-by-step plan to migrate the GB Chess Engine from
 6. **moves_table** (precomputed move tables) ✅ COMPLETE
 7. **moves** (core move logic) ✅ COMPLETE
 8. **moves_gen** (move generation algorithms) ✅ COMPLETE
-9. **perft** (move generation validation and testing) ⏳ NEXT - HIGH PRIORITY
-10. **eval** (evaluation functions) 📋 PLANNED
+9. **perft** (move generation validation and testing) 🔄 **IN PROGRESS**
+10. **eval** (evaluation functions) ⏳ NEXT - HIGH PRIORITY
 11. **nnue** (neural network evaluation) 📋 PLANNED
 12. **search** (main search algorithm) 📋 PLANNED
 13. **uci** (UCI protocol implementation) 📋 PLANNED
@@ -62,7 +62,7 @@ This document outlines the step-by-step plan to migrate the GB Chess Engine from
 - Use integration tests to verify equivalent behavior
 - Gradually replace C++ dependencies with Rust equivalents
 
-**Special Note on Perft**: The perft component is critical for validating move generation correctness. It performs exhaustive tree searches to count all possible moves at various depths, making it an excellent debugging tool for finding edge cases in move generation algorithms. This should be implemented immediately after moves_gen to catch any bugs early.
+**Special Note on Perft**: The perft component is critical for validating move generation correctness. It performs exhaustive tree searches to count all possible moves at various depths, making it an excellent debugging tool for finding edge cases in move generation algorithms. ✅ **COMPLETED** - Perft implementation is working correctly and validated through depth 3: startpos depth 1 (20 moves), depth 2 (400 moves), depth 3 (8,902 moves) - all matching expected reference values.
 
 ## Phase 4: Build System Integration
 
@@ -78,8 +78,8 @@ members = [
     "rust/moves_table",
     "rust/square_set",
     "rust/moves_gen",
+    "rust/perft",
     # Future components:
-    # "rust/perft",
     # "rust/eval",
     # "rust/nnue", 
     # "rust/search",
@@ -205,9 +205,40 @@ members = [
 - ✅ **magic**: Magic bitboard generation - COMPLETE
 - ✅ **moves_table**: Precomputed move lookup tables - COMPLETE
 - ✅ **moves**: Core move data structures and operations - COMPLETE
-- ✅ **moves_gen**: Move generation algorithms - COMPLETE ✨ **NEW**
+- ✅ **moves_gen**: Move generation algorithms - COMPLETE
+- 🔄 **perft**: Move generation validation and testing - **IN PROGRESS** ✨ **BASIC COMPLETE**
 
-#### moves_gen Migration Details (Completed)
+#### perft Migration Details (In Progress) 🔄 **BASIC COMPLETE**
+**Duration**: 1 day (basic implementation)  
+**Status**: Basic functionality complete, comprehensive testing needed
+**Key Features Implemented**:
+- ✅ Complete perft (performance test) implementation for move generation validation
+- ✅ Depth-based exhaustive move counting from any position
+- ✅ Perft with divide functionality showing node counts per root move
+- ✅ Support for FEN input and "startpos" shorthand
+- ✅ **Basic validation** - starting position tested through depth 3
+- ⏳ **Comprehensive test suite needed** - well-known positions with edge cases
+- ✅ Validation testing confirming correct move counts at multiple depths:
+  - Depth 1: 20 moves ✅ 
+  - Depth 2: 400 moves ✅
+  - Depth 3: 8,902 moves ✅ 
+  - All results match known perft reference values
+- ✅ Integration with all move generation and position management components
+
+**API Functions**:
+- `perft()` - Count total nodes at given depth
+- `perft_with_divide()` - Show breakdown by root moves
+- Command-line tool: `perft-test <fen|startpos> <depth>`
+
+**Testing**: Successfully validates move generation correctness with known perft values.
+- ✅ **Starting position validated through depth 3**: 20, 400, 8,902 nodes
+- ⏳ **Next: Comprehensive test suite needed** covering:
+  - Kiwipete position (castling, en passant): depth 4, 4,085,603 nodes
+  - Position 3 (pawn promotion, complex): depth 5, 674,624 nodes  
+  - Position 4 (promotions to all pieces): depth 4, 422,333 nodes
+  - Position 5 (tactical position): depth 4, 2,103,487 nodes
+  - Position 6 (middlegame): depth 4, 3,894,594 nodes
+  - All known reference positions from chessprogramming.org#### moves_gen Migration Details (Completed)
 **Duration**: 1 day  
 **Key Features Implemented**:
 - ✅ Complete pawn move generation (single/double pushes, captures, en passant, promotions)
@@ -272,27 +303,45 @@ rust/
 ├── hash/          # Zobrist hashing for positions
 ├── magic/         # Magic bitboard generation
 ├── moves/         # Core move operations and position updates
+├── moves_gen/     # Complete move generation algorithms
 ├── moves_table/   # Move/capture table generation
+├── perft/         # Move generation validation and testing
 └── square_set/    # Bitboard square set operations
 ```
 
 ### In Progress
-- None currently
+- 🔄 **perft**: Comprehensive test suite needed for edge cases (castling, en passant, promotions)
 
 ### Remaining Components
-- **moves_gen**: Move generation using moves_table and magic bitboards (next priority)
-- **perft**: Move generation validation and correctness testing (critical for move_gen validation)
-- **eval**: Position evaluation functions  
+- **eval**: Position evaluation functions (next priority)
 - **nnue**: Neural network evaluation
 - **search**: Main search algorithm (minimax, alpha-beta, etc.)
 - **uci**: UCI protocol implementation
 - **Integration**: Final chess engine binary
 
 ### Recent Achievements
-- **En Passant Fix**: Resolved critical bug in Rust moves implementation where en passant captures weren't properly removing the captured pawn. The compound move system now correctly handles the complex two-step process of en passant.
-- **API Completeness**: The moves crate now provides full parity with the C++ implementation, including all move types, position updates, and edge cases.
-- **Test Coverage**: All move-related tests pass, including complex scenarios like castling, en passant, and promotions.
-- **Quiet Mode**: Updated magic test generator to match C++ behavior with quiet default mode and `--verbose` flag for statistics.
+- **Perft Basic Implementation**: ✨ **NEW** - Added perft testing capability with basic validation through depth 3 (20, 400, 8,902 nodes for starting position). **Next: comprehensive test suite needed** for edge cases.
+- **Moves Generation Fixes**: Multiple critical fixes including out-of-bounds access prevention and API improvements.
+- **Build System Integration**: All Rust components now build and test seamlessly with the existing Makefile system.
+- **Singleton Pattern**: Refactored moves_table to use efficient global singleton pattern for better performance.
+- **Enhanced Debugging**: Added Rust panic breakpoints for better debugging experience in VS Code.
+
+### Next Immediate Steps (Recommended)
+1. **Extended Perft Testing** 🎯 **HIGH PRIORITY** 
+   - ✅ **Starting position validated** (depths 1-3: 20, 400, 8,902 nodes)
+   - **Add comprehensive test suite** with well-known perft positions:
+     - **Kiwipete**: `r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq -` (castling, en passant)
+     - **Position 3**: `8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - -` (pawn promotion)
+     - **Position 4**: `r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq -` (promotions to all pieces)
+     - **Position 5**: `rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ -` (tactical)
+     - **Position 6**: `r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - -` (middlegame)
+   - Test depths up to 4-6 (avoiding 128-bit integer requirements)
+   - Performance comparison with C++ implementation
+
+2. **Begin eval Migration**
+   - Port basic piece-square table evaluation
+   - Implement material counting and basic positional evaluation
+   - Set up evaluation testing framework
 
 ---
 
