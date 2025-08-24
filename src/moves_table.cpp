@@ -7,7 +7,8 @@
 
 namespace init {
 /** Compute the delta in occupancy for the given move */
-Occupancy occupancyDelta(Square from, Square to, MoveKind kind) {
+Occupancy occupancyDelta(Move move) {
+    auto [from, to, kind] = move;
     SquareSet ours;
     ours.insert(from);
     ours.insert(to);
@@ -177,7 +178,7 @@ void MovesTable::initializeOccupancyDeltas() {
         for (int from = 0; from < kNumSquares; ++from)
             for (int to = 0; to < kNumSquares; ++to)
                 _occupancyDelta[moveKind][from][to] =
-                    init::occupancyDelta(Square(from), Square(to), MoveKind(moveKind));
+                    init::occupancyDelta(Move{Square(from), Square(to), MoveKind(moveKind)});
 }
 
 void MovesTable::initializePaths() {
