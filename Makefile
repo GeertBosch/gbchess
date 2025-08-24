@@ -255,14 +255,19 @@ magic: build/magic-test
 	@(./build/magic-test --verbose | diff -u src/magic_gen.h -) && echo Magic tests passed || \
 	(echo "\n*** To accept these changes, pipe this output to the patch command ***" && false)
 
-test: build rust-build debug ${CPP_TESTS}
-	@echo "Running C++ test executables..."
-	@for file in ${CPP_TESTS}; do \
-		/bin/echo -n Run $$file ; \
-		(./$$file < /dev/null > /dev/null && echo " passed") || ./$$file </dev/null; \
-	done
+test-rust: rust-build/.rust-built
 	@echo "Running Rust test executables..."
 	@for target in $(RUST_BUILD_TARGETS); do \
 		/bin/echo -n Run $$target ; \
 		(./$$target < /dev/null > /dev/null && echo " passed") || RUST_BACKTRACE=1 ./$$target </dev/null; \
 	done
+
+test-cpp: build debug ${CPP_TESTS}
+	@echo "Running C++ test executables..."
+	@for file in ${CPP_TESTS}; do \
+		/bin/echo -n Run $$file ; \
+		(./$$file < /dev/null > /dev/null && echo " passed") || ./$$file </dev/null; \
+	done
+
+test: test-rust test-cpp
+
