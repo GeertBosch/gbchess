@@ -3,6 +3,7 @@ resolver = "2"
 
 members = [
     "rust/elo",
+    "rust/eval",
     "rust/fen",
     "rust/hash",
     "rust/square_set",

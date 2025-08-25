@@ -11,7 +11,7 @@
             "initCommands": [
                 "command source ${workspaceRoot}/chess.lldbinit"
             ],
-            "program": "${workspaceFolder}/search-debug",
+            "program": "${workspaceFolder}/build/search-debug",
             "args": [
                 // "5r1k/pp4pp/5p2/1BbQp1r1/7K/7P/1PP3P1/3R3R b - - 3 26",
                 // "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1",
@@ -32,7 +32,7 @@
             "initCommands": [
                 "command source ${workspaceRoot}/chess.lldbinit"
             ],
-            "program": "${workspaceFolder}/moves-debug",
+            "program": "${workspaceFolder}/build/moves-debug",
             "args": [],
         },
         {
@@ -42,7 +42,7 @@
             "initCommands": [
                 "command source ${workspaceRoot}/chess.lldbinit"
             ],
-            "program": "${workspaceFolder}/magic-debug",
+            "program": "${workspaceFolder}/build/magic-debug",
             "args": [],
         },
         {
@@ -52,7 +52,7 @@
             "initCommands": [
                 "command source ${workspaceRoot}/chess.lldbinit"
             ],
-            "program": "${workspaceFolder}/hash-debug",
+            "program": "${workspaceFolder}/build/hash-debug",
             "args": [],
         },
         {
@@ -62,11 +62,12 @@
             "initCommands": [
                 "command source ${workspaceRoot}/chess.lldbinit"
             ],
-            "program": "${workspaceFolder}/eval-debug",
+            "program": "${workspaceFolder}/build/eval-debug",
             "args": [
-                "evals/lichess_opening_evals.csv",
-                "evals/lichess_middlegame_evals.csv",
-                "evals/lichess_endgame_evals.csv"
+                "8/8/8/8/4p3/5pNN/4p3/2K1k3",
+                // "evals/lichess_opening_evals.csv",
+                // "evals/lichess_middlegame_evals.csv",
+                // "evals/lichess_endgame_evals.csv"
             ],
         },
         {
@@ -76,7 +77,7 @@
             "initCommands": [
                 "command source ${workspaceRoot}/chess.lldbinit"
             ],
-            "program": "${workspaceFolder}/perft-debug",
+            "program": "${workspaceFolder}/build/perft-debug",
             "args": [
                 "-q",
                 // "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
@@ -95,7 +96,7 @@
             "initCommands": [
                 "command source ${workspaceRoot}/chess.lldbinit"
             ],
-            "program": "${workspaceFolder}/nnue-debug",
+            "program": "${workspaceFolder}/build/nnue-debug",
             "args": [],
         },
         {
@@ -105,7 +106,7 @@
             "initCommands": [
                 "command source ${workspaceFolder}/chess.lldbinit"
             ],
-            "program": "${workspaceFolder}/uci-debug",
+            "program": "${workspaceFolder}/build/uci-debug",
             "args": [
                 "${workspaceFolder}/ut6.in",
             ],
