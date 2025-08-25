@@ -9,7 +9,7 @@ OPTOBJ=build/opt
 DBGOBJ=build/dbg
 
 # Rust configuration
-RUST_TARGETS=elo-test fen-test hash-test magic-test moves-table-test square_set-test moves-test moves_gen-test
+RUST_TARGETS=elo-test eval-test fen-test hash-test magic-test moves-table-test square_set-test moves-test moves_gen-test
 RUST_BUILD_DIR=rust-build
 RUST_BUILD_TARGETS=$(patsubst %,$(RUST_BUILD_DIR)/%-rust,$(RUST_TARGETS))
 
@@ -72,7 +72,11 @@ $(RUST_BUILD_DIR)/.rust-built:
 	cargo build --release
 	@mkdir -p $(RUST_BUILD_DIR)
 	@for target in $(RUST_TARGETS); do \
-		cp target/release/$$target $(RUST_BUILD_DIR)/$$target-rust; \
+		if [ "$$target" = "eval-test" ]; then \
+			cp target/release/eval_test $(RUST_BUILD_DIR)/$$target-rust; \
+		else \
+			cp target/release/$$target $(RUST_BUILD_DIR)/$$target-rust; \
+		fi \
 	done
 	@touch $(RUST_BUILD_DIR)/.rust-built
 

@@ -1,0 +1,12 @@
+[package]
+name = "eval"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+fen = { path = "../fen" }
+moves = { path = "../moves" }
+moves_gen = { path = "../moves_gen" }
+
+[dev-dependencies]
+criterion.workspace = true
