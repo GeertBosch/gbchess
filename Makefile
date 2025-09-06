@@ -8,11 +8,6 @@ DEBUGFLAGS=-DDEBUG -O0 -g
 OPTOBJ=build/opt
 DBGOBJ=build/dbg
 
-# Rust configuration
-RUST_TARGETS=elo-test eval-test fen-test hash-test magic-test moves-table-test square_set-test moves-test moves_gen-test
-RUST_BUILD_DIR=rust-build
-RUST_BUILD_TARGETS=$(patsubst %,$(RUST_BUILD_DIR)/%-rust,$(RUST_TARGETS))
-
 # CPP Tests
 CPP_TEST_SRCS=$(wildcard src/*_test.cpp)
 CPP_TESTS=$(patsubst src/%_test.cpp,build/%-test,$(CPP_TEST_SRCS))
@@ -21,7 +16,7 @@ CPP_TESTS=$(patsubst src/%_test.cpp,build/%-test,$(CPP_TEST_SRCS))
 calc_objs=$(patsubst src/%.cpp,${$(1)OBJ}/%.o,$(2))
 calc_deps=${calc_objs:.o=.d}
 
-all: debug test rust-test perft-bench perft-test perft-debug-test mate123 mate45 puzzles evals searches evals magic uci
+all: debug test perft-bench perft-test perft-debug-test mate123 mate45 puzzles test
 	@echo "\n*** All tests passed! ***\n"
 
 -include $(call calc_deps,OPT,${ALLSRCS})
@@ -62,30 +57,6 @@ build/%-debug: ${DBGOBJ}/%_test.o
 	@mkdir -p build
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
-# Rust build rules
-
-# Build all Rust executables in one go to avoid parallel compilation issues
-rust-build: $(RUST_BUILD_DIR)/.rust-built
-
-# Sentinel file to track when Rust build is complete
-$(RUST_BUILD_DIR)/.rust-built:
-	cargo build --release
-	@mkdir -p $(RUST_BUILD_DIR)
-	@for target in $(RUST_TARGETS); do \
-		if [ "$$target" = "eval-test" ]; then \
-			cp target/release/eval_test $(RUST_BUILD_DIR)/$$target-rust; \
-		else \
-			cp target/release/$$target $(RUST_BUILD_DIR)/$$target-rust; \
-		fi \
-	done
-	@touch $(RUST_BUILD_DIR)/.rust-built
-
-# Individual targets depend on the completed build
-$(RUST_BUILD_TARGETS): $(RUST_BUILD_DIR)/.rust-built
-
-rust-test: $(RUST_BUILD_DIR)/.rust-built
-	cargo test
-
 ALLSRCS=$(wildcard src/*.cpp)
 
 .deps: $(call calc_deps,OPT,${ALLSRCS}) $(call calc_deps,DBG,${ALLSRCS})
@@ -93,9 +64,7 @@ ALLSRCS=$(wildcard src/*.cpp)
 .SUFFIXES: # Delete the default suffix rules
 
 clean: 
-	cargo clean
-	@rm -f $(RUST_BUILD_DIR)/.rust-built
-	rm -fr build $(RUST_BUILD_DIR)
+	rm -fr build
 	rm -f *.log
 	rm -f core *.core puzzles.actual perf.data* *.ii *.bc *.s
 	rm -f game.??? log.??? players.dat # XBoard outputs
@@ -198,8 +167,8 @@ evals: build/eval-test ${EVALS}
 
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:
-	@echo "\n*** Combined C++ and Rust Source Code ***\n"
-	cloc --by-percent cmb `find src -name \*.cpp -o -name \*.h | egrep -v '_test[.]|debug'` `find rust -name \*.rs` 2>/dev/null || echo "Error combining source files"
+	@echo "\n*** C++ Source Code ***\n"
+	cloc --by-percent cmb `find src -name \*.cpp -o -name \*.h | egrep -v '_test[.]|debug'` 2>/dev/null || echo "Error combining source files"
 
 build/perft-debug-test: build/perft-debug
 	./build/perft-debug 4 197281
@@ -259,13 +228,6 @@ magic: build/magic-test
 	@(./build/magic-test --verbose | diff -u src/magic_gen.h -) && echo Magic tests passed || \
 	(echo "\n*** To accept these changes, pipe this output to the patch command ***" && false)
 
-test-rust: rust-build/.rust-built
-	@echo "Running Rust test executables..."
-	@for target in $(RUST_BUILD_TARGETS); do \
-		/bin/echo -n Run $$target ; \
-		(./$$target < /dev/null > /dev/null && echo " passed") || RUST_BACKTRACE=1 ./$$target </dev/null; \
-	done
-
 test-cpp: build debug ${CPP_TESTS}
 	@echo "Running C++ test executables..."
 	@for file in ${CPP_TESTS}; do \
@@ -273,5 +235,5 @@ test-cpp: build debug ${CPP_TESTS}
 		(./$$file < /dev/null > /dev/null && echo " passed") || ./$$file </dev/null; \
 	done
 
-test: test-rust test-cpp
+test: test-cpp searches evals uci magic
 
