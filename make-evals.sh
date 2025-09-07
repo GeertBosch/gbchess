@@ -1,4 +1,6 @@
 #!/bin/bash
+set -e 
+(stockfish quit | grep Stockfish.12 >&2) || (echo "$0: Need Stockfish 12 in the path" >&2 && false)
 
 phase=${1:-middlegame}
 
