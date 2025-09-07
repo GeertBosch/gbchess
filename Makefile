@@ -8,20 +8,6 @@ DEBUGFLAGS=-DDEBUG -O0 -g
 OPTOBJ=build/opt
 DBGOBJ=build/dbg
 
-# CPP Tests
-CPP_TEST_SRCS=$(wildcard src/*_test.cpp)
-CPP_TESTS=$(patsubst src/%_test.cpp,build/%-test,$(CPP_TEST_SRCS))
-
-# First argument is DBG or OPT, second is list of source files
-calc_objs=$(patsubst src/%.cpp,${$(1)OBJ}/%.o,$(2))
-calc_deps=${calc_objs:.o=.d}
-
-all: debug test perft-bench perft-test perft-debug-test mate123 mate45 puzzles test
-	@echo "\n*** All tests passed! ***\n"
-
--include $(call calc_deps,OPT,${ALLSRCS})
--include $(call calc_deps,DBG,${ALLSRCS})
-
 # MacOS specific stuff - why can't thinks just work  by default?
 ifeq ($(_system_type),Darwin)
     export MallocNanoZone=0
@@ -32,6 +18,31 @@ ifeq ($(_system_type),Darwin)
     DEBUGFLAGS:=${DEBUGFLAGS} -fsanitize=address
     LINKFLAGS:=${LINKFLAGS} -Wl,-syslibroot,${sdk},-dead_strip_dylibs -mmacosx-version-min=11.0 -target darwin17.0.0 -arch ${arch}
 endif
+
+# CPP Tests
+CPP_TEST_SRCS=$(wildcard src/*_test.cpp)
+CPP_TESTS=$(patsubst src/%_test.cpp,build/%-test,$(CPP_TEST_SRCS))
+
+# First argument is the object dir, second is list of source files
+calc_objs=$(patsubst src/%.cpp,$(1)/%.o,$(2))
+calc_deps=${calc_objs:.o=.d}
+
+# Given a list of move source files, return these prefixed with src/
+prefix_src=$(patsubst %.cpp,src/%.cpp,$(1))
+# Given a test target name, return the corresponding source file name, 
+test_src=$(patsubst %-test,%_test.cpp,$(patsubst %-debug,%_test.cpp,$(1)))
+# Given a test target name, return the corresponding object directory
+test_dir=$(patsubst %-test,${OPTOBJ},$(patsubst %-debug,${DBGOBJ},$(1)))
+# Given a test target name and additional source files, return the list of object files
+test_objs=$(call calc_objs,$(call test_dir,$(1)),$(call prefix_src,$(call test_src,$(1)) $(2)))
+
+ALLSRCS=$(wildcard src/*.cpp)
+
+all: debug test perft-bench perft-test perft-debug-test mate123 mate45 puzzles test
+	@echo "\n*** All tests passed! ***\n"
+
+-include $(call calc_deps,${OPTOBJ},${ALLSRCS})
+-include $(call calc_deps,${DBGOBJ},${ALLSRCS})
 
 ${OPTOBJ}/%.d: src/%.cpp
 	@mkdir -p ${OPTOBJ}
@@ -57,9 +68,7 @@ build/%-debug: ${DBGOBJ}/%_test.o
 	@mkdir -p build
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
-ALLSRCS=$(wildcard src/*.cpp)
-
-.deps: $(call calc_deps,OPT,${ALLSRCS}) $(call calc_deps,DBG,${ALLSRCS})
+.deps: $(call calc_deps,${OPTOBJ},${ALLSRCS}) $(call calc_deps,${DBGOBJ},${ALLSRCS})
 
 .SUFFIXES: # Delete the default suffix rules
 
@@ -72,57 +81,57 @@ clean:
 	rm -f puzzles/puzzles.csv
 	rm -rf *.dSYM .DS_Store
 
-build/fen-test: ${OPTOBJ}/fen.o
-build/fen-debug: ${DBGOBJ}/fen.o
+build/fen-test: $(call test_objs,fen-test,fen.cpp)
+build/fen-debug: $(call test_objs,fen-debug,fen.cpp)
 
-build/square_set-test: $(call calc_objs,OPT,src/square_set.cpp  src/fen.cpp)
-build/square_set-debug: $(call calc_objs,DBG,src/square_set.cpp src/fen.cpp)
+build/square_set-test: $(call test_objs,square_set-test,square_set.cpp fen.cpp)
+build/square_set-debug: $(call test_objs,square_set-debug,square_set.cpp fen.cpp)
 
-NNUE_SRCS=src/nnue.cpp src/nnue_stats.cpp src/nnue_incremental.cpp src/square_set.cpp src/fen.cpp
+NNUE_SRCS=nnue.cpp nnue_stats.cpp nnue_incremental.cpp square_set.cpp fen.cpp
 
-build/nnue-test: $(call calc_objs,OPT,${NNUE_SRCS})
-build/nnue-debug: $(call calc_objs,DBG,${NNUE_SRCS})
+build/nnue-test: $(call test_objs,nnue-test,${NNUE_SRCS})
+build/nnue-debug: $(call test_objs,nnue-debug,${NNUE_SRCS})
 
-build/moves_table-test: $(call calc_objs,OPT,src/moves_table.cpp src/fen.cpp)
-build/moves_table-debug: $(call calc_objs,DBG,src/moves_table.cpp src/fen.cpp)
+build/moves_table-test: $(call test_objs,moves_table-test,moves_table.cpp fen.cpp)
+build/moves_table-debug: $(call test_objs,moves_table-debug,moves_table.cpp fen.cpp)
 
-MOVES_SRCS=src/moves.cpp src/moves_table.cpp src/moves_gen.cpp src/magic.cpp src/square_set.cpp
+MOVES_SRCS=moves.cpp moves_table.cpp moves_gen.cpp magic.cpp square_set.cpp
 
-build/moves_gen-test: $(call calc_objs,OPT,${MOVES_SRCS} src/fen.cpp)
-build/moves_gen-debug: $(call calc_objs,DBG,${MOVES_SRCS} src/fen.cpp)
+build/moves_gen-test: $(call test_objs,moves_gen-test,${MOVES_SRCS} fen.cpp)
+build/moves_gen-debug: $(call test_objs,moves_gen-debug,${MOVES_SRCS} fen.cpp)
 
-build/moves-test: $(call calc_objs,OPT,${MOVES_SRCS} src/fen.cpp) 
-build/moves-debug: $(call calc_objs,DBG,${MOVES_SRCS} src/fen.cpp)
+build/moves-test: $(call test_objs,moves-test,${MOVES_SRCS} fen.cpp) 
+build/moves-debug: $(call test_objs,moves-debug,${MOVES_SRCS} fen.cpp)
 
-build/hash-test: $(call calc_objs,OPT,${MOVES_SRCS} src/hash.cpp src/fen.cpp)
-build/hash-debug: $(call calc_objs,DBG,${MOVES_SRCS} src/hash.cpp src/fen.cpp)
+build/hash-test: $(call test_objs,hash-test,${MOVES_SRCS} hash.cpp fen.cpp)
+build/hash-debug: $(call test_objs,hash-debug,${MOVES_SRCS} hash.cpp fen.cpp)
 
-build/magic-test: $(call calc_objs,OPT,${MOVES_SRCS})
-build/magic-debug: $(call calc_objs,DBG,${MOVES_SRCS})
+build/magic-test: $(call test_objs,magic-test,${MOVES_SRCS})
+build/magic-debug: $(call test_objs,magic-debug,${MOVES_SRCS})
 
-EVAL_SRCS=src/eval.cpp src/hash.cpp src/fen.cpp src/nnue.cpp src/nnue_stats.cpp src/nnue_incremental.cpp ${MOVES_SRCS}
+EVAL_SRCS=eval.cpp hash.cpp ${NNUE_SRCS} ${MOVES_SRCS}
 
-build/eval-test: $(call calc_objs,OPT,${EVAL_SRCS})
-build/eval-debug: $(call calc_objs,DBG,${EVAL_SRCS})
+build/eval-test: $(call test_objs,eval-test,${EVAL_SRCS})
+build/eval-debug: $(call test_objs,eval-debug,${EVAL_SRCS})
 
-SEARCH_SRCS=${EVAL_SRCS} src/search.cpp
+SEARCH_SRCS=${EVAL_SRCS} search.cpp
 
-build/search-test: $(call calc_objs,OPT,${SEARCH_SRCS})
-build/search-debug: $(call calc_objs,DBG,${SEARCH_SRCS})
+build/search-test: $(call test_objs,search-test,${SEARCH_SRCS})
+build/search-debug: $(call test_objs,search-debug,${SEARCH_SRCS})
 
-build/uci-test: $(call calc_objs,OPT,src/uci.cpp ${SEARCH_SRCS})
-build/uci-debug: $(call calc_objs,DBG,src/uci.cpp ${SEARCH_SRCS})
+build/uci-test: $(call test_objs,uci-test,uci.cpp ${SEARCH_SRCS})
+build/uci-debug: $(call test_objs,uci-debug,uci.cpp ${SEARCH_SRCS})
 
-PERFT_SRCS=src/perft.cpp ${MOVES_SRCS} src/fen.cpp src/hash.cpp
+PERFT_SRCS=$(call prefix_src,perft.cpp ${MOVES_SRCS} fen.cpp hash.cpp)
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
-build/perft: $(call calc_objs,OPT,${PERFT_SRCS})
+build/perft: $(call calc_objs,${OPTOBJ},${PERFT_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
-build/perft-debug: $(call calc_objs,DBG,${PERFT_SRCS})
+build/perft-debug: $(call calc_objs,${DBGOBJ},${PERFT_SRCS})
 	${GPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
-PERFT_SIMPLE_SRCS=src/perft_simple.cpp ${MOVES_SRCS} src/fen.cpp
+PERFT_SIMPLE_SRCS=$(call prefix_src,perft_simple.cpp ${MOVES_SRCS} fen.cpp)
 # perft_simple is a simplified version without caching or 128-bit ints
-build/perft-simple: $(call calc_objs,OPT,${PERFT_SIMPLE_SRCS})
+build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
 # Compare the perft tool with some different compilation options for speed comparison
@@ -149,6 +158,13 @@ perft-test: build/perft-test
 
 perft-debug-test: build/perft-debug-test
 
+# Download the lichess puzzles database if not already present. As the puzzles change over time, and
+# the file is large, we don't normally clean and refetch it.
+${PUZZLES}:
+	mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) \
+		&& wget https://database.lichess.org/$(notdir ${PUZZLES}).zst
+	zstd -d ${PUZZLES}.zst
+
 # Solve some known mate-in-n puzzles, for correctness of the search methods
 mate123: build/search-test ${PUZZLES}
 	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -1001 | ./build/search-test 5
@@ -162,6 +178,9 @@ puzzles/puzzles.csv: ${PUZZLES} Makefile
 puzzles: puzzles/puzzles.csv build/search-test
 	./build/search-test 6 < $<
 
+evals/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
+	mkdir -p $(dir $@) && ./$< $(@:evals/lichess_%_evals.csv=%) > $@
+
 evals: build/eval-test ${EVALS}
 	./build/eval-test ${EVALS}
 
@@ -169,6 +188,8 @@ evals: build/eval-test ${EVALS}
 cloc:
 	@echo "\n*** C++ Source Code ***\n"
 	cloc --by-percent cmb `find src -name \*.cpp -o -name \*.h | egrep -v '_test[.]|debug'` 2>/dev/null || echo "Error combining source files"
+	@echo "\n*** C++ Test Code ***\n"
+	cloc --by-percent cmb `find src -name \*.cpp -o -name \*.h | egrep '_test[.]|debug'` 2>/dev/null || echo "Error combining source files"
 
 build/perft-debug-test: build/perft-debug
 	./build/perft-debug 4 197281
@@ -177,13 +198,6 @@ build/perft-debug-test: build/perft-debug
 build/perft-test: build/perft
 	./build/perft -q 5 4865609
 	./build/perft
-
-${PUZZLES}:
-	mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) && wget https://database.lichess.org/$(notdir ${PUZZLES}).zst
-	zstd -d ${PUZZLES}.zst
-
-evals/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
-	mkdir -p $(dir $@) && ./$< $(@:evals/lichess_%_evals.csv=%) > $@
 
 # Automatically generate debug targets from *_test.cpp files
 TEST_SRCS=$(wildcard src/*_test.cpp)
@@ -236,4 +250,3 @@ test-cpp: build debug ${CPP_TESTS}
 	done
 
 test: test-cpp searches evals uci magic
-
