@@ -214,6 +214,13 @@ SquareSet leastValuableAttacker(const Board& board,
         if (color(piece) != side) continue;
 
         int val = std::abs(pieceValues[index(piece)].cp());
+
+        // For SEE purposes, treat the king as having a very high value
+        // since capturing it would end the game
+        if (type(piece) == PieceType::KING) {
+            val = 10000;  // Very high value for king in SEE
+        }
+
         if (bestValue && bestValue <= val) continue;
 
         bestValue = val;

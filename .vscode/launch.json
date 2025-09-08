@@ -86,7 +86,7 @@
                 // 5,
                 "rnbqkbnr/1ppppppp/B7/p7/4P3/8/PPPP1PPP/RNBQK1NR b KQkq - 1 2",
                 "4",
-                "509448"
+                // "509448"
             ],
         },
         {
@@ -108,7 +108,7 @@
             ],
             "program": "${workspaceFolder}/build/uci-debug",
             "args": [
-                "${workspaceFolder}/ut6.in",
+                "${workspaceFolder}/test/ut5.in",
             ],
         },
         {

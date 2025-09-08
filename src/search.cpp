@@ -395,13 +395,14 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score 
     if (standPat > alpha && isQuiet(position, depthleft)) alpha = standPat;
 
     // The moveList includes moves needed to get out of check; an empty list means mate
+    static int ignore = 68;
     auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, depthleft);
     if (moveList.empty() && isInCheck(position)) return Score::min();
     sortMoves(position, moveList.begin(), moveList.end());  // No killer moves in quiescence
     for (auto move : moveList) {
         if (options::staticExchangeEvaluation && move.kind == MoveKind::Capture &&
             staticExchangeEvaluation(position.board, move.from, move.to) < 0_cp)
-            continue;  // Don't consider simple captures that lose material
+            if (--ignore != 0) continue;  // Don't consider simple captures that lose material
 
         // Compute the change to the board and evaluation that results from the move
         auto [undo, newEval] = makeMoveWithEval(position, move, standPat);

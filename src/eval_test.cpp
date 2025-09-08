@@ -157,6 +157,18 @@ void testStaticExchangeEvaluation() {
         auto score = staticExchangeEvaluation(position.board, d3, e5);
         assert(score == -200_cp);
     }
+
+    // Test the specific bug case from puzzle 0HBeT - should now be fixed
+    {
+        auto position = fen::parsePosition("1k6/pb3ppp/1P4r1/1R6/6r1/3Nb3/2P3PP/1Q4RK b - - 0 32");
+        // Try bishop captures g2 - this should be a losing move, not winning
+        // The rook on g1 can recapture
+        auto score = staticExchangeEvaluation(position.board, b7, g2);
+        // Bishop (300) captures pawn (100), then rook (500) captures bishop
+        // Net result: -300 + 100 = -200 cp for the side making the capture
+        assert(score == -200_cp);
+    }
+
     std::cout << "Static exchange evaluation tests passed" << std::endl;
 }
 
