@@ -200,6 +200,28 @@ SquareSet discoverXRayAttackers(const Board& board, Square to, SquareSet occ, Co
 
     return xrayAttackers;
 }
+/**
+ * Returns the absolute value of a piece for Static Exchange Evaluation (SEE). Treats the king as
+ * having a very high value  since capturing it would end the game.
+ */
+int seeValue(Piece piece) {
+    const static int seeValues[] = {
+        100,     // White Pawn
+        300,     // White Knight
+        300,     // White Bishop
+        500,     // White Rook
+        900,     // White Queen
+        10'000,  // White King
+        0,       // No piece
+        100,     // Black Pawn
+        300,     // Black Knight
+        300,     // Black Bishop
+        500,     // Black Rook
+        900,     // Black Queen
+        10'000,  // Black King
+    };
+    return seeValues[index(piece)];
+}
 
 SquareSet leastValuableAttacker(const Board& board,
                                 SquareSet attackers,
@@ -213,7 +235,8 @@ SquareSet leastValuableAttacker(const Board& board,
         Piece piece = board[sq];
         if (color(piece) != side) continue;
 
-        int val = std::abs(pieceValues[index(piece)].cp());
+        int val = seeValue(piece);
+
         if (bestValue && bestValue <= val) continue;
 
         bestValue = val;
@@ -225,7 +248,7 @@ SquareSet leastValuableAttacker(const Board& board,
 }
 
 /**
- * Static Exchange Evaluation - see https://www.chessprogramming.org/SEE_-_The_Swap_Algorithm
+ * Static Exchange Evaluation - see https://www.chessprogramming.org/SEE_-_The_Swap_Algorithm.
  * Returns the material gain/loss from the perspective of the active player.
  */
 Score staticExchangeEvaluation(const Board& board, Square from, Square to) {
@@ -240,30 +263,30 @@ Score staticExchangeEvaluation(const Board& board, Square from, Square to) {
     SquareSet attackers = moves::attackers(board, to, occ);
     SquareSet fromSet = SquareSet{from};
 
-    gain[depth] = std::abs(pieceValues[index(target)].cp());
+    gain[depth] = seeValue(target);
     Color sideToMove = color(attacker);
-
-    Piece nextPiece = attacker;
 
     do {
         ++depth;
-        gain[depth] = std::abs(pieceValues[index(nextPiece)].cp()) - gain[depth - 1];
+        gain[depth] = seeValue(attacker) - gain[depth - 1];
 
         // Remove piece from occupancy and attackers
         occ ^= fromSet;
         attackers ^= fromSet;
 
         // If piece removed may reveal x-rays, re-scan x-ray attacks
-        if (mayXray.contains(nextPiece))
+        if (mayXray.contains(attacker))
             attackers |= discoverXRayAttackers(board, to, occ, sideToMove);
 
         // Get least valuable attacker of the opposite side
-        fromSet = leastValuableAttacker(board, attackers, !sideToMove, nextPiece);
+        fromSet = leastValuableAttacker(board, attackers, !sideToMove, attacker);
         sideToMove = !sideToMove;
     } while (!fromSet.empty());
 
-    // Minimax backward resolution of speculative scores
+    // Minimax backward resolution of speculative scores: here we account for the fact that the
+    // opponent will try to minimize our gain and not recapture if that increases the loss.
     while (--depth) gain[depth - 1] = -std::max(-gain[depth - 1], gain[depth]);
+
     return Score::fromCP(gain[0]);
 }
 namespace {

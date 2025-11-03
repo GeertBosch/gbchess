@@ -157,6 +157,22 @@ void testStaticExchangeEvaluation() {
         auto score = staticExchangeEvaluation(position.board, d3, e5);
         assert(score == -200_cp);
     }
+
+    // Test the specific bug case from puzzle 0HBeT - should now be fixed
+    {
+        auto position = fen::parsePosition("1k6/pb3ppp/1P4r1/1R6/6r1/3Nb3/2P3PP/1Q4RK b - - 0 32");
+
+        // Try bishop captures g2 - this should be a winning move, not losing. The rook on g1 must
+        // recapture as it's the only legal move. Then the rook on g4 recaptures ending with a net
+        // gain of 300 cp. However, we currently don't handle forced recaptures, so in our case, the
+        // rook will not recapture the bishop.
+        auto score = staticExchangeEvaluation(position.board, b7, g2);
+
+        // Bishop captures pawn (100), then the rook declines recapturing the bishop, to avoid
+        // losing the king. So in the end, we are just capturing the pawn.
+        assert(score == 100_cp);
+    }
+
     std::cout << "Static exchange evaluation tests passed" << std::endl;
 }
 
