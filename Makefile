@@ -29,7 +29,7 @@ calc_deps=${calc_objs:.o=.d}
 
 # Given a list of move source files, return these prefixed with src/
 prefix_src=$(patsubst %.cpp,src/%.cpp,$(1))
-# Given a test target name, return the corresponding source file name, 
+# Given a test target name, return the corresponding source file name
 test_src=$(patsubst %-test,%_test.cpp,$(patsubst %-debug,%_test.cpp,$(1)))
 # Given a test target name, return the corresponding object directory
 test_dir=$(patsubst %-test,${OPTOBJ},$(patsubst %-debug,${DBGOBJ},$(1)))
@@ -38,7 +38,7 @@ test_objs=$(call calc_objs,$(call test_dir,$(1)),$(call prefix_src,$(call test_s
 
 ALLSRCS=$(wildcard src/*.cpp)
 
-all: debug test perft-bench perft-test perft-debug-test mate123 mate45 puzzles test
+all: debug test perft-bench perft-test perft-debug-test mate123 mate45 puzzles
 	@echo "\n*** All tests passed! ***\n"
 
 -include $(call calc_deps,${OPTOBJ},${ALLSRCS})
@@ -72,7 +72,7 @@ build/%-debug: ${DBGOBJ}/%_test.o
 
 .SUFFIXES: # Delete the default suffix rules
 
-clean: 
+clean:
 	rm -fr build
 	rm -f *.log
 	rm -f core *.core puzzles.actual perf.data* *.ii *.bc *.s
@@ -100,7 +100,7 @@ MOVES_SRCS=moves.cpp moves_table.cpp moves_gen.cpp magic.cpp square_set.cpp
 build/moves_gen-test: $(call test_objs,moves_gen-test,${MOVES_SRCS} fen.cpp)
 build/moves_gen-debug: $(call test_objs,moves_gen-debug,${MOVES_SRCS} fen.cpp)
 
-build/moves-test: $(call test_objs,moves-test,${MOVES_SRCS} fen.cpp) 
+build/moves-test: $(call test_objs,moves-test,${MOVES_SRCS} fen.cpp)
 build/moves-debug: $(call test_objs,moves-debug,${MOVES_SRCS} fen.cpp)
 
 build/hash-test: $(call test_objs,hash-test,${MOVES_SRCS} hash.cpp fen.cpp)
@@ -135,7 +135,7 @@ build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
 # Compare the perft tool with some different compilation options for speed comparison
-build/perft-clang-sse2: ${PERFT_SRCS} src/*.h 
+build/perft-clang-sse2: ${PERFT_SRCS} src/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
 build/perft-clang-emul:  ${PERFT_SRCS} src/*.h
