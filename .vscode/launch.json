@@ -4,10 +4,12 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "search-debug",
             "type": "lldb-dap",
             "request": "launch",
+            "preLaunchTask": "build: search-debug",
             "initCommands": [
                 "command source ${workspaceRoot}/chess.lldbinit"
             ],
@@ -29,6 +31,7 @@
             "name": "moves-debug",
             "type": "lldb-dap",
             "request": "launch",
+            "preLaunchTask": "build: moves-debug",
             "initCommands": [
                 "command source ${workspaceRoot}/chess.lldbinit"
             ],
@@ -39,6 +42,7 @@
             "name": "magic-debug",
             "type": "lldb-dap",
             "request": "launch",
+            "preLaunchTask": "build: magic-debug",
             "initCommands": [
                 "command source ${workspaceRoot}/chess.lldbinit"
             ],
@@ -49,6 +53,7 @@
             "name": "hash-debug",
             "type": "lldb-dap",
             "request": "launch",
+            "preLaunchTask": "build: hash-debug",
             "initCommands": [
                 "command source ${workspaceRoot}/chess.lldbinit"
             ],
@@ -59,12 +64,13 @@
             "name": "eval-debug",
             "type": "lldb-dap",
             "request": "launch",
+            "preLaunchTask": "build: eval-debug",
             "initCommands": [
                 "command source ${workspaceRoot}/chess.lldbinit"
             ],
             "program": "${workspaceFolder}/build/eval-debug",
             "args": [
-                "8/8/8/8/4p3/5pNN/4p3/2K1k3",
+               "8/8/8/8/4p3/5pNN/4p3/2K1k3 w - - 0 1 ",
                 // "evals/lichess_opening_evals.csv",
                 // "evals/lichess_middlegame_evals.csv",
                 // "evals/lichess_endgame_evals.csv"
@@ -74,6 +80,7 @@
             "name": "perft-debug",
             "type": "lldb-dap",
             "request": "launch",
+            "preLaunchTask": "build: perft-debug",
             "initCommands": [
                 "command source ${workspaceRoot}/chess.lldbinit"
             ],
@@ -86,13 +93,14 @@
                 // 5,
                 "rnbqkbnr/1ppppppp/B7/p7/4P3/8/PPPP1PPP/RNBQK1NR b KQkq - 1 2",
                 "4",
-                "509448"
+               // "509448"
             ],
         },
         {
             "name": "nnue-debug",
             "type": "lldb-dap",
             "request": "launch",
+            "preLaunchTask": "build: nnue-debug",
             "initCommands": [
                 "command source ${workspaceRoot}/chess.lldbinit"
             ],
@@ -103,26 +111,14 @@
             "name": "uci-debug",
             "type": "lldb-dap",
             "request": "launch",
+            "preLaunchTask": "build: uci-debug",
             "initCommands": [
-                "command source ${workspaceFolder}/chess.lldbinit"
+               "command source ${workspaceRoot}/chess.lldbinit"
             ],
             "program": "${workspaceFolder}/build/uci-debug",
             "args": [
-                "${workspaceFolder}/ut6.in",
+               "${workspaceFolder}/test/ut5.in",
             ],
-        },
-        {
-            "name": "moves_gen-test-rust",
-            "type": "lldb-dap",
-            "request": "launch",
-            "program": "${workspaceFolder}/target/debug/moves_gen-test",
-            "args": [],
-            "cwd": "${workspaceFolder}",
-            "preLaunchTask": "rust: cargo build moves_gen",
-            "initCommands": [
-                "breakpoint set --name rust_panic",
-                "breakpoint set --name rust_begin_unwind",
-            ],
-        }
+      },
     ]
 }

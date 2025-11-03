@@ -1,17 +1,101 @@
 {
     "version": "2.0.0",
     "tasks": [
-        {
-            "type": "cargo",
-            "command": "build",
-            "group": "test",
-            "problemMatcher": [
-                "$rustc"
-            ],
-            "label": "rust: cargo build moves_gen",
-            "options": {
-                "cwd": "${workspaceFolder}/rust/moves_gen"
-            }
-        }
-    ]
+      {
+         "type": "shell",
+         "label": "build: search-debug",
+         "command": "make",
+         "args": [
+            "build/search-debug"
+         ],
+         "group": "build",
+         "problemMatcher": [
+            "$gcc"
+         ]
+      },
+      {
+         "type": "shell",
+         "label": "build: moves-debug",
+         "command": "make",
+         "args": [
+            "build/moves-debug"
+         ],
+         "group": "build",
+         "problemMatcher": [
+            "$gcc"
+         ]
+      },
+      {
+         "type": "shell",
+         "label": "build: magic-debug",
+         "command": "make",
+         "args": [
+            "build/magic-debug"
+         ],
+         "group": "build",
+         "problemMatcher": [
+            "$gcc"
+         ]
+      },
+      {
+         "type": "shell",
+         "label": "build: hash-debug",
+         "command": "make",
+         "args": [
+            "build/hash-debug"
+         ],
+         "group": "build",
+         "problemMatcher": [
+            "$gcc"
+         ]
+      },
+      {
+         "type": "shell",
+         "label": "build: eval-debug",
+         "command": "make",
+         "args": [
+            "build/eval-debug"
+         ],
+         "group": "build",
+         "problemMatcher": [
+            "$gcc"
+         ]
+      },
+      {
+         "type": "shell",
+         "label": "build: perft-debug",
+         "command": "make",
+         "args": [
+            "build/perft-debug"
+         ],
+         "group": "build",
+         "problemMatcher": [
+            "$gcc"
+         ]
+      },
+      {
+         "type": "shell",
+         "label": "build: nnue-debug",
+         "command": "make",
+         "args": [
+            "build/nnue-debug"
+         ],
+         "group": "build",
+         "problemMatcher": [
+            "$gcc"
+         ]
+      },
+      {
+         "type": "shell",
+         "label": "build: uci-debug",
+         "command": "make",
+         "args": [
+            "build/uci-debug"
+         ],
+         "group": "build",
+         "problemMatcher": [
+            "$gcc"
+         ]
+      },
+   ]
 }
