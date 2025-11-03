@@ -1,4 +1,5 @@
 #include "common.h"
+#include "options.h"
 #include "square_set.h"
 #include <cassert>
 #include <chrono>
@@ -6,6 +7,7 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <string>
 
 #include "fen.h"
@@ -18,7 +20,7 @@
 bool quiet = false;
 
 constexpr size_t MB = 1ull << 20;
-constexpr size_t hashTableMemory = 1024 * MB;
+constexpr size_t hashTableMemory = options::cachePerftMB * MB;
 using NodeCount = uint128_t;
 
 struct HashTable {
@@ -40,7 +42,7 @@ struct HashTable {
         Value _value = 0;
     };
     constexpr static size_t kHashTableSize =
-        options::cachePerft ? hashTableMemory / sizeof(HashValue) : 1;
+        options::cachePerft ? hashTableMemory / sizeof(Entry) : 1;
 
     HashTable() {
         table.clear();
@@ -67,7 +69,10 @@ NodeCount cached = 0;
 
 std::string pct(double some, double all) {
     double percentage = all > 0 ? some * 100.0 / all : 0.0;
-    return all ? " " + std::to_string(percentage) + "%" : "";
+    if (!all) return "";
+    std::ostringstream oss;
+    oss << " " << std::fixed << std::setprecision(1) << percentage << "%";
+    return oss.str();
 }
 
 void error(const std::string& message) {
@@ -107,7 +112,7 @@ NodeCount perft(Board& board, Hash hash, moves::SearchState& state, int depth) {
         if (newNodes < nodes) error("Node count overflow");
         nodes = newNodes;
     });
-    if (options::cachePerft && nodes > 100) hashTable.enter(hash(), depth, nodes);
+    if (options::cachePerft && nodes > 200) hashTable.enter(hash(), depth, nodes);
     return nodes;
 }
 
@@ -217,8 +222,9 @@ void testStartingPosition(int depth) {
                                          {12, "62'854'969'236'701'747"_u128},
                                          {13, "1'981'066'775'000'396'239"_u128}};
     if constexpr (sizeof(NodeCount) == sizeof(uint128_t)) {
-        knownPositions[13] = {13, NodeCount("61'885'021'521'585'529'237"_u128)};
-        knownPositions[14] = {14, NodeCount("2'015'099'950'053'364'471'960"_u128)};
+        knownPositions.resize(15);
+        knownPositions[13] = {14, NodeCount("61'885'021'521'585'529'237"_u128)};
+        knownPositions[14] = {15, NodeCount("2'015'099'950'053'364'471'960"_u128)};
     }
     NodeCount count = perft(fen::parsePosition(fen::initialPosition), depth);
     if (count != knownPositions[depth - 1].count)
@@ -243,7 +249,7 @@ void testTwoKings() {
 }
 
 void testMaxMoves() {
-    std::string fen = "R6R/3Q4/1Q4Q1/4Q3/2Q4Q/Q4Q2/pp1Q4/kBNN1KB w - - 0 1";
+    std::string fen = "R6R/3Q4/1Q4Q1/4Q3/2Q4Q/Q4Q2/pp1Q4/kBNN1KB1 w - - 0 1";
     Position position = fen::parsePosition(fen);
     NodeCount moves = perft(position, 1);
     assert(moves == 218);  // Position with maximum number of legal moves
