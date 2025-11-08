@@ -122,12 +122,16 @@ build/search-debug: $(call test_objs,search-debug,${SEARCH_SRCS})
 build/uci-test: $(call test_objs,uci-test,uci.cpp ${SEARCH_SRCS})
 build/uci-debug: $(call test_objs,uci-debug,uci.cpp ${SEARCH_SRCS})
 
-PERFT_SRCS=$(call prefix_src,perft.cpp ${MOVES_SRCS} fen.cpp hash.cpp)
+PERFT_SRCS=$(call prefix_src,perft.cpp perft_core.cpp ${MOVES_SRCS} fen.cpp hash.cpp)
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
 build/perft: $(call calc_objs,${OPTOBJ},${PERFT_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
-build/perft-debug: $(call calc_objs,${DBGOBJ},${PERFT_SRCS})
-	${GPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+
+PERFT_TEST_SRCS=$(call prefix_src,perft_test.cpp perft_core.cpp ${MOVES_SRCS} fen.cpp hash.cpp)
+build/perft-test: $(call calc_objs,${OPTOBJ},${PERFT_TEST_SRCS})
+	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+build/perft-debug: $(call calc_objs,${DBGOBJ},${PERFT_TEST_SRCS})
+	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
 PERFT_SIMPLE_SRCS=$(call prefix_src,perft_simple.cpp ${MOVES_SRCS} fen.cpp)
 # perft_simple is a simplified version without caching or 128-bit ints
@@ -154,9 +158,9 @@ build/perft-%.ok: build/perft-%
 # Aliases for perft test targets
 perft-bench: build/perft-clang-emul.ok build/perft-gcc-emul.ok build/perft-clang-sse2.ok build/perft-gcc-sse2.ok
 
-perft-test: build/perft-test
+perft-test: build/perft-test.ok
 
-perft-debug-test: build/perft-debug-test
+perft-debug-test: build/perft-debug.ok
 
 # Download the lichess puzzles database if not already present. As the puzzles change over time, and
 # the file is large, we don't normally clean and refetch it.
@@ -191,13 +195,12 @@ cloc:
 	@echo "\n*** C++ Test Code ***\n"
 	cloc --by-percent cmb `find src -name \*.cpp -o -name \*.h | egrep '_test[.]|debug'` 2>/dev/null || echo "Error combining source files"
 
-build/perft-debug-test: build/perft-debug
-	./build/perft-debug 4 197281
+build/perft-debug.ok: build/perft-debug
+	./build/perft-debug && touch $@
 
 # Verify well-known perft results. Great for checking correct move generation.
-build/perft-test: build/perft
-	./build/perft -q 5 4865609
-	./build/perft
+build/perft-test.ok: build/perft build/perft-test
+	./build/perft -q 5 4865609 && ./build/perft-test && touch $@
 
 # Automatically generate debug targets from *_test.cpp files
 TEST_SRCS=$(wildcard src/*_test.cpp)
