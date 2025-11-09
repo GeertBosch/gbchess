@@ -62,8 +62,38 @@ void testKnownPositions() {
     Known twoKingsOnly = {"4k3/8/8/8/8/8/8/4K3 w - - 0 1",
                           kDebug ? DepthAndCount{7, 375'049} : DepthAndCount{10, 122'753'895}};
 
+    // All but one moves are check mate, so depth 2 has only one node while depth 1 has 14.
+    Known dontMate1 = {"B5KR/1r5B/6R1/2b1p1p1/2P1k1P1/1p2P2p/1P2P2P/3N1N2 w - - 0 1", 1, 14};
+    Known dontMate2 = {dontMate1.fen, 2, 1};  // Depth 2 has less nodes due to mates
+    Known dontMate3 = {dontMate1.fen, 3, 17};
+    Known dontMate6 = {dontMate1.fen, 6, 5'405};
+
+    // There is no freedom of choice, only one legal move at each ply, with only a single choice of
+    // promotion at depth 10, though the they all lead to the same forced mate at depth 11.
+    Known forcedPlay1 = {"K1k5/P1Pp4/1p1P4/8/p7/P2P4/8/8 w - - 0 1", 9, 1};
+    Known forcedPlay9 = {forcedPlay1.fen, 9, 1};    // 1 legal move only
+    Known forcedPlay10 = {forcedPlay1.fen, 10, 4};  // 4 promotions
+    Known forcedPlay11 = {forcedPlay1.fen, 11, 4};
+    Known forcedPlay12 = {forcedPlay1.fen, 12, 0};  // checkmate at 11
+
     std::vector<Known> knownPositions = {
-        kiwipete, position3, position4, position4m, position5, position6, maxMoves};
+        kiwipete,
+        position3,
+        position4,
+        position4m,
+        position5,
+        position6,
+        maxMoves,
+        dontMate1,
+        dontMate2,
+        dontMate3,
+        dontMate6,
+        forcedPlay1,
+        forcedPlay9,
+        forcedPlay10,
+        forcedPlay11,
+        forcedPlay12,
+    };
 
     if (options::cachePerft) {
         knownPositions.emplace_back(twoKings);
