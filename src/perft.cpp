@@ -36,6 +36,7 @@ void perftWithDivide(Position position, int depth, NodeCount expectedCount) {
     };
     std::vector<Division> divisions;
 
+    auto cachedStart = getPerftCached();
     auto startTime = std::chrono::high_resolution_clock::now();
     NodeCount count = 0;
     for (auto move : moves::allLegalMovesAndCaptures(position.turn, position.board)) {
@@ -61,9 +62,10 @@ void perftWithDivide(Position position, int depth, NodeCount expectedCount) {
 
     if (quiet) return;
 
+    auto cachedTotal = getPerftCached() - cachedStart;
     std::cout << duration.count() / 1000 << " ms @ " << std::fixed << std::setprecision(1)
               << megarate << "M nodes/sec";
-    if (options::cachePerft) std::cout << ", " << pct(getPerftCached(), count) << " cached";
+    if (options::cachePerft) std::cout << ", " << pct(cachedTotal, count) << " cached";
     std::cout << "\n";
 }
 

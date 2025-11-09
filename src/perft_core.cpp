@@ -149,7 +149,7 @@ NodeCount perft(Board& board,
                 moves::SearchState state,
                 int depth,
                 const ProgressCallback& callback = nullptr) {
-    // if (depth <= 1) return depth == 1 ? countLegalMovesAndCaptures(board, state) : 1;
+    assert(depth > 1);
     if (depth == 2) return perft2(board, hash, state, callback);
 
     dassert(!options::cachePerft || hash == Hash(Position{board, state.turn}));
@@ -211,7 +211,7 @@ TaskList expandTasks(TaskList tasks, size_t number) {
     return tasks;
 }
 
-NodeCount threaded_perft(Position position, int depth, const ProgressCallback& callback) {
+NodeCount threadedPerft(Position position, int depth, const ProgressCallback& callback) {
     std::atomic<NodeCount> nodes{0};
     TaskList tasks;
     tasks.emplace_back(PerftTask{position, depth});
@@ -247,6 +247,8 @@ NodeCount threaded_perft(Position position, int depth, const ProgressCallback& c
             else
                 last = current;
 
+            reportNodes = std::max(reportNodes, last.nodes);  // Ensure monotonic increase
+
             callback(reportNodes);
             std::chrono::time_point currentTime = lastUpdate;
             do {
@@ -255,6 +257,8 @@ NodeCount threaded_perft(Position position, int depth, const ProgressCallback& c
             } while (runningThreads.load() && currentTime - lastUpdate < interval / 2);
             lastUpdate = currentTime;
         }
+        // Ensure that the final update reflects all nodes
+        if (callback) callback(nodes.load());
     });
 
     for (unsigned int i = 0; i < numThreads; ++i) {
