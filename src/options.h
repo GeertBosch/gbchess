@@ -35,4 +35,5 @@ constexpr int nullMoveMinDepth = 3;                         // Minimum depth to 
 constexpr bool cachePerft = hash128;        // Allow caching when using 128-bit hashes
 constexpr size_t cachePerftMB = 2 * 1024;   // Memory for perft cache in MB
 constexpr size_t cachePerftMinNodes = 100;  // Minimum nodes to cache perft results
+constexpr int perftProgressMillis = 100;    // Milliseconds between progress updates
 };  // namespace options

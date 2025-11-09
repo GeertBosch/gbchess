@@ -5,7 +5,7 @@
 #include "moves_table.h"
 #include "options.h"
 #include <atomic>
-#include <iostream>
+#include <condition_variable>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -38,7 +38,10 @@ struct HashTable {
 
     static constexpr size_t kHashTableSize =
         options::cachePerft ? options::cachePerftMB * MB / 2 / sizeof(Entry) : 1;
-    mutable std::mutex tableMutex;
+
+    // This becomes super hot with very deep perfts with close to 100% cache hits
+    static constexpr size_t kNumMutexShards = 2048;  // Reduce contention
+    mutable std::atomic_flag tableMutexes[kNumMutexShards] = {};
 
     HashTable() {
         table.clear();
@@ -46,20 +49,36 @@ struct HashTable {
     }
 
     const Entry* lookup(HashValue hash, int level) const {
-        std::lock_guard<std::mutex> lock(tableMutex);
         Key key = makeKey(hash, level);
         size_t idx = static_cast<size_t>(key % kHashTableSize);
+
+        while (tableMutexes[idx % kNumMutexShards].test_and_set(std::memory_order_acquire)) {
+            // Spin until lock is available
+        }
+
         auto& entry = table[idx];
-        return entry.key() == key ? &entry : nullptr;
+        bool found = entry.key() == key;
+        const Entry* result = found ? &entry : nullptr;
+
+        // Release the spinlock
+        tableMutexes[idx % kNumMutexShards].clear(std::memory_order_release);
+
+        return result;
     }
 
     void enter(HashValue hash, int level, Value value) {
-        std::lock_guard<std::mutex> lock(tableMutex);
         Key key = makeKey(hash, level);
         size_t idx = static_cast<size_t>(key % kHashTableSize);
+
+        while (tableMutexes[idx % kNumMutexShards].test_and_set(std::memory_order_acquire)) {
+            // Spin until lock is available
+        }
+
         auto& entry = table[idx];
         dassert(entry.key() != key || entry.value() == value);
         entry = {key, value};
+
+        tableMutexes[idx % kNumMutexShards].clear(std::memory_order_release);
     }
 
     std::vector<Entry> table;
@@ -90,12 +109,14 @@ void enter2(HashValue hash, uint32_t count) {
 /**
  * Specialize perft with 2 levels left. The bulk of the work is done here, so optimize this.
  */
-NodeCount perft2(Board& board, Hash hash, moves::SearchState state) {
+NodeCount perft2(Board& board,
+                 Hash hash,
+                 moves::SearchState state,
+                 const ProgressCallback& callback = nullptr) {
     dassert(!options::cachePerft || hash == Hash(Position{board, state.turn}));
 
     if constexpr (options::cachePerft)
         if (auto count = lookup2(hash())) return perftCached.fetch_add(count), count;
-
     NodeCount nodes = 0;
     auto newState = state;
     auto pawn = addColor(PieceType::PAWN, !state.active());
@@ -114,19 +135,22 @@ NodeCount perft2(Board& board, Hash hash, moves::SearchState state) {
         newState.inCheck = moves::isAttacked(board, newState.kingSquare, newState.occupancy);
         newState.pinned = moves::pinnedPieces(board, newState.occupancy, newState.kingSquare);
 
-        nodes += countLegalMovesAndCaptures(board, newState);
+        auto moveNodes = countLegalMovesAndCaptures(board, newState);
+        nodes += moveNodes;
+        if (callback) callback(moveNodes);
     });
-    if (options::cachePerft && nodes > 100) {
-        enter2(hash(), nodes);
-        assert(lookup2(hash()) == nodes);
-    }
+    if (options::cachePerft) enter2(hash(), nodes);
 
     return nodes;
 }
 
-NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
+NodeCount perft(Board& board,
+                Hash hash,
+                moves::SearchState state,
+                int depth,
+                const ProgressCallback& callback = nullptr) {
     // if (depth <= 1) return depth == 1 ? countLegalMovesAndCaptures(board, state) : 1;
-    if (depth == 2) return perft2(board, hash, state);
+    if (depth == 2) return perft2(board, hash, state, callback);
 
     dassert(!options::cachePerft || hash == Hash(Position{board, state.turn}));
 
@@ -148,17 +172,19 @@ NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
         newState.inCheck = moves::isAttacked(board, newState.kingSquare, newState.occupancy);
         newState.pinned = moves::pinnedPieces(board, newState.occupancy, newState.kingSquare);
 
-        auto newNodes = nodes + perft(board, newHash, newState, depth - 1);
+        auto moveNodes = perft(board, newHash, newState, depth - 1, callback);
+        auto newNodes = nodes + moveNodes;
         dassert(newNodes >= nodes);  // Check for node count overflow
         nodes = newNodes;
+        if (callback) callback(moveNodes);
     });
-    if (options::cachePerft && nodes > 200) perftHashTable.enter(hash(), depth, nodes);
+    if (options::cachePerft) perftHashTable.enter(hash(), depth, nodes);
     return nodes;
 }
 
 struct PerftTask {
     Position position;
-    int depth;
+    int depth = 0;
 
     PerftTask() = default;
     PerftTask(Position pos, int d) : position(pos), depth(d) {}
@@ -166,8 +192,8 @@ struct PerftTask {
 
 using TaskList = std::vector<PerftTask>;
 
-TaskList expandTasks(TaskList tasks) {
-    while (tasks.size() < 100) {
+TaskList expandTasks(TaskList tasks, size_t number) {
+    while (tasks.size() < number) {
         TaskList expanded;
 
         for (auto task : tasks) {
@@ -185,49 +211,83 @@ TaskList expandTasks(TaskList tasks) {
     return tasks;
 }
 
-NodeCount threaded_perft(Position position, int depth) {
-    NodeCount nodes = 0;
+NodeCount threaded_perft(Position position, int depth, const ProgressCallback& callback) {
+    std::atomic<NodeCount> nodes{0};
     TaskList tasks;
     tasks.emplace_back(PerftTask{position, depth});
-    tasks = expandTasks(tasks);
+    tasks = expandTasks(tasks, depth > 4 ? depth * depth * depth : 100);
 
-    std::mutex nodesMutex;
     std::atomic<size_t> taskIndex{0};
 
     // Create a bounded number of threads to process the tasks
     const auto numThreads = std::max<unsigned int>(4, std::thread::hardware_concurrency());
-    std::cout << "Starting " << tasks.size() << " tasks for depth " << depth;
-    std::cout << " using " << numThreads << " threads\n";
     std::vector<std::thread> threads;
+    std::mutex progressMutex;
+    std::condition_variable progressCondition;
+    std::atomic<int> runningThreads{0};
+    std::atomic<size_t> completedTasks{0};
+
+    std::thread progressThread([&]() {
+        struct Progress {
+            uint128_t nodes;
+            uint128_t cached;
+        };
+        Progress last = {nodes.load(), perftCached.load()};
+        // Remember the time of the last update
+        auto lastUpdate = std::chrono::high_resolution_clock::now();
+        auto interval = std::chrono::milliseconds(options::perftProgressMillis);
+
+        while (completedTasks.load() < tasks.size() && callback) {
+            std::unique_lock<std::mutex> lock(progressMutex);
+            Progress current = {nodes.load(), perftCached.load()};
+            auto reportNodes = current.nodes;
+
+            if (current.nodes == last.nodes)
+                reportNodes += current.cached - last.cached;
+            else
+                last = current;
+
+            callback(reportNodes);
+            std::chrono::time_point currentTime = lastUpdate;
+            do {
+                progressCondition.wait_for(lock, interval);
+                currentTime = std::chrono::high_resolution_clock::now();
+            } while (runningThreads.load() && currentTime - lastUpdate < interval / 2);
+            lastUpdate = currentTime;
+        }
+    });
 
     for (unsigned int i = 0; i < numThreads; ++i) {
         threads.emplace_back([&]() {
-            NodeCount localNodes = 0;
-
+            runningThreads.fetch_add(1);
             while (true) {
                 size_t idx = taskIndex.fetch_add(1, std::memory_order_relaxed);
                 if (idx >= tasks.size()) break;
                 PerftTask task = tasks[idx];
                 auto state = moves::SearchState(task.position.board, task.position.turn);
-                localNodes += perft(task.position.board, Hash(task.position), state, task.depth);
+                nodes.fetch_add(perft(task.position.board, Hash(task.position), state, task.depth));
+                completedTasks.fetch_add(1);
+                progressCondition.notify_one();
             }
-
-            std::lock_guard<std::mutex> lock(nodesMutex);
-            nodes += localNodes;
+            runningThreads.fetch_sub(1);
         });
     }
 
+    progressThread.join();
     for (auto& thread : threads) thread.join();
     return nodes;
 }
 
-NodeCount perft(Position position, int depth) {
-    if (depth <= 1)
-        return depth == 1 ? moves::allLegalMovesAndCaptures(position.turn, position.board).size()
-                          : 1;
-    if (depth > 5) return threaded_perft(position, depth);
+NodeCount perft(Position position, int depth, const ProgressCallback& callback) {
+    if (depth <= 1) {
+        NodeCount result =
+            depth == 1 ? moves::allLegalMovesAndCaptures(position.turn, position.board).size() : 1;
+        if (callback) callback(result);
+        return result;
+    }
+    if (depth > 5) return threaded_perft(position, depth, callback);
     auto state = moves::SearchState(position.board, position.turn);
-    return perft(position.board, Hash{position}, state, depth);
+    return perft(position.board, Hash{position}, state, depth, callback);
 }
 
 NodeCount getPerftCached() {

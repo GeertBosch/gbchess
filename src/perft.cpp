@@ -39,7 +39,11 @@ void perftWithDivide(Position position, int depth, NodeCount expectedCount) {
     auto startTime = std::chrono::high_resolution_clock::now();
     NodeCount count = 0;
     for (auto move : moves::allLegalMovesAndCaptures(position.turn, position.board)) {
-        auto newCount = perft(moves::applyMove(position, move), depth - 1);
+        auto newCount = perft(moves::applyMove(position, move), depth - 1, [move](NodeCount count) {
+            if (!quiet)
+                std::cerr << "\r" << to_string(move) << ": " << to_string(count) << std::flush;
+        });
+        if (!quiet) std::cerr << "\r" << std::string(20, ' ') << "\r";
         if (!quiet) std::cout << to_string(move) << ": " << to_string(newCount) << "\n";
         divisions.push_back({move, newCount});
         if (count + newCount < count) error("Node count overflow");
