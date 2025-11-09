@@ -2,8 +2,7 @@
  * Test suite for SquareSet data structure.
  *
  * This file contains isolated tests for the SquareSet class, which provides
- * an efficient bitset-based representation of chess squares. The tests are
- * separated from moves_test.cpp to facilitate future Rust migration.
+ * an efficient bitset-based representation of chess squares.
  *
  * Tests include:
  * - Basic operations (empty, size, insert, contains)

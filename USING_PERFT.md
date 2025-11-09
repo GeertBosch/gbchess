@@ -12,7 +12,7 @@ Perft recursively generates all legal moves from a position to a specified depth
 
 You'll need:
 - A known-good chess engine like Stockfish for reference
-- Your perft implementation (C++ or Rust version)
+- Your perft implementation
 - Test positions with known correct perft counts
 
 ## Step-by-Step Debugging Process
@@ -43,13 +43,8 @@ Nodes searched: 8902
 Run your perft test with the same position and depth:
 
 ```bash
-# C++ version
 cd /Users/bosch/gbchess
 ./build/perft "fen_string" depth
-
-# Rust version  
-cd /Users/bosch/gbchess/rust/perft
-cargo run -- "fen_string" depth
 ```
 
 Compare the output format and total node count.
@@ -62,7 +57,7 @@ Compare the output format and total node count.
 - **Invalid en passant**: Wrong pawn positions or illegal captures
 - **Invalid pawn moves**: Double moves from non-starting ranks
 
-### Too Few Moves (Lower node count)  
+### Too Few Moves (Lower node count)
 - **Missing move types**: Castling, en passant, promotions not generated
 - **Overly restrictive validation**: Incorrectly rejecting valid moves
 - **Incomplete piece movement**: Missing directions or knight moves
@@ -83,7 +78,7 @@ Begin with basic positions and shallow depths:
 # Depth 1: Should be exactly 20 moves
 echo -e "position startpos\ngo perft 1" | stockfish
 
-# Depth 2: Should be exactly 400 positions  
+# Depth 2: Should be exactly 400 positions
 echo -e "position startpos\ngo perft 2" | stockfish
 
 # Depth 3: Should be exactly 8902 positions
@@ -112,7 +107,7 @@ echo -e 'position fen "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w k
 ## Troubleshooting Tips
 
 - **Start simple**: Begin with startpos at depths 1-3 before complex positions
-- **Choose smallest failing cases**: Pick moves with lowest node counts for easier debugging  
+- **Choose smallest failing cases**: Pick moves with lowest node counts for easier debugging
 - **Focus on percentage differences**: 10% difference is easier to debug than 1%
 - **Use divide output**: Compare move-by-move to isolate issues
 - **Test incrementally**: If depth 4 fails, try depth 3, 2, 1 for same position
@@ -120,18 +115,10 @@ echo -e 'position fen "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w k
 
 ## Tools and Commands
 
-### C++ Implementation
 ```bash
 cd /Users/bosch/gbchess
 make perft-test        # Run comprehensive test suite
 ./build/perft "fen" depth  # Manual testing
-```
-
-### Rust Implementation
-```bash
-cd /Users/bosch/gbchess/rust/perft
-cargo test             # Run built-in test suite
-cargo run -- "fen" depth  # Manual testing
 ```
 
 ### Well-Known Test Positions
