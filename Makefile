@@ -125,33 +125,33 @@ clean:
 	rm -f lichess/puzzles.csv
 	rm -rf *.dSYM .DS_Store
 
-PERFT_SRCS=$(call prefix_src,perft.cpp perft_core.cpp ${MOVES_SRCS} fen.cpp hash.cpp)
+PERFT_SRCS=$(call prefix_src,perft/perft.cpp perft/perft_core.cpp ${MOVES_SRCS} fen.cpp hash.cpp)
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
 build/perft: $(call calc_objs,${OPTOBJ},${PERFT_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
-PERFT_TEST_SRCS=$(call prefix_src,perft_test.cpp perft_core.cpp ${MOVES_SRCS} fen.cpp hash.cpp)
+PERFT_TEST_SRCS=$(call prefix_src,perft/perft_test.cpp perft/perft_core.cpp ${MOVES_SRCS} fen.cpp hash.cpp)
 build/perft-test: $(call calc_objs,${OPTOBJ},${PERFT_TEST_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 build/perft-debug: $(call calc_objs,${DBGOBJ},${PERFT_TEST_SRCS})
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
-PERFT_SIMPLE_SRCS=$(call prefix_src,perft_simple.cpp ${MOVES_SRCS} fen.cpp)
+PERFT_SIMPLE_SRCS=$(call prefix_src,perft/perft_simple.cpp ${MOVES_SRCS} fen.cpp)
 # perft_simple is a simplified version without caching or 128-bit ints
 build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
 # Compare the perft tool with some different compilation options for speed comparison
-build/perft-clang-sse2: ${PERFT_SRCS} src/*.h
+build/perft-clang-sse2: ${PERFT_SRCS} src/*.h src/perft/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-clang-emul:  ${PERFT_SRCS} src/*.h
+build/perft-clang-emul:  ${PERFT_SRCS} src/*.h src/perft/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-sse2:  ${PERFT_SRCS} src/*.h
+build/perft-gcc-sse2:  ${PERFT_SRCS} src/*.h src/perft/*.h
 	@mkdir -p build
 	${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-emul:  ${PERFT_SRCS} src/*.h
+build/perft-gcc-emul:  ${PERFT_SRCS} src/*.h src/perft/*.h
 	@mkdir -p build
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
 
