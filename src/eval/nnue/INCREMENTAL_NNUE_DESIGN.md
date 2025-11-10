@@ -1,5 +1,12 @@
 # Incremental NNUE Integration Design
 
+## Status
+
+**Implementation on hold**: Given the relatively modest performance impact (~1.2x speedup) and the
+large engineering effort required to implement incremental NNUE updates safely and correctly, this
+feature has been deprioritized. Focus is instead on reducing the number of required evaluations
+rather than the speed of individual evaluations, as the impact will be larger.
+
 ## Overview
 
 This document outlines a practical approach to add incremental NNUE evaluation to the chess engine,
@@ -57,7 +64,7 @@ initially estimated 11x.
 
 1. **Accumulator Updates**
    ```cpp
-   void updateAccumulator(const std::vector<size_t>& removed, 
+   void updateAccumulator(const std::vector<size_t>& removed,
                          const std::vector<size_t>& added);
    ```
 
@@ -113,7 +120,7 @@ incrementally because each of the 32 outputs depends on all 512 inputs with no l
 ## Future Enhancements
 
 1. **Lazy Evaluation**: Only compute NNUE when needed
-2. **SIMD Optimization**: Vectorize accumulator updates  
+2. **SIMD Optimization**: Vectorize accumulator updates
 3. **Larger Networks**: Enable efficient evaluation of bigger NNUE models
 4. **Alternative Architectures**: Explore network designs with more incremental-friendly structures
 

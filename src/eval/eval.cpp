@@ -9,7 +9,7 @@
 #include "options.h"
 #include "piece_set.h"
 
-#include "eval.h"
+#include "eval/eval.h"
 
 SquareTable operator+(SquareTable lhs, Score rhs) {
     for (auto& value : lhs) value += rhs;

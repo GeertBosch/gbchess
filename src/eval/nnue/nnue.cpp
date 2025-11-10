@@ -1,5 +1,6 @@
+#include "eval/nnue/nnue.h"
 #include "common.h"
-#include "nnue_stats.h"
+#include "eval/nnue/nnue_stats.h"
 #include <chrono>
 #include <fstream>
 #include <iomanip>
@@ -8,7 +9,6 @@
 #include <stdexcept>
 
 #include "moves.h"
-#include "nnue.h"
 
 namespace nnue {
 

@@ -7,12 +7,12 @@
 #include <vector>
 
 #include "common.h"
-#include "eval.h"
+#include "eval/eval.h"
+#include "eval/nnue/nnue.h"
+#include "eval/nnue/nnue_incremental.h"
 #include "hash.h"
 #include "moves.h"
 #include "moves_gen.h"
-#include "nnue.h"
-#include "nnue_incremental.h"
 #include "options.h"
 #include "pv.h"
 

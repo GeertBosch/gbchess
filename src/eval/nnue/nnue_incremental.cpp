@@ -1,5 +1,5 @@
-#include "nnue_incremental.h"
-#include "nnue_stats.h"
+#include "eval/nnue/nnue_incremental.h"
+#include "eval/nnue/nnue_stats.h"
 #include <algorithm>
 #include <chrono>
 

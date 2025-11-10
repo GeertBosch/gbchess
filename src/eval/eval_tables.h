@@ -3,7 +3,7 @@
 #include <array>
 
 #include "common.h"
-#include "eval.h"
+#include "eval/eval.h"
 
 // Values of pieces, in centipawns (using _cp suffix to indicate centipawns).
 // The values are in order from the lowest rank to the highest, from file a to h.

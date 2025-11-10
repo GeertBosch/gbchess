@@ -1,5 +1,5 @@
-#include "nnue_stats.h"
-#include "nnue.h"
+#include "eval/nnue/nnue_stats.h"
+#include "eval/nnue/nnue.h"
 #include <cmath>
 #include <iomanip>
 #include <iostream>

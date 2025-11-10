@@ -36,7 +36,11 @@ test_dir=$(patsubst %-test,${OPTOBJ},$(patsubst %-debug,${DBGOBJ},$(1)))
 # Given a test target name and additional source files, return the list of object files
 test_objs=$(call calc_objs,$(call test_dir,$(1)),$(call prefix_src,$(call test_src,$(1)) $(2)))
 
-ALLSRCS=$(wildcard src/*.cpp)
+# Special handling for subdirectory tests
+eval_test_src=eval/eval_test.cpp
+nnue_test_src=eval/nnue/nnue_test.cpp
+
+ALLSRCS=$(wildcard src/*.cpp src/*/*.cpp src/*/*/*.cpp)
 
 all: debug test perft-bench perft-test perft-debug-test mate123 mate45 puzzles
 	@echo "\n*** All tests passed! ***\n"
@@ -45,19 +49,19 @@ all: debug test perft-bench perft-test perft-debug-test mate123 mate45 puzzles
 -include $(call calc_deps,${DBGOBJ},${ALLSRCS})
 
 ${OPTOBJ}/%.d: src/%.cpp
-	@mkdir -p ${OPTOBJ}
+	@mkdir -p $(dir $@)
 	${GPP} -MT $(subst .d,.o,$@) -MM ${CCFLAGS} -Isrc -o $@ $< > $@
 
 ${OPTOBJ}/%.o: src/%.cpp ${OPTOBJ}/%.d
-	@mkdir -p ${OPTOBJ}
+	@mkdir -p $(dir $@)
 	${GPP} -c ${CCFLAGS} -Isrc -O2 -o $@ $<
 
 ${DBGOBJ}/%.d: src/%.cpp
-	@mkdir -p ${DBGOBJ}
+	@mkdir -p $(dir $@)
 	${GPP} -MM ${CCFLAGS} -Isrc -o $@ $< > $@
 
 ${DBGOBJ}/%.o: src/%.cpp
-	@mkdir -p ${DBGOBJ}
+	@mkdir -p $(dir $@)
 	${CLANGPP} -MMD -c ${CCFLAGS} ${DEBUGFLAGS} -Isrc -o $@ $<
 
 build/%-test: ${OPTOBJ}/%_test.o
@@ -65,6 +69,46 @@ build/%-test: ${OPTOBJ}/%_test.o
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
 build/%-debug: ${DBGOBJ}/%_test.o
+	@mkdir -p build
+	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+
+# Test dependency definitions
+NNUE_SRCS=eval/nnue/nnue.cpp eval/nnue/nnue_stats.cpp eval/nnue/nnue_incremental.cpp square_set.cpp fen.cpp
+MOVES_SRCS=moves.cpp moves_table.cpp moves_gen.cpp magic.cpp square_set.cpp
+EVAL_SRCS=eval/eval.cpp hash.cpp ${NNUE_SRCS} ${MOVES_SRCS}
+SEARCH_SRCS=${EVAL_SRCS} search.cpp
+
+# Function to create both test and debug rules for a test
+define test_rules
+build/$(1)-test: $$(call test_objs,$(1)-test,$(2))
+build/$(1)-debug: $$(call test_objs,$(1)-debug,$(2))
+endef
+
+# Generate test rules for each test
+$(eval $(call test_rules,fen,fen.cpp))
+$(eval $(call test_rules,square_set,square_set.cpp fen.cpp))
+$(eval $(call test_rules,moves_table,moves_table.cpp fen.cpp))
+$(eval $(call test_rules,moves_gen,${MOVES_SRCS} fen.cpp))
+$(eval $(call test_rules,moves,${MOVES_SRCS} fen.cpp))
+$(eval $(call test_rules,hash,${MOVES_SRCS} hash.cpp fen.cpp))
+$(eval $(call test_rules,magic,${MOVES_SRCS}))
+$(eval $(call test_rules,search,${SEARCH_SRCS}))
+$(eval $(call test_rules,uci,uci.cpp ${SEARCH_SRCS}))
+
+# Special rules for subdirectory tests (these don't follow the standard pattern)
+build/eval-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,eval/eval_test.cpp ${SEARCH_SRCS}))
+	@mkdir -p build
+	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+
+build/eval-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,eval/eval_test.cpp ${SEARCH_SRCS}))
+	@mkdir -p build
+	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+
+build/nnue-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,eval/nnue/nnue_test.cpp ${NNUE_SRCS}))
+	@mkdir -p build
+	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+
+build/nnue-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,eval/nnue/nnue_test.cpp ${NNUE_SRCS}))
 	@mkdir -p build
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
@@ -80,47 +124,6 @@ clean:
 	rm -f test/ut*.out
 	rm -f lichess/puzzles.csv
 	rm -rf *.dSYM .DS_Store
-
-build/fen-test: $(call test_objs,fen-test,fen.cpp)
-build/fen-debug: $(call test_objs,fen-debug,fen.cpp)
-
-build/square_set-test: $(call test_objs,square_set-test,square_set.cpp fen.cpp)
-build/square_set-debug: $(call test_objs,square_set-debug,square_set.cpp fen.cpp)
-
-NNUE_SRCS=nnue.cpp nnue_stats.cpp nnue_incremental.cpp square_set.cpp fen.cpp
-
-build/nnue-test: $(call test_objs,nnue-test,${NNUE_SRCS})
-build/nnue-debug: $(call test_objs,nnue-debug,${NNUE_SRCS})
-
-build/moves_table-test: $(call test_objs,moves_table-test,moves_table.cpp fen.cpp)
-build/moves_table-debug: $(call test_objs,moves_table-debug,moves_table.cpp fen.cpp)
-
-MOVES_SRCS=moves.cpp moves_table.cpp moves_gen.cpp magic.cpp square_set.cpp
-
-build/moves_gen-test: $(call test_objs,moves_gen-test,${MOVES_SRCS} fen.cpp)
-build/moves_gen-debug: $(call test_objs,moves_gen-debug,${MOVES_SRCS} fen.cpp)
-
-build/moves-test: $(call test_objs,moves-test,${MOVES_SRCS} fen.cpp)
-build/moves-debug: $(call test_objs,moves-debug,${MOVES_SRCS} fen.cpp)
-
-build/hash-test: $(call test_objs,hash-test,${MOVES_SRCS} hash.cpp fen.cpp)
-build/hash-debug: $(call test_objs,hash-debug,${MOVES_SRCS} hash.cpp fen.cpp)
-
-build/magic-test: $(call test_objs,magic-test,${MOVES_SRCS})
-build/magic-debug: $(call test_objs,magic-debug,${MOVES_SRCS})
-
-EVAL_SRCS=eval.cpp hash.cpp ${NNUE_SRCS} ${MOVES_SRCS}
-
-build/eval-test: $(call test_objs,eval-test,${EVAL_SRCS})
-build/eval-debug: $(call test_objs,eval-debug,${EVAL_SRCS})
-
-SEARCH_SRCS=${EVAL_SRCS} search.cpp
-
-build/search-test: $(call test_objs,search-test,${SEARCH_SRCS})
-build/search-debug: $(call test_objs,search-debug,${SEARCH_SRCS})
-
-build/uci-test: $(call test_objs,uci-test,uci.cpp ${SEARCH_SRCS})
-build/uci-debug: $(call test_objs,uci-debug,uci.cpp ${SEARCH_SRCS})
 
 PERFT_SRCS=$(call prefix_src,perft.cpp perft_core.cpp ${MOVES_SRCS} fen.cpp hash.cpp)
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
@@ -254,3 +257,20 @@ test-cpp: build debug ${CPP_TESTS}
 	done
 
 test: test-cpp searches evals uci magic
+
+# Generate compile_commands.json for clangd
+compile_commands.json:
+	@echo '[' > $@
+	@first=true; \
+	for src in $(wildcard src/*.cpp src/*/*.cpp src/*/*/*.cpp); do \
+		[ "$$first" = true ] && first=false || echo ',' >> $@; \
+		echo '  {' >> $@; \
+		echo "    \"directory\": \"$(PWD)\"," >> $@; \
+		echo "    \"command\": \"$(CLANGPP) $(CCFLAGS) -Isrc -c $$src\"," >> $@; \
+		echo "    \"file\": \"$$src\"" >> $@; \
+		printf '  }' >> $@; \
+	done
+	@echo >> $@
+	@echo ']' >> $@
+
+.PHONY: compile_commands.json

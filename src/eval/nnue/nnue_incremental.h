@@ -1,8 +1,8 @@
 #pragma once
 
 #include "common.h"
-#include "eval.h"
-#include "nnue.h"
+#include "eval/eval.h"
+#include "eval/nnue/nnue.h"
 #include <array>
 #include <optional>
 
@@ -19,8 +19,8 @@ namespace nnue {
  */
 struct EvaluationContext {
     // Core incremental state
-    Accumulator accumulator;                   // 512-element accumulator (both perspectives)
-    bool accumulatorValid = false;             // Whether accumulator is valid
+    Accumulator accumulator;        // 512-element accumulator (both perspectives)
+    bool accumulatorValid = false;  // Whether accumulator is valid
 
     // Network reference
     const NNUE& network;

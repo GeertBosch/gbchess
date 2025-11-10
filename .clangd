@@ -1,0 +1,6 @@
+CompileFlags:
+  Add:
+    - "-Isrc"
+    - "-std=c++17"
+  Remove:
+    - "-W*"  # Remove warning flags that might be noisy in the editor

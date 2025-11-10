@@ -8,12 +8,12 @@
 #include <string>
 
 #include "common.h"
-#include "eval.h"
+#include "eval/eval.h"
+#include "eval/nnue/nnue.h"
+#include "eval/nnue/nnue_stats.h"
 #include "fen.h"
 #include "moves.h"
 #include "moves_gen.h"
-#include "nnue.h"
-#include "nnue_stats.h"
 #include "options.h"
 
 namespace {
