@@ -1,6 +1,6 @@
-PUZZLES=puzzles/lichess_db_puzzle.csv
+PUZZLES=lichess/lichess_db_puzzle.csv
 PHASES=opening middlegame endgame
-EVALS=$(foreach phase,${PHASES},evals/lichess_${phase}_evals.csv)
+EVALS=$(foreach phase,${PHASES},lichess/lichess_${phase}_evals.csv)
 CCFLAGS=-std=c++17 -Werror -Wall -Wextra
 CLANGPP=clang++
 GPP=g++
@@ -78,7 +78,7 @@ clean:
 	rm -f core *.core puzzles.actual perf.data* *.ii *.bc *.s
 	rm -f game.??? log.??? players.dat # XBoard outputs
 	rm -f test/ut*.out
-	rm -f puzzles/puzzles.csv
+	rm -f lichess/puzzles.csv
 	rm -rf *.dSYM .DS_Store
 
 build/fen-test: $(call test_objs,fen-test,fen.cpp)
@@ -176,14 +176,15 @@ mate123: build/search-test ${PUZZLES}
 mate45: build/search-test ${PUZZLES}
 	egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -101 | ./build/search-test 9
 
-puzzles/puzzles.csv: ${PUZZLES} Makefile
+lichess/puzzles.csv: ${PUZZLES} Makefile
 	egrep -v "mateIn[12345]" ${PUZZLES} | head -101 > $@
 
-puzzles: puzzles/puzzles.csv build/search-test
+.PHONY: puzzles
+puzzles: lichess/puzzles.csv build/search-test
 	./build/search-test 6 < $<
 
-evals/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
-	mkdir -p $(dir $@) && ./$< $(@:evals/lichess_%_evals.csv=%) > $@
+lichess/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
+	mkdir -p $(dir $@) && ./$< $(@:lichess/lichess_%_evals.csv=%) > $@
 
 evals: build/eval-test ${EVALS}
 	./build/eval-test ${EVALS}

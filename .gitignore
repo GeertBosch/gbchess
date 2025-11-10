@@ -14,3 +14,4 @@ game.*
 nn-*.nnue
 puzzles
 players.dat
+lichess/*.csv*
