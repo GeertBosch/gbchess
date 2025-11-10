@@ -53,10 +53,14 @@ void testKnownPositions() {
     Known position6 = {
         "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10", 4, 3894594};
 
-    Known twoKings = {"8/8/3k4/8/8/8/8/2K5 w - - 4 3",
-                      kDebug ? DepthAndCount{8, 4'656'573} : DepthAndCount{12, 10'109'930'485}};
+    // The following position has the maximum initial number of moves (218) possible in chess.
     Known maxMoves = {"R6R/3Q4/1Q4Q1/4Q3/2Q4Q/Q4Q2/pp1Q4/kBNN1KB1 w - - 0 1",
                       kDebug ? DepthAndCount{3, 19'073} : DepthAndCount{5, 13'853'661}};
+
+    // A few positions with very few pieces to test caching of deep perft results and very large
+    // total move counts.
+    Known twoKings = {"8/8/3k4/8/8/8/8/2K5 w - - 4 3",
+                      kDebug ? DepthAndCount{8, 4'656'573} : DepthAndCount{12, 10'109'930'485}};
     Known twoKingsRook = {"4k3/8/8/8/8/8/8/4Kr2 w - - 0 1",
                           kDebug ? DepthAndCount{5, 21'570} : DepthAndCount{7, 2'362'837}};
     Known twoKingsOnly = {"4k3/8/8/8/8/8/8/4K3 w - - 0 1",
