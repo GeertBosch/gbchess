@@ -156,7 +156,7 @@ build/perft-gcc-emul:  ${PERFT_SRCS} src/*.h src/perft/*.h src/move/*.h
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
 
 build/perft-%.ok: build/perft-%
-	./$< 5 4865609 | grep nodes/sec
+	./$< 5 4865609 2>&1 | grep nodes/sec
 
 # Aliases for perft test targets
 perft-bench: build/perft-clang-emul.ok build/perft-gcc-emul.ok build/perft-clang-sse2.ok build/perft-gcc-sse2.ok
