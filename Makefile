@@ -108,6 +108,10 @@ build/search-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,search/search_t
 	@mkdir -p build
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
+build/elo-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,search/elo_test.cpp ${EVAL_SRCS}))
+	@mkdir -p build
+	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+
 build/nnue-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,eval/nnue/nnue_test.cpp ${NNUE_SRCS}))
 	@mkdir -p build
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
@@ -178,16 +182,16 @@ build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
 # Compare the perft tool with some different compilation options for speed comparison
-build/perft-clang-sse2: ${PERFT_SRCS} src/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-clang-sse2: ${PERFT_SRCS} src/*.h src/util/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-clang-emul:  ${PERFT_SRCS} src/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-clang-emul:  ${PERFT_SRCS} src/*.h src/util/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-sse2:  ${PERFT_SRCS} src/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-gcc-sse2:  ${PERFT_SRCS} src/*.h src/util/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-emul:  ${PERFT_SRCS} src/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-gcc-emul:  ${PERFT_SRCS} src/*.h src/util/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
 

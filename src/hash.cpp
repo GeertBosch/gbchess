@@ -4,7 +4,7 @@
 #include "common.h"
 #include "hash.h"
 #include "move/move.h"
-#include "random.h"
+#include "util/random.h"
 
 std::array<HashValue, kNumHashVectors> hashVectors = []() {
     std::array<HashValue, kNumHashVectors> vectors;
