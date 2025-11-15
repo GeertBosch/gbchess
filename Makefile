@@ -20,8 +20,9 @@ ifeq ($(_system_type),Darwin)
 endif
 
 # CPP Tests
-CPP_TEST_SRCS=$(wildcard src/*_test.cpp)
-CPP_TESTS=$(patsubst src/%_test.cpp,build/%-test,$(CPP_TEST_SRCS))
+CPP_TEST_SRCS=$(foreach test,$(wildcard src/*_test.cpp src/*/*_test.cpp src/*/*/*_test.cpp),\
+	$(notdir $(test)))
+CPP_TESTS=$(patsubst %_test.cpp,build/%-test,$(CPP_TEST_SRCS))
 
 # First argument is the object dir, second is list of source files
 calc_objs=$(patsubst src/%.cpp,$(1)/%.o,$(2))
@@ -42,7 +43,7 @@ nnue_test_src=eval/nnue/nnue_test.cpp
 
 ALLSRCS=$(wildcard src/*.cpp src/*/*.cpp src/*/*/*.cpp)
 
-all: debug test perft-bench perft-test perft-debug-test mate123 mate45 puzzles
+all: compile_commands.json debug test perft-bench perft-test perft-debug-test mate123 mate45 puzzles
 	@echo "\n*** All tests passed! ***\n"
 
 -include $(call calc_deps,${OPTOBJ},${ALLSRCS})
@@ -76,7 +77,7 @@ build/%-debug: ${DBGOBJ}/%_test.o
 NNUE_SRCS=eval/nnue/nnue.cpp eval/nnue/nnue_stats.cpp eval/nnue/nnue_incremental.cpp square_set.cpp fen.cpp
 MOVES_SRCS=move/move.cpp move/move_table.cpp move/move_gen.cpp move/magic/magic.cpp square_set.cpp
 EVAL_SRCS=eval/eval.cpp hash.cpp ${NNUE_SRCS} ${MOVES_SRCS}
-SEARCH_SRCS=${EVAL_SRCS} search.cpp
+SEARCH_SRCS=${EVAL_SRCS} search/search.cpp
 
 # Function to create both test and debug rules for a test
 define test_rules
@@ -87,11 +88,7 @@ endef
 # Generate test rules for each test
 $(eval $(call test_rules,fen,fen.cpp))
 $(eval $(call test_rules,square_set,square_set.cpp fen.cpp))
-$(eval $(call test_rules,moves_table,move/move_table.cpp fen.cpp))
-$(eval $(call test_rules,moves_gen,${MOVES_SRCS} fen.cpp))
-$(eval $(call test_rules,moves,${MOVES_SRCS} fen.cpp))
 $(eval $(call test_rules,hash,${MOVES_SRCS} hash.cpp fen.cpp))
-$(eval $(call test_rules,search,${SEARCH_SRCS}))
 $(eval $(call test_rules,uci,uci.cpp ${SEARCH_SRCS}))
 
 # Special rules for subdirectory tests (these don't follow the standard pattern)
@@ -100,6 +97,14 @@ build/eval-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,eval/eval_test.cpp
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
 build/eval-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,eval/eval_test.cpp ${SEARCH_SRCS}))
+	@mkdir -p build
+	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+
+build/search-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,search/search_test.cpp ${SEARCH_SRCS}))
+	@mkdir -p build
+	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+
+build/search-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,search/search_test.cpp ${SEARCH_SRCS}))
 	@mkdir -p build
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
@@ -116,6 +121,30 @@ build/magic-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,move/magic/magic_
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
 build/magic-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,move/magic/magic_test.cpp ${MOVES_SRCS}))
+	@mkdir -p build
+	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+
+build/move-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,move/move_test.cpp ${MOVES_SRCS} fen.cpp))
+	@mkdir -p build
+	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+
+build/move-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,move/move_test.cpp ${MOVES_SRCS} fen.cpp))
+	@mkdir -p build
+	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+
+build/move_gen-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,move/move_gen_test.cpp ${MOVES_SRCS} fen.cpp))
+	@mkdir -p build
+	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+
+build/move_gen-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,move/move_gen_test.cpp ${MOVES_SRCS} fen.cpp))
+	@mkdir -p build
+	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+
+build/move_table-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,move/move_table_test.cpp move/move_table.cpp fen.cpp))
+	@mkdir -p build
+	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+
+build/move_table-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,move/move_table_test.cpp move/move_table.cpp fen.cpp))
 	@mkdir -p build
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
@@ -149,16 +178,16 @@ build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
 # Compare the perft tool with some different compilation options for speed comparison
-build/perft-clang-sse2: ${PERFT_SRCS} src/*.h src/perft/*.h src/move/*.h
+build/perft-clang-sse2: ${PERFT_SRCS} src/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-clang-emul:  ${PERFT_SRCS} src/*.h src/perft/*.h src/move/*.h
+build/perft-clang-emul:  ${PERFT_SRCS} src/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-sse2:  ${PERFT_SRCS} src/*.h src/perft/*.h src/move/*.h
+build/perft-gcc-sse2:  ${PERFT_SRCS} src/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-emul:  ${PERFT_SRCS} src/*.h src/perft/*.h src/move/*.h
+build/perft-gcc-emul:  ${PERFT_SRCS} src/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
 
@@ -258,8 +287,16 @@ magic: build/magic-test
 	|| (echo "\n*** To accept these changes, pipe this output to the patch command ***" && false)
 
 test-cpp: build debug ${CPP_TESTS}
+	@echo "Checking that all C++ unit tests have been built"
+	@find src -name "*_test.cpp" -exec basename {} _test.cpp \; | sort > .test_sources.tmp
+	@find build -name "*-test" -exec basename {} -test \; | sort > .test_executables.tmp
+	@diff -u .test_sources.tmp .test_executables.tmp \
+		&& (echo "All C++ unit tests have been built" \
+			&& rm -f .test_sources.tmp .test_executables.tmp) \
+		|| (echo "\n*** Extra or missing C++ unit tests! ***\n"  && false)
+	@echo ${CPP_TESTS}
 	@echo "Running C++ test executables..."
-	@for file in ${CPP_TESTS}; do \
+	@for file in build/*-test; do \
 		/bin/echo -n Run $$file ; \
 		(./$$file < /dev/null > /dev/null && echo " passed") || ./$$file </dev/null; \
 	done

@@ -9,7 +9,7 @@
 #include "fen.h"
 #include "move/move.h"
 #include "options.h"
-#include "search.h"
+#include "search/search.h"
 #include "uci.h"
 
 namespace {
