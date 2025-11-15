@@ -1,7 +1,7 @@
 #include <cassert>
 #include <iostream>
 
-#include "moves_gen.h"
+#include "move_gen.h"
 
 #include "fen.h"
 #include "options.h"
@@ -161,7 +161,7 @@ void showCapturesAndMoves(Position position) {
 }
 
 void checkMovesAndCaptures(std::string fen, size_t expectedMoves, size_t expectedCaptures) {
-auto position = fen::parsePosition(fen);
+    auto position = fen::parsePosition(fen);
     auto legalMoves = allLegalMoves(position.turn, position.board);
     auto legalCaptures = allLegalCaptures(position.turn, position.board);
     if (legalMoves.size() != expectedMoves || legalCaptures.size() != expectedCaptures) {

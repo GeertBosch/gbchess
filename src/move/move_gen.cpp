@@ -1,7 +1,7 @@
-#include "moves_gen.h"
+#include "move_gen.h"
 
 #include "castling_info.h"
-#include "moves_table.h"
+#include "move_table.h"
 #include "options.h"
 #include "piece_set.h"
 

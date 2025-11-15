@@ -12,8 +12,8 @@
 #include "eval/nnue/nnue.h"
 #include "eval/nnue/nnue_stats.h"
 #include "fen.h"
-#include "moves.h"
-#include "moves_gen.h"
+#include "move/move.h"
+#include "move/move_gen.h"
 #include "options.h"
 
 namespace {

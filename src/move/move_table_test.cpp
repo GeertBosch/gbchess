@@ -1,7 +1,7 @@
 #include <cassert>
 #include <iostream>
 
-#include "moves_table.h"
+#include "move_table.h"
 
 void testPossibleMoves() {
     // Test rook moves

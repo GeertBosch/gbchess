@@ -1,7 +1,7 @@
 #pragma once
 
 #include "common.h"
-#include "moves.h"
+#include "move.h"
 
 namespace moves {
 struct SearchState {

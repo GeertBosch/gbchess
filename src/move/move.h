@@ -1,11 +1,7 @@
 #pragma once
 
-#include <climits>
-#include <cstring>
 #include <functional>
-#include <iterator>
 #include <string>
-#include <vector>
 
 #include "common.h"
 #include "occupancy.h"

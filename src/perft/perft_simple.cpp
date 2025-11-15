@@ -14,8 +14,8 @@
 
 #include "common.h"
 #include "fen.h"
-#include "moves.h"
-#include "moves_gen.h"
+#include "move/move.h"
+#include "move/move_gen.h"
 #include <cstdlib>
 #include <iostream>
 #include <string>

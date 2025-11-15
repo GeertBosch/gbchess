@@ -8,7 +8,7 @@
 #include <sstream>
 #include <stdexcept>
 
-#include "moves.h"
+#include "move/move.h"
 
 namespace nnue {
 

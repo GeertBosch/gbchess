@@ -74,7 +74,7 @@ build/%-debug: ${DBGOBJ}/%_test.o
 
 # Test dependency definitions
 NNUE_SRCS=eval/nnue/nnue.cpp eval/nnue/nnue_stats.cpp eval/nnue/nnue_incremental.cpp square_set.cpp fen.cpp
-MOVES_SRCS=moves.cpp moves_table.cpp moves_gen.cpp magic.cpp square_set.cpp
+MOVES_SRCS=move/move.cpp move/move_table.cpp move/move_gen.cpp magic.cpp square_set.cpp
 EVAL_SRCS=eval/eval.cpp hash.cpp ${NNUE_SRCS} ${MOVES_SRCS}
 SEARCH_SRCS=${EVAL_SRCS} search.cpp
 
@@ -87,7 +87,7 @@ endef
 # Generate test rules for each test
 $(eval $(call test_rules,fen,fen.cpp))
 $(eval $(call test_rules,square_set,square_set.cpp fen.cpp))
-$(eval $(call test_rules,moves_table,moves_table.cpp fen.cpp))
+$(eval $(call test_rules,moves_table,move/move_table.cpp fen.cpp))
 $(eval $(call test_rules,moves_gen,${MOVES_SRCS} fen.cpp))
 $(eval $(call test_rules,moves,${MOVES_SRCS} fen.cpp))
 $(eval $(call test_rules,hash,${MOVES_SRCS} hash.cpp fen.cpp))
@@ -142,16 +142,16 @@ build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
 # Compare the perft tool with some different compilation options for speed comparison
-build/perft-clang-sse2: ${PERFT_SRCS} src/*.h src/perft/*.h
+build/perft-clang-sse2: ${PERFT_SRCS} src/*.h src/perft/*.h src/move/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-clang-emul:  ${PERFT_SRCS} src/*.h src/perft/*.h
+build/perft-clang-emul:  ${PERFT_SRCS} src/*.h src/perft/*.h src/move/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-sse2:  ${PERFT_SRCS} src/*.h src/perft/*.h
+build/perft-gcc-sse2:  ${PERFT_SRCS} src/*.h src/perft/*.h src/move/*.h
 	@mkdir -p build
 	${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-emul:  ${PERFT_SRCS} src/*.h src/perft/*.h
+build/perft-gcc-emul:  ${PERFT_SRCS} src/*.h src/perft/*.h src/move/*.h
 	@mkdir -p build
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
 

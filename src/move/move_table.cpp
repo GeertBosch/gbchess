@@ -3,7 +3,7 @@
 
 #include "castling_info.h"
 
-#include "moves_table.h"
+#include "move_table.h"
 
 namespace init {
 /** Compute the delta in occupancy for the given move */
@@ -204,7 +204,7 @@ void MovesTable::initializeEnPassantFrom() {
         int fromRank = color == 0 ? kNumRanks - 4 : 3;  // skipping 3 ranks from either side
         for (int fromFile = 0; fromFile < kNumFiles; ++fromFile)
             _enPassantFrom[color][fromFile] = {SquareSet::valid(fromRank, fromFile - 1) |
-                                              SquareSet::valid(fromRank, fromFile + 1)};
+                                               SquareSet::valid(fromRank, fromFile + 1)};
     }
 }
 

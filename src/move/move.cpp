@@ -4,10 +4,10 @@
 #include "castling_info.h"
 #include "common.h"
 #include "magic.h"
-#include "moves_table.h"
+#include "move_table.h"
 #include "piece_set.h"
 
-#include "moves.h"
+#include "move.h"
 
 namespace {
 
@@ -39,7 +39,8 @@ SquareSet pinnedPieces(const Board& board, Occupancy occupancy, Square kingSquar
     // Define pinning piece sets and corresponding capture sets
     PinData pinData[] = {
         {MovesTable::possibleCaptures(Piece::R, kingSquare), {PieceType::ROOK, PieceType::QUEEN}},
-        {MovesTable::possibleCaptures(Piece::B, kingSquare), {PieceType::BISHOP, PieceType::QUEEN}}};
+        {MovesTable::possibleCaptures(Piece::B, kingSquare),
+         {PieceType::BISHOP, PieceType::QUEEN}}};
 
     auto pinned = SquareSet();
 
@@ -108,10 +109,10 @@ void unmakeMove(Position& position, UndoPosition undo) {
 }
 
 CastlingMask castlingMask(Square from, Square to) {
-    constexpr struct MaskTable {
+    static struct MaskTable {
         using CM = CastlingMask;
         std::array<CM, kNumSquares> mask;
-        constexpr MaskTable() : mask{} {
+        MaskTable() : mask{} {
             mask[castlingInfo[0].kingSide[0].from] = CM::KQ;  // White King
             mask[castlingInfo[0].kingSide[1].from] = CM::K;   // White King Side Rook
             mask[castlingInfo[0].queenSide[1].from] = CM::Q;  // White Queen Side Rook

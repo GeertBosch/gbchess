@@ -7,7 +7,7 @@
 
 #include "common.h"
 #include "fen.h"
-#include "moves.h"
+#include "move/move.h"
 #include "options.h"
 #include "search.h"
 #include "uci.h"

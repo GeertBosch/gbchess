@@ -1,8 +1,8 @@
 #include "perft_core.h"
 #include "hash.h"
-#include "moves.h"
-#include "moves_gen.h"
-#include "moves_table.h"
+#include "move/move.h"
+#include "move/move_gen.h"
+#include "move/move_table.h"
 #include "options.h"
 #include <atomic>
 #include <condition_variable>

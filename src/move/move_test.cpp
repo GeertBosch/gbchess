@@ -3,8 +3,8 @@
 
 #include "common.h"
 #include "fen.h"
-#include "moves.h"
-#include "moves_table.h"
+#include "move.h"
+#include "move_table.h"
 
 using namespace moves;
 

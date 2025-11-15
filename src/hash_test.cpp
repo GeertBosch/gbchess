@@ -6,7 +6,7 @@
 #include "common.h"
 #include "fen.h"
 #include "hash.h"
-#include "moves.h"
+#include "move/move.h"
 
 namespace {
 std::string toHex(HashValue value) {

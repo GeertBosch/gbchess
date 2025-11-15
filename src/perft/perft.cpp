@@ -10,8 +10,8 @@
 #include <string>
 
 #include "fen.h"
-#include "moves.h"
-#include "moves_gen.h"
+#include "move/move.h"
+#include "move/move_gen.h"
 #include "perft_core.h"
 
 bool quiet = false;
