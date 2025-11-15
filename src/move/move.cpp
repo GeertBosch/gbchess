@@ -3,7 +3,7 @@
 
 #include "castling_info.h"
 #include "common.h"
-#include "magic.h"
+#include "magic/magic.h"
 #include "move_table.h"
 #include "piece_set.h"
 

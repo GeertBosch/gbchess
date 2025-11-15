@@ -1,7 +1,6 @@
 #pragma once
 
 #include "common.h"
-#include "magic.h"
 #include "occupancy.h"
 #include "square_set.h"
 

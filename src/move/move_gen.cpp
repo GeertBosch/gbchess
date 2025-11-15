@@ -1,6 +1,7 @@
 #include "move_gen.h"
 
 #include "castling_info.h"
+#include "magic/magic.h"
 #include "move_table.h"
 #include "options.h"
 #include "piece_set.h"

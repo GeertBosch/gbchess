@@ -74,7 +74,7 @@ build/%-debug: ${DBGOBJ}/%_test.o
 
 # Test dependency definitions
 NNUE_SRCS=eval/nnue/nnue.cpp eval/nnue/nnue_stats.cpp eval/nnue/nnue_incremental.cpp square_set.cpp fen.cpp
-MOVES_SRCS=move/move.cpp move/move_table.cpp move/move_gen.cpp magic.cpp square_set.cpp
+MOVES_SRCS=move/move.cpp move/move_table.cpp move/move_gen.cpp move/magic/magic.cpp square_set.cpp
 EVAL_SRCS=eval/eval.cpp hash.cpp ${NNUE_SRCS} ${MOVES_SRCS}
 SEARCH_SRCS=${EVAL_SRCS} search.cpp
 
@@ -91,7 +91,6 @@ $(eval $(call test_rules,moves_table,move/move_table.cpp fen.cpp))
 $(eval $(call test_rules,moves_gen,${MOVES_SRCS} fen.cpp))
 $(eval $(call test_rules,moves,${MOVES_SRCS} fen.cpp))
 $(eval $(call test_rules,hash,${MOVES_SRCS} hash.cpp fen.cpp))
-$(eval $(call test_rules,magic,${MOVES_SRCS}))
 $(eval $(call test_rules,search,${SEARCH_SRCS}))
 $(eval $(call test_rules,uci,uci.cpp ${SEARCH_SRCS}))
 
@@ -109,6 +108,14 @@ build/nnue-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,eval/nnue/nnue_tes
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
 build/nnue-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,eval/nnue/nnue_test.cpp ${NNUE_SRCS}))
+	@mkdir -p build
+	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+
+build/magic-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,move/magic/magic_test.cpp ${MOVES_SRCS}))
+	@mkdir -p build
+	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+
+build/magic-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,move/magic/magic_test.cpp ${MOVES_SRCS}))
 	@mkdir -p build
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
@@ -246,8 +253,9 @@ uci: $(patsubst test/ut%.in,test/ut%.out,$(wildcard test/ut*.in))
 
 magic: build/magic-test
 # To accept any changes on test failure, pipe the output to the `patch` command
-	@(./build/magic-test --verbose | diff -u src/magic_gen.h -) && echo Magic tests passed || \
-	(echo "\n*** To accept these changes, pipe this output to the patch command ***" && false)
+	@(./build/magic-test --verbose | diff -u src/move/magic/magic_gen.h -) \
+	&& echo Magic tests passed \
+	|| (echo "\n*** To accept these changes, pipe this output to the patch command ***" && false)
 
 test-cpp: build debug ${CPP_TESTS}
 	@echo "Running C++ test executables..."

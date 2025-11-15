@@ -3,7 +3,7 @@
 #include <string>
 
 #include "eval_tables.h"
-#include "magic.h"
+#include "move/magic/magic.h"
 #include "move/move.h"
 #include "move/move_gen.h"
 #include "options.h"
