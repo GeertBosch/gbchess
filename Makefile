@@ -20,9 +20,8 @@ ifeq ($(_system_type),Darwin)
 endif
 
 # CPP Tests
-CPP_TEST_SRCS=$(foreach test,$(wildcard src/*_test.cpp src/*/*_test.cpp src/*/*/*_test.cpp),\
-	$(notdir $(test)))
-CPP_TESTS=$(patsubst %_test.cpp,build/%-test,$(CPP_TEST_SRCS))
+CPP_TEST_SRCS=$(wildcard src/*_test.cpp src/*/*_test.cpp src/*/*/*_test.cpp)
+CPP_TESTS=$(patsubst %_test.cpp,build/%-test,$(foreach test, $(CPP_TEST_SRCS),$(notdir $(test))))
 
 # First argument is the object dir, second is list of source files
 calc_objs=$(patsubst src/%.cpp,$(1)/%.o,$(2))
@@ -36,14 +35,6 @@ test_src=$(patsubst %-test,%_test.cpp,$(patsubst %-debug,%_test.cpp,$(1)))
 test_dir=$(patsubst %-test,${OPTOBJ},$(patsubst %-debug,${DBGOBJ},$(1)))
 # Given a test target name and additional source files, return the list of object files
 test_objs=$(call calc_objs,$(call test_dir,$(1)),$(call prefix_src,$(call test_src,$(1)) $(2)))
-
-# Special handling for subdirectory tests
-eval_test_src=eval/eval_test.cpp
-nnue_test_src=eval/nnue/nnue_test.cpp
-fen_test_src=fen/fen_test.cpp
-hash_test_src=hash/hash_test.cpp
-uci_test_src=uci/uci_test.cpp
-core_test_src=core/core_test.cpp
 
 ALLSRCS=$(wildcard src/*.cpp src/*/*.cpp src/*/*/*.cpp)
 
@@ -69,127 +60,42 @@ ${DBGOBJ}/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
 	${CLANGPP} -MMD -c ${CCFLAGS} ${DEBUGFLAGS} -Isrc -o $@ $<
 
-build/%-test: ${OPTOBJ}/%_test.o
+${OPTOBJ}/%-test: ${OPTOBJ}/%_test.o
 	@mkdir -p build
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+	@ln -sf $$(echo "$@" | sed 's|build/||') build/$(notdir $@)
 
-build/%-debug: ${DBGOBJ}/%_test.o
+${DBGOBJ}/%-debug: ${DBGOBJ}/%_test.o
 	@mkdir -p build
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+	@ln -sf $$(echo "$@" | sed 's|build/||') build/$(notdir $@)
 
 # Test dependency definitions
-NNUE_SRCS=eval/nnue/nnue.cpp eval/nnue/nnue_stats.cpp eval/nnue/nnue_incremental.cpp square_set/square_set.cpp fen/fen.cpp
+NNUE_SRCS=eval/nnue/nnue.cpp eval/nnue/nnue_stats.cpp eval/nnue/nnue_incremental.cpp square_set/square_set.cpp
 MOVES_SRCS=move/move.cpp move/move_table.cpp move/move_gen.cpp move/magic/magic.cpp square_set/square_set.cpp
 EVAL_SRCS=eval/eval.cpp hash/hash.cpp ${NNUE_SRCS} ${MOVES_SRCS}
 SEARCH_SRCS=${EVAL_SRCS} search/search.cpp
 
-# Function to create both test and debug rules for a test
 define test_rules
-build/$(1)-test: $$(call test_objs,$(1)-test,$(2))
-build/$(1)-debug: $$(call test_objs,$(1)-debug,$(2))
+${OPTOBJ}/$(1)-test: $$(call test_objs,$(1)-test,$(2))
+${DBGOBJ}/$(1)-debug: $$(call test_objs,$(1)-debug,$(2))
+build/$(notdir $1)-test: ${OPTOBJ}/$(1)-test
+build/$(notdir $1)-debug: ${DBGOBJ}/$(1)-debug
 endef
 
-# Generate test rules for moved components
-build/fen-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,fen/fen_test.cpp fen/fen.cpp))
-	@mkdir -p build
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
-
-build/fen-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,fen/fen_test.cpp fen/fen.cpp))
-	@mkdir -p build
-	${CLANGPP} ${CCFLAGS} -DDEBUG -O0 -g -fsanitize=address ${LINKFLAGS} -o $@ $^
-
-build/hash-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,hash/hash_test.cpp ${MOVES_SRCS} hash/hash.cpp fen/fen.cpp))
-	@mkdir -p build
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
-
-build/hash-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,hash/hash_test.cpp ${MOVES_SRCS} hash/hash.cpp fen/fen.cpp))
-	@mkdir -p build
-	${CLANGPP} ${CCFLAGS} -DDEBUG -O0 -g -fsanitize=address ${LINKFLAGS} -o $@ $^
-
-build/uci-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,uci/uci_test.cpp uci/uci.cpp ${SEARCH_SRCS}))
-	@mkdir -p build
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
-
-build/uci-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,uci/uci_test.cpp uci/uci.cpp ${SEARCH_SRCS}))
-	@mkdir -p build
-	${CLANGPP} ${CCFLAGS} -DDEBUG -O0 -g -fsanitize=address ${LINKFLAGS} -o $@ $^
-
-# Special rules for subdirectory tests (these don't follow the standard pattern)
-build/square_set-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,square_set/square_set_test.cpp square_set/square_set.cpp fen/fen.cpp))
-	@mkdir -p build
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
-
-build/square_set-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,square_set/square_set_test.cpp square_set/square_set.cpp fen/fen.cpp))
-	@mkdir -p build
-	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
-
-build/eval-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,eval/eval_test.cpp ${SEARCH_SRCS}))
-	@mkdir -p build
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
-
-build/eval-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,eval/eval_test.cpp ${SEARCH_SRCS}))
-	@mkdir -p build
-	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
-
-build/search-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,search/search_test.cpp ${SEARCH_SRCS}))
-	@mkdir -p build
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
-
-build/search-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,search/search_test.cpp ${SEARCH_SRCS}))
-	@mkdir -p build
-	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
-
-build/core-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,core/core_test.cpp))
-	@mkdir -p build
-	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
-
-build/core-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,core/core_test.cpp))
-	@mkdir -p build
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
-
-build/elo-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,search/elo_test.cpp ${EVAL_SRCS}))
-	@mkdir -p build
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
-
-build/nnue-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,eval/nnue/nnue_test.cpp ${NNUE_SRCS}))
-	@mkdir -p build
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
-
-build/nnue-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,eval/nnue/nnue_test.cpp ${NNUE_SRCS}))
-	@mkdir -p build
-	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
-
-build/magic-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,move/magic/magic_test.cpp ${MOVES_SRCS}))
-	@mkdir -p build
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
-
-build/magic-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,move/magic/magic_test.cpp ${MOVES_SRCS}))
-	@mkdir -p build
-	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
-
-build/move-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,move/move_test.cpp ${MOVES_SRCS} fen/fen.cpp))
-	@mkdir -p build
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
-
-build/move-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,move/move_test.cpp ${MOVES_SRCS} fen/fen.cpp))
-	@mkdir -p build
-	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
-
-build/move_gen-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,move/move_gen_test.cpp ${MOVES_SRCS} fen/fen.cpp))
-	@mkdir -p build
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
-
-build/move_gen-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,move/move_gen_test.cpp ${MOVES_SRCS} fen/fen.cpp))
-	@mkdir -p build
-	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
-
-build/move_table-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,move/move_table_test.cpp move/move_table.cpp fen/fen.cpp))
-	@mkdir -p build
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
-
-build/move_table-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,move/move_table_test.cpp move/move_table.cpp fen/fen.cpp))
-	@mkdir -p build
-	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+$(eval $(call test_rules,core/core))
+$(eval $(call test_rules,fen/fen,fen/fen.cpp))
+$(eval $(call test_rules,hash/hash,hash/hash.cpp ${MOVES_SRCS} fen/fen.cpp))
+$(eval $(call test_rules,uci/uci,uci/uci.cpp ${SEARCH_SRCS} fen/fen.cpp))
+$(eval $(call test_rules,eval/eval,eval/eval.cpp ${EVAL_SRCS} fen/fen.cpp))
+$(eval $(call test_rules,square_set/square_set,square_set/square_set.cpp fen/fen.cpp))
+$(eval $(call test_rules,search/search,search/search.cpp ${SEARCH_SRCS} fen/fen.cpp))
+$(eval $(call test_rules,move/move,move/move.cpp ${MOVES_SRCS} fen/fen.cpp))
+$(eval $(call test_rules,move/move_gen,move/move_gen.cpp ${MOVES_SRCS} fen/fen.cpp))
+$(eval $(call test_rules,move/move_table,move/move_table.cpp fen/fen.cpp))
+$(eval $(call test_rules,move/magic/magic,move/magic/magic.cpp ${MOVES_SRCS} fen/fen.cpp))
+$(eval $(call test_rules,eval/nnue/nnue,${NNUE_SRCS} fen/fen.cpp))
+$(eval $(call test_rules,search/elo, ${EVAL_SRCS}))
 
 .deps: $(call calc_deps,${OPTOBJ},${ALLSRCS}) $(call calc_deps,${DBGOBJ},${ALLSRCS})
 
@@ -285,13 +191,8 @@ build/perft-debug.ok: build/perft-debug
 build/perft-test.ok: build/perft build/perft-test
 	./build/perft -q 5 4865609 && ./build/perft-test && touch $@
 
-# Automatically generate debug targets from *_test.cpp files
-TEST_SRCS=$(wildcard src/*_test.cpp)
-DEBUG_TARGETS=$(patsubst src/%_test.cpp,build/%-debug,$(TEST_SRCS))
-BUILD_TARGETS=$(patsubst src/%_test.cpp,build/%-test,$(TEST_SRCS))
-
-debug: $(DEBUG_TARGETS) build/perft-debug
-build: $(BUILD_TARGETS) build/perft
+debug: $(patsubst %-test,%-debug,$(CPP_TESTS)) build/perft-debug
+build: $(CPP_TESTS) build/perft
 
 searches1: build/search-debug
 	./build/search-debug "5r1k/pp4pp/5p2/1BbQp1r1/7K/7P/1PP3P1/3R3R b - - 3 26" 3
@@ -329,20 +230,21 @@ magic: build/magic-test
 	&& echo Magic tests passed \
 	|| (echo "\n*** To accept these changes, pipe this output to the patch command ***" && false)
 
-test-cpp: build debug ${CPP_TESTS}
+test-cpp: build ${CPP_TESTS}
+	@(cd build && echo Symlinking NNUE files && ln -fs ../*.nnue .)
 	@echo "Checking that all C++ unit tests have been built"
 	@find src -name "*_test.cpp" -exec basename {} _test.cpp \; | sort > .test_sources.tmp
-	@find build -name "*-test" -exec basename {} -test \; | sort > .test_executables.tmp
+	@find build -depth 1 -a -name "*-test" -exec basename {} -test \; | sort > .test_executables.tmp
 	@diff -u .test_sources.tmp .test_executables.tmp \
 		&& (echo "All C++ unit tests have been built" \
 			&& rm -f .test_sources.tmp .test_executables.tmp) \
 		|| (echo "\n*** Extra or missing C++ unit tests! ***\n"  && false)
 	@echo ${CPP_TESTS}
 	@echo "Running C++ test executables..."
-	@for file in build/*-test; do \
+	@(cd build && for file in *-test; do \
 		/bin/echo -n Run $$file ; \
 		(./$$file < /dev/null > /dev/null && echo " passed") || ./$$file </dev/null; \
-	done
+	done)
 
 test: test-cpp searches evals uci magic
 
