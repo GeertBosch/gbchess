@@ -56,8 +56,8 @@ gbchess is a high-performance C++ chess engine focusing on:
 - **Evaluation**: Hybrid classical + NNUE neural network
 - **Search**: Alpha-beta with various optimizations
 - **Testing**: Perft for move generation validation, tactical puzzles for search
-- **Key Components**: Move generation (`moves*.cpp/h`), Position evaluation (`eval.cpp/h`, NNUE),
-  Search algorithms (`search.cpp/h`), Hash tables (`hash.cpp/h`), FEN parsing (`fen.cpp/h`)
+- **Key Components**: Move generation (`move/`), Position evaluation (`eval/`, `nnue/`),
+  Search algorithms (`search/`), Hash tables (`hash/`), FEN parsing (`fen/`)
 
 ### Testing Protocol
 **ALWAYS start with parallel builds**: Use `make -j` to see the complete failure picture immediately.
@@ -109,13 +109,18 @@ This is far more efficient than incremental testing requiring multiple LLM/human
 ## File Organization
 ```
 src/
-├── moves*.{cpp,h}     - Move generation
-├── eval.{cpp,h}       - Position evaluation
-├── search.{cpp,h}     - Search algorithms
-├── nnue*.{cpp,h}      - Neural network evaluation
-├── hash.{cpp,h}       - Transposition tables
-├── fen.{cpp,h}        - FEN position parsing
-└── xxx_test.cpp       - Unit tests for xxx.{cpp,h}
+├── core/              - Core chess types and utilities
+├── move/              - Move generation and representation
+│   └── magic/         - Magic bitboard generation
+├── eval/              - Position evaluation
+│   └── nnue/          - Neural network evaluation
+├── search/            - Search algorithms
+├── hash/              - Transposition tables
+├── fen/               - FEN position parsing
+├── square_set/        - Bitboard operations
+├── uci/               - UCI protocol interface
+├── perft/             - Performance testing
+└── util/              - General utilities
 ```
 
 ## Integration Notes
