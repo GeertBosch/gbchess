@@ -14,7 +14,7 @@
 #include <cassert>
 #include <iostream>
 
-#include "common.h"
+#include "core/common.h"
 #include "square_set.h"
 
 void testSquareSet() {

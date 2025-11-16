@@ -1,10 +1,10 @@
 #include "move_gen.h"
 
 #include "castling_info.h"
+#include "core/options.h"
+#include "core/piece_set.h"
 #include "magic/magic.h"
 #include "move_table.h"
-#include "options.h"
-#include "piece_set.h"
 
 using namespace moves;
 

@@ -1,9 +1,9 @@
 #include "perft_core.h"
-#include "../hash/hash.h"
+#include "core/options.h"
+#include "hash/hash.h"
 #include "move/move.h"
 #include "move/move_gen.h"
 #include "move/move_table.h"
-#include "options.h"
 #include <atomic>
 #include <condition_variable>
 #include <mutex>

@@ -2,10 +2,10 @@
 #include <cstring>
 
 #include "castling_info.h"
-#include "common.h"
+#include "core/common.h"
+#include "core/piece_set.h"
 #include "magic/magic.h"
 #include "move_table.h"
-#include "piece_set.h"
 
 #include "move.h"
 

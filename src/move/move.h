@@ -3,7 +3,7 @@
 #include <functional>
 #include <string>
 
-#include "common.h"
+#include "core/common.h"
 #include "square_set/occupancy.h"
 #include "square_set/square_set.h"
 

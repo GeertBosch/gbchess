@@ -1,7 +1,7 @@
 #pragma once
 #include <array>
 
-#include "common.h"
+#include "core/common.h"
 using CastlingMove = std::array<FromTo, 2>;  // King and Rook moves for castling
 struct CastlingInfo {
     const Piece rook;

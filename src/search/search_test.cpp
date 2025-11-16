@@ -6,7 +6,8 @@
 #include <sstream>
 #include <string>
 
-#include "common.h"
+#include "core/common.h"
+#include "core/options.h"
 #include "elo.h"
 #include "eval/eval.h"
 #include "eval/nnue/nnue_stats.h"
@@ -14,7 +15,6 @@
 #include "hash/hash.h"
 #include "move/move.h"
 #include "move/move_gen.h"
-#include "options.h"
 #include "pv.h"
 #include "search.h"
 

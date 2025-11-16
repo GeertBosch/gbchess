@@ -1,10 +1,9 @@
 #pragma once
 
-#include "common.h"
+#include "core/common.h"
 #include "eval/eval.h"
-#include "eval/nnue/nnue.h"
-#include <array>
-#include <optional>
+
+#include "nnue.h"
 
 namespace nnue {
 

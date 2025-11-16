@@ -5,10 +5,10 @@
 #include <sstream>
 #include <thread>
 
-#include "common.h"
+#include "core/common.h"
+#include "core/options.h"
 #include "fen/fen.h"
 #include "move/move.h"
-#include "options.h"
 #include "search/search.h"
 #include "uci.h"
 

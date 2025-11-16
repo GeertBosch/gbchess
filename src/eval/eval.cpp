@@ -2,15 +2,15 @@
 #include <map>
 #include <string>
 
-#include "common.h"
+#include "core/common.h"
+#include "core/options.h"
+#include "core/piece_set.h"
 #include "eval_tables.h"
 #include "move/magic/magic.h"
 #include "move/move.h"
 #include "move/move_gen.h"
-#include "options.h"
-#include "piece_set.h"
 
-#include "eval/eval.h"
+#include "eval.h"
 
 SquareTable operator+(SquareTable lhs, Score rhs) {
     for (auto& value : lhs) value += rhs;

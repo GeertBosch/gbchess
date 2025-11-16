@@ -1,5 +1,5 @@
-#include "common.h"
-#include "options.h"
+#include "core/common.h"
+#include "core/options.h"
 #include <cassert>
 #include <cstdlib>
 #include <iostream>

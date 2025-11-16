@@ -1,8 +1,8 @@
 #include <array>
 
-#include "move/castling_info.h"
-#include "common.h"
+#include "core/common.h"
 #include "hash.h"
+#include "move/castling_info.h"
 #include "move/move.h"
 #include "util/random.h"
 

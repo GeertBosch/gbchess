@@ -6,14 +6,14 @@
 #include <sys/types.h>
 #include <vector>
 
-#include "common.h"
+#include "core/common.h"
+#include "core/options.h"
 #include "eval/eval.h"
 #include "eval/nnue/nnue.h"
 #include "eval/nnue/nnue_incremental.h"
 #include "hash/hash.h"
 #include "move/move.h"
 #include "move/move_gen.h"
-#include "options.h"
 #include "pv.h"
 
 #include "search.h"

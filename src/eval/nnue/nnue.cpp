@@ -1,5 +1,5 @@
 #include "eval/nnue/nnue.h"
-#include "common.h"
+#include "core/common.h"
 #include "eval/nnue/nnue_stats.h"
 #include <chrono>
 #include <fstream>

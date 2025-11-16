@@ -1,7 +1,7 @@
 #include <cassert>
 #include <iostream>
 
-#include "common.h"
+#include "core/common.h"
 #include "fen/fen.h"
 #include "move.h"
 #include "move_table.h"

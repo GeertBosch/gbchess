@@ -3,8 +3,8 @@
 
 #include "move_gen.h"
 
+#include "core/options.h"
 #include "fen/fen.h"
-#include "options.h"
 
 using namespace moves;
 

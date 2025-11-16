@@ -1,5 +1,6 @@
 #pragma once
-#include "common.h"
+#include "core/common.h"
+
 namespace fen {
 static constexpr auto emptyPiecePlacement = "8/8/8/8/8/8/8/8";
 static constexpr auto initialPiecePlacement = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";

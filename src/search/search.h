@@ -2,7 +2,7 @@
 
 #include <functional>
 
-#include "common.h"
+#include "core/common.h"
 #include "eval/eval.h"
 #include "pv.h"
 

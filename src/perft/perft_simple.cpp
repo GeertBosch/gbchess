@@ -12,7 +12,7 @@
  * Example: perft_simple startpos 3
  */
 
-#include "common.h"
+#include "core/common.h"
 #include "fen/fen.h"
 #include "move/move.h"
 #include "move/move_gen.h"
