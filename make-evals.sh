@@ -6,7 +6,7 @@ phase=${1:-middlegame}
 
 # Use end positions of from puzzles, as they should be relatively quiet for evaluation
 echo "cp,fen"
-egrep "$phase" puzzles/lichess_db_puzzle.csv | 
+egrep "$phase" lichess/lichess_db_puzzle.csv | 
 head -1000 | 
 cut -d, -f2,3 | 
 tr ',' ' ' |

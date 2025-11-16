@@ -201,7 +201,7 @@ clean:
 	rm -f core *.core puzzles.actual perf.data* *.ii *.bc *.s
 	rm -f game.??? log.??? players.dat # XBoard outputs
 	rm -f test/ut*.out
-	rm -f lichess/puzzles.csv
+	rm -f lichess/\.csv
 	rm -rf *.dSYM .DS_Store
 
 PERFT_SRCS=$(call prefix_src,perft/perft.cpp perft/perft_core.cpp ${MOVES_SRCS} fen/fen.cpp hash/hash.cpp)
