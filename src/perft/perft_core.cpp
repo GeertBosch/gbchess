@@ -109,10 +109,7 @@ void enter2(HashValue hash, uint32_t count) {
 /**
  * Specialize perft with 2 levels left. The bulk of the work is done here, so optimize this.
  */
-NodeCount perft2(Board& board,
-                 Hash hash,
-                 moves::SearchState state,
-                 const ProgressCallback& callback = nullptr) {
+NodeCount perft2(Board& board, Hash hash, moves::SearchState state) {
     dassert(!options::cachePerft || hash == Hash(Position{board, state.turn}));
 
     if constexpr (options::cachePerft)
@@ -137,20 +134,15 @@ NodeCount perft2(Board& board,
 
         auto moveNodes = countLegalMovesAndCaptures(board, newState);
         nodes += moveNodes;
-        if (callback) callback(moveNodes);
     });
-    if (options::cachePerft) enter2(hash(), nodes);
+    if (options::cachePerft && nodes > 100) enter2(hash(), nodes);
 
     return nodes;
 }
 
-NodeCount perft(Board& board,
-                Hash hash,
-                moves::SearchState state,
-                int depth,
-                const ProgressCallback& callback = nullptr) {
+NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
     assert(depth > 1);
-    if (depth == 2) return perft2(board, hash, state, callback);
+    if (depth == 2) return perft2(board, hash, state);
 
     dassert(!options::cachePerft || hash == Hash(Position{board, state.turn}));
 
@@ -172,13 +164,25 @@ NodeCount perft(Board& board,
         newState.inCheck = moves::isAttacked(board, newState.kingSquare, newState.occupancy);
         newState.pinned = moves::pinnedPieces(board, newState.occupancy, newState.kingSquare);
 
-        auto moveNodes = perft(board, newHash, newState, depth - 1, callback);
+        auto moveNodes = perft(board, newHash, newState, depth - 1);
         auto newNodes = nodes + moveNodes;
-        dassert(newNodes >= nodes);  // Check for node count overflow
+        assert(newNodes >= nodes);  // Check for node count overflow
         nodes = newNodes;
-        if (callback) callback(moveNodes);
     });
     if (options::cachePerft) perftHashTable.enter(hash(), depth, nodes);
+    return nodes;
+}
+
+/**
+ * Perft with progress callback at the end of the computation
+ */
+NodeCount perft(Board& board,
+                Hash hash,
+                moves::SearchState state,
+                int depth,
+                const ProgressCallback& callback) {
+    auto nodes = perft(board, hash, state, depth);
+    if (callback) callback(nodes);
     return nodes;
 }
 
@@ -192,20 +196,24 @@ struct PerftTask {
 
 using TaskList = std::vector<PerftTask>;
 
+void expandTask(TaskList& expanded, PerftTask task, MoveVector moves) {
+    if (moves.size() < 2 || task.depth < 5)
+        expanded.push_back(task);
+    else
+        for (auto move : moves)
+            expanded.emplace_back(moves::applyMove(task.position, move), task.depth - 1);
+}
 TaskList expandTasks(TaskList tasks, size_t number) {
     while (tasks.size() < number) {
         TaskList expanded;
 
-        for (auto task : tasks) {
-            auto moves = moves::allLegalMovesAndCaptures(task.position.turn, task.position.board);
-            if (moves.size() < 2 || task.depth < 5)
-                expanded.push_back(task);
-            else
-                for (auto move : moves)
-                    expanded.emplace_back(moves::applyMove(task.position, move), task.depth - 1);
-        }
+        for (auto task : tasks)
+            expandTask(expanded,
+                       task,
+                       moves::allLegalMovesAndCaptures(task.position.turn, task.position.board));
 
-        if (expanded.size() == tasks.size()) break;
+
+        if (expanded.size() == tasks.size()) break;  // No further expansion possible
         tasks = expanded;
     };
     return tasks;
@@ -283,14 +291,13 @@ NodeCount threadedPerft(Position position, int depth, const ProgressCallback& ca
 }
 
 NodeCount perft(Position position, int depth, const ProgressCallback& callback) {
+    auto state = moves::SearchState(position.board, position.turn);
     if (depth <= 1) {
-        NodeCount result =
-            depth == 1 ? moves::allLegalMovesAndCaptures(position.turn, position.board).size() : 1;
+        NodeCount result = depth ? moves::countLegalMovesAndCaptures(position.board, state) : 1;
         if (callback) callback(result);
         return result;
     }
 
-    auto state = moves::SearchState(position.board, position.turn);
     if (depth <= 5) return perft(position.board, Hash{position}, state, depth, callback);
 
     // For deeper perfts, see if the first few plies have sufficient cardinality. For that we take

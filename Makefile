@@ -107,8 +107,11 @@ clean:
 	rm -f core *.core puzzles.actual perf.data* *.ii *.bc *.s
 	rm -f game.??? log.??? players.dat # XBoard outputs
 	rm -f test/ut*.out
-	rm -f lichess/\.csv
 	rm -rf *.dSYM .DS_Store
+	rm -f compile_commands.json
+
+realclean: clean
+	rm -f lichess/*.csv
 
 PERFT_SRCS=$(call prefix_src,perft/perft.cpp perft/perft_core.cpp ${MOVES_SRCS} fen/fen.cpp hash/hash.cpp)
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
@@ -152,10 +155,12 @@ perft-debug-test: build/perft-debug.ok
 
 # Download the lichess puzzles database if not already present. As the puzzles change over time, and
 # the file is large, we don't normally clean and refetch it.
-${PUZZLES}:
+${PUZZLES}: ${PUZZLES}.zst
+	zstd -d $<
+
+${PUZZLES}.zst:
 	mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) \
 		&& wget https://database.lichess.org/$(notdir ${PUZZLES}).zst
-	zstd -d ${PUZZLES}.zst
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
 mate123: build/search-test ${PUZZLES}
