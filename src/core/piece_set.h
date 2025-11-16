@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 
-#include "common.h"
+#include "core.h"
 
 struct PieceSet {
     uint16_t pieces = 0;

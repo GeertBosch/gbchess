@@ -2,7 +2,7 @@
 #include <sstream>
 #include <string>
 
-#include "core/common.h"
+#include "core/core.h"
 #include "fen.h"
 
 namespace fen {

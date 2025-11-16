@@ -3,7 +3,7 @@
 #include <limits>
 #include <string>
 
-#include "core/common.h"
+#include "core/core.h"
 
 /**
  *  The Score type is used to represent the evaluation of a chess position. It is a signed integer,

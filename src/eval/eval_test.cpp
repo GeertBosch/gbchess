@@ -7,7 +7,7 @@
 #include <optional>
 #include <string>
 
-#include "core/common.h"
+#include "core/core.h"
 #include "core/options.h"
 #include "fen/fen.h"
 #include "move/move.h"

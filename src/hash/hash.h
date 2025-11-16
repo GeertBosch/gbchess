@@ -4,7 +4,7 @@
 #include <functional>
 #include <type_traits>
 
-#include "core/common.h"
+#include "core/core.h"
 #include "core/options.h"
 
 // Implement a hashing method for chess positions using Zobrist hashing

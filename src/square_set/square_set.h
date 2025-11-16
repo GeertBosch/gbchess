@@ -2,7 +2,7 @@
 
 #include <climits>
 
-#include "core/common.h"
+#include "core/core.h"
 
 /**
  * Represents a set of squares on a chess board. This class is like std::set<Square>, but

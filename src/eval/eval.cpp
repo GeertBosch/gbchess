@@ -2,7 +2,7 @@
 #include <map>
 #include <string>
 
-#include "core/common.h"
+#include "core/core.h"
 #include "core/options.h"
 #include "core/piece_set.h"
 #include "eval_tables.h"

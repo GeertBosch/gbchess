@@ -43,7 +43,7 @@ nnue_test_src=eval/nnue/nnue_test.cpp
 fen_test_src=fen/fen_test.cpp
 hash_test_src=hash/hash_test.cpp
 uci_test_src=uci/uci_test.cpp
-core_test_src=core/common_test.cpp
+core_test_src=core/core_test.cpp
 
 ALLSRCS=$(wildcard src/*.cpp src/*/*.cpp src/*/*/*.cpp)
 
@@ -139,11 +139,11 @@ build/search-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,search/search_t
 	@mkdir -p build
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
-build/common-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,core/common_test.cpp))
+build/core-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,core/core_test.cpp))
 	@mkdir -p build
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
-build/common-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,core/common_test.cpp))
+build/core-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,core/core_test.cpp))
 	@mkdir -p build
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
@@ -221,16 +221,16 @@ build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
 # Compare the perft tool with some different compilation options for speed comparison
-build/perft-clang-sse2: ${PERFT_SRCS} src/util/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-clang-sse2: ${PERFT_SRCS} src/core/*.h src/util/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-clang-emul:  ${PERFT_SRCS} src/util/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-clang-emul:  ${PERFT_SRCS} src/core/*.h src/util/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-sse2:  ${PERFT_SRCS} src/util/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-gcc-sse2:  ${PERFT_SRCS} src/core/*.h src/util/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-emul:  ${PERFT_SRCS} src/util/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-gcc-emul:  ${PERFT_SRCS} src/core/*.h src/util/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/common.h"
+#include "core/core.h"
 #include "eval/eval.h"
 
 #include "nnue.h"

@@ -3,7 +3,7 @@
 #include <ostream>
 #include <sstream>
 
-#include "core/common.h"
+#include "core/core.h"
 #include "fen/fen.h"
 #include "hash.h"
 #include "move/move.h"

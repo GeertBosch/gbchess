@@ -6,7 +6,7 @@
 #include <sstream>
 #include <string>
 
-#include "core/common.h"
+#include "core/core.h"
 #include "core/options.h"
 #include "elo.h"
 #include "eval/eval.h"

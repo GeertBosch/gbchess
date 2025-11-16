@@ -1,6 +1,6 @@
 #include <array>
 
-#include "core/common.h"
+#include "core/core.h"
 #include "hash.h"
 #include "move/castling_info.h"
 #include "move/move.h"

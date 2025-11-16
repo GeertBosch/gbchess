@@ -2,7 +2,7 @@
 #include <cstring>
 
 #include "castling_info.h"
-#include "core/common.h"
+#include "core/core.h"
 #include "core/piece_set.h"
 #include "magic/magic.h"
 #include "move_table.h"

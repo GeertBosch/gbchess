@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-#include "core/common.h"
+#include "core/core.h"
 
 inline std::ostream& operator<<(std::ostream& os, Move mv) {
     return os << to_string(mv);

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/common.h"
+#include "core/core.h"
 #include "square_set/square_set.h"
 
 /**

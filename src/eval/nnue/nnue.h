@@ -6,7 +6,7 @@
 #include <sys/types.h>
 #include <vector>
 
-#include "core/common.h"
+#include "core/core.h"
 
 namespace nnue {
 

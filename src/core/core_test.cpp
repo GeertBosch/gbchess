@@ -1,7 +1,7 @@
 #include <cassert>
 #include <iostream>
 
-#include "common.h"
+#include "core.h"
 
 void testColor() {
     assert(color(Piece::P) == Color::w);
