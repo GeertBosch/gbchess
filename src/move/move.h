@@ -4,8 +4,8 @@
 #include <string>
 
 #include "common.h"
-#include "occupancy.h"
-#include "square_set.h"
+#include "square_set/occupancy.h"
+#include "square_set/square_set.h"
 
 namespace moves {
 struct MoveError : public std::exception {

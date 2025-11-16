@@ -1,7 +1,8 @@
-#include "common.h"
 #include <algorithm>
+#include <map>
 #include <string>
 
+#include "common.h"
 #include "eval_tables.h"
 #include "move/magic/magic.h"
 #include "move/move.h"

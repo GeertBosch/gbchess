@@ -74,8 +74,8 @@ build/%-debug: ${DBGOBJ}/%_test.o
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
 # Test dependency definitions
-NNUE_SRCS=eval/nnue/nnue.cpp eval/nnue/nnue_stats.cpp eval/nnue/nnue_incremental.cpp square_set.cpp fen.cpp
-MOVES_SRCS=move/move.cpp move/move_table.cpp move/move_gen.cpp move/magic/magic.cpp square_set.cpp
+NNUE_SRCS=eval/nnue/nnue.cpp eval/nnue/nnue_stats.cpp eval/nnue/nnue_incremental.cpp square_set/square_set.cpp fen.cpp
+MOVES_SRCS=move/move.cpp move/move_table.cpp move/move_gen.cpp move/magic/magic.cpp square_set/square_set.cpp
 EVAL_SRCS=eval/eval.cpp hash.cpp ${NNUE_SRCS} ${MOVES_SRCS}
 SEARCH_SRCS=${EVAL_SRCS} search/search.cpp
 
@@ -87,11 +87,18 @@ endef
 
 # Generate test rules for each test
 $(eval $(call test_rules,fen,fen.cpp))
-$(eval $(call test_rules,square_set,square_set.cpp fen.cpp))
 $(eval $(call test_rules,hash,${MOVES_SRCS} hash.cpp fen.cpp))
 $(eval $(call test_rules,uci,uci.cpp ${SEARCH_SRCS}))
 
 # Special rules for subdirectory tests (these don't follow the standard pattern)
+build/square_set-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,square_set/square_set_test.cpp square_set/square_set.cpp fen.cpp))
+	@mkdir -p build
+	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+
+build/square_set-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,square_set/square_set_test.cpp square_set/square_set.cpp fen.cpp))
+	@mkdir -p build
+	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+
 build/eval-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,eval/eval_test.cpp ${SEARCH_SRCS}))
 	@mkdir -p build
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
@@ -182,16 +189,16 @@ build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
 # Compare the perft tool with some different compilation options for speed comparison
-build/perft-clang-sse2: ${PERFT_SRCS} src/*.h src/util/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-clang-sse2: ${PERFT_SRCS} src/*.h src/util/*.h src/square_set/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-clang-emul:  ${PERFT_SRCS} src/*.h src/util/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-clang-emul:  ${PERFT_SRCS} src/*.h src/util/*.h src/square_set/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-sse2:  ${PERFT_SRCS} src/*.h src/util/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-gcc-sse2:  ${PERFT_SRCS} src/*.h src/util/*.h src/square_set/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-emul:  ${PERFT_SRCS} src/*.h src/util/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-gcc-emul:  ${PERFT_SRCS} src/*.h src/util/*.h src/square_set/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
 

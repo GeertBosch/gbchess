@@ -1,7 +1,7 @@
 #pragma once
 
 #include "common.h"
-#include "square_set.h"
+#include "square_set/square_set.h"
 
 /**
  * Parallel deposit function that deposits bits from `value` into `result` according to the `mask`.
