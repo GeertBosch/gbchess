@@ -5,7 +5,7 @@
 #include <iostream>
 #include <string>
 
-#include "fen.h"
+#include "fen/fen.h"
 #include "perft_core.h"
 
 using NodeCount = uint128_t;

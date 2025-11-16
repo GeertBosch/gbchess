@@ -4,7 +4,7 @@
 #include <string>
 
 #include "eval/nnue/nnue.h"
-#include "fen.h"
+#include "fen/fen.h"
 
 /**
  * Compute FNV1A hash of data with given size. This provides a simple way to verify test results.

@@ -10,7 +10,7 @@
 #include "eval/eval.h"
 #include "eval/nnue/nnue.h"
 #include "eval/nnue/nnue_incremental.h"
-#include "hash.h"
+#include "hash/hash.h"
 #include "move/move.h"
 #include "move/move_gen.h"
 #include "options.h"

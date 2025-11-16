@@ -2,7 +2,7 @@
 #include <iostream>
 
 #include "common.h"
-#include "fen.h"
+#include "fen/fen.h"
 #include "move.h"
 #include "move_table.h"
 

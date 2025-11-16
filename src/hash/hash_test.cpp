@@ -4,7 +4,7 @@
 #include <sstream>
 
 #include "common.h"
-#include "fen.h"
+#include "fen/fen.h"
 #include "hash.h"
 #include "move/move.h"
 

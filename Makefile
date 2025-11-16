@@ -40,6 +40,9 @@ test_objs=$(call calc_objs,$(call test_dir,$(1)),$(call prefix_src,$(call test_s
 # Special handling for subdirectory tests
 eval_test_src=eval/eval_test.cpp
 nnue_test_src=eval/nnue/nnue_test.cpp
+fen_test_src=fen/fen_test.cpp
+hash_test_src=hash/hash_test.cpp
+uci_test_src=uci/uci_test.cpp
 
 ALLSRCS=$(wildcard src/*.cpp src/*/*.cpp src/*/*/*.cpp)
 
@@ -74,9 +77,9 @@ build/%-debug: ${DBGOBJ}/%_test.o
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
 # Test dependency definitions
-NNUE_SRCS=eval/nnue/nnue.cpp eval/nnue/nnue_stats.cpp eval/nnue/nnue_incremental.cpp square_set/square_set.cpp fen.cpp
+NNUE_SRCS=eval/nnue/nnue.cpp eval/nnue/nnue_stats.cpp eval/nnue/nnue_incremental.cpp square_set/square_set.cpp fen/fen.cpp
 MOVES_SRCS=move/move.cpp move/move_table.cpp move/move_gen.cpp move/magic/magic.cpp square_set/square_set.cpp
-EVAL_SRCS=eval/eval.cpp hash.cpp ${NNUE_SRCS} ${MOVES_SRCS}
+EVAL_SRCS=eval/eval.cpp hash/hash.cpp ${NNUE_SRCS} ${MOVES_SRCS}
 SEARCH_SRCS=${EVAL_SRCS} search/search.cpp
 
 # Function to create both test and debug rules for a test
@@ -85,17 +88,37 @@ build/$(1)-test: $$(call test_objs,$(1)-test,$(2))
 build/$(1)-debug: $$(call test_objs,$(1)-debug,$(2))
 endef
 
-# Generate test rules for each test
-$(eval $(call test_rules,fen,fen.cpp))
-$(eval $(call test_rules,hash,${MOVES_SRCS} hash.cpp fen.cpp))
-$(eval $(call test_rules,uci,uci.cpp ${SEARCH_SRCS}))
-
-# Special rules for subdirectory tests (these don't follow the standard pattern)
-build/square_set-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,square_set/square_set_test.cpp square_set/square_set.cpp fen.cpp))
+# Generate test rules for moved components
+build/fen-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,fen/fen_test.cpp fen/fen.cpp))
 	@mkdir -p build
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
-build/square_set-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,square_set/square_set_test.cpp square_set/square_set.cpp fen.cpp))
+build/fen-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,fen/fen_test.cpp fen/fen.cpp))
+	@mkdir -p build
+	${CLANGPP} ${CCFLAGS} -DDEBUG -O0 -g -fsanitize=address ${LINKFLAGS} -o $@ $^
+
+build/hash-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,hash/hash_test.cpp ${MOVES_SRCS} hash/hash.cpp fen/fen.cpp))
+	@mkdir -p build
+	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+
+build/hash-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,hash/hash_test.cpp ${MOVES_SRCS} hash/hash.cpp fen/fen.cpp))
+	@mkdir -p build
+	${CLANGPP} ${CCFLAGS} -DDEBUG -O0 -g -fsanitize=address ${LINKFLAGS} -o $@ $^
+
+build/uci-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,uci/uci_test.cpp uci/uci.cpp ${SEARCH_SRCS}))
+	@mkdir -p build
+	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+
+build/uci-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,uci/uci_test.cpp uci/uci.cpp ${SEARCH_SRCS}))
+	@mkdir -p build
+	${CLANGPP} ${CCFLAGS} -DDEBUG -O0 -g -fsanitize=address ${LINKFLAGS} -o $@ $^
+
+# Special rules for subdirectory tests (these don't follow the standard pattern)
+build/square_set-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,square_set/square_set_test.cpp square_set/square_set.cpp fen/fen.cpp))
+	@mkdir -p build
+	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+
+build/square_set-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,square_set/square_set_test.cpp square_set/square_set.cpp fen/fen.cpp))
 	@mkdir -p build
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
@@ -135,27 +158,27 @@ build/magic-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,move/magic/magic
 	@mkdir -p build
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
-build/move-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,move/move_test.cpp ${MOVES_SRCS} fen.cpp))
+build/move-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,move/move_test.cpp ${MOVES_SRCS} fen/fen.cpp))
 	@mkdir -p build
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
-build/move-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,move/move_test.cpp ${MOVES_SRCS} fen.cpp))
+build/move-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,move/move_test.cpp ${MOVES_SRCS} fen/fen.cpp))
 	@mkdir -p build
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
-build/move_gen-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,move/move_gen_test.cpp ${MOVES_SRCS} fen.cpp))
+build/move_gen-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,move/move_gen_test.cpp ${MOVES_SRCS} fen/fen.cpp))
 	@mkdir -p build
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
-build/move_gen-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,move/move_gen_test.cpp ${MOVES_SRCS} fen.cpp))
+build/move_gen-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,move/move_gen_test.cpp ${MOVES_SRCS} fen/fen.cpp))
 	@mkdir -p build
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
-build/move_table-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,move/move_table_test.cpp move/move_table.cpp fen.cpp))
+build/move_table-test: $(call calc_objs,${OPTOBJ},$(call prefix_src,move/move_table_test.cpp move/move_table.cpp fen/fen.cpp))
 	@mkdir -p build
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
-build/move_table-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,move/move_table_test.cpp move/move_table.cpp fen.cpp))
+build/move_table-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,move/move_table_test.cpp move/move_table.cpp fen/fen.cpp))
 	@mkdir -p build
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
@@ -172,33 +195,33 @@ clean:
 	rm -f lichess/puzzles.csv
 	rm -rf *.dSYM .DS_Store
 
-PERFT_SRCS=$(call prefix_src,perft/perft.cpp perft/perft_core.cpp ${MOVES_SRCS} fen.cpp hash.cpp)
+PERFT_SRCS=$(call prefix_src,perft/perft.cpp perft/perft_core.cpp ${MOVES_SRCS} fen/fen.cpp hash/hash.cpp)
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
 build/perft: $(call calc_objs,${OPTOBJ},${PERFT_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
-PERFT_TEST_SRCS=$(call prefix_src,perft/perft_test.cpp perft/perft_core.cpp ${MOVES_SRCS} fen.cpp hash.cpp)
+PERFT_TEST_SRCS=$(call prefix_src,perft/perft_test.cpp perft/perft_core.cpp ${MOVES_SRCS} fen/fen.cpp hash/hash.cpp)
 build/perft-test: $(call calc_objs,${OPTOBJ},${PERFT_TEST_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 build/perft-debug: $(call calc_objs,${DBGOBJ},${PERFT_TEST_SRCS})
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
-PERFT_SIMPLE_SRCS=$(call prefix_src,perft/perft_simple.cpp ${MOVES_SRCS} fen.cpp)
+PERFT_SIMPLE_SRCS=$(call prefix_src,perft/perft_simple.cpp ${MOVES_SRCS} fen/fen.cpp)
 # perft_simple is a simplified version without caching or 128-bit ints
 build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
 # Compare the perft tool with some different compilation options for speed comparison
-build/perft-clang-sse2: ${PERFT_SRCS} src/*.h src/util/*.h src/square_set/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-clang-sse2: ${PERFT_SRCS} src/*.h src/util/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-clang-emul:  ${PERFT_SRCS} src/*.h src/util/*.h src/square_set/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-clang-emul:  ${PERFT_SRCS} src/*.h src/util/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-sse2:  ${PERFT_SRCS} src/*.h src/util/*.h src/square_set/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-gcc-sse2:  ${PERFT_SRCS} src/*.h src/util/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-emul:  ${PERFT_SRCS} src/*.h src/util/*.h src/square_set/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-gcc-emul:  ${PERFT_SRCS} src/*.h src/util/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
 

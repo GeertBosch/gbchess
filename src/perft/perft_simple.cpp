@@ -13,7 +13,7 @@
  */
 
 #include "common.h"
-#include "fen.h"
+#include "fen/fen.h"
 #include "move/move.h"
 #include "move/move_gen.h"
 #include <cstdlib>
