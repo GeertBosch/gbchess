@@ -300,11 +300,12 @@ NodeCount perft(Position position, int depth, const ProgressCallback& callback) 
 
     if (depth <= 5) return perft(position.board, Hash{position}, state, depth, callback);
 
-    // For deeper perfts, see if the first few plies have sufficient cardinality. For that we take
-    // the perft at depth 4 and estimate the apparent depth assuming an average of 32 moves per ply.
+    // For deeper perfts, see if the first few plies have sufficient cardinality to merit threading.
+    // For that we take the perft at depth 4 and estimate the apparent depth assuming an average of
+    // 20 moves per ply.
     auto perft4 = std::max<NodeCount>(perft(position.board, Hash{position}, state, 4), 1);
-    int apparentDepth = depth - 4 + static_cast<int>(std::log(perft4) / std::log(32.0));
-    if (apparentDepth < 6) return perft(position.board, Hash{position}, state, depth, callback);
+    int apparentDepth = depth - 4 + static_cast<int>(std::log(perft4) / std::log(20.0));
+    if (apparentDepth <= 5) return perft(position.board, Hash{position}, state, depth, callback);
     return threadedPerft(position, depth, callback);
 }
 
