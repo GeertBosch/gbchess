@@ -8,12 +8,12 @@
 #include "core/options.h"
 
 // Implement a hashing method for chess positions using Zobrist hashing
-// https://en.wikipedia.org/wiki/Zobrist_hashing This relies just on the number of locations
+// https://en.wikipedia.org/wiki/Zobrist_hashing. This relies just on the number of locations
 // ("squares") and number of pieces. The hash allows for efficient incremental updating of the hash
 // value when a move is made.
 
 // 1 for black to move, 1 for each castling right, 8 for en passant file
-static constexpr int kNumExtraVectors = 24;
+static constexpr int kNumExtraVectors = 13;
 static constexpr int kNumBoardVectors = kNumPieces * kNumSquares;
 static constexpr int kNumHashVectors = kNumBoardVectors + kNumExtraVectors;
 
@@ -37,14 +37,14 @@ public:
         CASTLING_1 = kNumBoardVectors + 2,
         CASTLING_2 = kNumBoardVectors + 3,
         CASTLING_3 = kNumBoardVectors + 4,
-        EN_PASSANT_A = kNumBoardVectors + 16,
-        EN_PASSANT_B = kNumBoardVectors + 17,
-        EN_PASSANT_C = kNumBoardVectors + 18,
-        EN_PASSANT_D = kNumBoardVectors + 19,
-        EN_PASSANT_E = kNumBoardVectors + 20,
-        EN_PASSANT_F = kNumBoardVectors + 21,
-        EN_PASSANT_G = kNumBoardVectors + 22,
-        EN_PASSANT_H = kNumBoardVectors + 23,
+        EN_PASSANT_A = kNumBoardVectors + 5,
+        EN_PASSANT_B = kNumBoardVectors + 6,
+        EN_PASSANT_C = kNumBoardVectors + 7,
+        EN_PASSANT_D = kNumBoardVectors + 8,
+        EN_PASSANT_E = kNumBoardVectors + 9,
+        EN_PASSANT_F = kNumBoardVectors + 10,
+        EN_PASSANT_G = kNumBoardVectors + 11,
+        EN_PASSANT_H = kNumBoardVectors + 12,
     };
 
     Hash() = default;
@@ -65,7 +65,7 @@ public:
 
     // Assumes that passed in position is the same as the one used to construct this hash.
     // Cancels out castling rights and en passant targets.
-    void applyMove(const Position& position, Move mv);
+    void applyMove(Turn turn, MoveWithPieces mwp, CastlingMask mask);
 
     // Use toggle to add/remove a piece or non piece/location vector.
     void toggle(Piece piece, int location) {
@@ -95,7 +95,7 @@ private:
 };
 
 // Updates the given hash at the given turn, based on the passed move.
-Hash applyMove(Hash hash, Turn turn, MoveWithPieces mwp);
+Hash applyMove(Hash hash, Turn turn, MoveWithPieces mwp, CastlingMask mask);
 
 namespace std {
 template <>

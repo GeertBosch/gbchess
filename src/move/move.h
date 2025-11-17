@@ -1,11 +1,9 @@
 #pragma once
 
-#include <functional>
 #include <string>
 
 #include "core/core.h"
 #include "square_set/occupancy.h"
-#include "square_set/square_set.h"
 
 namespace moves {
 struct MoveError : public std::exception {

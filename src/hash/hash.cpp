@@ -1,9 +1,8 @@
 #include <array>
 
+#include "core/castling_info.h"
 #include "core/core.h"
 #include "hash.h"
-#include "move/castling_info.h"
-#include "move/move.h"
 #include "util/random.h"
 
 std::array<HashValue, kNumHashVectors> hashVectors = []() {
@@ -17,22 +16,19 @@ std::array<HashValue, kNumHashVectors> hashVectors = []() {
 }();
 
 Hash::Hash(const Position& position) {
-    for (auto square : occupancy(position.board)) toggle(position.board[square], square);
+    for (auto square : squares)
+        if (position.board[square] != Piece::_) toggle(position.board[square], square);
     if (position.active() == Color::b) toggle(BLACK_TO_MOVE);
     if (position.turn.castling() != CastlingMask::_) toggle(position.turn.castling());
     if (position.turn.enPassant())
         toggle(ExtraVectors(file(position.turn.enPassant()) + EN_PASSANT_A));
 }
 
-void Hash::applyMove(const Position& position, Move mv) {
-    auto piece = position.board[mv.from];
-    auto target =
-        position.board[mv.kind == MoveKind::En_Passant ? makeSquare(file(mv.to), rank(mv.from))
-                                                       : mv.to];
-    *this = ::applyMove(*this, position.turn, {mv, piece, target});
+void Hash::applyMove(Turn turn, MoveWithPieces mwp, CastlingMask mask) {
+    *this = ::applyMove(*this, turn, mwp, mask);
 }
 
-Hash applyMove(Hash hash, Turn turn, MoveWithPieces mwp) {
+Hash applyMove(Hash hash, Turn turn, MoveWithPieces mwp, CastlingMask mask) {
     auto [mv, piece, target] = mwp;
 
     // Always assume we move a piece and switch the player to move.
@@ -44,7 +40,7 @@ Hash applyMove(Hash hash, Turn turn, MoveWithPieces mwp) {
         hash.toggle(Hash::ExtraVectors(file(turn.enPassant()) + Hash::EN_PASSANT_A));
 
     // Cancel any castling rights according to the move squares.
-    hash.toggle(turn.castling() & moves::castlingMask(mv.from, mv.to));
+    hash.toggle(turn.castling() & mask);
 
     switch (mv.kind) {
     case MoveKind::Quiet_Move: break;

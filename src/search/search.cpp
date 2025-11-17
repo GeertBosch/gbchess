@@ -513,7 +513,15 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
         ++totalMovesEvaluated;  // Increment total moves evaluated
         ++moveCount;
         auto newHash = hash;
-        newHash.applyMove(position, move);
+
+        auto piece = position.board[move.from];
+        auto target = position.board[move.kind == MoveKind::En_Passant
+                                         ? makeSquare(file(move.to), rank(move.from))
+                                         : move.to];
+        auto mwp = MoveWithPieces{move, piece, target};
+        auto mask = moves::castlingMask(move.from, move.to);
+        newHash.applyMove(position.turn, mwp, mask);
+
         auto undo = moves::makeMove(position, move);
         dassert(newHash == Hash(position));
         auto newAlpha = std::max(alpha, pv.score);
@@ -599,10 +607,8 @@ PrincipalVariation toplevelAlphaBeta(
         if (currmoveInfo(info, depthleft, move, ++currmovenumber)) break;
         ++totalMovesEvaluated;  // Increment total moves evaluated
 
-        auto newHash = hash;
-        newHash.applyMove(position, move);
         auto newPosition = moves::applyMove(position, move);
-        dassert(newHash == Hash(newPosition));
+        Hash newHash(newPosition);
         auto newVar =
             -alphaBeta(newPosition, newHash, -beta, -std::max(alpha, pv.score), depth + 1);
         if (newVar.score > pv.score || !pv.front()) pv = {move, newVar};

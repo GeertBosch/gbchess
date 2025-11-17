@@ -1,7 +1,8 @@
 #pragma once
+#include <functional>
 
 #include "core/core.h"
-#include "move.h"
+#include "square_set/occupancy.h"
 
 namespace moves {
 struct SearchState {

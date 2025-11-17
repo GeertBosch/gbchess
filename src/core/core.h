@@ -21,7 +21,40 @@ constexpr bool debug = 0;
 static constexpr int kNumFiles = 8, kNumRanks = 8;
 static constexpr int kNumSquares = kNumFiles * kNumRanks;
 
-enum Square : uint16_t {
+/**
+ * A simple range class for iterating over enum values. Assumes that the enum values are
+ * sequentially ordered without gaps.
+ */
+template <typename T>
+class Range {
+    static_assert(std::is_enum_v<T>, "Range template parameter must be an enum type");
+
+public:
+    class iterator {
+        T value;
+
+    public:
+        constexpr iterator(T value) : value(value) {}
+        T operator*() const { return value; }
+        iterator& operator++() {
+            value = static_cast<T>(static_cast<size_t>(value) + 1);
+            return *this;
+        }
+        bool operator==(iterator other) const { return value == other.value; }
+        bool operator!=(iterator other) const { return value != other.value; }
+    };
+    constexpr Range(T first, T last)
+        : _begin(first), _end(static_cast<T>(static_cast<size_t>(last) + 1)) {}
+
+    iterator begin() const { return _begin; }
+    iterator end() const { return _end; }
+
+private:
+    const iterator _begin;
+    const iterator _end;
+};
+
+enum Square : uint16_t {  // uint16_t to allow better packing
     // clang-format off
     a1, b1, c1, d1, e1, f1, g1, h1,
     a2, b2, c2, d2, e2, f2, g2, h2,
@@ -33,6 +66,8 @@ enum Square : uint16_t {
     a8, b8, c8, d8, e8, f8, g8, h8,
     // clang-format on
 };
+
+static constexpr Range squares(Square::a1, Square::h8);
 
 constexpr Square makeSquare(int file, int rank) {
     return Square(rank * kNumFiles + file);
@@ -83,32 +118,6 @@ static constexpr uint8_t kNumPieceTypes = index(PieceType::KING) + 1;
 enum class Piece : uint8_t { P, N, B, R, Q, K, _, p, n, b, r, q, k };
 static constexpr uint8_t kNumPieces = static_cast<uint8_t>(Piece::k) + 1;
 
-template <typename T>
-class Range {
-public:
-    class iterator {
-        T value;
-
-    public:
-        constexpr iterator(T value) : value(value) {}
-        T operator*() const { return value; }
-        iterator& operator++() {
-            value = static_cast<T>(static_cast<size_t>(value) + 1);
-            return *this;
-        }
-        bool operator==(iterator other) const { return value == other.value; }
-        bool operator!=(iterator other) const { return value != other.value; }
-    };
-    constexpr Range(T first, T last)
-        : _begin(first), _end(static_cast<T>(static_cast<size_t>(last) + 1)) {}
-
-    iterator begin() const { return _begin; }
-    iterator end() const { return _end; }
-
-private:
-    const iterator _begin;
-    const iterator _end;
-};
 static constexpr Range pieces(Piece::P, Piece::k);
 
 constexpr uint8_t index(Piece piece) {
@@ -167,6 +176,7 @@ enum class MoveKind : uint8_t {
     Capture_Mask = 4,
     Promotion_Mask = 8,
 };
+
 constexpr uint8_t index(MoveKind kind) {
     return static_cast<uint8_t>(kind);
 }

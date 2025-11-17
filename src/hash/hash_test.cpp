@@ -152,7 +152,9 @@ void testEnPassant() {
     auto hash2 = Hash(pos2);
     assert(hash1() != hash2());
     auto hash = hash1;
-    hash.applyMove(pos1, move);
+    auto mwp = MoveWithPieces{
+        move, pos1.board[move.from], pos1.board[makeSquare(file(move.to), rank(move.from))]};
+    hash.applyMove(pos1.turn, mwp, moves::castlingMask(move.from, move.to));
     assert(checkSameHash(hash, hash2));
 }
 
@@ -160,7 +162,14 @@ void checkApplyMove(std::string position, std::string move) {
     auto pos1 = fen::parsePosition(position);
     Hash hash(pos1);
     auto mv = fen::parseUCIMove(pos1.board, move);
-    hash.applyMove(pos1, mv);
+    auto piece = pos1.board[mv.from];
+    auto target =
+        pos1.board[mv.kind == MoveKind::En_Passant ? makeSquare(file(mv.to), rank(mv.from))
+                                                   : mv.to];
+    auto mwp = MoveWithPieces{mv, piece, target};
+    auto mask = moves::castlingMask(mv.from, mv.to);
+
+    hash.applyMove(pos1.turn, mwp, mask);
     auto pos2 = moves::applyMove(pos1, mv);
     bool ok = checkSameHash(hash, Hash(pos2));
     if (!ok) std::cout << "Failed to apply move " << move << " on position " << position << "\n";

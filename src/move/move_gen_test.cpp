@@ -1,10 +1,10 @@
 #include <cassert>
 #include <iostream>
 
-#include "move_gen.h"
-
 #include "core/options.h"
 #include "fen/fen.h"
+#include "move.h"
+#include "move_gen.h"
 
 using namespace moves;
 

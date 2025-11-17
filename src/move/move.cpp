@@ -1,7 +1,7 @@
 #include <cassert>
 #include <cstring>
 
-#include "castling_info.h"
+#include "core/castling_info.h"
 #include "core/core.h"
 #include "core/piece_set.h"
 #include "magic/magic.h"

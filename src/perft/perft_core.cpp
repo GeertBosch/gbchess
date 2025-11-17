@@ -156,7 +156,9 @@ NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
     auto newState = state;
     forAllLegalMovesAndCaptures(board, state, [&](Board& board, MoveWithPieces mwp) {
         auto delta = MovesTable::occupancyDelta(mwp.move);
-        auto newHash = options::cachePerft ? applyMove(hash, state.turn, mwp) : Hash();
+        auto mask = moves::castlingMask(mwp.move.from, mwp.move.to);
+
+        auto newHash = options::cachePerft ? applyMove(hash, state.turn, mwp, mask) : Hash();
         newState.occupancy = !(state.occupancy ^ delta);
         newState.pawns = find(board, addColor(PieceType::PAWN, !state.active()));
         newState.turn = moves::applyMove(state.turn, mwp);

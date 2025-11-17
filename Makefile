@@ -95,7 +95,7 @@ $(eval $(call test_rules,move/move_gen,move/move_gen.cpp ${MOVES_SRCS} fen/fen.c
 $(eval $(call test_rules,move/move_table,move/move_table.cpp fen/fen.cpp))
 $(eval $(call test_rules,move/magic/magic,move/magic/magic.cpp ${MOVES_SRCS} fen/fen.cpp))
 $(eval $(call test_rules,eval/nnue/nnue,${NNUE_SRCS} fen/fen.cpp))
-$(eval $(call test_rules,search/elo, ${EVAL_SRCS}))
+$(eval $(call test_rules,search/elo,))
 
 .deps: $(call calc_deps,${OPTOBJ},${ALLSRCS}) $(call calc_deps,${DBGOBJ},${ALLSRCS})
 
@@ -129,7 +129,7 @@ PERFT_SIMPLE_SRCS=$(call prefix_src,perft/perft_simple.cpp ${MOVES_SRCS} fen/fen
 build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
-# Compare the perft tool with some different compilation options for speed comparison
+# Build the perft tool with some different compilation options for speed comparison
 build/perft-clang-sse2: ${PERFT_SRCS} src/core/*.h src/util/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
