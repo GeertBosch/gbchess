@@ -1,7 +1,6 @@
 #pragma once
 
 #include "core/core.h"
-#include "util/uint128_t.h"
 #include <functional>
 
 using NodeCount = uint128_t;

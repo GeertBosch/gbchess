@@ -1,5 +1,3 @@
-#include "core/core.h"
-#include "core/options.h"
 #include <cassert>
 #include <chrono>
 #include <cmath>
@@ -9,10 +7,12 @@
 #include <sstream>
 #include <string>
 
+#include "core/core.h"
 #include "fen/fen.h"
 #include "move/move.h"
 #include "move/move_gen.h"
 #include "perft_core.h"
+#include "core/uint128_str.h"
 
 bool quiet = false;
 
@@ -65,7 +65,7 @@ void perftWithDivide(Position position, int depth, NodeCount expectedCount) {
     auto cachedTotal = getPerftCached() - cachedStart;
     std::cout << duration.count() / 1000 << " ms @ " << std::fixed << std::setprecision(1)
               << megarate << "M nodes/sec";
-    if (options::cachePerft) std::cout << ", " << pct(cachedTotal, count) << " cached";
+    if (cachedTotal) std::cout << ", " << pct(cachedTotal, count) << " cached";
     std::cout << "\n";
 }
 

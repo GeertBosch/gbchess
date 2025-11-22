@@ -130,16 +130,16 @@ build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
 # Build the perft tool with some different compilation options for speed comparison
-build/perft-clang-sse2: ${PERFT_SRCS} src/core/*.h src/util/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-clang-sse2: ${PERFT_SRCS} src/core/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-clang-emul:  ${PERFT_SRCS} src/core/*.h src/util/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-clang-emul:  ${PERFT_SRCS} src/core/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-sse2:  ${PERFT_SRCS} src/core/*.h src/util/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-gcc-sse2:  ${PERFT_SRCS} src/core/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-emul:  ${PERFT_SRCS} src/core/*.h src/util/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-gcc-emul:  ${PERFT_SRCS} src/core/*.h src/square_set/*.h src/fen/*.h src/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
 
@@ -172,7 +172,7 @@ mate45: build/search-test ${PUZZLES}
 lichess/puzzles.csv: ${PUZZLES} Makefile
 	egrep -v "mateIn[12345]" ${PUZZLES} | head -101 > $@
 
-.PHONY: puzzles
+.PHONY: puzzles build
 puzzles: lichess/puzzles.csv build/search-test
 	./build/search-test 6 < $<
 
@@ -198,6 +198,7 @@ build/perft-test.ok: build/perft build/perft-test
 
 debug: $(patsubst %-test,%-debug,$(CPP_TESTS)) build/perft-debug
 build: $(CPP_TESTS) build/perft
+	@./check-arch.sh
 
 searches1: build/search-debug
 	./build/search-debug "5r1k/pp4pp/5p2/1BbQp1r1/7K/7P/1PP3P1/3R3R b - - 3 26" 3

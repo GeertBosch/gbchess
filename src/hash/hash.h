@@ -17,7 +17,7 @@ static constexpr int kNumExtraVectors = 13;
 static constexpr int kNumBoardVectors = kNumPieces * kNumSquares;
 static constexpr int kNumHashVectors = kNumBoardVectors + kNumExtraVectors;
 
-using HashValue = std::conditional_t<options::hash128, __uint128_t, uint64_t>;
+using HashValue = std::conditional_t<options::hash128, uint128_t, uint64_t>;
 
 // A random 64- or 128-bit integer for each piece on each square, as well as the extra vectors.
 extern std::array<HashValue, kNumHashVectors> hashVectors;

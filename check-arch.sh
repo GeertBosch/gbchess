@@ -17,7 +17,7 @@ mermaid && /^ +[A-Z0-9_]+[[][^]]+]$/ {
 }
 
 #  Match Mermaid lines like A --> B
-mermaid && match($0, /^ +[A-Z0-9_]+ --> [A-Z0-9_]+$/) {
+mermaid && match($0, /^ +[A-Z0-9_]+ [-]+-> [A-Z0-9_]+$/) {
     sub(/^ +/, "")
     if (!mod2file[$1]) {
         print "Skip dependency for unknown module " $1 " in: " $0
@@ -47,7 +47,7 @@ function close_deps(x, to) {
                     if (deps[y,z] && !deps[x,z]) {
                         closed = deps[x,z]++
                     }
-            }   
+            }
         }
     } while (!closed)
     return deps[x, to]
@@ -74,10 +74,11 @@ function close_deps(x, to) {
         next
     }
 }
-END { 
+END {
     if (errors) {
         print errors " errors"
         exit(1)
     }
 }
 ' src/ARCHITECTURE.md -
+echo "✅ src/ARCHITECTURE.md checked"

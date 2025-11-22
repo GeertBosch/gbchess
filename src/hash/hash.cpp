@@ -3,7 +3,7 @@
 #include "core/castling_info.h"
 #include "core/core.h"
 #include "hash.h"
-#include "util/random.h"
+#include "core/random.h"
 
 std::array<HashValue, kNumHashVectors> hashVectors = []() {
     std::array<HashValue, kNumHashVectors> vectors;

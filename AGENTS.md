@@ -119,8 +119,7 @@ src/
 ├── fen/               - FEN position parsing
 ├── square_set/        - Bitboard operations
 ├── uci/               - UCI protocol interface
-├── perft/             - Performance testing
-└── util/              - General utilities
+└── perft/             - Performance testing
 ```
 
 ## Integration Notes

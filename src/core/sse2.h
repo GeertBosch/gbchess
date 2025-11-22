@@ -3,7 +3,7 @@
 #if defined(__SSE2__) && !defined(SSE2EMUL)
 #include <emmintrin.h>
 #else
-#include "util/sse2emul.h"
+#include "core/sse2emul.h"
 #endif
 
 // Unconditionally use actual SSE2 or emulated SSE2: it turns out that the emulated CPU has more

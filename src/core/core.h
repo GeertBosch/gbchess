@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+using uint128_t = __uint128_t;
+
 #ifdef DEBUG
 constexpr bool debug = 1;
 #else

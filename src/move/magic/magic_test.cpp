@@ -7,7 +7,7 @@
 
 #include "core/core.h"
 #include "magic.h"
-#include "util/random.h"
+#include "core/random.h"
 
 namespace {
 xorshift gen;

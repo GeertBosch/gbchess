@@ -3,17 +3,12 @@
 
 graph TD
 
-%% Unknown module for occupancy.h referenced from move_gen.h
-%% Unknown module for occupancy.h referenced from move.h
-%% Unknown module for options.h referenced from hash.h
-%% Unknown module for uint128_t.h referenced from perft_core.h
-%% Unknown module for options.h referenced from perft.cpp
-
-
     %% Core module - foundational types
     C[core.h]
         CI[castling_info.h]
         PS[piece_set.h]
+        O[options.h]
+        CU[uint128_str.h]
 
     %% Eval module - position evaluation
     E[eval.h]
@@ -42,7 +37,7 @@ graph TD
 
     SS[square_set.h]
 
-    %% UCI module - universal chess interface
+    %% UCI module - universal chess ui
     U[uci.h]
 
     %% The following are include dependencies between the above modules.
@@ -53,9 +48,11 @@ graph TD
     F --> C
     P --> M
     P --> PC
-    P --> MG
+    P ---> MG
+    P ----> CU
     S --> M
-    PC --> C
+    PC ----> C
+    CU --> C
     MG --> MO
     M --> MO
     MO --> SS
@@ -64,28 +61,59 @@ graph TD
     S --> EN
     S --> H
     S --> PV
-    PV --> E
+    PV ---> E
+    EN --> E
     P --> F
     M --> CI
-    M --> PS
-    MM --> SS
-    PS --> C
+    M ---> PS
+    MM ---> SS
     CI --> C
+    PS ---> C
+    H --> O
+    O ~~~ C
     H --> C
     E --> C
-    EN --> E
 
     %% Styling
     classDef core fill:#e1f5fe,font-family:monospace
-    classDef move fill:#e8f5e8
-    classDef eval fill:#fff3e0
-    classDef interface fill:#fce4ec
-    classDef perft fill:#f3e5f5
-    classDef search fill:#e8eaf6
+    classDef move fill:#e8f5e8,font-family:monospace
+    classDef eval fill:#fff3e0,font-family:monospace
+    classDef ui fill:#fce4ec,font-family:monospace
+    classDef perft fill:#f3e5f5,font-family:monospace
+    classDef search fill:#e8eaf6,font-family:monospace
 
-    class C,PS,CI,SS,H core
+    class C,PS,CI,SS,H,O,CU core
     class MM,MO,MG,M move
     class E,EN eval
     class S,PV search
-    class F,U,P,PC interface
+    class F,U,P,PC ui
+```
+```mermaid
+
+graph LR
+    ui[**ui**
+    User Interface
+    ]
+    move[**move**
+    Move Generation
+    ]
+    eval[**eval**
+    Position Evaluation
+    ]
+    search[**search**
+    Search Algorithm
+    ]
+    core[**core**
+    Foundational Types
+    ]
+
+    ui ~~~ move ~~~ search ~~~ eval ~~~ core
+
+    %% Styling
+    style core fill:#e1f5fe
+    style eval fill:#fff3e0
+    style move fill:#e8f5e8
+    style search fill:#e8eaf6
+    style ui fill:#fce4ec
+
 ```

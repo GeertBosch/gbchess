@@ -3,9 +3,7 @@
 #include <stdexcept>
 #include <string>
 
-/** Basic uint128_t type definition based on Clang/GCC's __uint128_t */
-
-using uint128_t = __uint128_t;
+#include "core/core.h"
 
 /**
  * User-defined literal for uint128_t from an unsigned long long literal.
