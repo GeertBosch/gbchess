@@ -110,14 +110,14 @@ This is far more efficient than incremental testing requiring multiple LLM/human
 ```
 src/
 ├── core/              - Core chess types and utilities
-├── move/              - Move generation and representation
-│   └── magic/         - Magic bitboard generation
+│   ├── hash/              - Transposition tables
+│   └── square_set/        - Bitboard operations
 ├── eval/              - Position evaluation
-│   └── nnue/          - Neural network evaluation
+│   └── nnue/              - Neural network evaluation
+├── move/              - Move generation and representation
+│   └── magic/             - Magic bitboard generation
 ├── search/            - Search algorithms
-├── hash/              - Transposition tables
 ├── fen/               - FEN position parsing
-├── square_set/        - Bitboard operations
 ├── uci/               - UCI protocol interface
 └── perft/             - Performance testing
 ```

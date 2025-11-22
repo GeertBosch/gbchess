@@ -2,7 +2,7 @@
 #include <functional>
 
 #include "core/core.h"
-#include "square_set/occupancy.h"
+#include "core/square_set/occupancy.h"
 
 namespace moves {
 struct SearchState {

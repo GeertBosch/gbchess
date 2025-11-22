@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/core.h"
-#include "square_set/occupancy.h"
+#include "core/square_set/occupancy.h"
 
 struct CompoundMove {
     Square to : 8;  // TODO C++20: Can use default initialization for bit-fields

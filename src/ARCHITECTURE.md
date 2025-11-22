@@ -2,6 +2,41 @@
 ```mermaid
 
 graph TD
+    engine([**engine**
+    Chess Engine
+    ])
+    move([**move**
+    Move Generation
+    ])
+    eval([**eval**
+    Position Evaluation
+    ])
+    search([**search**
+    Search Algorithm
+    ])
+    core([**core**
+    Foundational Types
+    ])
+
+    engine --> search
+    engine --> move
+    search --> move
+    engine ~~~ core
+    search --> eval
+    move --> core
+    eval --> core
+
+    %% Styling
+    style core fill:#e1f5fe
+    style eval fill:#fff3e0
+    style move fill:#e8f5e8
+    style search fill:#e8eaf6
+    style engine fill:#fce4ec
+
+```
+```mermaid
+
+graph TD
 
     %% Core module - foundational types
     C[core.h]
@@ -37,7 +72,7 @@ graph TD
 
     SS[square_set.h]
 
-    %% UCI module - universal chess ui
+    %% UCI module - universal chess engine
     U[uci.h]
 
     %% The following are include dependencies between the above modules.
@@ -78,42 +113,12 @@ graph TD
     classDef core fill:#e1f5fe,font-family:monospace
     classDef move fill:#e8f5e8,font-family:monospace
     classDef eval fill:#fff3e0,font-family:monospace
-    classDef ui fill:#fce4ec,font-family:monospace
-    classDef perft fill:#f3e5f5,font-family:monospace
+    classDef engine fill:#fce4ec,font-family:monospace
     classDef search fill:#e8eaf6,font-family:monospace
 
     class C,PS,CI,SS,H,O,CU core
     class MM,MO,MG,M move
     class E,EN eval
     class S,PV search
-    class F,U,P,PC ui
-```
-```mermaid
-
-graph LR
-    ui[**ui**
-    User Interface
-    ]
-    move[**move**
-    Move Generation
-    ]
-    eval[**eval**
-    Position Evaluation
-    ]
-    search[**search**
-    Search Algorithm
-    ]
-    core[**core**
-    Foundational Types
-    ]
-
-    ui ~~~ move ~~~ search ~~~ eval ~~~ core
-
-    %% Styling
-    style core fill:#e1f5fe
-    style eval fill:#fff3e0
-    style move fill:#e8f5e8
-    style search fill:#e8eaf6
-    style ui fill:#fce4ec
-
+    class F,U,P,PC engine
 ```

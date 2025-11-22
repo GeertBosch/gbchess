@@ -3,7 +3,7 @@
 #include <string>
 
 #include "core/core.h"
-#include "square_set/occupancy.h"
+#include "core/square_set/occupancy.h"
 
 namespace moves {
 struct MoveError : public std::exception {

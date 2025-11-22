@@ -1,6 +1,6 @@
 #include "perft_core.h"
 #include "core/options.h"
-#include "hash/hash.h"
+#include "core/hash/hash.h"
 #include "move/move.h"
 #include "move/move_gen.h"
 #include "move/move_table.h"
