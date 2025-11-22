@@ -5,9 +5,9 @@
 #include <iostream>
 #include <string>
 
-#include "fen/fen.h"
-#include "perft_core.h"
 #include "core/uint128_str.h"
+#include "engine/fen/fen.h"
+#include "perft_core.h"
 
 using NodeCount = uint128_t;
 

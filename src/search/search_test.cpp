@@ -7,12 +7,12 @@
 #include <string>
 
 #include "core/core.h"
+#include "core/hash/hash.h"
 #include "core/options.h"
 #include "elo.h"
+#include "engine/fen/fen.h"
 #include "eval/eval.h"
 #include "eval/nnue/nnue_stats.h"
-#include "fen/fen.h"
-#include "core/hash/hash.h"
 #include "move/move.h"
 #include "move/move_gen.h"
 #include "pv.h"

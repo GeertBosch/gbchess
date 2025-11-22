@@ -112,14 +112,15 @@ src/
 ├── core/              - Core chess types and utilities
 │   ├── hash/              - Transposition tables
 │   └── square_set/        - Bitboard operations
+├── engine/             - UCI Chess Engine
+│   ├── fen/               - FEN position parsing
+│   ├── uci/               - UCI protocol interface
+│   └── perft/             - Performance testing
 ├── eval/              - Position evaluation
 │   └── nnue/              - Neural network evaluation
 ├── move/              - Move generation and representation
 │   └── magic/             - Magic bitboard generation
-├── search/            - Search algorithms
-├── fen/               - FEN position parsing
-├── uci/               - UCI protocol interface
-└── perft/             - Performance testing
+└── search/            - Search algorithms
 ```
 
 ## Integration Notes

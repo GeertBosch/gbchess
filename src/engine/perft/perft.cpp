@@ -8,11 +8,11 @@
 #include <string>
 
 #include "core/core.h"
-#include "fen/fen.h"
+#include "core/uint128_str.h"
+#include "engine/fen/fen.h"
 #include "move/move.h"
 #include "move/move_gen.h"
 #include "perft_core.h"
-#include "core/uint128_str.h"
 
 bool quiet = false;
 

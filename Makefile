@@ -84,17 +84,17 @@ build/$(notdir $1)-debug: ${DBGOBJ}/$(1)-debug
 endef
 
 $(eval $(call test_rules,core/core))
-$(eval $(call test_rules,fen/fen,fen/fen.cpp))
-$(eval $(call test_rules,core/hash/hash,core/hash/hash.cpp ${MOVES_SRCS} fen/fen.cpp))
-$(eval $(call test_rules,uci/uci,uci/uci.cpp ${SEARCH_SRCS} fen/fen.cpp))
-$(eval $(call test_rules,eval/eval,eval/eval.cpp ${EVAL_SRCS} fen/fen.cpp))
-$(eval $(call test_rules,core/square_set/square_set,core/square_set/square_set.cpp fen/fen.cpp))
-$(eval $(call test_rules,search/search,search/search.cpp ${SEARCH_SRCS} fen/fen.cpp))
-$(eval $(call test_rules,move/move,move/move.cpp ${MOVES_SRCS} fen/fen.cpp))
-$(eval $(call test_rules,move/move_gen,move/move_gen.cpp ${MOVES_SRCS} fen/fen.cpp))
-$(eval $(call test_rules,move/move_table,move/move_table.cpp fen/fen.cpp))
-$(eval $(call test_rules,move/magic/magic,move/magic/magic.cpp ${MOVES_SRCS} fen/fen.cpp))
-$(eval $(call test_rules,eval/nnue/nnue,${NNUE_SRCS} fen/fen.cpp))
+$(eval $(call test_rules,engine/fen/fen,engine/fen/fen.cpp))
+$(eval $(call test_rules,core/hash/hash,core/hash/hash.cpp ${MOVES_SRCS} engine/fen/fen.cpp))
+$(eval $(call test_rules,engine/uci/uci,engine/uci/uci.cpp ${SEARCH_SRCS} engine/fen/fen.cpp))
+$(eval $(call test_rules,eval/eval,eval/eval.cpp ${EVAL_SRCS} engine/fen/fen.cpp))
+$(eval $(call test_rules,core/square_set/square_set,core/square_set/square_set.cpp engine/fen/fen.cpp))
+$(eval $(call test_rules,search/search,search/search.cpp ${SEARCH_SRCS} engine/fen/fen.cpp))
+$(eval $(call test_rules,move/move,move/move.cpp ${MOVES_SRCS} engine/fen/fen.cpp))
+$(eval $(call test_rules,move/move_gen,move/move_gen.cpp ${MOVES_SRCS} engine/fen/fen.cpp))
+$(eval $(call test_rules,move/move_table,move/move_table.cpp engine/fen/fen.cpp))
+$(eval $(call test_rules,move/magic/magic,move/magic/magic.cpp ${MOVES_SRCS} engine/fen/fen.cpp))
+$(eval $(call test_rules,eval/nnue/nnue,${NNUE_SRCS} engine/fen/fen.cpp))
 $(eval $(call test_rules,search/elo,))
 
 .deps: $(call calc_deps,${OPTOBJ},${ALLSRCS}) $(call calc_deps,${DBGOBJ},${ALLSRCS})
@@ -113,33 +113,33 @@ clean:
 realclean: clean
 	rm -f lichess/*.csv
 
-PERFT_SRCS=$(call prefix_src,perft/perft.cpp perft/perft_core.cpp ${MOVES_SRCS} fen/fen.cpp core/hash/hash.cpp)
+PERFT_SRCS=$(call prefix_src,engine/perft/perft.cpp engine/perft/perft_core.cpp ${MOVES_SRCS} engine/fen/fen.cpp core/hash/hash.cpp)
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
 build/perft: $(call calc_objs,${OPTOBJ},${PERFT_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
-PERFT_TEST_SRCS=$(call prefix_src,perft/perft_test.cpp perft/perft_core.cpp ${MOVES_SRCS} fen/fen.cpp core/hash/hash.cpp)
+PERFT_TEST_SRCS=$(call prefix_src,engine/perft/perft_test.cpp engine/perft/perft_core.cpp ${MOVES_SRCS} engine/fen/fen.cpp core/hash/hash.cpp)
 build/perft-test: $(call calc_objs,${OPTOBJ},${PERFT_TEST_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 build/perft-debug: $(call calc_objs,${DBGOBJ},${PERFT_TEST_SRCS})
 	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
-PERFT_SIMPLE_SRCS=$(call prefix_src,perft/perft_simple.cpp ${MOVES_SRCS} fen/fen.cpp)
+PERFT_SIMPLE_SRCS=$(call prefix_src,engine/perft/perft_simple.cpp ${MOVES_SRCS} engine/fen/fen.cpp)
 # perft_simple is a simplified version without caching or 128-bit ints
 build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
 # Build the perft tool with some different compilation options for speed comparison
-build/perft-clang-sse2: ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/fen/*.h src/core/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-clang-sse2: ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/uci/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-clang-emul:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/fen/*.h src/core/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-clang-emul:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/uci/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-sse2:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/fen/*.h src/core/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-gcc-sse2:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/uci/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-emul:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/fen/*.h src/core/hash/*.h src/uci/*.h src/perft/*.h src/move/*.h src/search/*.h
+build/perft-gcc-emul:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/uci/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
 

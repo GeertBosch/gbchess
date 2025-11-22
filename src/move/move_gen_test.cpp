@@ -2,7 +2,7 @@
 #include <iostream>
 
 #include "core/options.h"
-#include "fen/fen.h"
+#include "engine/fen/fen.h"
 #include "move.h"
 #include "move_gen.h"
 

@@ -13,7 +13,7 @@
  */
 
 #include "core/core.h"
-#include "fen/fen.h"
+#include "engine/fen/fen.h"
 #include "move/move.h"
 #include "move/move_gen.h"
 #include <cstdlib>
