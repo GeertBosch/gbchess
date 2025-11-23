@@ -20,7 +20,9 @@
 #include <iostream>
 #include <string>
 
-using NodeCount = uint64_t;  // Will not overflow for thousands of years, no need to check
+// As there is no caching, each increment will require multiple nanoseconds of work, so the counter
+// will not overflow for thousands of years, no need to check for overflow in processing.
+using NodeCount = uint64_t;
 
 /**
  * Simple perft implementation without caching or incremental updates.

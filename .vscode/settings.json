@@ -32,5 +32,6 @@
     "editor.formatOnSaveMode": "modificationsIfAvailable",
     "files.associations": {
         "*.mmd": "mermaid"
-    }
+    },
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json"
 }

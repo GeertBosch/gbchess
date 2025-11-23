@@ -7,6 +7,7 @@ GPP=g++
 DEBUGFLAGS=-DDEBUG -O0 -g
 OPTOBJ=build/opt
 DBGOBJ=build/dbg
+COMPILE_COMMANDS=build/compile_commands.json
 
 # MacOS specific stuff - why can't thinks just work  by default?
 ifeq ($(_system_type),Darwin)
@@ -38,36 +39,36 @@ test_objs=$(call calc_objs,$(call test_dir,$(1)),$(call prefix_src,$(call test_s
 
 ALLSRCS=$(wildcard src/*.cpp src/*/*.cpp src/*/*/*.cpp)
 
-all: compile_commands.json debug test perft-bench perft-test perft-debug-test mate123 mate45 puzzles
-	@echo "\n*** All tests passed! ***\n"
+all: build debug test perft-bench perft-test mate123 mate45 puzzles
+	@echo "\n✅ All tests passed!\n"
 
 -include $(call calc_deps,${OPTOBJ},${ALLSRCS})
 -include $(call calc_deps,${DBGOBJ},${ALLSRCS})
 
 ${OPTOBJ}/%.d: src/%.cpp
 	@mkdir -p $(dir $@)
-	${GPP} -MT $(subst .d,.o,$@) -MM ${CCFLAGS} -Isrc -o $@ $< > $@
+	@${GPP} -MT $(subst .d,.o,$@) -MM ${CCFLAGS} -Isrc -o $@ $< > $@
 
 ${OPTOBJ}/%.o: src/%.cpp ${OPTOBJ}/%.d
 	@mkdir -p $(dir $@)
-	${GPP} -c ${CCFLAGS} -Isrc -O2 -o $@ $<
+	@${GPP} -c ${CCFLAGS} -Isrc -O2 -o $@ $<
 
 ${DBGOBJ}/%.d: src/%.cpp
 	@mkdir -p $(dir $@)
-	${GPP} -MM ${CCFLAGS} -Isrc -o $@ $< > $@
+	@${GPP} -MM ${CCFLAGS} -Isrc -o $@ $< > $@
 
 ${DBGOBJ}/%.o: src/%.cpp
 	@mkdir -p $(dir $@)
-	${CLANGPP} -MMD -c ${CCFLAGS} ${DEBUGFLAGS} -Isrc -o $@ $<
+	@${CLANGPP} -MMD -c ${CCFLAGS} ${DEBUGFLAGS} -Isrc -o $@ $<
 
 ${OPTOBJ}/%-test: ${OPTOBJ}/%_test.o
 	@mkdir -p build
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+	@${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 	@ln -sf $$(echo "$@" | sed 's|build/||') build/$(notdir $@)
 
 ${DBGOBJ}/%-debug: ${DBGOBJ}/%_test.o
 	@mkdir -p build
-	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+	@${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 	@ln -sf $$(echo "$@" | sed 's|build/||') build/$(notdir $@)
 
 # Test dependency definitions
@@ -85,9 +86,9 @@ endef
 
 ENGINE_SRCS=$(call prefix_src,engine/engine.cpp engine/fen/fen.cpp ${SEARCH_SRCS})
 build/engine: $(call calc_objs,${OPTOBJ},${ENGINE_SRCS})
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+	@${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 build/engine-debug: $(call calc_objs,${DBGOBJ},${ENGINE_SRCS})
-	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+	@${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
 $(eval $(call test_rules,core/core))
 $(eval $(call test_rules,engine/fen/fen,engine/fen/fen.cpp))
@@ -114,7 +115,7 @@ clean:
 	rm -f game.??? log.??? players.dat # XBoard outputs
 	rm -f test/ut*.out
 	rm -rf *.dSYM .DS_Store
-	rm -f compile_commands.json
+	rm -f $(COMPILE_COMMANDS)
 
 realclean: clean
 	rm -f lichess/*.csv
@@ -122,42 +123,48 @@ realclean: clean
 PERFT_SRCS=$(call prefix_src,engine/perft/perft.cpp engine/perft/perft_core.cpp ${MOVES_SRCS} engine/fen/fen.cpp core/hash/hash.cpp)
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
 build/perft: $(call calc_objs,${OPTOBJ},${PERFT_SRCS})
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+	@${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
 PERFT_TEST_SRCS=$(call prefix_src,engine/perft/perft_test.cpp engine/perft/perft_core.cpp ${MOVES_SRCS} engine/fen/fen.cpp core/hash/hash.cpp)
 build/perft-test: $(call calc_objs,${OPTOBJ},${PERFT_TEST_SRCS})
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+	@${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 build/perft-debug: $(call calc_objs,${DBGOBJ},${PERFT_TEST_SRCS})
-	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+	@${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
 PERFT_SIMPLE_SRCS=$(call prefix_src,engine/perft/perft_simple.cpp ${MOVES_SRCS} engine/fen/fen.cpp)
 # perft_simple is a simplified version without caching or 128-bit ints
 build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
-	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+	@${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
 # Build the perft tool with some different compilation options for speed comparison
 build/perft-clang-sse2: ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
-	${CLANGPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
+	@${CLANGPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
 build/perft-clang-emul:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
-	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
+	@${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
 build/perft-gcc-sse2:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
-	${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
+	@${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
 build/perft-gcc-emul:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
-	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
+	@${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
 
+# Test the Kiwipete position at depth 4 as it exercises captures, en passant, castling,
+# promotions, checks, discovered checks, double checks, checkmates, etc at low depth.
+KIWIPETE=r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1
 build/perft-%.ok: build/perft-%
-	./$< 5 4865609 2>&1 | grep nodes/sec
+	@./$< "$(KIWIPETE)" 5 > $(basename $@).out
+	@grep -q "Nodes searched: 193690690" $(basename $@).out && touch $@
+	@grep -H nodes/sec $(basename $@).out || true
+
+build/perft.ok: build/perft
+	@./build/perft "$(KIWIPETE)" 5 | grep -q "Nodes searched: 193690690" && touch $@
 
 # Aliases for perft test targets
 perft-bench: build/perft-clang-emul.ok build/perft-gcc-emul.ok build/perft-clang-sse2.ok build/perft-gcc-sse2.ok
 
-perft-test: build/perft-test.ok
-
-perft-debug-test: build/perft-debug.ok
+perft-test: build/perft.ok build/perft-test.ok build/perft-debug.ok build/perft-simple.ok
 
 # Download the lichess puzzles database if not already present. As the puzzles change over time, and
 # the file is large, we don't normally clean and refetch it.
@@ -170,23 +177,23 @@ ${PUZZLES}.zst:
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
 mate123: build/search-test ${PUZZLES}
-	egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -1001 | ./build/search-test 5
+	@egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -1001 | ./build/search-test 5
 
 mate45: build/search-test ${PUZZLES}
-	egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -101 | ./build/search-test 9
+	@egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -101 | ./build/search-test 9
 
 lichess/puzzles.csv: ${PUZZLES} Makefile
 	egrep -v "mateIn[12345]" ${PUZZLES} | head -101 > $@
 
 .PHONY: puzzles build
-puzzles: lichess/puzzles.csv build/search-test
-	./build/search-test 6 < $<
+puzzles: ${PUZZLES} build/search-test
+	@egrep -v "mateIn[12345]" ${PUZZLES} | head -101 | ./build/search-test 6
 
 lichess/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
 	mkdir -p $(dir $@) && ./$< $(@:lichess/lichess_%_evals.csv=%) > $@
 
 evals: build/eval-test ${EVALS}
-	./build/eval-test ${EVALS}
+	@./build/eval-test ${EVALS}
 
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:
@@ -195,15 +202,15 @@ cloc:
 	@echo "\n*** C++ Test Code ***\n"
 	cloc --by-percent cmb `find src -name \*.cpp -o -name \*.h | egrep '_test[.]|debug'` 2>/dev/null || echo "Error combining source files"
 
+# Verify well-known perft results. Great for checking correct move generation.
+build/perft-test.ok: build/perft-test
+	./build/perft-test && touch $@
 build/perft-debug.ok: build/perft-debug
 	./build/perft-debug && touch $@
 
-# Verify well-known perft results. Great for checking correct move generation.
-build/perft-test.ok: build/perft build/perft-test
-	./build/perft -q 5 4865609 && ./build/perft-test && touch $@
-
 debug: $(patsubst %-test,%-debug,$(CPP_TESTS)) build/perft-debug
-build: $(CPP_TESTS) build/perft
+build: $(CPP_TESTS) $(COMPILE_COMMANDS) build/perft build/engine build/perft-simple
+	@echo "\n✅ Build complete\n"
 	@./check-arch.sh
 
 searches1: build/search-debug
@@ -228,7 +235,7 @@ searches: searches1 searches2 searches3 searches4 searches5 searches6
 
 test/ut%.out: test/ut%.in build/engine-debug
 	@./build/engine-debug $< 2>&1 | grep -wv "expect" > "$@"
-	@grep -w "^expect" $< | \
+	grep -w "^expect" $< | \
 	while read expect pattern ; do \
 		grep -He "$$pattern" "$@" || \
 			(echo "$@: no match for \"$$pattern\"" && cat "$@" && rm -f "$@" && false) ; \
@@ -252,16 +259,17 @@ test-cpp: build ${CPP_TESTS}
 			&& rm -f .test_sources.tmp .test_executables.tmp) \
 		|| (echo "\n*** Extra or missing C++ unit tests! ***\n"  && false)
 	@echo ${CPP_TESTS}
-	@echo "Running C++ test executables..."
+	@echo "Running C++ unit test executables..."
 	@(cd build && for file in *-test; do \
 		/bin/echo -n Run $$file ; \
 		(./$$file < /dev/null > /dev/null && echo " passed") || ./$$file </dev/null; \
-	done)
+	done) && echo "\n✅ All C++ unit tests passed!\n"
 
 test: test-cpp searches evals uci magic
 
 # Generate compile_commands.json for clangd
-compile_commands.json:
+$(COMPILE_COMMANDS):
+	@mkdir -p build
 	@echo '[' > $@
 	@first=true; \
 	for src in $(wildcard src/*.cpp src/*/*.cpp src/*/*/*.cpp); do \
@@ -275,4 +283,4 @@ compile_commands.json:
 	@echo >> $@
 	@echo ']' >> $@
 
-.PHONY: compile_commands.json
+.PHONY: ${COMPILE_COMMANDS}
