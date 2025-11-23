@@ -400,8 +400,9 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score 
     sortMoves(position, moveList.begin(), moveList.end());  // No killer moves in quiescence
     for (auto move : moveList) {
         if (options::staticExchangeEvaluation && move.kind == MoveKind::Capture &&
-            staticExchangeEvaluation(position.board, move.from, move.to) < 0_cp)
-            continue;  // Don't consider simple captures that lose material
+            staticExchangeEvaluation(position.board, move.from, move.to) < 0_cp &&
+            !isInCheck(position))
+            continue;  // Don't consider simple captures that lose material unless in check
 
         // Compute the change to the board and evaluation that results from the move
         auto [undo, newEval] = makeMoveWithEval(position, move, standPat);
