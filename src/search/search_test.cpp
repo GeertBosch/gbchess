@@ -172,7 +172,7 @@ ScoreWithReason computeScore(Position position, MoveVector moves) {
     return {score, " (" + side + " side) \"" + fen::to_string(position) + "\""};
 }
 
-enum PuzzleError { NO_ERROR, DEPTH_ERROR, EVAL_ERROR, SEARCH_ERROR, COUNT };
+enum PuzzleError { NO_ERROR, DEPTH_ERROR, EVAL_ERROR, SEARCH_ERROR, MATE_ERROR, COUNT };
 
 struct PuzzleStats {
     std::array<uint64_t, PuzzleError::COUNT> counts = {0};
@@ -181,11 +181,12 @@ struct PuzzleStats {
     uint64_t total() const { return std::accumulate(counts.begin(), counts.end(), 0); }
     std::string operator()() {
         std::stringstream ss;
-        ss << total() << " puzzles, "                 //
-           << counts[NO_ERROR] << " correct "         //
-           << counts[DEPTH_ERROR] << " too deep, "    //
-           << counts[EVAL_ERROR] << " eval errors, "  //
-           << counts[SEARCH_ERROR] << " search errors";
+        ss << total() << " puzzles, "                     //
+           << counts[NO_ERROR] << " correct "             //
+           << counts[DEPTH_ERROR] << " too deep, "        //
+           << counts[EVAL_ERROR] << " eval errors, "      //
+           << counts[SEARCH_ERROR] << " search errors, "  //
+           << counts[MATE_ERROR] << " mate errors";
         return ss.str();
     }
 };
@@ -218,12 +219,13 @@ PuzzleError analyzePuzzleSolution(std::string puzzle,
                       << gotScore << "\n";
         return NO_ERROR;
     }
+    auto mateError = expectedScore.mate() && gotScore != expectedScore;
     auto evalError = gotScore >= expectedScore;
-    auto errorKind = evalError ? "Evaluation error" : "Search error";
+    auto errorKind = mateError ? "Mate error" : (evalError ? "Evaluation error" : "Search error");
     std::cout << errorKind << ": Got " << got << ", but expected " << expected << "\n";
     std::cout << "Got: " << gotScore << gotReason << "\n";
     std::cout << "Expected: " << expectedScore << expectedReason << "\n";
-    return evalError ? EVAL_ERROR : SEARCH_ERROR;
+    return mateError ? MATE_ERROR : (evalError ? EVAL_ERROR : SEARCH_ERROR);
 }
 
 PuzzleError doPuzzle(std::string puzzle, Position position, MoveVector moves, size_t maxdepth) {
@@ -279,6 +281,7 @@ void testFromStdIn(int depth) {
             puzzleRating.updateOne(rating, result == NO_ERROR ? ELO::WIN : ELO::LOSS);
     }
     std::cout << stats() << ", " << puzzleRating() << " rating\n";
+    assert(stats[MATE_ERROR] == 0);
     assert(puzzleRating() >= kExpectedPuzzleRating - ELO::K);
 
     if (verbose) nnue::printTimingStats();
