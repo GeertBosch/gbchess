@@ -1,4 +1,5 @@
 PUZZLES=lichess/lichess_db_puzzle.csv
+FIXED_PUZZLES=lichess/fixed_puzzles.csv
 PHASES=opening middlegame endgame
 EVALS=$(foreach phase,${PHASES},lichess/lichess_${phase}_evals.csv)
 CCFLAGS=-std=c++17 -Werror -Wall -Wextra
@@ -182,9 +183,6 @@ mate123: build/search-test ${PUZZLES}
 mate45: build/search-test ${PUZZLES}
 	@egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -101 | ./build/search-test 9
 
-lichess/puzzles.csv: ${PUZZLES} Makefile
-	egrep -v "mateIn[12345]" ${PUZZLES} | head -101 > $@
-
 .PHONY: puzzles build
 puzzles: ${PUZZLES} build/search-test
 	@egrep -v "mateIn[12345]" ${PUZZLES} | head -101 | ./build/search-test 6
@@ -212,6 +210,9 @@ debug: $(patsubst %-test,%-debug,$(CPP_TESTS)) build/perft-debug
 build: $(CPP_TESTS) $(COMPILE_COMMANDS) build/perft build/engine build/perft-simple
 	@echo "\n✅ Build complete\n"
 	@./check-arch.sh
+
+fixed-puzzles: build/search-test
+	./build/search-test 6 < ${FIXED_PUZZLES}
 
 searches1: build/search-debug
 	./build/search-debug "5r1k/pp4pp/5p2/1BbQp1r1/7K/7P/1PP3P1/3R3R b - - 3 26" 3
@@ -265,7 +266,7 @@ test-cpp: build ${CPP_TESTS}
 		(./$$file < /dev/null > /dev/null && echo " passed") || ./$$file </dev/null; \
 	done) && echo "\n✅ All C++ unit tests passed!\n"
 
-test: test-cpp searches evals uci magic
+test: test-cpp fixed-puzzles searches evals uci magic
 
 # Generate compile_commands.json for clangd
 $(COMPILE_COMMANDS):

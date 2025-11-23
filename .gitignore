@@ -12,6 +12,5 @@ dairy.md
 evals
 game.*
 nn-*.nnue
-puzzles
 players.dat
-lichess/*.csv*
+lichess/lichess_*.csv*
