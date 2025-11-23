@@ -2,6 +2,8 @@
 # Check the source file diagram to ensure it shows all dependencies
 # It is OK for transitive dependencies to be omitted.
 
+set -e
+
 find src \( -name \*.cpp -o -name \*.h \) -exec grep -H '#include "' {} \; |
 awk '
 # When to process Mermaid lines
@@ -80,5 +82,5 @@ END {
         exit(1)
     }
 }
-' src/ARCHITECTURE.md -
-echo "✅ src/ARCHITECTURE.md checked"
+' src/README.md -
+echo "✅ src/README.md checked"

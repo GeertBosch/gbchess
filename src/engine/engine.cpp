@@ -1,22 +1,28 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <ostream>
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
 #include <sstream>
 #include <thread>
+
 
 #include "core/core.h"
 #include "core/options.h"
 #include "engine/fen/fen.h"
 #include "move/move.h"
 #include "search/search.h"
-#include "uci.h"
 
 namespace {
 const char* const cmdName = "gbchess";
 const char* const authorName = "Geert Bosch";
 
 using UCIArguments = std::vector<std::string>;
+
+inline std::ostream& operator<<(std::ostream& os, Move mv) {
+    return os << to_string(mv);
+}
 
 namespace {
 MoveVector parseUCIMoves(Position position, const std::vector<std::string>& moves) {
@@ -230,4 +236,29 @@ void enterUCI(std::istream& in, std::ostream& out, std::ostream& log) {
         std::flush(log);
         runner.execute(line);
     }
+}
+
+void fromStdIn() {
+    std::ofstream log("uci_test.log");
+    log << "Entering UCI\n";
+    enterUCI(std::cin, std::cout, log);
+}
+
+void fromFile(const char* filename) {
+    std::ifstream file(filename);
+    if (file.is_open()) {
+        enterUCI(file, std::cout, std::cout);
+    } else {
+        std::cerr << "Failed to open file: " << filename << std::endl;
+        std::exit(2);
+    }
+}
+
+int main(int argc, char** argv) {
+    if (argc == 1)
+        fromStdIn();
+    else
+        for (int i = 1; i < argc; i++) fromFile(argv[i]);
+
+    return 0;
 }

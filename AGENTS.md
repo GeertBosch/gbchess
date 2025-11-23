@@ -106,22 +106,9 @@ This is far more efficient than incremental testing requiring multiple LLM/human
   refactoring follow the testing protocol to ensure all tests still pass and performance has not
   regressed.
 
-## File Organization
-```
-src/
-├── core/              - Core chess types and utilities
-│   ├── hash/              - Transposition tables
-│   └── square_set/        - Bitboard operations
-├── engine/             - UCI Chess Engine
-│   ├── fen/               - FEN position parsing
-│   ├── uci/               - UCI protocol interface
-│   └── perft/             - Performance testing
-├── eval/              - Position evaluation
-│   └── nnue/              - Neural network evaluation
-├── move/              - Move generation and representation
-│   └── magic/             - Magic bitboard generation
-└── search/            - Search algorithms
-```
+## File Organization and Modular Architecture
+
+See `src/README.md`.
 
 ## Integration Notes
 When working with this codebase:

@@ -1,6 +1,6 @@
-# Include File Dependencies
-```mermaid
+# Modular Architecture
 
+```mermaid
 graph TD
     engine([**engine**
     Chess Engine
@@ -27,15 +27,39 @@ graph TD
     eval --> core
 
     %% Styling
-    style core fill:#e1f5fe
-    style eval fill:#fff3e0
-    style move fill:#e8f5e8
-    style search fill:#e8eaf6
-    style engine fill:#fce4ec
-
+    style core fill:#e1f5fe,stroke:#333,stroke-width:2px
+    style eval fill:#fff3e0,stroke:#333,stroke-width:2px
+    style move fill:#e8f5e8,stroke:#333,stroke-width:2px
+    style search fill:#e8eaf6,stroke:#333,stroke-width:2px
+    style engine fill:#fce4ec,stroke:#333,stroke-width:2px
 ```
-```mermaid
 
+## File Organization
+
+The file organization represents the module structure.
+```
+src/
+├── core/              - Core chess types and utilities
+│   ├── hash/              - Zobrist Hashing
+│   └── square_set/        - Bitboard operations
+├── engine/             - UCI Chess Engine
+│   ├── fen/               - FEN position parsing
+│   └── perft/             - Performance testing
+├── eval/              - Position evaluation
+│   └── nnue/              - Neural network evaluation
+├── move/              - Move generation and representation
+│   └── magic/             - Magic bitboard generation
+└── search/            - Search algorithms
+```
+
+
+## Include Dependencies
+The graph below shows dependencies of the public APIs of the chess engine. Transitive dependencies
+are omited for clarity. The `check-arch.sh` script verifies that all actual dependencies are
+included here, and is part of the `make build` target. Keep the dependency graph planar when making
+changes.
+
+```mermaid
 graph TD
 
     %% Core module - foundational types
@@ -45,9 +69,13 @@ graph TD
         O[options.h]
         CU[uint128_str.h]
 
+    %% UCI Engine
+    U[engine.cpp]
+
     %% Eval module - position evaluation
     E[eval.h]
         EN[nnue.h]
+
 
     %% FEN module - Forsyth-Edwards notation
     F[fen.h]
@@ -71,9 +99,6 @@ graph TD
     S[search.h]
 
     SS[square_set.h]
-
-    %% UCI module - universal chess engine
-    U[uci.h]
 
     %% The following are include dependencies between the above modules.
     %% The order is chosen to be able to render a planar graph, without crossing edges.
@@ -110,11 +135,11 @@ graph TD
     E --> C
 
     %% Styling
-    classDef core fill:#e1f5fe,font-family:monospace
-    classDef move fill:#e8f5e8,font-family:monospace
-    classDef eval fill:#fff3e0,font-family:monospace
-    classDef engine fill:#fce4ec,font-family:monospace
-    classDef search fill:#e8eaf6,font-family:monospace
+    classDef core fill:#e1f5fe,stroke:#333,stroke-width:2px,font-family:monospace
+    classDef move fill:#e8f5e8,stroke:#333,stroke-width:2px,font-family:monospace
+    classDef eval fill:#fff3e0,stroke:#333,stroke-width:2px,font-family:monospace
+    classDef engine fill:#fce4ec,stroke:#333,stroke-width:2px,font-family:monospace
+    classDef search fill:#e8eaf6,stroke:#333,stroke-width:2px,font-family:monospace
 
     class C,PS,CI,SS,H,O,CU core
     class MM,MO,MG,M move

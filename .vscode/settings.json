@@ -30,4 +30,7 @@
     ],
     "editor.formatOnSave": true,
     "editor.formatOnSaveMode": "modificationsIfAvailable",
+    "files.associations": {
+        "*.mmd": "mermaid"
+    }
 }

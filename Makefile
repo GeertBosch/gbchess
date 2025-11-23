@@ -83,6 +83,12 @@ build/$(notdir $1)-test: ${OPTOBJ}/$(1)-test
 build/$(notdir $1)-debug: ${DBGOBJ}/$(1)-debug
 endef
 
+ENGINE_SRCS=$(call prefix_src,engine/engine.cpp engine/fen/fen.cpp ${SEARCH_SRCS})
+build/engine: $(call calc_objs,${OPTOBJ},${ENGINE_SRCS})
+	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+build/engine-debug: $(call calc_objs,${DBGOBJ},${ENGINE_SRCS})
+	${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+
 $(eval $(call test_rules,core/core))
 $(eval $(call test_rules,engine/fen/fen,engine/fen/fen.cpp))
 $(eval $(call test_rules,core/hash/hash,core/hash/hash.cpp ${MOVES_SRCS} engine/fen/fen.cpp))
@@ -130,16 +136,16 @@ build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
 	${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
 # Build the perft tool with some different compilation options for speed comparison
-build/perft-clang-sse2: ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/uci/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
+build/perft-clang-sse2: ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-clang-emul:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/uci/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
+build/perft-clang-emul:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-sse2:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/uci/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
+build/perft-gcc-sse2:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
-build/perft-gcc-emul:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/uci/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
+build/perft-gcc-emul:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
 	@mkdir -p build
 	${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
 
@@ -220,8 +226,8 @@ searches6: build/search-test
 
 searches: searches1 searches2 searches3 searches4 searches5 searches6
 
-test/ut%.out: test/ut%.in build/uci-debug
-	@./build/uci-debug $< 2>&1 | grep -wv "expect" > "$@"
+test/ut%.out: test/ut%.in build/engine-debug
+	@./build/engine-debug $< 2>&1 | grep -wv "expect" > "$@"
 	@grep -w "^expect" $< | \
 	while read expect pattern ; do \
 		grep -He "$$pattern" "$@" || \
