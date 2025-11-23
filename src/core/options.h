@@ -27,7 +27,7 @@ constexpr bool incrementalNNUE = false;  // Use incremental NNUE updates (experi
 constexpr bool incrementalEvaluation = true;                // Compute QS evaluation using deltas
 constexpr bool nullMovePruning = true;                      // Enable null move pruning
 constexpr int nullMoveReduction = 3;                        // Depth reduction for null move search
-constexpr int nullMoveMinDepth = 3;                         // Minimum depth to try null move
+constexpr int nullMoveMinDepth = 5;                         // Minimum depth to try null move
 
 /**
  * Caching options for the perft program

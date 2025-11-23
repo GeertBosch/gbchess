@@ -275,7 +275,7 @@ public:
 
 using MoveIt = MoveVector::iterator;
 
-MoveIt sortKillerMoves(int depth, MoveIt begin, MoveIt end) {
+[[maybe_unused]] MoveIt sortKillerMoves(int depth, MoveIt begin, MoveIt end) {
     if (depth >= MAX_DEPTH) return begin;
 
     MoveIt current = begin;
@@ -475,6 +475,7 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
     if (options::nullMovePruning && depth.left >= options::nullMoveMinDepth &&
         !isInCheck(position) && beta > Score::min() + 100_cp &&  // Avoid null move near mate
         hasNonPawnMaterial(position)) {                          // Don't do null move in endgame
+        assert(options::nullMoveReduction < options::nullMoveMinDepth);
 
         // Make null move using RAII
         Turn savedTurn = position.turn;
