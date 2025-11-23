@@ -19,6 +19,7 @@
 #include "search.h"
 
 namespace {
+bool verbose = false;
 std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     os << "[";
     for (const auto& move : moves) {
@@ -279,7 +280,8 @@ void testFromStdIn(int depth) {
     }
     std::cout << stats() << ", " << puzzleRating() << " rating\n";
     assert(puzzleRating() >= kExpectedPuzzleRating - ELO::K);
-    nnue::printTimingStats();
+
+    if (verbose) nnue::printTimingStats();
 }
 
 void testBasicPuzzles() {
@@ -384,6 +386,12 @@ bool isAllDigits(std::string number) {
 int main(int argc, char* argv[]) {
     cmdName = argv[0];
 
+    if (argc > 1 && std::string(argv[1]) == "-v") {
+        verbose = true;
+        --argc;
+        ++argv;
+    }
+
     testBasicSearch();
     testBasicPuzzles();
 
@@ -410,7 +418,7 @@ int main(int argc, char* argv[]) {
     if (depth) {
         nnue::resetTimingStats();
         printEvalRate([&]() { printBestMove(position, depth); });
-        if (nnue::g_totalEvaluations) {
+        if (verbose && nnue::g_totalEvaluations) {
             nnue::printTimingStats();
             nnue::analyzeComputationalComplexity();
         }
