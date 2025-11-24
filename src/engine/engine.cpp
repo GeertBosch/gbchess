@@ -10,7 +10,9 @@
 
 #include "core/core.h"
 #include "core/options.h"
+#include "core/uint128_str.h"
 #include "engine/fen/fen.h"
+#include "engine/perft/perft_core.h"
 #include "move/move.h"
 #include "search/search.h"
 
@@ -53,8 +55,6 @@ OutputIt skip(InputIt first, InputIt last, size_t skip, OutputIt d_first) {
     }
     return d_first;
 }
-
-
 }  // namespace
 
 using namespace std::chrono;
@@ -124,23 +124,28 @@ private:
         this->position = position;
     }
 
+    void perft(int depth) {
+        stop();
+        auto position = this->position;  // need to copy the position
+        auto moves = this->moves;
+        auto totalNodes = NodeCount(0);
+        totalNodes = ::perft(position, depth);
+        respond("Nodes searched: " + to_string(totalNodes));
+    }
+
     void go(UCIArguments arguments) {
         auto depth = options::defaultDepth;
         auto movetime = options::defaultMoveTime;
         auto wait = false;
         for (size_t i = 0; i < arguments.size(); ++i) {
-            if (arguments[i] == "depth" && ++i < arguments.size()) {
+            if (arguments[i] == "depth" && ++i < arguments.size())
                 depth = std::stoi(arguments[i]);
-                continue;
-            }
-            if (arguments[i] == "wait") {
-                wait = true;
-                continue;
-            }
-            if (arguments[i] == "movetime" && ++i < arguments.size()) {
+            else if (arguments[i] == "movetime" && ++i < arguments.size())
                 movetime = std::stoi(arguments[i]);
-                continue;
-            }
+            else if (arguments[i] == "wait")
+                wait = true;
+            else if (arguments[i] == "perft" && ++i < arguments.size())
+                return perft(std::stoi(arguments[i]));
         }
         stop();
         auto search =
@@ -163,11 +168,10 @@ private:
                 respond(ss.str());
             };
         startTime = clock::now();
-        if (wait) {
+        if (wait)
             search();
-        } else {
+        else
             thread = std::thread(search);
-        }
     }
 
     void stop() {

@@ -52,7 +52,6 @@ src/
 └── search/            - Search algorithms
 ```
 
-
 ## Include Dependencies
 The graph below shows dependencies of the public APIs of the chess engine. Transitive dependencies
 are omited for clarity. The `check-arch.sh` script verifies that all actual dependencies are
@@ -76,7 +75,6 @@ graph TD
     E[eval.h]
         EN[nnue.h]
 
-
     %% FEN module - Forsyth-Edwards notation
     F[fen.h]
 
@@ -85,13 +83,11 @@ graph TD
 
     %% Move module - Move generation
     M[move.h]
-        MG[move_gen.h]
         %% Move Magic module - Sliding move generation
         MM[magic.h]
     MO[occupancy.h]
 
     %% Perft module - move generator testing
-    P[perft.cpp]
     PC[perft_core.h]
 
     %% Search module
@@ -105,15 +101,12 @@ graph TD
     %% Transitive dependencies are generally omitted for the graph.
     U --> F
     U --> S
-    F --> C
-    P --> M
-    P --> PC
-    P ---> MG
-    P ----> CU
+    U --> PC
+    F -----> C
     S --> M
-    PC ----> C
-    CU --> C
-    MG --> MO
+    U ----> CU
+    CU ---> C
+    PC -----> C
     M --> MO
     MO --> SS
     M --> MM
@@ -123,16 +116,15 @@ graph TD
     S --> PV
     PV ---> E
     EN --> E
-    P --> F
     M --> CI
     M ---> PS
-    MM ---> SS
+    MM --> SS
     CI --> C
     PS ---> C
     H --> O
     O ~~~ C
     H --> C
-    E --> C
+    E ----> C
 
     %% Styling
     classDef core fill:#e1f5fe,stroke:#333,stroke-width:2px,font-family:monospace
@@ -142,8 +134,8 @@ graph TD
     classDef search fill:#e8eaf6,stroke:#333,stroke-width:2px,font-family:monospace
 
     class C,PS,CI,SS,H,O,CU core
-    class MM,MO,MG,M move
+    class MM,MO,M move
     class E,EN eval
     class S,PV search
-    class F,U,P,PC engine
+    class F,U,PC engine
 ```

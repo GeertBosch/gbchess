@@ -77,6 +77,7 @@ NNUE_SRCS=eval/nnue/nnue.cpp eval/nnue/nnue_stats.cpp eval/nnue/nnue_incremental
 MOVES_SRCS=move/move.cpp move/move_table.cpp move/move_gen.cpp move/magic/magic.cpp core/square_set/square_set.cpp
 EVAL_SRCS=eval/eval.cpp core/hash/hash.cpp ${NNUE_SRCS} ${MOVES_SRCS}
 SEARCH_SRCS=${EVAL_SRCS} search/search.cpp
+ENGINE_SRCS=engine/engine.cpp engine/perft/perft_core.cpp engine/fen/fen.cpp ${SEARCH_SRCS}
 
 define test_rules
 ${OPTOBJ}/$(1)-test: $$(call test_objs,$(1)-test,$(2))
@@ -85,10 +86,9 @@ build/$(notdir $1)-test: ${OPTOBJ}/$(1)-test
 build/$(notdir $1)-debug: ${DBGOBJ}/$(1)-debug
 endef
 
-ENGINE_SRCS=$(call prefix_src,engine/engine.cpp engine/fen/fen.cpp ${SEARCH_SRCS})
-build/engine: $(call calc_objs,${OPTOBJ},${ENGINE_SRCS})
+build/engine: $(call calc_objs,${OPTOBJ},$(call prefix_src,${ENGINE_SRCS}))
 	@${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
-build/engine-debug: $(call calc_objs,${DBGOBJ},${ENGINE_SRCS})
+build/engine-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,${ENGINE_SRCS}))
 	@${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
 $(eval $(call test_rules,core/core))
