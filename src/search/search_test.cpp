@@ -384,6 +384,17 @@ bool isAllDigits(std::string number) {
     return !number.empty() && std::all_of(number.begin(), number.end(), ::isdigit);
 }
 
+void parseMoves(Position& position, int argc, char* argv[]) {
+    // Parse moves from the command line in UCI format, like:
+    //   moves e2e4 e7e5 g1f3 ...
+    if (argc < 3 || strcmp(argv[2], "moves")) return;
+
+    for (int i = 3; i < argc; ++i) {
+        Move move = fen::parseUCIMove(position.board, argv[i]);
+        position = moves::applyMove(position, move);
+    }
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -413,6 +424,9 @@ int main(int argc, char* argv[]) {
 
     // Parse the FEN string into a Position
     Position position = fen::parsePosition(fen);
+
+    // Apply any moves specified on the command line
+    parseMoves(position, argc, argv);
 
     Score quiescenceEval = search::quiesce(position, options::quiescenceDepth);
     if (position.active() == Color::b) quiescenceEval = -quiescenceEval;
