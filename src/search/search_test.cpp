@@ -41,12 +41,19 @@ std::ostream& operator<<(std::ostream& os, const PrincipalVariation& pv) {
 
 std::string cmdName = "search-test";
 
-void usage(std::string cmdName, std::string errmsg) {
-    std::cerr << "Error: " << errmsg << "\n\n";
-    std::cerr << "Usage: " << cmdName << " <FEN-string> [move...] <search-depth>" << std::endl;
-    std::cerr << "       " << cmdName << " <search-depth>" << std::endl;
-    std::cerr << "       " << cmdName << " <FEN-string>" << std::endl;
+void usage() {
+    std::cerr << "Usage: " << cmdName << " <FEN-string> moves [move...] <search-depth>\n";
+    std::cerr << "       " << cmdName << " <FEN-string>\n";
+    std::cerr << "       " << cmdName << " <search-depth> < puzzle-file.csv\n\n";
+    std::cerr << "The first form searches from the given position after applying the given moves\n";
+    std::cerr << "The second form runs a quiescence search from the given position\n";
+    std::cerr << "The third accepts puzzles in lichess CSV format from stdin and solves them\n";
     std::exit(1);
+}
+
+void usage(std::string message) {
+    std::cerr << "Error: " << message << "\n";
+    usage();
 }
 
 constexpr bool debugAnalysis = false;
@@ -148,7 +155,7 @@ std::vector<std::string> split(std::string line, char delim) {
 template <typename T>
 int find(T t, std::string what) {
     auto it = std::find(t.begin(), t.end(), what);
-    if (it == t.end()) usage(cmdName, "Missing field \"" + what + "\"");
+    if (it == t.end()) usage("Missing field \"" + what + "\"");
     return it - t.begin();
 }
 
@@ -395,16 +402,20 @@ void parseMoves(Position& position, int argc, char* argv[]) {
     }
 }
 
+bool isOption(char* arg, std::string shortOpt, std::string longOpt) {
+    return std::string(arg) == shortOpt || std::string(arg) == longOpt;
+}
 }  // namespace
 
 int main(int argc, char* argv[]) {
     cmdName = argv[0];
 
-    if (argc > 1 && std::string(argv[1]) == "-v") {
+    if (argc > 1 && isOption(argv[1], "-v", "--verbose")) {
         verbose = true;
         --argc;
         ++argv;
     }
+    if (argc > 1 && isOption(argv[1], "-h", "--help")) usage();
 
     testBasicSearch();
     testBasicPuzzles();
@@ -412,7 +423,8 @@ int main(int argc, char* argv[]) {
     if (argc < 2) return 0;
 
     // Need at least one argument
-    if (!isAllDigits(argv[1]) && !fen::maybeFEN(argv[1])) usage(argv[0], "invalid argument");
+    if (!isAllDigits(argv[1]) && !fen::maybeFEN(argv[1]))
+        usage("invalid argument: " + std::string(argv[1]));
 
     // If the last argument is a number, it's the search depth
     int depth = isAllDigits(argv[argc - 1]) ? std::stoi(argv[--argc]) : 0;
