@@ -96,9 +96,13 @@ graph TD
 
     SS[square_set.h]
 
+    T[time.h]
+
     %% The following are include dependencies between the above modules.
     %% The order is chosen to be able to render a planar graph, without crossing edges.
     %% Transitive dependencies are generally omitted for the graph.
+    U --> T
+    T ----> C
     U --> F
     U --> S
     U --> PC
@@ -137,5 +141,5 @@ graph TD
     class MM,MO,M move
     class E,EN eval
     class S,PV search
-    class F,U,PC engine
+    class F,U,PC,T engine
 ```

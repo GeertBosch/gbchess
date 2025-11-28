@@ -15,6 +15,7 @@
 #include "engine/perft/perft_core.h"
 #include "move/move.h"
 #include "search/search.h"
+#include "time/time.h"
 
 namespace {
 const char* const cmdName = "gbchess";
@@ -72,6 +73,7 @@ private:
     using UCICommandHandler = std::function<void(std::ostream&, UCIArguments args)>;
 
     Position position = fen::parsePosition(fen::initialPosition);
+    TimeControl timeControl{180'000};  // Default to 3 minutes per side
     MoveVector moves;
     std::atomic_bool stopping = false;
     time_point<clock> startTime;
@@ -135,13 +137,15 @@ private:
 
     void go(UCIArguments arguments) {
         auto depth = options::defaultDepth;
-        auto movetime = options::defaultMoveTime;
         auto wait = false;
+        // TODO: Parse things like:
+        //   go wtime <ms> btime <ms> winc <ms> binc <ms> movestogo <n>
+
         for (size_t i = 0; i < arguments.size(); ++i) {
             if (arguments[i] == "depth" && ++i < arguments.size())
                 depth = std::stoi(arguments[i]);
             else if (arguments[i] == "movetime" && ++i < arguments.size())
-                movetime = std::stoi(arguments[i]);
+                timeControl.setFixedTimeMillis(std::stoi(arguments[i]));
             else if (arguments[i] == "wait")
                 wait = true;
             else if (arguments[i] == "perft" && ++i < arguments.size())
@@ -149,14 +153,18 @@ private:
         }
         stop();
         auto search =
-            [this, depth, pos = position, moves = moves, movetime, &startTime = startTime]() {
+            [this, depth, pos = position, moves = moves, &startTime = startTime]() {
                 auto position = pos;  // need to copy the position
+                auto timeMillis = timeControl.computeMillisForMove(position.turn);
                 auto pv = search::computeBestMove(
-                    position, depth, moves, [this, movetime, &startTime](std::string info) -> bool {
+                    position,
+                    depth,
+                    moves,
+                    [this, timeMillis, &startTime](std::string info) -> bool {
                         auto elapsed =
                             duration_cast<milliseconds>(clock::now() - startTime).count();
                         respond("info " + info);
-                        if (elapsed > movetime) {
+                        if (elapsed > timeMillis) {
                             stopping.store(true);
                             respond("info string time exceeded " + std::to_string(elapsed) + "ms");
                         }
@@ -203,6 +211,9 @@ void UCIRunner::execute(std::string line) {
         std::exit(0);
     } else if (command == "ucinewgame") {
         search::newGame();
+        timeControl = TimeControl{180'000};  // Default to 3 minutes per side
+        moves.clear();
+        position = fen::parsePosition(fen::initialPosition);
     } else if (command == "position") {
         std::string positionKind;
         in >> positionKind >> std::ws;
