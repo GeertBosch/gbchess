@@ -23,6 +23,13 @@ EvalTable evalTable;
 uint64_t evalCount = 0;
 uint64_t quiescenceCount = 0;
 uint64_t cacheCount = 0;
+uint64_t nullMoveAttempts = 0;
+uint64_t nullMoveCutoffs = 0;
+uint64_t lmrReductions = 0;
+uint64_t lmrResearches = 0;
+uint64_t betaCutoffs = 0;
+uint64_t firstMoveCutoffs = 0;
+int maxSelDepth = 0;
 
 namespace {
 using namespace std::chrono;
@@ -295,7 +302,6 @@ using MoveIt = MoveVector::iterator;
 }
 
 uint64_t totalMovesEvaluated = 0;
-uint64_t betaCutoffMoves = 0;
 }  // namespace
 
 /**
@@ -443,9 +449,10 @@ Score quiesce(Position& position, int depthleft) {
     return quiesce(position, Score::min(), Score::max(), depthleft);
 }
 
-bool betaCutoff(Score score, Score beta, Move move, Color side, int depthleft) {
+bool betaCutoff(Score score, Score beta, Move move, int moveCount, Color side, int depthleft) {
     if (score < beta) return false;  // No beta cutoff
-    ++betaCutoffMoves;
+    ++betaCutoffs;
+    if (moveCount == 1) ++firstMoveCutoffs;
 
     // Only apply heuristics to quiet moves
     if (move.kind == MoveKind::Quiet_Move || move.kind == MoveKind::Double_Push) {
@@ -455,6 +462,53 @@ bool betaCutoff(Score score, Score beta, Move move, Color side, int depthleft) {
     return true;
 }
 
+// Forward declaration for null move pruning
+PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score beta, Depth depth);
+
+/**
+ * Attempts null move pruning. Returns true if we can prune (cutoff occurred).
+ * Only effective in non-PV nodes with sufficient margin.
+ */
+bool tryNullMovePruning(Position& position, Hash hash, Score alpha, Score beta, Depth depth) {
+    if (!options::nullMovePruning) return false;
+    if (depth.left < options::nullMoveMinDepth) return false;
+    if (isInCheck(position)) return false;
+    if (beta.mate()) return false;                    // Avoid null move near mate
+    if (!hasNonPawnMaterial(position)) return false;  // Don't do null move in endgame
+
+    // Don't try null move in PV nodes (where alpha+1 == beta)
+    // These need exact scores, not just fail-high/fail-low
+    if (beta - 1_cp <= alpha) return false;
+
+    // Get quick evaluation for pruning decisions
+    // Use quiescence search for better tactical accuracy instead of static eval
+    Score staticEval = Score::fromCP(nnue::evaluate(position, *network));
+    if (position.active() == Color::b) staticEval = -staticEval;
+    ++evalCount;
+
+    if (staticEval < beta) return false;  // Must be ahead to prune
+
+    ++nullMoveAttempts;
+
+    // Make null move
+    Turn savedTurn = position.turn;
+    Hash nullHash = hash.makeNullMove(position.turn);
+    position.turn.makeNullMove();
+    dassert(nullHash == Hash(position));
+
+    // Search with reduced depth
+    auto nullDepth =
+        Depth{depth.current + 1, std::max(1, depth.left - 1 - options::nullMoveReduction)};
+    auto nullResult = -alphaBeta(position, nullHash, -beta, -beta + 1_cp, nullDepth);
+
+    position.turn = savedTurn;
+
+    // If null move search fails high, we can prune
+    bool canPrune = nullResult.score >= beta;
+    nullMoveCutoffs += canPrune;
+    return canPrune;
+}
+
 /**
  * The alpha-beta search algorithm with fail-soft negamax search.
  * The alpha represents the best score that the maximizing player can guarantee at the current
@@ -462,6 +516,9 @@ bool betaCutoff(Score score, Score beta, Move move, Color side, int depthleft) {
  * the best score that the current player can guarantee, assuming the opponent plays optimally.
  */
 PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score beta, Depth depth) {
+    // Track maximum selective depth reached in main search (excludes quiescence)
+    if (depth.current > maxSelDepth) maxSelDepth = depth.current;
+
     if (depth.left <= 0) return {{}, quiesce(position, alpha, beta, depth)};
 
     // Check the transposition table, which may tighten one or both search bounds
@@ -471,31 +528,8 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
     if (alpha >= beta)
         if (auto eval = transpositionTable.find(hash)) return {{eval.move}, alpha};
 
-    // Null move pruning
-    if (options::nullMovePruning && depth.left >= options::nullMoveMinDepth &&
-        !isInCheck(position) && beta > Score::min() + 100_cp &&  // Avoid null move near mate
-        hasNonPawnMaterial(position)) {                          // Don't do null move in endgame
-        assert(options::nullMoveReduction < options::nullMoveMinDepth);
-
-        // Make null move using RAII
-        Turn savedTurn = position.turn;
-        Hash nullHash = hash.makeNullMove(position.turn);  // Pass original turn before null move
-        position.turn.makeNullMove();
-        dassert(nullHash == Hash(position));  // Ensure hash matches position after null move
-
-        // Search with reduced depth
-        auto nullResult =
-            -alphaBeta(position,
-                       nullHash,
-                       -beta,
-                       -beta + 1_cp,  // Null window search for efficiency
-                       {depth.current + 1, depth.left - 1 - options::nullMoveReduction});
-
-        position.turn = savedTurn;  // Restore turn after null move search
-
-        // If null move search fails high, we can prune
-        if (nullResult.score >= beta) return {{}, beta};  // Null move cutoff
-    }
+    // Try null move pruning (only in non-PV nodes)
+    if (tryNullMovePruning(position, hash, alpha, beta, depth)) return {{}, beta};
 
     auto moveList = moves::allLegalMovesAndCaptures(position.turn, position.board);
 
@@ -532,17 +566,19 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
         bool applyLMR = options::lateMoveReductions && depth.left > 2 && moveCount > 2 &&
             isQuiet(position, depth.left);
 
+        if (applyLMR) ++lmrReductions;
+
         // Perform a reduced-depth search
         auto newVar = -alphaBeta(
             position, newHash, -beta, -newAlpha, {depth.current + 1, depth.left - 1 - applyLMR});
 
         // Re-search at full depth if the reduced search fails high
-        if (applyLMR && newVar.score > alpha)
+        if (applyLMR && newVar.score > alpha && ++lmrResearches)
             newVar = -alphaBeta(position, newHash, -beta, -newAlpha, depth + 1);
         unmakeMove(position, undo);
 
         if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
-        if (betaCutoff(pv.score, beta, move, position.active(), depth.current)) break;
+        if (betaCutoff(pv.score, beta, move, moveCount, position.active(), depth.current)) break;
     }
 
     if (moveList.empty() && !isInCheck(position)) pv.score = Score();  // Stalemate
@@ -567,6 +603,7 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
     if (!info) return false;
 
     std::string pvString = "depth " + std::to_string(depthleft);
+    if (maxSelDepth) pvString += " seldepth " + std::to_string(maxSelDepth);
     if (score.mate())
         pvString += " score mate " + std::to_string(score.mate());
     else
@@ -614,7 +651,8 @@ PrincipalVariation toplevelAlphaBeta(
         auto newVar =
             -alphaBeta(newPosition, newHash, -beta, -std::max(alpha, pv.score), depth + 1);
         if (newVar.score > pv.score || !pv.front()) pv = {move, newVar};
-        if (betaCutoff(pv.score, beta, move, position.active(), depth.current)) break;
+        if (betaCutoff(pv.score, beta, move, currmovenumber, position.active(), depth.current))
+            break;
     }
     if (moveList.empty() && !isInCheck(position)) pv = {Move(), Score()};
     transpositionTable.insert(hash, {pv.front(), pv.score}, depthleft, alpha, beta);
@@ -719,11 +757,6 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
 
     // Clear incremental context after search
     searchContext.clear();
-
-    // Print beta cutoff statistics
-    if (alphaBetaDebug && totalMovesEvaluated > 0)
-        std::cout << "Beta cutoff moves: " << betaCutoffMoves << " / " << totalMovesEvaluated
-                  << pct(betaCutoffMoves, totalMovesEvaluated) << std::endl;
 
     return pv;
 }

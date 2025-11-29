@@ -8,7 +8,7 @@
 #include <sstream>
 #include <stdexcept>
 
-#include "move/move.h"
+#include "core/square_set/square_set.h"
 
 namespace nnue {
 

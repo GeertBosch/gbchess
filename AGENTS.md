@@ -28,8 +28,8 @@ gbchess is a high-performance C++ chess engine focusing on:
   - Minimize dependence on external libraries to keep the code self-contained
 - **Style**:
   - Minimize nesting, prefer early returns, keep functions focused
-  - Use standard library methods and algorithms if this results in more concise code with same perf
-  -
+  - Use standard library methods and algorithms where more concise with same perf
+  - Prefer "\n" over `std::endl`;
 - **Conventions**:
   - Follow existing naming conventions in the code, avoid unnecessary braces/parentheses
 - **Documentation**:

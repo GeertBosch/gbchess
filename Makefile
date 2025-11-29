@@ -185,7 +185,7 @@ mate45: build/search-test ${PUZZLES}
 
 .PHONY: puzzles build
 puzzles: ${PUZZLES} build/search-test
-	@egrep -v "mateIn[12345]" ${PUZZLES} | head -101 | ./build/search-test 6
+	@egrep -v "mateIn[12345]" ${PUZZLES} | head -101 | ./build/search-test 7
 
 lichess/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
 	mkdir -p $(dir $@) && ./$< $(@:lichess/lichess_%_evals.csv=%) > $@
@@ -212,7 +212,7 @@ build: $(CPP_TESTS) $(COMPILE_COMMANDS) build/perft build/engine build/perft-sim
 	@./check-arch.sh
 
 fixed-puzzles: build/search-test
-	./build/search-test 6 < ${FIXED_PUZZLES}
+	./build/search-test 7 < ${FIXED_PUZZLES}
 
 searches1: build/search-debug
 	./build/search-debug "5r1k/pp4pp/5p2/1BbQp1r1/7K/7P/1PP3P1/3R3R b - - 3 26" 3

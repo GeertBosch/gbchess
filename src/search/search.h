@@ -11,6 +11,13 @@ namespace search {
 extern uint64_t evalCount;
 extern uint64_t cacheCount;
 extern uint64_t quiescenceCount;
+extern uint64_t nullMoveAttempts;
+extern uint64_t nullMoveCutoffs;
+extern uint64_t lmrReductions;
+extern uint64_t lmrResearches;
+extern uint64_t betaCutoffs;
+extern uint64_t firstMoveCutoffs;
+extern int maxSelDepth;
 
 constexpr bool transpositionTableDebug = false;
 constexpr bool alphaBetaDebug = false;

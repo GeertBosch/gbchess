@@ -101,20 +101,56 @@ void printEvalRate(const F& fun) {
     auto startEvals = search::evalCount;
     auto startCache = search::cacheCount;
     auto startQuiescence = search::quiescenceCount;
+    auto startNullMoveAttempts = search::nullMoveAttempts;
+    auto startNullMove = search::nullMoveCutoffs;
+    auto startLMR = search::lmrReductions;
+    auto startLMRResearch = search::lmrResearches;
+    auto startBetaCutoffs = search::betaCutoffs;
+    auto startFirstMoveCutoffs = search::firstMoveCutoffs;
+    search::maxSelDepth = 0;
     fun();
     auto endTime = std::chrono::high_resolution_clock::now();
     auto endEvals = search::evalCount;
     auto endCache = search::cacheCount;
     auto endQuiescence = search::quiescenceCount;
+    auto endNullMoveAttempts = search::nullMoveAttempts;
+    auto endNullMove = search::nullMoveCutoffs;
+    auto endLMR = search::lmrReductions;
+    auto endLMRResearch = search::lmrResearches;
+    auto endBetaCutoffs = search::betaCutoffs;
+    auto endFirstMoveCutoffs = search::firstMoveCutoffs;
 
     auto quiesce = endQuiescence - startQuiescence;
+    auto nullMoveAttempts = endNullMoveAttempts - startNullMoveAttempts;
+    auto nullMove = endNullMove - startNullMove;
+    auto lmr = endLMR - startLMR;
+    auto lmrResearch = endLMRResearch - startLMRResearch;
+    auto betaCuts = endBetaCutoffs - startBetaCutoffs;
+    auto firstMoveCuts = endFirstMoveCutoffs - startFirstMoveCutoffs;
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
     auto evals = endEvals - startEvals;
     auto cached = endCache - startCache;
     auto evalRate = evals / (duration.count() / 1000'000.0);  // evals per second
 
-    std::cerr << evals << " evals, " << cached << " cached, " << quiesce << " quiesced in "
-              << duration.count() / 1000 << " ms @ " << evalRate / 1000.0 << "K evals/sec"
+    std::cerr << evals << " evals, " << cached << " cached, " << quiesce << " quiesced";
+    if (search::maxSelDepth) std::cerr << " (seldepth " << search::maxSelDepth << ")";
+    std::cerr << "\n";
+    if (nullMoveAttempts) {
+        std::cerr << "  " << nullMoveAttempts << " null-move attempts, " << nullMove << " cutoffs";
+        if (nullMoveAttempts) std::cerr << " (" << (nullMove * 100 / nullMoveAttempts) << "%)";
+        std::cerr << "\n";
+    }
+    if (lmr) std::cerr << "  " << lmr << " LMR reductions";
+    if (lmrResearch) std::cerr << " (" << lmrResearch << " researches)";
+    if (lmr) std::cerr << "\n";
+    if (betaCuts) {
+        std::cerr << "  " << betaCuts << " beta cutoffs";
+        if (firstMoveCuts)
+            std::cerr << " (" << firstMoveCuts
+                      << " first-move = " << (firstMoveCuts * 100 / betaCuts) << "%)";
+        std::cerr << "\n";
+    }
+    std::cerr << "  " << duration.count() / 1000 << " ms @ " << evalRate / 1000.0 << "K evals/sec"
               << std::endl;
 }
 
