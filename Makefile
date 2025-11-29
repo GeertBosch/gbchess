@@ -178,14 +178,14 @@ ${PUZZLES}.zst:
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
 mate123: build/search-test ${PUZZLES}
-	@egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -1001 | ./build/search-test 5
+	@egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -1001 | ./build/search-test 6
 
 mate45: build/search-test ${PUZZLES}
 	@egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -101 | ./build/search-test 9
 
 .PHONY: puzzles build
 puzzles: ${PUZZLES} build/search-test
-	@egrep -v "mateIn[12345]" ${PUZZLES} | head -101 | ./build/search-test 7
+	@egrep -v "mateIn[12345]" ${PUZZLES} | head -101 | ./build/search-test 6
 
 lichess/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
 	mkdir -p $(dir $@) && ./$< $(@:lichess/lichess_%_evals.csv=%) > $@

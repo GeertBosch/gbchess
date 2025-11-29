@@ -180,8 +180,11 @@ bool isAttacked(const Board& board, SquareSet squares, Color opponentColor) {
     return isAttacked(board, squares, occupancy);
 }
 
+bool attacks(Piece piece, Square from, Square to) {
+    return MovesTable::possibleCaptures(piece, from).contains(to);
+}
 bool attacks(const Board& board, Square from, Square to) {
-    return MovesTable::possibleCaptures(board[from], from).contains(to);
+    return attacks(board[from], from, to);
 }
 
 SquareSet attackers(const Board& board, Square target, SquareSet occupancy) {

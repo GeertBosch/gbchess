@@ -116,6 +116,19 @@ void findMoves(const Board& board, SearchState& state, const F& fun) {
     findNonPawnMoves(board, state, fun);
 }
 
+template <typename F>
+void findChecks(const Board& board, SearchState& state, const F& fun) {
+    auto otherKing = state.turn.activeColor() == Color::w ? Piece::k : Piece::K;
+    auto otherKingSquare =
+        *find(board, otherKing).begin();  // There is always exactly one king of each color
+    auto doIfCheck = [&](Piece piece, Move move) {
+        if (attacks(piece, move.to, otherKingSquare)) fun(piece, move);
+    };
+    findPawnPushes(state, doIfCheck);
+    findNonPawnMoves(board, state, doIfCheck);
+    // TODO: Consider caslting that gives check
+}
+
 /** For use in quiescent search: allow pawn moves that promote or near promotion */
 template <typename F>
 void findPromotionMoves(SearchState& state, const F& fun) {
@@ -239,6 +252,15 @@ void forAllLegalQuiescentMoves(Turn turn,
     // Check if the opponent may promote
     bool otherMayPromote = depthleft > options::promotionMinDepthLeft &&
         mayHavePromoMove(!turn.activeColor(), board, !state.occupancy);
+
+    // In endgames, allow finding checks in the first plies of quiescence search
+    bool endGame = state.occupancy.size() <= options::checksMaxPiecesLeft;
+
+    // Allow limited quiescence search in endgames to find checks. Don't double up in case of
+    // being in check or promotion threats.
+    // TODO: Move this and the otherMayPromote statistic to a regular search extension.
+    if (depthleft >= options::checksMinDepthLeft && !otherMayPromote && !state.inCheck && endGame)
+        findChecks(board, state, doMove);
 
     // Avoid horizon effect: don't promote in the last plies
     if (depthleft >= options::promotionMinDepthLeft) findPromotionMoves(state, doMove);

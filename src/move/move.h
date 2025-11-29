@@ -29,6 +29,7 @@ SquareSet attackers(const Board& board, Square square, SquareSet occupancy);
  * Returns whether the piece on 'from' can attack the square 'to', ignoring occupancy or en passant.
  */
 bool attacks(const Board& board, Square from, Square to);
+bool attacks(Piece piece, Square from, Square to);
 
 /** Returns the set of pieces that would result in the king being checked,
     if the piece where to be removed from the board. */

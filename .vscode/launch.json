@@ -23,7 +23,7 @@
                 // "r3k2r/pb1p1ppp/1b4q1/1Q2P3/8/2NP1PP1/PP4P1/R1B2R1K b kq - 0 17",
                 // "8/2p4r/1p3k2/p2PR1p1/P1P2pP1/1P3P1r/4R1K1/8 b - - 0 4",
                 // "3",
-                "startpos",
+                "R7/P7/8/5p2/5kp1/8/r5PK/8 b - - 0 41",
                 "6",
             ],
         },
@@ -36,6 +36,17 @@
                 "command source ${workspaceRoot}/chess.lldbinit"
             ],
             "program": "${workspaceFolder}/build/moves-debug",
+            "args": [],
+        },
+        {
+            "name": "move_gen-debug",
+            "type": "lldb-dap",
+            "request": "launch",
+            "preLaunchTask": "build: move_gen-debug",
+            "initCommands": [
+                "command source ${workspaceRoot}/chess.lldbinit"
+            ],
+            "program": "${workspaceFolder}/build/move_gen-debug",
             "args": [],
         },
         {

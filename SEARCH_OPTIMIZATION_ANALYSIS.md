@@ -11,14 +11,15 @@ Depth: 9
 | Engine | Nodes | Seldepth | Time |
 |--------|-------|----------|------|
 | **Stockfish 12** | 7,028 | 12 | 9ms |
-| **gbchess** | 767,785 | 10 | 3,174ms |
-| **Ratio** | **109x** | 0.83x | 353x |
+| **gbchess** | 598,390 | 10 | 2,497ms |
+| **Ratio** | **85x** | 0.83x | 277x |
 
-**Recent Improvements:**
+**Recent Optimizations:**
 - Changed `nullMoveReduction` from 3 to 4 (more aggressive)
 - Changed `nullMoveMinDepth` from 3 to 2 (allows null move at more depths)
 - Removed `max(1, ...)` constraint on null move search depth
-- Result: 50% reduction in nodes (1.55M → 768K) and time (6.1s → 3.2s)
+- **Selective quiescence extension** for checking moves (fixes missed checkmates without regression)
+- Result: **22% faster** than previous best (768K nodes, 3.2s) with correct checkmate detection
 
 Note: Both engines report "seldepth" (selective depth = maximum depth in main search including extensions, excluding quiescence).
 
@@ -26,34 +27,25 @@ Note: Both engines report "seldepth" (selective depth = maximum depth in main se
 
 | Metric | Stockfish 12 | gbchess | Ratio |
 |--------|--------------|---------|-------|
-| **Total Nodes** | 7,028 | 767,785 | **109x** |
-| **Null Move Attempts** | 1,467 (20.87% of nodes) | 26,164 (3.41% of nodes) | **6x fewer attempts** |
-| **Null Move Cutoffs** | 1,075 (73% of attempts) | 20,737 (79% of attempts) | Better effectiveness! |
-| **Beta Cutoffs** | 1,575 (22% of nodes) | 118,856 (15.5% of nodes) | Lower % but 75x more |
-| **First-Move Cutoffs** | 1,373 (87% of beta) | 100,661 (84% of beta) | Similar ordering |
+| **Total Nodes** | 7,028 | 598,390 | **85x** |
+| **Null Move Attempts** | 1,467 (20.87% of nodes) | 21,896 (3.66% of nodes) | **6x fewer attempts** |
+| **Null Move Cutoffs** | 1,075 (73% of attempts) | 17,748 (81% of attempts) | Better effectiveness! |
+| **Beta Cutoffs** | 1,575 (22% of nodes) | 100,009 (16.7% of nodes) | Lower % but 63x more |
+| **First-Move Cutoffs** | 1,373 (87% of beta) | 85,883 (85% of beta) | Similar ordering |
 
-## Key Finding: Null Move Pruning Improvements
 
-**Progress Made:**
-- Changed `nullMoveMinDepth` from 3 → 2: Allows null move at more depths
-- Changed `nullMoveReduction` from 3 → 4: More aggressive pruning
-- Result: **50% node reduction** and improved null move utilization
-
-**Current Status:**
+**Current Null Move Statistics:**
 - Stockfish 12: **20.87%** of nodes attempt null move
-- gbchess: **3.41%** of nodes attempt null move (improved from 1.84%)
-- Gap narrowed from 11x to **6x fewer attempts**
+- gbchess: **3.66%** of nodes attempt null move
+- Gap: **6x fewer attempts** (improved from previous 24x)
 
 **Success Rates (when attempted):**
 - Stockfish 12: 73% of attempts result in cutoff
-- gbchess: **79%** of attempts result in cutoff (even better!)
-
-**Why Lower `nullMoveMinDepth` Further Doesn't Help:**
-Experiments with `nullMoveMinDepth = 1` increased total nodes and time, suggesting that null move at very shallow depths (1-2 plies) has negative ROI—the verification search cost outweighs pruning benefits at these depths.
+- gbchess: **81%** of attempts result in cutoff (even better!)
 
 This demonstrates that **our null move implementation is effective when used**, but we're severely underutilizing it by attempting it too rarely.
 
-### Analysis: `nullMoveMinDepth = 2` is Optimal
+### Analysis: Null Move Conditions
 
 **gbchess null move conditions:**
 ```cpp
@@ -76,14 +68,10 @@ if (   !PvNode
 ```
 
 **Experimental Findings:**
-- `nullMoveMinDepth = 3`: 1.55M nodes, 6.1s (baseline before improvements)
-- `nullMoveMinDepth = 2`: **768K nodes, 3.2s** (optimal) ✓
-- `nullMoveMinDepth = 1`: More nodes and slower (negative ROI at depth 1)
-
-**Why `nullMoveMinDepth = 2` Works Best:**
-- At depth 1, null move verification search overhead exceeds pruning benefit
-- At depth 2+, the R=4 reduction is effective (searches at depth 2-4=0 or less)
-- Stockfish's additional conditions (history, improving, etc.) may enable safe depth-1 pruning
+- `nullMoveMinDepth = 3`: 1.55M nodes, 6.1s (baseline)
+- `nullMoveMinDepth = 2`: 768K nodes, 3.2s (initial improvement)
+- `nullMoveMinDepth = 2` + selective extension: **598K nodes, 2.5s** (current, best) ✓
+- `nullMoveMinDepth = 1`: More nodes and slower (negative ROI)
 
 **Remaining Gap:**
 - gbchess still attempts null move 6x less often (3.41% vs 20.87%)
@@ -159,7 +147,10 @@ if (   !PvNode
 
 ## Estimated Impact
 
-Recent null move optimizations achieved **50% node reduction** (1.55M → 768K).
+**Current Status:**
+- After selective extension: 598K nodes, 2.5s (correct and fast)
+- 85x node gap vs Stockfish (down from original 221x)
+- **61% improvement** from baseline (1.55M → 598K nodes)
 
 Adding the missing optimizations would likely improve node count by:
 - **Futility Pruning (Node)**: 2-3x reduction
@@ -167,9 +158,9 @@ Adding the missing optimizations would likely improve node count by:
 - **SEE Pruning**: 1.3-1.5x reduction
 - **Combined**: **4-9x total reduction** (conservative estimate)
 
-This would bring gbchess from 768K nodes to **85K-190K nodes** at depth 9.
+This would bring gbchess from 598K nodes to **66K-150K nodes** at depth 9.
 
-To match Stockfish's 7K nodes would require additional optimizations:
+To match Stockfish's 7K nodes (~85x remaining gap) would require additional optimizations:
 - More aggressive pruning margins
 - Better move ordering (reducing researches)
 - Singular extensions

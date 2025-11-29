@@ -27,6 +27,18 @@
       },
       {
          "type": "shell",
+         "label": "build: move_gen-debug",
+         "command": "make",
+         "args": [
+            "build/move_gen-debug"
+         ],
+         "group": "build",
+         "problemMatcher": [
+            "$gcc"
+         ]
+      },
+      {
+         "type": "shell",
          "label": "build: magic-debug",
          "command": "make",
          "args": [

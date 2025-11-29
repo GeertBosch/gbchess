@@ -34,4 +34,5 @@ public:
         return _theirs == other._theirs && _ours == other._ours;
     }
     bool operator!=(Occupancy other) const { return !(*this == other); }
+    size_t size() const { return (_theirs | _ours).size(); }
 };

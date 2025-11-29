@@ -498,7 +498,7 @@ bool tryNullMovePruning(Position& position, Hash hash, Score alpha, Score beta, 
 
     // Search with reduced depth
     auto nullDepth =
-        Depth{depth.current + 1, std::max(1, depth.left - 1 - options::nullMoveReduction)};
+        Depth{depth.current + 1, std::max(0, depth.left - 1 - options::nullMoveReduction)};
     auto nullResult = -alphaBeta(position, nullHash, -beta, -beta + 1_cp, nullDepth);
 
     position.turn = savedTurn;
