@@ -349,8 +349,9 @@ int scoreMVVLVA(const Board& board, Move move) {
         case PieceType::QUEEN: return 900;
         case PieceType::KING: return 10000;
         case PieceType::EMPTY: return 100;  // Empty square indicates en passant capture
-        default: return 0;
         }
+        dassert(false && "Unexpected piece type");
+        return 0;  // Unreachable, but silences compiler warning
     };
 
     int victimValue = getSimpleValue(victim);

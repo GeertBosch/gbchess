@@ -4,6 +4,7 @@
 
 #include "core/core.h"
 #include "eval/eval.h"
+#include "move/move_gen.h"
 #include "pv.h"
 
 
@@ -61,6 +62,12 @@ void newGame();
  * Search all tactical moves necessary to achieve a quiet position and return the best score
  */
 Score quiesce(Position& position, int depthleft);
+
+/**
+ * Compute flags for quiescent move generation based on position and search depth.
+ * This determines which additional moves to consider beyond basic captures.
+ */
+moves::QuiescentFlags computeQuiescentFlags(Position& position, int depthleft);
 
 /**
  * Calculates MVV-LVA (Most Valuable Victim - Least Valuable Attacker) score for a capture move.

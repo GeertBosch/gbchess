@@ -36,6 +36,7 @@ enum class QuiescentFlags : uint8_t {
 constexpr QuiescentFlags operator|(QuiescentFlags a, QuiescentFlags b) {
     return static_cast<QuiescentFlags>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
 }
+/** Returns true if any flags in b are set in a. Used for flag checking like `if (flags & Flag::X)` */
 constexpr bool operator&(QuiescentFlags a, QuiescentFlags b) {
     return static_cast<uint8_t>(a) & static_cast<uint8_t>(b);
 }

@@ -60,7 +60,13 @@ std::vector<std::string> split(std::string line, char delim) {
 
 /**
  * Compute quiescent flags from depth for test purposes.
- * This replicates the logic from the search layer.
+ * 
+ * NOTE: This duplicates the logic from search::computeQuiescentFlags() in search.cpp.
+ * The duplication is intentional to avoid a dependency on search.cpp which requires
+ * NNUE to be loaded at program startup. If search::computeQuiescentFlags() changes,
+ * this function should be updated to match.
+ * 
+ * @see search::computeQuiescentFlags() in src/search/search.cpp
  */
 moves::QuiescentFlags computeTestQuiescentFlags(Position& position, int depthleft) {
     using moves::QuiescentFlags;
