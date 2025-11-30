@@ -237,6 +237,7 @@ void forAllLegalQuiescentMoves(Turn turn,
                                Board& board,
                                int depthleft,
                                std::function<void(Move)> action) {
+    (void)depthleft;  // Parameter kept for interface compatibility
     // Iterate over all moves and captures
     auto state = SearchState(board, turn);
     auto doMove = [&](Piece, Move move) {

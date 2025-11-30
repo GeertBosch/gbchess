@@ -377,6 +377,19 @@ void testMateInOne() {
     assert(ss.str() == "mate 1 pv a5c3");
 }
 
+void testMateInTwo() {
+    // Test a mate-in-2: black to move, b3h3+ g2h3 f2h2#
+    // Regression test for search extension handling
+    std::string fen = "6k1/2P3pp/1P6/4b3/3p4/Br5P/4prP1/R5RK b - - 0 30";
+    auto position = fen::parsePosition(fen);
+    auto pv = search::computeBestMove(position, 6);
+    std::stringstream ss;
+    ss << pv;
+    // Should find M2, not incorrectly claim M1
+    assert(pv.score.mate() == 2);
+    assert(pv.moves.size() >= 1 && pv.moves[0] == Move(b3, h3, MoveKind::Quiet_Move));
+}
+
 void testNullMoveHash() {
     // Test position with en passant possibility (from previous analysis)
     auto position =
@@ -418,6 +431,7 @@ void testBasicSearch() {
     testMissingPV();
     testCheckMated();
     testMateInOne();
+    testMateInTwo();
     testNullMoveHash();
     if (debug) std::cout << "Basic search test passed!\n";
 }

@@ -406,10 +406,10 @@ int computeExtension(Position& position, int depthCurrent) {
         if (isInCheck(position) && endGame) return 1;
     }
 
-    // Promotion extension: extend when opponent can promote
+    // Promotion extension: extend when opponent can promote (threat)
     if (options::promotionExtensions &&
         moves::mayHavePromoMove(
-            position.active(), position.board, Occupancy(position.board, position.active())))
+            !position.active(), position.board, Occupancy(position.board, !position.active())))
         return 1;
 
     return 0;
