@@ -382,13 +382,36 @@ std::pair<moves::UndoPosition, Score> makeMoveWithEval(Position& position, Move 
     return {undo, eval};
 }
 
-bool isQuiet(Position& position, int depthleft) {
+bool isQuiet(Position& position) {
     if (isInCheck(position)) return false;
-    if (depthleft <= options::promotionMinDepthLeft) return true;
     if (moves::mayHavePromoMove(
             !position.active(), position.board, Occupancy(position.board, !position.active())))
         return false;
     return true;
+}
+
+/**
+ * Computes search extension at the last ply before quiescence search.
+ * Returns 1 if the position should be extended, 0 otherwise.
+ */
+int computeExtension(Position& position, int depthCurrent) {
+    // Don't extend if we're already too deep
+    if (depthCurrent >= options::extensionMaxDepth) return 0;
+
+    // Check extension: extend when giving check in endgames
+    if (options::checkExtensions) {
+        auto pieceCount = Occupancy(position.board, position.active()).size();
+        bool endGame = pieceCount <= options::checkExtensionMaxPieces;
+        if (isInCheck(position) && endGame) return 1;
+    }
+
+    // Promotion extension: extend when opponent can promote
+    if (options::promotionExtensions &&
+        moves::mayHavePromoMove(
+            position.active(), position.board, Occupancy(position.board, position.active())))
+        return 1;
+
+    return 0;
 }
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score standPat) {
@@ -396,9 +419,9 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score 
 
     if (!depthleft) return standPat;
 
-    if (standPat >= beta && isQuiet(position, depthleft)) return beta;
+    if (standPat >= beta && isQuiet(position)) return beta;
 
-    if (standPat > alpha && isQuiet(position, depthleft)) alpha = standPat;
+    if (standPat > alpha && isQuiet(position)) alpha = standPat;
 
     // The moveList includes moves needed to get out of check; an empty list means mate
     auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, depthleft);
@@ -562,27 +585,21 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
         dassert(newHash == Hash(position));
         auto newAlpha = std::max(alpha, pv.score);
 
-        // Compute search extensions at the last ply before quiescence search
-        auto pieceCount = Occupancy(position.board, position.active()).size();
-        bool endGame = pieceCount <= options::checksMaxPiecesLeft;
-        bool givesCheck = options::checkExtensions && isInCheck(position) && endGame;
-        bool promotionThreat = options::promotionExtensions &&
-            moves::mayHavePromoMove(
-                position.active(), position.board, Occupancy(position.board, position.active()));
-        int extension = depth.left == 1 && (givesCheck || promotionThreat);
+        // Compute search extension based on current depth
+        int extension = computeExtension(position, depth.current);
 
         // Apply Late Move Reduction (LMR)
         bool applyLMR = options::lateMoveReductions && depth.left > 2 && moveCount > 2 &&
-            isQuiet(position, depth.left);
+            isQuiet(position);
 
         if (applyLMR) ++lmrReductions;
 
+        // Compute new depth left with extensions and reductions
+        int newDepthLeft = depth.left - 1 + extension - applyLMR;
+
         // Perform a reduced-depth search (with extensions if applicable)
-        auto newVar = -alphaBeta(position,
-                                 newHash,
-                                 -beta,
-                                 -newAlpha,
-                                 {depth.current + 1, depth.left - 1 + extension - applyLMR});
+        auto newVar =
+            -alphaBeta(position, newHash, -beta, -newAlpha, {depth.current + 1, newDepthLeft});
 
         // Re-search at full depth if the reduced search fails high
         if (applyLMR && newVar.score > alpha && ++lmrResearches)
