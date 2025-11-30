@@ -519,7 +519,7 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
     // Track maximum selective depth reached in main search (excludes quiescence)
     if (depth.current > maxSelDepth) maxSelDepth = depth.current;
 
-    if (depth.left <= 0) return {{}, quiesce(position, alpha, beta, depth)};
+    if (depth.left <= 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
 
     // Check the transposition table, which may tighten one or both search bounds
     transpositionTable.refineAlphaBeta(hash, depth.left, alpha, beta);
