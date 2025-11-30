@@ -1,5 +1,6 @@
 #include <chrono>
 #include <cstdlib>  // For std::exit
+#include <cstring>
 #include <iostream>
 #include <numeric>
 #include <ostream>
