@@ -565,11 +565,11 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
         int extension = 0;
         auto pieceCount = Occupancy(position.board, position.active()).size();
         bool endGame = pieceCount <= options::checkExtensionMaxPieces;
-        if (options::checkExtensions && isInCheck(position) && endGame) extension = 1;
-        if (options::promotionExtensions &&
+        bool givesCheck = options::checkExtensions && isInCheck(position) && endGame;
+        bool promotionThreat = options::promotionExtensions &&
             moves::mayHavePromoMove(
-                position.active(), position.board, Occupancy(position.board, position.active())))
-            extension = 1;
+                position.active(), position.board, Occupancy(position.board, position.active()));
+        if (givesCheck || promotionThreat) extension = 1;
 
         // Apply Late Move Reduction (LMR)
         bool applyLMR = options::lateMoveReductions && depth.left > 2 && moveCount > 2 &&
@@ -586,8 +586,8 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
 
         // Re-search at full depth if the reduced search fails high (with extensions)
         if (applyLMR && newVar.score > alpha && ++lmrResearches)
-            newVar =
-                -alphaBeta(position, newHash, -beta, -newAlpha, {depth.current + 1, depth.left + extension});
+            newVar = -alphaBeta(
+                position, newHash, -beta, -newAlpha, {depth.current + 1, depth.left - 1 + extension});
         unmakeMove(position, undo);
 
         if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
