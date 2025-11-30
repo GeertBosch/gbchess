@@ -285,7 +285,7 @@ PuzzleError doPuzzle(std::string puzzle, Position position, MoveVector moves, si
 void testFromStdIn(int depth) {
     // Assumes CSV input as from the lichess puzzle database:
     // PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,GameUrl,OpeningTags
-    const int kExpectedPuzzleRating = 2000;
+    const int kExpectedPuzzleRating = 2300;
     std::string line;
     std::getline(std::cin, line);
     auto columns = split(line, ',');

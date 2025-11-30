@@ -185,7 +185,7 @@ mate45: build/search-test ${PUZZLES}
 
 .PHONY: puzzles build
 puzzles: ${PUZZLES} build/search-test
-	@egrep -v "mateIn[12345]" ${PUZZLES} | head -101 | ./build/search-test 6
+	@egrep -v "mateIn[12345]" ${PUZZLES} | head -101 | ./build/search-test 7
 
 lichess/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
 	mkdir -p $(dir $@) && ./$< $(@:lichess/lichess_%_evals.csv=%) > $@
