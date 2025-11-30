@@ -26,12 +26,26 @@ MoveVector allLegalMoves(Turn turn, Board board);
 MoveVector allLegalCaptures(Turn turn, Board board);
 MoveVector allLegalMovesAndCaptures(Turn turn, Board& board);
 
-MoveVector allLegalQuiescentMoves(Turn turn, Board& board, int depthleft);
+/** Flags for quiescent move generation extensions */
+enum class QuiescentFlags : uint8_t {
+    None = 0,
+    IncludeChecks = 1,        // Include moves that give check
+    IncludeAllMoves = 2,      // Include all quiet moves (for non-quiet positions)
+    IncludePromotions = 4,    // Include pawn moves that may promote
+};
+constexpr QuiescentFlags operator|(QuiescentFlags a, QuiescentFlags b) {
+    return static_cast<QuiescentFlags>(static_cast<uint8_t>(a) | static_cast<uint8_t>(b));
+}
+constexpr bool operator&(QuiescentFlags a, QuiescentFlags b) {
+    return static_cast<uint8_t>(a) & static_cast<uint8_t>(b);
+}
+
+MoveVector allLegalQuiescentMoves(Turn turn, Board& board, QuiescentFlags flags);
 
 size_t countLegalMovesAndCaptures(Board& board, SearchState& state);
 
 using MoveFun = std::function<void(Board&, MoveWithPieces)>;
-void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun action);
+void forAllLegalQuiescentMoves(Turn turn, Board& board, QuiescentFlags flags, MoveFun action);
 void forAllLegalMovesAndCaptures(Board& board, SearchState& state, MoveFun action);
 
 inline void forAllLegalMovesAndCaptures(Turn turn, Board& board, MoveFun action) {

@@ -9,6 +9,7 @@
 
 #include "core/core.h"
 #include "core/options.h"
+#include "core/square_set/occupancy.h"
 #include "engine/fen/fen.h"
 #include "move/move.h"
 #include "move/move_gen.h"
@@ -58,6 +59,33 @@ std::vector<std::string> split(std::string line, char delim) {
 }
 
 /**
+ * Compute quiescent flags from depth for test purposes.
+ * This replicates the logic from the search layer.
+ */
+moves::QuiescentFlags computeTestQuiescentFlags(Position& position, int depthleft) {
+    using moves::QuiescentFlags;
+    QuiescentFlags flags = QuiescentFlags::None;
+
+    // Avoid horizon effect: include promotions when we have enough depth
+    if (depthleft >= options::promotionMinDepthLeft) flags = flags | QuiescentFlags::IncludePromotions;
+
+    // Check if the opponent may promote
+    bool otherMayPromote = depthleft > options::promotionMinDepthLeft &&
+        moves::mayHavePromoMove(
+            !position.active(), position.board, Occupancy(position.board, !position.active()));
+
+    if (otherMayPromote) flags = flags | QuiescentFlags::IncludeAllMoves;
+
+    // In endgames, include checks
+    auto pieceCount = Occupancy(position.board, position.active()).size();
+    bool endGame = pieceCount <= options::checksMaxPiecesLeft;
+    if (depthleft >= options::checksMinDepthLeft && !otherMayPromote && endGame)
+        flags = flags | QuiescentFlags::IncludeChecks;
+
+    return flags;
+}
+
+/**
  * Simplistic quiescence search for evaluation test purposes.
  */
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
@@ -70,8 +98,11 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
 
     if (alpha < stand_pat) alpha = stand_pat;
 
+    // Compute flags for quiescent move generation
+    auto flags = computeTestQuiescentFlags(position, depthleft);
+
     // The moveList includes moves needed to get out of check; an empty list means mate
-    auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, depthleft);
+    auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, flags);
 
     if (moveList.empty()) return isInCheck(position) ? Score::min() : stand_pat;
 

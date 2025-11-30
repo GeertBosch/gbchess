@@ -382,6 +382,34 @@ std::pair<moves::UndoPosition, Score> makeMoveWithEval(Position& position, Move 
     return {undo, eval};
 }
 
+/**
+ * Compute flags for quiescent move generation based on position and search depth.
+ * This is the search extension logic that determines which additional moves to consider.
+ */
+moves::QuiescentFlags computeQuiescentFlags(Position& position, int depthleft) {
+    using moves::QuiescentFlags;
+    QuiescentFlags flags = QuiescentFlags::None;
+
+    // Avoid horizon effect: include promotions when we have enough depth
+    if (depthleft >= options::promotionMinDepthLeft) flags = flags | QuiescentFlags::IncludePromotions;
+
+    // Check if the opponent may promote - this is an unstable position requiring more search
+    bool otherMayPromote = depthleft > options::promotionMinDepthLeft &&
+        moves::mayHavePromoMove(
+            !position.active(), position.board, Occupancy(position.board, !position.active()));
+
+    if (otherMayPromote) flags = flags | QuiescentFlags::IncludeAllMoves;
+
+    // In endgames, allow finding checks in the first plies of quiescence search
+    // Don't double up in case of promotion threats (already searching all moves)
+    auto pieceCount = Occupancy(position.board, position.active()).size();
+    bool endGame = pieceCount <= options::checksMaxPiecesLeft;
+    if (depthleft >= options::checksMinDepthLeft && !otherMayPromote && endGame)
+        flags = flags | QuiescentFlags::IncludeChecks;
+
+    return flags;
+}
+
 bool isQuiet(Position& position, int depthleft) {
     if (isInCheck(position)) return false;
     if (depthleft <= options::promotionMinDepthLeft) return true;
@@ -400,8 +428,11 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score 
 
     if (standPat > alpha && isQuiet(position, depthleft)) alpha = standPat;
 
+    // Compute the flags for quiescent move generation based on position and depth
+    auto flags = computeQuiescentFlags(position, depthleft);
+
     // The moveList includes moves needed to get out of check; an empty list means mate
-    auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, depthleft);
+    auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, flags);
     if (moveList.empty() && isInCheck(position)) return Score::min();
     sortMoves(position, moveList.begin(), moveList.end());  // No killer moves in quiescence
     for (auto move : moveList) {

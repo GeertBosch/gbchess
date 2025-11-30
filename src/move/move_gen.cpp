@@ -236,7 +236,7 @@ bool doesNotCheck(Board& board, const SearchState& state, Move move) {
 
 void forAllLegalQuiescentMoves(Turn turn,
                                Board& board,
-                               int depthleft,
+                               QuiescentFlags flags,
                                std::function<void(Move)> action) {
     // Iterate over all moves and captures
     auto state = SearchState(board, turn);
@@ -249,30 +249,23 @@ void forAllLegalQuiescentMoves(Turn turn,
     };
     findCaptures(board, state, doMove);
 
-    // Check if the opponent may promote
-    bool otherMayPromote = depthleft > options::promotionMinDepthLeft &&
-        mayHavePromoMove(!turn.activeColor(), board, !state.occupancy);
-
-    // In endgames, allow finding checks in the first plies of quiescence search
-    bool endGame = state.occupancy.size() <= options::checksMaxPiecesLeft;
-
-    // Allow limited quiescence search in endgames to find checks. Don't double up in case of
-    // being in check or promotion threats.
-    // TODO: Move this and the otherMayPromote statistic to a regular search extension.
-    if (depthleft >= options::checksMinDepthLeft && !otherMayPromote && !state.inCheck && endGame)
+    // Include checking moves if requested (and not already in check)
+    if ((flags & QuiescentFlags::IncludeChecks) && !state.inCheck)
         findChecks(board, state, doMove);
 
-    // Avoid horizon effect: don't promote in the last plies
-    if (depthleft >= options::promotionMinDepthLeft) findPromotionMoves(state, doMove);
+    // Include promotion moves if requested
+    if (flags & QuiescentFlags::IncludePromotions) findPromotionMoves(state, doMove);
 
     findEnPassant(board, turn, doMove);
-    if (state.inCheck || otherMayPromote) findMoves(board, state, doMove);
+
+    // Include all moves if in check or if explicitly requested
+    if (state.inCheck || (flags & QuiescentFlags::IncludeAllMoves)) findMoves(board, state, doMove);
 }
 
-MoveVector allLegalQuiescentMoves(Turn turn, Board& board, int depthleft) {
+MoveVector allLegalQuiescentMoves(Turn turn, Board& board, QuiescentFlags flags) {
     MoveVector legalQuiescentMoves;
     forAllLegalQuiescentMoves(
-        turn, board, depthleft, [&](Move move) { legalQuiescentMoves.emplace_back(move); });
+        turn, board, flags, [&](Move move) { legalQuiescentMoves.emplace_back(move); });
     return legalQuiescentMoves;
 }
 

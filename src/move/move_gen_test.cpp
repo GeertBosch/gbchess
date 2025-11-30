@@ -113,11 +113,14 @@ void testAllLegalCastling() {
 }
 
 void testAllLegalQuiescentMoves() {
+    using moves::QuiescentFlags;
     {
+        // Test position where black cannot immediately promote
         std::string fen = "8/1N3k2/6p1/8/2P3P1/p7/1R2K3/8 b - - 0 58";
         auto position = fen::parsePosition(fen);
-        auto moves =
-            allLegalQuiescentMoves(position.turn, position.board, options::promotionMinDepthLeft);
+        // With IncludePromotions flag, we should get captures and near-promotion moves
+        auto moves = allLegalQuiescentMoves(
+            position.turn, position.board, QuiescentFlags::IncludePromotions);
         if (moves.size() != 2) {
             std::cout << "FEN: " << fen::to_string(position) << "\n";
             std::cout << "Moves:\n";
@@ -128,10 +131,13 @@ void testAllLegalQuiescentMoves() {
     }
     {
         // This position is not quiet for white, as black may promote a pawn
+        // When IncludeAllMoves is set, all moves should be returned
         std::string fen = "8/1N3k2/6p1/8/2P3P1/8/1p2K3/8 w - - 0 59";
         auto position = fen::parsePosition(fen);
         auto moves = allLegalQuiescentMoves(
-            position.turn, position.board, options::promotionMinDepthLeft + 1);
+            position.turn,
+            position.board,
+            QuiescentFlags::IncludePromotions | QuiescentFlags::IncludeAllMoves);
         assert(moves.size() == 14);
     }
     std::cout << "All allLegalQuiescentMoves tests passed!\n";
