@@ -1,6 +1,7 @@
 #include "move_gen.h"
 
 #include "core/castling_info.h"
+#include "core/options.h"
 #include "core/piece_set.h"
 #include "magic/magic.h"
 #include "move.h"
@@ -235,7 +236,7 @@ bool doesNotCheck(Board& board, const SearchState& state, Move move) {
 
 void forAllLegalQuiescentMoves(Turn turn,
                                Board& board,
-                               int /* depthleft */,
+                               int depthleft,
                                std::function<void(Move)> action) {
     // Iterate over all moves and captures
     auto state = SearchState(board, turn);
@@ -249,10 +250,21 @@ void forAllLegalQuiescentMoves(Turn turn,
     findCaptures(board, state, doMove);
 
     // Check if the opponent may promote
-    bool otherMayPromote = mayHavePromoMove(!turn.activeColor(), board, !state.occupancy);
+    bool otherMayPromote = depthleft > options::promotionMinDepthLeft &&
+        mayHavePromoMove(!turn.activeColor(), board, !state.occupancy);
+
+    // In endgames, allow finding checks in the first plies of quiescence search
+    bool endGame = state.occupancy.size() <= options::checksMaxPiecesLeft;
+
+    // Allow limited quiescence search in endgames to find checks. Don't double up in case of
+    // being in check or promotion threats.
+    if (depthleft >= options::checksMinDepthLeft && !otherMayPromote && !state.inCheck && endGame)
+        findChecks(board, state, doMove);
+
+    // Avoid horizon effect: don't promote in the last plies
+    if (depthleft >= options::promotionMinDepthLeft) findPromotionMoves(state, doMove);
 
     findEnPassant(board, turn, doMove);
-    // When in check or under promotion threat, search all moves to escape
     if (state.inCheck || otherMayPromote) findMoves(board, state, doMove);
 }
 

@@ -17,6 +17,9 @@ constexpr bool useKillerMoves = true;                       // Use the killer mo
 constexpr bool historyStore = true;                         // Use beta cutoffs for move ordering
 constexpr std::array<int, 2> aspirationWindows{30, 125};    // Given in centipawns, {} disables
 constexpr int aspirationWindowMinDepth = 2;                 // Minimum depth for aspiration windows
+constexpr int promotionMinDepthLeft = quiescenceDepth - 2;  // Minimum depth left for promos in QS
+constexpr int checksMinDepthLeft = quiescenceDepth;         // Minimum depth left for checks in QS
+constexpr int checksMaxPiecesLeft = 12;                     // Max pieces left for checks in QS
 constexpr int currmoveMinDepthLeft = 1;                     // Min depth left for currmove progress
 constexpr size_t transpositionTableEntries = 1ull << 20;    // Zero means not enabled
 constexpr int defaultMoveTime = 20'000;                     // Max time for a move in milliseconds
@@ -27,9 +30,8 @@ constexpr bool incrementalEvaluation = true;  // Compute QS evaluation using del
 constexpr bool nullMovePruning = true;        // Enable null move pruning
 constexpr int nullMoveReduction = 3;          // Depth reduction for null move search
 constexpr int nullMoveMinDepth = 2;           // Minimum depth to try null move
-constexpr bool checkExtensions = true;        // Extend search when giving check
-constexpr bool promotionExtensions = true;    // Extend search when opponent can promote
-constexpr int checkExtensionMaxPieces = 12;   // Max pieces for check extensions (endgame only)
+constexpr bool checkExtensions = true;        // Extend search when giving check (last ply only)
+constexpr bool promotionExtensions = true;    // Extend search when opponent can promote (last ply)
 
 /**
  * Caching options for the perft program

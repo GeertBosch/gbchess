@@ -382,8 +382,9 @@ std::pair<moves::UndoPosition, Score> makeMoveWithEval(Position& position, Move 
     return {undo, eval};
 }
 
-bool isQuiet(Position& position) {
+bool isQuiet(Position& position, int depthleft) {
     if (isInCheck(position)) return false;
+    if (depthleft <= options::promotionMinDepthLeft) return true;
     if (moves::mayHavePromoMove(
             !position.active(), position.board, Occupancy(position.board, !position.active())))
         return false;
@@ -395,9 +396,9 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score 
 
     if (!depthleft) return standPat;
 
-    if (standPat >= beta && isQuiet(position)) return beta;
+    if (standPat >= beta && isQuiet(position, depthleft)) return beta;
 
-    if (standPat > alpha && isQuiet(position)) alpha = standPat;
+    if (standPat > alpha && isQuiet(position, depthleft)) alpha = standPat;
 
     // The moveList includes moves needed to get out of check; an empty list means mate
     auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, depthleft);
@@ -561,19 +562,18 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
         dassert(newHash == Hash(position));
         auto newAlpha = std::max(alpha, pv.score);
 
-        // Compute search extensions for checks and promotion threats
-        int extension = 0;
+        // Compute search extensions at the last ply before quiescence search
         auto pieceCount = Occupancy(position.board, position.active()).size();
-        bool endGame = pieceCount <= options::checkExtensionMaxPieces;
+        bool endGame = pieceCount <= options::checksMaxPiecesLeft;
         bool givesCheck = options::checkExtensions && isInCheck(position) && endGame;
         bool promotionThreat = options::promotionExtensions &&
             moves::mayHavePromoMove(
                 position.active(), position.board, Occupancy(position.board, position.active()));
-        if (givesCheck || promotionThreat) extension = 1;
+        int extension = depth.left == 1 && (givesCheck || promotionThreat);
 
         // Apply Late Move Reduction (LMR)
         bool applyLMR = options::lateMoveReductions && depth.left > 2 && moveCount > 2 &&
-            isQuiet(position) && !extension;
+            isQuiet(position, depth.left);
 
         if (applyLMR) ++lmrReductions;
 
@@ -584,10 +584,9 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
                                  -newAlpha,
                                  {depth.current + 1, depth.left - 1 + extension - applyLMR});
 
-        // Re-search at full depth if the reduced search fails high (with extensions)
+        // Re-search at full depth if the reduced search fails high
         if (applyLMR && newVar.score > alpha && ++lmrResearches)
-            newVar = -alphaBeta(
-                position, newHash, -beta, -newAlpha, {depth.current + 1, depth.left - 1 + extension});
+            newVar = -alphaBeta(position, newHash, -beta, -newAlpha, depth + 1);
         unmakeMove(position, undo);
 
         if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
