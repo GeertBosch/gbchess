@@ -14,3 +14,4 @@ game.*
 nn-*.nnue
 players.dat
 lichess/lichess_*.csv*
+_codeql_detected_source_root
