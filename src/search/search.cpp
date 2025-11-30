@@ -406,7 +406,7 @@ int computeExtension(Position& position, int depthCurrent) {
         if (isInCheck(position) && endGame) return 1;
     }
 
-    // Promotion extension: extend when opponent can promote (threat)
+    // Promotion extension: extend when opponent (side to move after current move) can promote
     if (options::promotionExtensions &&
         moves::mayHavePromoMove(
             !position.active(), position.board, Occupancy(position.board, !position.active())))
