@@ -258,7 +258,9 @@ void forAllLegalQuiescentMoves(Turn turn,
 
     // Allow limited quiescence search in endgames to find checks. Don't double up in case of
     // being in check or promotion threats.
-    // TODO: Move this and the otherMayPromote statistic to a regular search extension.
+    // TODO: Move this check search, as well as the promotion search, to regular search where we
+    // should extend the search depth if we have a forcing check or when our opponent can promote.
+    // This should not be in quiescence search.
     if (depthleft >= options::checksMinDepthLeft && !otherMayPromote && !state.inCheck && endGame)
         findChecks(board, state, doMove);
 
