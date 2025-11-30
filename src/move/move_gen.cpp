@@ -235,7 +235,7 @@ bool doesNotCheck(Board& board, const SearchState& state, Move move) {
 
 void forAllLegalQuiescentMoves(Turn turn,
                                Board& board,
-                               int /* depthleft */,
+                               int depthleft,
                                std::function<void(Move)> action) {
     // Iterate over all moves and captures
     auto state = SearchState(board, turn);

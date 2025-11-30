@@ -382,8 +382,9 @@ std::pair<moves::UndoPosition, Score> makeMoveWithEval(Position& position, Move 
     return {undo, eval};
 }
 
-bool isQuiet(Position& position) {
+bool isQuiet(Position& position, int depthleft) {
     if (isInCheck(position)) return false;
+    if (depthleft <= options::promotionMinDepthLeft) return true;
     if (moves::mayHavePromoMove(
             !position.active(), position.board, Occupancy(position.board, !position.active())))
         return false;
@@ -419,9 +420,9 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score 
 
     if (!depthleft) return standPat;
 
-    if (standPat >= beta && isQuiet(position)) return beta;
+    if (standPat >= beta && isQuiet(position, depthleft)) return beta;
 
-    if (standPat > alpha && isQuiet(position)) alpha = standPat;
+    if (standPat > alpha && isQuiet(position, depthleft)) alpha = standPat;
 
     // The moveList includes moves needed to get out of check; an empty list means mate
     auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, depthleft);
@@ -590,7 +591,7 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
 
         // Apply Late Move Reduction (LMR)
         bool applyLMR = options::lateMoveReductions && depth.left > 2 && moveCount > 2 &&
-            isQuiet(position);
+            isQuiet(position, depth.left);
 
         if (applyLMR) ++lmrReductions;
 
