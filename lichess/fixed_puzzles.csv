@@ -4,3 +4,4 @@ PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,GameUrl,Open
 1Dtdo,8/5Q2/4p1pk/2p5/P1q1p1P1/4P2K/8/8 b - - 2 45,c4a4 g4g5 h6g5 f7f4 g5h5 f4h4,1935,74,89,253,attraction endgame long mate mateIn3 queenEndgame,https://lichess.org/rnjIaJ7d/black#89,
 2XtrG,R7/8/P7/5p2/5kp1/8/r5PK/8 w - - 0 41,a6a7 g4g3 h2h3 a2a1 a8b8 a1h1,1753,74,80,128,endgame long mate mateIn3 rookEndgame,https://lichess.org/vhHQci5H#80,
 005qG,8/8/1p1k1p1p/3npp2/2B5/PP1K1PP1/7P/8 b - - 0 36,f5f4 c4d5 f4g3 h2g3 d6d5 g3g4,2293,87,65,52,crushing defensiveMove endgame long,https://lichess.org/RMj9gStA/black#71,
+03JeC,5rk1/3PQppp/p7/6P1/8/2pq4/P5PP/4R2K b - - 0 30,c3c2 e7f8 g8f8 e1e8,1577,79,89,34,attraction endgame mate mateIn2 sacrifice short,https://lichess.org/yY9Iks5E/black#59,

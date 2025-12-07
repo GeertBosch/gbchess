@@ -261,10 +261,22 @@ test-cpp: build ${CPP_TESTS}
 		|| (echo "\n*** Extra or missing C++ unit tests! ***\n"  && false)
 	@echo ${CPP_TESTS}
 	@echo "Running C++ unit test executables..."
-	@(cd build && for file in *-test; do \
+	@(cd build && failed=0; for file in *-test; do \
 		/bin/echo -n Run $$file ; \
-		(./$$file < /dev/null > /dev/null && echo " passed") || ./$$file </dev/null; \
-	done) && echo "\n✅ All C++ unit tests passed!\n"
+		if ./$$file < /dev/null > /dev/null; then \
+			echo " passed"; \
+		else \
+			echo " FAILED"; \
+			./$$file < /dev/null || true; \
+			failed=1; \
+		fi; \
+	done; \
+	if [ $$failed -eq 0 ]; then \
+		echo "\n✅ All C++ unit tests passed!\n"; \
+	else \
+		echo "\n❌ Some C++ unit tests failed!\n"; \
+		exit 1; \
+	fi)
 
 test: test-cpp fixed-puzzles searches evals uci magic
 
