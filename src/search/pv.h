@@ -24,6 +24,16 @@ struct PrincipalVariation {
     Move front() const { return moves.empty() ? Move() : moves.front(); }
     Move operator[](size_t i) const { return i < moves.size() ? moves[i] : Move(); }
 
+    /**
+     * Adjust the score for mates to reflect mate in N moves.
+     */
+    Score adjustScore() const {
+        int mate = (score.mate() > 0) - (score.mate() < 0);
+        if (!moves.size() || !mate) return score;
+        Score adjusted = Score::mateIn(int(mate * ((moves.size() + 1) / 2)));
+        return adjusted;
+    }
+
     explicit operator MoveVector() const { return moves; }
     PrincipalVariation operator-() const { return {-score, moves}; }
     bool operator<(const PrincipalVariation& other) const {

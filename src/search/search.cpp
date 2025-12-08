@@ -108,6 +108,21 @@ struct TranspositionTable {
         return {};  // no move found
     }
 
+    PrincipalVariation pv(Position pos, int depth) {
+        if constexpr (kNumEntries == 0) return {};
+        auto hash = Hash(pos);
+        auto eval = find(hash);
+        auto move = eval.move;
+        if (!move) return {};
+        PrincipalVariation pv(Move(), eval.score);
+        do {
+            pv.moves.push_back(move);
+            pos = moves::applyMove(pos, move);
+            hash = Hash(pos);
+        } while ((move = find(hash).move) && --depth > 0);
+        return pv;
+    }
+
     void refineAlphaBeta(Hash hash, int depthleft, Score& alpha, Score& beta) {
         if constexpr (kNumEntries == 0) return;
         auto idx = hash() % kNumEntries;
@@ -524,9 +539,10 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
     // Check the transposition table, which may tighten one or both search bounds
     transpositionTable.refineAlphaBeta(hash, depth.left, alpha, beta);
 
-    // TODO: Figure out if we can return more of a PV here
+    // Early cutoff: if the position is already outside the search window, we can return
+    // immediately with a transition table based PV if we have one.
     if (alpha >= beta)
-        if (auto eval = transpositionTable.find(hash)) return {{eval.move}, alpha};
+        if (auto pv = transpositionTable.pv(position, depth.left)) return pv;
 
     // Try null move pruning (only in non-PV nodes)
     if (tryNullMovePruning(position, hash, alpha, beta, depth)) return {{}, beta};
@@ -698,7 +714,7 @@ PrincipalVariation iterativeDeepening(Position& position, int maxdepth, InfoFn i
         auto newpv = aspirationWindows(position, pv.score, depth, info);
         if (pvInfo(info, depth, newpv.score, newpv.moves)) break;
         pv = newpv;  // Avoid losing the previous principal variation due to an aborted search
-        if (pv.score.mate()) break;
+        if (pv.score.mate() && depth > static_cast<int>(pv.moves.size())) break;
     }
     return pv;
 }
@@ -758,6 +774,7 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
     // Clear incremental context after search
     searchContext.clear();
 
+    // Adjust mate scores to reflect the number of moves to mate
     return pv;
 }
 

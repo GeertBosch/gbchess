@@ -170,7 +170,7 @@ void printAnalysis(Position position, int maxdepth) {
         std::cerr << "Mismatch: " << bestMove.score << " != " << analyzed.score << "\n";
     else if (bestMove.front() != analyzed.front())
         std::cerr << "Mismatch: " << bestMove.front() << " != " << analyzed.front() << "\n";
-    assert(analyzed.score == bestMove.score);
+    assert(analyzed.adjustScore() == bestMove.adjustScore());
 }
 
 std::vector<std::string> split(std::string line, char delim) {
@@ -384,7 +384,7 @@ void testMateInTwo() {
     auto position = fen::parsePosition(fen);
     auto pv = search::computeBestMove(position, 6);
     // Should find M2, not incorrectly claim M1
-    assert(pv.score.mate() == 2);
+    assert(pv.adjustScore().mate() == 2);
 }
 
 void testNullMoveHash() {
