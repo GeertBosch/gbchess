@@ -138,19 +138,40 @@ private:
     void go(UCIArguments arguments) {
         auto depth = options::defaultDepth;
         auto wait = false;
-        // TODO: Parse things like:
-        //   go wtime <ms> btime <ms> winc <ms> binc <ms> movestogo <n>
+        int64_t wtime = 0, btime = 0;
+        uint32_t winc = 0, binc = 0;
+        uint16_t movestogo = 0;
 
         for (size_t i = 0; i < arguments.size(); ++i) {
             if (arguments[i] == "depth" && ++i < arguments.size())
                 depth = std::stoi(arguments[i]);
             else if (arguments[i] == "movetime" && ++i < arguments.size())
                 timeControl.setFixedTimeMillis(std::stoi(arguments[i]));
+            else if (arguments[i] == "wtime" && ++i < arguments.size())
+                wtime = std::stoll(arguments[i]);
+            else if (arguments[i] == "btime" && ++i < arguments.size())
+                btime = std::stoll(arguments[i]);
+            else if (arguments[i] == "winc" && ++i < arguments.size())
+                winc = std::stoul(arguments[i]);
+            else if (arguments[i] == "binc" && ++i < arguments.size())
+                binc = std::stoul(arguments[i]);
+            else if (arguments[i] == "movestogo" && ++i < arguments.size())
+                movestogo = std::stoul(arguments[i]);
             else if (arguments[i] == "wait")
                 wait = true;
             else if (arguments[i] == "perft" && ++i < arguments.size())
                 return perft(std::stoi(arguments[i]));
         }
+
+        // Update time control with parsed values if any time arguments were provided
+        if (wtime || btime) {
+            timeControl.setTimeMillis(Color::w, wtime);
+            timeControl.setTimeMillis(Color::b, btime);
+            timeControl.setIncrementMillis(Color::w, winc);
+            timeControl.setIncrementMillis(Color::b, binc);
+            timeControl.setMovesToGo(movestogo);
+        }
+
         stop();
         auto search =
             [this, depth, pos = position, moves = moves, &startTime = startTime]() {
@@ -166,7 +187,8 @@ private:
                         respond("info " + info);
                         if (elapsed > timeMillis) {
                             stopping.store(true);
-                            respond("info string time exceeded " + std::to_string(elapsed) + "ms");
+                            respond("info string time exceeded " + std::to_string(timeMillis) +
+                                    "ms");
                         }
                         return stopping;
                     });

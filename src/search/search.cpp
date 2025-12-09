@@ -345,7 +345,6 @@ MoveIt sortTransposition(Hash hash, MoveIt begin, MoveIt end) {
     return begin;
 }
 
-
 /**
  * Sorts the moves in the range [begin, end) in place, so that captures come before
  * non-captures, and captures are sorted by victim value, attacker value, and move kind.

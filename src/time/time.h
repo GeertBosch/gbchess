@@ -5,7 +5,7 @@
 #include "core/core.h"
 
 /**
- * Structure representing time control settings for a chess game. All timings are in milliseconds.
+ * Class representing time control settings for a chess game. All timings are in milliseconds.
  * The maximum increment per move is 31 days, or 2,678,400,000 milliseconds, fitting uint32_t. The
  * maximum time per side is 50 years, or 1,577,923,200 seconds assuming 13 leap days. Note that the
  * time is signed to allow players to exceed their time without flagging.
@@ -14,7 +14,7 @@
  * blackMillis, and no time is deducted for moves made. The movesToGo and increments are ignored in
  * that case.
  */
-struct TimeControl {
+class TimeControl {
     static constexpr int64_t kSecondMillis = 1000;
     static constexpr int64_t kMinuteMillis = 60 * kSecondMillis;
     static constexpr int64_t kHourMillis = 60 * kMinuteMillis;
@@ -34,11 +34,12 @@ struct TimeControl {
     uint16_t movesToGo;  // Number of moves to go until next time control, or 0 if unknown
     bool fixedTime;      // True if movetime is used for 'movetime' or 'go infinite'
 
+public:
     constexpr TimeControl(int64_t timeMillis, uint32_t incrementMillis = 0)
-        : whiteMillis(timeMillis),
-          blackMillis(timeMillis),
-          whiteIncrementMillis(incrementMillis),
-          blackIncrementMillis(incrementMillis),
+        : whiteMillis(std::clamp<int64_t>(timeMillis, -kMaxTimeMillis, kMaxTimeMillis)),
+          blackMillis(std::clamp<int64_t>(timeMillis, -kMaxTimeMillis, kMaxTimeMillis)),
+          whiteIncrementMillis(std::min<uint32_t>(incrementMillis, kMaxIncrementMillis)),
+          blackIncrementMillis(std::min<uint32_t>(incrementMillis, kMaxIncrementMillis)),
           movesToGo(0),
           fixedTime(false) {
         assert(timeMillis >= -kMaxTimeMillis && timeMillis < kMaxTimeMillis);
@@ -54,6 +55,8 @@ struct TimeControl {
     }
 
     void setTimeMillis(Color color, int64_t millis) {
+        fixedTime = false;
+        millis = std::clamp<int64_t>(millis, -kMaxTimeMillis, kMaxTimeMillis);
         if (color == Color::w)
             whiteMillis = millis;
         else
@@ -61,18 +64,27 @@ struct TimeControl {
     }
 
     void setIncrementMillis(Color color, uint32_t millis) {
+        fixedTime = false;
+        millis = std::min<uint32_t>(millis, kMaxIncrementMillis);
         if (color == Color::w)
             whiteIncrementMillis = millis;
         else
             blackIncrementMillis = millis;
     }
-    void setFixedTimeMillis(int64_t whiteFixedMillis, int64_t blackFixedMillis) {
-        whiteMillis = whiteFixedMillis;
-        blackMillis = blackFixedMillis;
+
+    void setFixedTimeMillis(uint32_t whiteFixedMillis, uint32_t blackFixedMillis) {
+        whiteMillis = std::min<uint32_t>(whiteFixedMillis, kMaxIncrementMillis);
+        blackMillis = std::min<uint32_t>(blackFixedMillis, kMaxIncrementMillis);
+        whiteIncrementMillis = blackIncrementMillis = 0;
         fixedTime = true;
     }
 
-    void setFixedTimeMillis(int64_t fixedMillis) { setFixedTimeMillis(fixedMillis, fixedMillis); }
+    void setMovesToGo(uint16_t moves) {
+        fixedTime = false;
+        movesToGo = moves;
+    }
+
+    void setFixedTimeMillis(uint32_t fixedMillis) { setFixedTimeMillis(fixedMillis, fixedMillis); }
 
     int64_t computeMillisForMove(Turn turn) const {
         if (fixedTime) return getMillis(turn.activeColor());

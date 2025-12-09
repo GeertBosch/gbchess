@@ -114,8 +114,7 @@ clean:
 	rm -f *.log
 	rm -f core *.core puzzles.actual perf.data* *.ii *.bc *.s
 	rm -f game.??? log.??? players.dat # XBoard outputs
-	rm -f test/ut*.out
-	rm -rf *.dSYM .DS_Store
+	rm -rf test/out *.dSYM .DS_Store
 	rm -f $(COMPILE_COMMANDS)
 
 realclean: clean
@@ -179,7 +178,7 @@ ${PUZZLES}.zst:
 # Create derived puzzle files for different test targets
 build/mate123.csv: ${PUZZLES}
 	@mkdir -p build
-	@egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -1001 > $@
+	@egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -4001 > $@
 
 build/mate45.csv: ${PUZZLES}
 	@mkdir -p build
@@ -247,15 +246,16 @@ searches6: build/search-test
 
 searches: searches1 searches2 searches3 searches4 searches5 searches6
 
-test/ut%.out: test/ut%.in build/engine-debug
-	@./build/engine-debug $< 2>&1 | grep -wv "expect" > "$@"
-	grep -w "^expect" $< | \
+test/out/uci-%.out: test/uci-%.in build/engine
+	@mkdir -p test/out
+	@./build/engine $< 2>&1 | grep -wv "expect" > "$@"
+	@grep -w "^expect" $< | \
 	while read expect pattern ; do \
 		grep -He "$$pattern" "$@" || \
 			(echo "$@: no match for \"$$pattern\"" && cat "$@" && rm -f "$@" && false) ; \
-	done
+	done | uniq
 
-uci: $(patsubst test/ut%.in,test/ut%.out,$(wildcard test/ut*.in))
+uci: $(patsubst test/uci-%.in,test/out/uci-%.out,$(wildcard test/uci-*.in))
 
 magic: build/magic-test
 # To accept any changes on test failure, pipe the output to the `patch` command

@@ -14,3 +14,4 @@ game.*
 nn-*.nnue
 players.dat
 lichess/lichess_*.csv*
+lichess_*

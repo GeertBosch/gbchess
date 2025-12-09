@@ -1,0 +1,3 @@
+position fen "8/8/1p1k1p1p/3np3/2B2p2/PP1K1PP1/7P/8 w - - 0 37"
+go depth 5 wait
+expect bestmove c4d5 ponder f4g3
