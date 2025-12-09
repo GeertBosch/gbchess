@@ -1,5 +1,6 @@
 #include <chrono>
 #include <cstdlib>  // For std::exit
+#include <fstream>
 #include <iostream>
 #include <numeric>
 #include <ostream>
@@ -44,10 +45,10 @@ std::string cmdName = "search-test";
 void usage() {
     std::cerr << "Usage: " << cmdName << " <FEN-string> moves [move...] <search-depth>\n";
     std::cerr << "       " << cmdName << " <FEN-string>\n";
-    std::cerr << "       " << cmdName << " <search-depth> < puzzle-file.csv\n\n";
+    std::cerr << "       " << cmdName << " <search-depth> [puzzle-file.csv]\n";
     std::cerr << "The first form searches from the given position after applying the given moves\n";
     std::cerr << "The second form runs a quiescence search from the given position\n";
-    std::cerr << "The third accepts puzzles in lichess CSV format from stdin and solves them\n";
+    std::cerr << "The third accept puzzles in lichess CSV format and solves them\n";
     std::exit(1);
 }
 
@@ -282,12 +283,12 @@ PuzzleError doPuzzle(std::string puzzle, Position position, MoveVector moves, si
     return analyzePuzzleSolution(puzzle, position, moves, pv.moves);
 }
 
-void testFromStdIn(int depth) {
+void testFromStream(std::istream& input, int depth) {
     // Assumes CSV input as from the lichess puzzle database:
     // PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,GameUrl,OpeningTags
     const int kExpectedPuzzleRating = 2300;
     std::string line;
-    std::getline(std::cin, line);
+    std::getline(input, line);
     auto columns = split(line, ',');
     auto colFEN = find(columns, "FEN");
     auto colMoves = find(columns, "Moves");
@@ -297,8 +298,8 @@ void testFromStdIn(int depth) {
     PuzzleStats stats;
     nnue::resetTimingStats();
 
-    while (std::cin) {
-        std::getline(std::cin, line);
+    while (input) {
+        std::getline(input, line);
         columns = split(line, ',');
         if (columns.size() < size_t(std::max(colMoves, colFEN))) continue;
         auto initialPosition = fen::parsePosition(columns[colFEN]);
@@ -328,6 +329,12 @@ void testFromStdIn(int depth) {
     assert(puzzleRating() >= kExpectedPuzzleRating - ELO::K);
 
     if (verbose) nnue::printTimingStats();
+}
+
+void testFromFile(const std::string& filename, int depth) {
+    std::ifstream file(filename);
+    if (!file.is_open()) usage("Could not open file: " + filename);
+    testFromStream(file, depth);
 }
 
 void testBasicPuzzles() {
@@ -452,6 +459,18 @@ void parseMoves(Position& position, int argc, char* argv[]) {
 bool isOption(char* arg, std::string shortOpt, std::string longOpt) {
     return std::string(arg) == shortOpt || std::string(arg) == longOpt;
 }
+
+/** Handle puzzle test mode: <depth> [puzzle-file] */
+void handlePuzzleTestMode(int argc, char* argv[]) {
+    if (argc > 3) usage("too many arguments for puzzle test mode");
+    auto puzzleFile = argc == 3 ? argv[2] : nullptr;
+    int depth = std::stoi(argv[1]);
+
+    printEvalRate([&]() {
+        return puzzleFile ? testFromFile(puzzleFile, depth)   // <depth> puzzle-file.csv
+                          : testFromStream(std::cin, depth);  // <depth> < puzzle-file.csv (stdin)
+    });
+}
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -469,15 +488,14 @@ int main(int argc, char* argv[]) {
 
     if (argc < 2) return 0;
 
-    // Need at least one argument
-    if (!isAllDigits(argv[1]) && !fen::maybeFEN(argv[1]))
-        usage("invalid argument: " + std::string(argv[1]));
+    // Check for puzzle test mode: <depth> [puzzle-file]
+    if (isAllDigits(argv[1])) return handlePuzzleTestMode(argc, argv), 0;
+
+    // FEN mode: parse FEN and optional moves/depth
+    if (!fen::maybeFEN(argv[1])) usage("invalid argument: " + std::string(argv[1]));
 
     // If the last argument is a number, it's the search depth
     int depth = isAllDigits(argv[argc - 1]) ? std::stoi(argv[--argc]) : 0;
-
-    // Special puzzle test mode reading from stdin
-    if (argc == 1) return printEvalRate([depth]() { testFromStdIn(depth); }), 0;
 
     std::string fen(argv[1]);
 

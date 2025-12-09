@@ -176,16 +176,29 @@ ${PUZZLES}.zst:
 	mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) \
 		&& wget https://database.lichess.org/$(notdir ${PUZZLES}).zst
 
-# Solve some known mate-in-n puzzles, for correctness of the search methods
-mate123: build/search-test ${PUZZLES}
-	@egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -1001 | ./build/search-test 6
+# Create derived puzzle files for different test targets
+build/mate123.csv: ${PUZZLES}
+	@mkdir -p build
+	@egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -1001 > $@
 
-mate45: build/search-test ${PUZZLES}
-	@egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -101 | ./build/search-test 9
+build/mate45.csv: ${PUZZLES}
+	@mkdir -p build
+	@egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -101 > $@
+
+build/puzzles.csv: ${PUZZLES}
+	@mkdir -p build
+	@egrep -v "mateIn[12345]" ${PUZZLES} | head -101 > $@
+
+# Solve some known mate-in-n puzzles, for correctness of the search methods
+mate123: build/search-test build/mate123.csv
+	@./build/search-test 5 build/mate123.csv
+
+mate45: build/search-test build/mate45.csv
+	@./build/search-test 11 build/mate45.csv
 
 .PHONY: puzzles build
-puzzles: ${PUZZLES} build/search-test
-	@egrep -v "mateIn[12345]" ${PUZZLES} | head -101 | ./build/search-test 7
+puzzles: build/search-test build/puzzles.csv
+	@./build/search-test 7 build/puzzles.csv
 
 lichess/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
 	mkdir -p $(dir $@) && ./$< $(@:lichess/lichess_%_evals.csv=%) > $@
