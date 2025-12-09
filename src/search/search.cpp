@@ -84,14 +84,18 @@ struct TranspositionTable {
             : hash(hash), eval(move), depthleft(depth), type(type), generation(generation) {}
     };
 
+    struct Stats {
+        uint64_t numInserted = 0;
+        uint64_t numWorse = 0;
+        uint64_t numOccupied = 0;
+        uint64_t numCollisions = 0;
+        uint64_t numImproved = 0;
+        uint64_t numHits = 0;
+        uint64_t numMisses = 0;
+    };
+    Stats stats;
+
     std::vector<Entry> entries{kNumEntries};
-    uint64_t numInserted = 0;
-    uint64_t numWorse = 0;
-    uint64_t numOccupied = 0;
-    uint64_t numCollisions = 0;
-    uint64_t numImproved = 0;
-    uint64_t numHits = 0;
-    uint64_t numMisses = 0;
     uint8_t numGenerations = 0;
 
     ~TranspositionTable() {
@@ -100,11 +104,11 @@ struct TranspositionTable {
 
     Eval find(Hash hash) {
         if constexpr (kNumEntries == 0) return {Move(), Score()};
-        ++numHits;
+        ++stats.numHits;
         auto& entry = entries[hash() % kNumEntries];
-        if (entry.hash() == hash()) return entry.eval;
-        --numHits;
-        ++numMisses;
+        if (entry.hash() == hash() && entry.generation == numGenerations) return entry.eval;
+        --stats.numHits;
+        ++stats.numMisses;
         return {};  // no move found
     }
 
@@ -128,12 +132,12 @@ struct TranspositionTable {
         auto idx = hash() % kNumEntries;
         auto& entry = entries[idx];
 
-        ++numMisses;
+        ++stats.numMisses;
         if (entry.hash() != hash() || entry.depthleft < depthleft ||
             entry.generation != numGenerations)
             return;
-        --numMisses;
-        ++numHits;
+        --stats.numMisses;
+        ++stats.numHits;
 
         ++cacheCount;
         switch (entry.type) {
@@ -148,21 +152,20 @@ struct TranspositionTable {
         if (!move || depthleft < 1) return;
         auto idx = hash() % kNumEntries;
         auto& entry = entries[idx];
-        ++numWorse;
+        ++stats.numWorse;
         if (entry.type == EXACT && depthleft < entry.depthleft && entry.eval.move &&
             (type != EXACT || move.score <= entry.eval.score) && entry.generation == numGenerations)
             return;
-        --numWorse;
-        ++numInserted;
+        --stats.numWorse;
+        ++stats.numInserted;
 
-        // 3 cases: improve existing entry, collision with unrelated entry, or occupy an empty
-        // slot
+        // 3 cases: improve existing entry, collision with unrelated entry, or occupy an empty slot
         if (entry.hash == hash)
-            ++numImproved;
+            ++stats.numImproved;
         else if (entry.eval.move)
-            ++numCollisions;
+            ++stats.numCollisions;
         else
-            ++numOccupied;  // nothing in this slot yet
+            ++stats.numOccupied;  // nothing in this slot yet
 
         entry = Entry{hash, move, depthleft, type, numGenerations};
     }
@@ -177,25 +180,29 @@ struct TranspositionTable {
     }
 
     void clear() {
-        if (debug && transpositionTableDebug && numInserted) {
+        if (debug && transpositionTableDebug && stats.numInserted) {
             printStats();
             std::cout << "Cleared transposition table\n";
         }
-        *this = {};
+        stats = {};
+        if (!++numGenerations) entries.clear();  // Only actually clear on wraparound
     };
 
-
     void printStats() {
-        auto numLookups = numHits + numMisses;
-        auto numInserts = numInserted + numWorse;
+        auto numLookups = stats.numHits + stats.numMisses;
+        auto numInserts = stats.numInserted + stats.numWorse;
         std::cout << "Transposition table stats:\n";
-        std::cout << "  occupied: " << numOccupied << pct(numOccupied, kNumEntries) << "\n";
-        std::cout << "  inserts: " << numInserted << "\n";
-        std::cout << "  worse: " << numWorse << pct(numWorse, numInserts) << "\n";
-        std::cout << "  collisions: " << numCollisions << pct(numCollisions, numInserted) << "\n";
-        std::cout << "  improved: " << numImproved << pct(numImproved, numInserted) << "\n";
-        std::cout << "  lookup hits: " << numHits << pct(numHits, numLookups) << "\n";
-        std::cout << "  lookup misses: " << numMisses << pct(numMisses, numLookups) << "\n";
+        std::cout << "  occupied: " << stats.numOccupied << pct(stats.numOccupied, kNumEntries)
+                  << "\n";
+        std::cout << "  inserts: " << stats.numInserted << "\n";
+        std::cout << "  worse: " << stats.numWorse << pct(stats.numWorse, numInserts) << "\n";
+        std::cout << "  collisions: " << stats.numCollisions << pct(stats.numCollisions, numInserts)
+                  << "\n";
+        std::cout << "  improved: " << stats.numImproved << pct(stats.numImproved, numInserts)
+                  << "\n";
+        std::cout << "  lookup hits: " << stats.numHits << pct(stats.numHits, numLookups) << "\n";
+        std::cout << "  lookup misses: " << stats.numMisses << pct(stats.numMisses, numLookups)
+                  << "\n";
     }
 } transpositionTable;
 
@@ -757,7 +764,6 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
     searchCacheCount = cacheCount;
 
     searchStartTime = clock::now();
-    ++transpositionTable.numGenerations;
 
     // Initialize incremental NNUE context for this search
     searchContext.initializeNNUE(position);
