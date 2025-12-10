@@ -104,6 +104,7 @@ $(eval $(call test_rules,move/move_table,move/move_table.cpp engine/fen/fen.cpp)
 $(eval $(call test_rules,move/magic/magic,move/magic/magic.cpp ${MOVES_SRCS} engine/fen/fen.cpp))
 $(eval $(call test_rules,eval/nnue/nnue,${NNUE_SRCS} engine/fen/fen.cpp))
 $(eval $(call test_rules,search/elo,))
+$(eval $(call test_rules,engine/pgn/pgn,engine/pgn/pgn.cpp))
 
 .deps: $(call calc_deps,${OPTOBJ},${ALLSRCS}) $(call calc_deps,${DBGOBJ},${ALLSRCS})
 
