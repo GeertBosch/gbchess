@@ -4,6 +4,19 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+        {
+            "name": "pgn-debug",
+            "type": "lldb-dap",
+            "request": "launch",
+            "preLaunchTask": "build: pgn-debug",
+            "initCommands": [
+                "command source ${workspaceRoot}/chess.lldbinit"
+            ],
+            "program": "${workspaceFolder}/build/pgn-debug",
+            "args": [
+                "${workspaceFolder}/lichess/lichess_db_broadcast_2025-11.pgn",
+            ],
+        },
 
         {
             "name": "search-debug",

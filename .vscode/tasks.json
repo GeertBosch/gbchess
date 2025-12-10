@@ -109,5 +109,17 @@
             "$gcc"
          ]
       },
+      {
+         "type": "shell",
+         "label": "build: pgn-debug",
+         "command": "make",
+         "args": [
+            "build/pgn-debug"
+         ],
+         "group": "build",
+         "problemMatcher": [
+            "$gcc"
+         ]
+      }
    ]
 }

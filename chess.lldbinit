@@ -1,5 +1,7 @@
 type format add --format decimal uint8_t
 
+settings set target.max-string-summary-length 10000
+
 type summary add --summary-string "${var.active} ${var.castlingAvailability} ${var.enPassantTarget} ${var.halfmoveClock} ${var.fullmoveNumber}" Turn
 type sum add -s "${var[0]}${var[1]}" Square[2]
 type sum add -s "${var.from}${var.to}" FromTo
