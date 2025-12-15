@@ -4,7 +4,10 @@
 #include <string>
 #include <string_view>
 
+#include "move/move.h"
+#include "move/move_gen.h"
 #include "pgn.h"
+#include <sys/types.h>
 
 namespace pgn {
 namespace {
@@ -194,7 +197,7 @@ SAN::SAN(std::string_view move) {
     if (move == "0-1") kind = TERMINATION_BLACK_WIN;
     if (move == "1/2-1/2") kind = TERMINATION_DRAW;
     if (move == "*") kind = TERMINATION_UNKNOWN;
-    if (kind != ERROR) return;  // Done if termination marker
+    if (kind != NOTATION_ERROR) return;  // Done if termination marker
 
     // Handle check/checkmate
     if (parseEnd(move, '+'))
@@ -203,9 +206,10 @@ SAN::SAN(std::string_view move) {
         check = CHECKMATE;
 
     // Handle castling, which can have check/checkmate
-    if (move == "O-O") kind = CASTLING_KINGSIDE;
-    if (move == "O-O-O") kind = CASTLING_QUEENSIDE;
-    if (kind != ERROR) return;  // Done if castling
+    piece = PieceType::KING;
+    if (move == "O-O") kind = O_O;
+    if (move == "O-O-O") kind = O_O_O;
+    if (kind != NOTATION_ERROR) return;  // Done if castling
 
     // Handle non-pawn pieces
     piece = parseBegin(move, 'N') ? PieceType::KNIGHT
@@ -214,7 +218,7 @@ SAN::SAN(std::string_view move) {
         : parseBegin(move, 'Q')   ? PieceType::QUEEN
         : parseBegin(move, 'K')   ? PieceType::KING
                                   : PieceType::PAWN;
-    
+
     // Handle promotion
     promotion = parseEnd(move, "=Q") ? PieceType::QUEEN
         : parseEnd(move, "=R")       ? PieceType::ROOK
@@ -237,21 +241,21 @@ SAN::SAN(std::string_view move) {
     disambiguationFile = parseRangeEnd(move, 'a', 'a' + kNumFiles);
 
     // Pawn captures require disambiguation file
-    if (piece == PieceType::PAWN && kind == CAPTURE && !disambiguationFile) kind = ERROR;
+    if (piece == PieceType::PAWN && kind == CAPTURE && !disambiguationFile) kind = NOTATION_ERROR;
 
     // Only pawns can promote
-    if (promotion != PieceType::EMPTY && piece != PieceType::PAWN) kind = ERROR;
+    if (promotion != PieceType::EMPTY && piece != PieceType::PAWN) kind = NOTATION_ERROR;
 
     // If any move text remains, parsing failed
-    if (!move.empty()) kind = ERROR;
+    if (!move.empty()) kind = NOTATION_ERROR;
 }
 
 SAN::operator std::string() const {
-    if (kind == ERROR) return "";
+    if (kind == NOTATION_ERROR) return "";
     std::string checkStr = check == CHECK ? "+" : check == CHECKMATE ? "#" : "";
 
-    if (kind == CASTLING_KINGSIDE) return "O-O" + checkStr;
-    if (kind == CASTLING_QUEENSIDE) return "O-O-O" + checkStr;
+    if (kind == O_O) return "O-O" + checkStr;
+    if (kind == O_O_O) return "O-O-O" + checkStr;
     if (kind == TERMINATION_WHITE_WIN) return "1-0";
     if (kind == TERMINATION_BLACK_WIN) return "0-1";
     if (kind == TERMINATION_DRAW) return "1/2-1/2";
@@ -278,6 +282,37 @@ SAN::operator std::string() const {
     return result + checkStr;
 }
 
+Move move(Position position, SAN san) {
+    if (!san) return Move{};  // Invalid SAN
+    Move result;
+    int matches = 0;
+    moves::forAllLegalMovesAndCaptures(
+        position.turn, position.board, [&]([[maybe_unused]] Board& board, MoveWithPieces mwp) {
+            // Check for piece type and destination square
+            if (type(mwp.piece) != san.piece) return;
+            if (mwp.move.to != san.to && !isCastles(mwp.move.kind)) return;
+
+            // Either both are captures or both are non-captures
+            if ((mwp.captured != Piece::_) != (san.kind == SAN::CAPTURE)) return;
+
+            // Check castling
+            if ((mwp.move.kind == MoveKind::O_O) != (san.kind == SAN::O_O)) return;
+            if ((mwp.move.kind == MoveKind::O_O_O) != (san.kind == SAN::O_O_O)) return;
+
+            // Check promotion
+            if (promotionType(mwp.move.kind) != san.promotion) return;
+
+            // Check disambiguation
+            auto from = to_string(mwp.move.from);
+            if (san.disambiguationFile && from[0] != san.disambiguationFile) return;
+            if (san.disambiguationRank && from[1] != san.disambiguationRank) return;
+
+            ++matches;
+            result = mwp.move;
+        });
+    return matches == 1 ? result : Move{};  // Return move if exactly one match found
+}
+
 PGN::iterator PGN::begin() const {
     return iterator(skipToSANmove(movetext.data()));
 }
@@ -299,29 +334,38 @@ SAN PGN::iterator::operator*() const {
     return SAN(std::string_view(start, end - start));
 }
 
-PGN::iterator PGN::terminator() const {
-    for (auto it = begin(); it != end(); ++it) {
-        auto move = *it;
-        if (!move) {
-            return it;  // invalid move
-        }
-        if (move.terminator()) return it;
-    }
-    return end();  // invalid game: no terminator found
-}
-
 std::string PGN::error(iterator it) const {
     if (it == end()) return "No terminator found";
     SAN move = *it;
-    assert(!move);
     std::string_view parsed = std::string_view(begin().it, it.it - begin().it);
     auto end = skipSANmove(std::next(it.it));
     while (static_cast<unsigned char>(*end) >= 128) ++end;  // Keep UTF-8 chars intact
     std::string_view token = std::string_view(it.it, end - it.it);
     size_t row = std::count(parsed.begin(), parsed.end(), '\n') + 1;
     size_t col = parsed.size() - parsed.rfind('\n');
-    return std::to_string(row) + ":" + std::to_string(col) + ": Invalid SAN move " +
-        std::string(token);
+    std::string msg =
+        move ? "Invalid move " + std::string(token) : "Invalid SAN notation " + std::string(token);
+    return std::to_string(row) + ":" + std::to_string(col) + ": " + msg;
+}
+
+VerifiedGame verify(PGN const& pgn) {
+
+    Position position = Position::initial();
+    MoveVector moves;
+    for (auto san : pgn) {
+        if (!san) return {moves, Termination::NOTATION_ERROR};
+        if (san.terminator())
+            return {moves,
+                    san.kind == SAN::TERMINATION_WHITE_WIN       ? Termination::WHITE_WIN
+                        : san.kind == SAN::TERMINATION_BLACK_WIN ? Termination::BLACK_WIN
+                        : san.kind == SAN::TERMINATION_DRAW      ? Termination::DRAW
+                                                                 : Termination::UNKNOWN};
+        if (auto move = pgn::move(position, san))
+            position = moves::applyMove(position, moves.emplace_back(move));
+        else
+            return {moves, Termination::MOVE_ERROR};
+    }
+    return {moves, Termination::INCOMPLETE_ERROR};  // No terminator found
 }
 
 PGN readPGN(std::istream& in) {

@@ -185,12 +185,16 @@ constexpr uint8_t index(MoveKind kind) {
 constexpr bool isCapture(MoveKind kind) {
     return index(kind) & index(MoveKind::Capture_Mask);
 }
-constexpr bool isPromotion(MoveKind kind) {
-    return index(kind) & index(MoveKind::Promotion_Mask);
-}
 constexpr bool isCastles(MoveKind kind) {
     return kind == MoveKind::O_O || kind == MoveKind::O_O_O;
 }
+constexpr bool isPromotion(MoveKind kind) {
+    return index(kind) & index(MoveKind::Promotion_Mask);
+}
+constexpr PieceType promotionType(MoveKind kind) {
+    return isPromotion(kind) ? PieceType((index(kind) & 3) + 1) : PieceType::EMPTY;
+}
+
 constexpr uint8_t kNumMoveKinds = index(MoveKind::Queen_Promotion_Capture) + 1;
 constexpr uint8_t kNumNoPromoMoveKinds = index(MoveKind::En_Passant) + 1;
 
@@ -226,6 +230,13 @@ inline std::string to_string(Move move) {
 }
 
 using MoveVector = std::vector<Move>;
+
+inline std::string to_string(MoveVector moves) {
+    std::string str = "";
+    for (auto&& move : moves) str += to_string(move) + " ";
+    if (!str.empty()) str.pop_back();
+    return str;
+}
 
 class Board {
     using Squares = std::array<Piece, kNumSquares>;

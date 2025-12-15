@@ -48,13 +48,6 @@ std::string pct(uint64_t some, uint64_t all) {
     return all ? " " + std::to_string((some * 100) / all) + "%" : "";
 }
 
-std::string to_string(MoveVector moves) {
-    std::string str = "";
-    for (auto&& move : moves) str += to_string(move) + " ";
-    if (!str.empty()) str.pop_back();
-    return str;
-}
-
 /**
  * The transposition table is a hash table that stores the best move found for a position, so it can
  * be reused in subsequent searches. The table is indexed by the hash of the position, and stores

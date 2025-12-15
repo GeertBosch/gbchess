@@ -22,10 +22,6 @@ using HashValue = std::conditional_t<options::hash128, uint128_t, uint64_t>;
 // A random 64- or 128-bit integer for each piece on each square, as well as the extra vectors.
 extern std::array<HashValue, kNumHashVectors> hashVectors;
 
-constexpr PieceType promotionType(MoveKind kind) {
-    return PieceType((index(kind) & 3) + 1);
-}
-
 // A Hash is a 64- or 128-bit integer that represents a position. It is the XOR of the hash vectors
 // for each piece on each square, as well as the applicable extra vectors.
 class Hash {

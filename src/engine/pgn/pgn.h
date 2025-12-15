@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <sys/types.h>
 #include <vector>
 
 #include "core/core.h"
@@ -14,12 +15,12 @@ namespace pgn {
  */
 struct SAN {
     enum CheckKind : uint8_t { NONE, CHECK, CHECKMATE };
-    enum MoveKind : uint8_t {
-        ERROR,
+    enum NotationKind : uint8_t {
+        NOTATION_ERROR,
         MOVE,
         CAPTURE,
-        CASTLING_KINGSIDE,
-        CASTLING_QUEENSIDE,
+        O_O,
+        O_O_O,
         TERMINATION_WHITE_WIN,
         TERMINATION_BLACK_WIN,
         TERMINATION_DRAW,
@@ -27,20 +28,27 @@ struct SAN {
     };
     char disambiguationFile = 0;
     char disambiguationRank = 0;
-    Square to = {};
+    Square to = {};  // Not set for castles as side to play is unknown here
     PieceType piece = PieceType::PAWN;
     PieceType promotion = PieceType::EMPTY;
     CheckKind check = NONE;
-    MoveKind kind = ERROR;
+    NotationKind kind = NOTATION_ERROR;
 
     SAN(std::string_view move);
 
     bool terminator() const { return kind >= TERMINATION_WHITE_WIN && kind <= TERMINATION_UNKNOWN; }
 
-    operator bool() const { return kind != ERROR; }
+    operator bool() const { return kind != NOTATION_ERROR; }
 
     operator std::string() const;
 };
+
+/**
+ * Converts the SAN move to a Move object given the current position. Returns Move{} if the SAN
+ * move is invalid in the given position.
+ */
+Move move(Position position, SAN san);
+
 
 /**
  * Represents a PGN game with tags and movetext.
@@ -90,18 +98,28 @@ struct PGN {
     iterator end() const { return iterator(movetext.data() + movetext.size()); }
 
     /**
-     * Returning an iterator pointing to the termination marker of the movetext, or end() if none
-     * exists. If any moves are not in valid SAN format, will return an iterator pointing to the
-     * first such error.
+     * Call with it == end for games with missing termination, or !*it for SAN errors. If the SAN
+     * move is syntactically valid, assumes that the error is due to move legality. Produces an
+     * appropriate error string with line, column and message
      */
-    iterator terminator() const;
-
-    bool valid() const {
-        auto it = terminator();
-        return it != end() && *it && ++it == end();
-    }
     std::string error(iterator it) const;
 };
+
+/** Represents the termination marker of the PGN game, or ERROR if the game was invalid. */
+enum class Termination : uint8_t {
+    NOTATION_ERROR,
+    MOVE_ERROR,
+    INCOMPLETE_ERROR,
+    WHITE_WIN,
+    BLACK_WIN,
+    DRAW,
+    UNKNOWN,
+    COUNT
+};
+using VerifiedGame = std::pair<MoveVector, Termination>;  // For now assume initial position
+
+/** Verifies validity of the moves in the PGN. Returns an ERROR termination for invalid games. */
+VerifiedGame verify(PGN const& pgn);
 
 PGN readPGN(std::istream& in);
 }  // namespace pgn
