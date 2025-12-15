@@ -229,10 +229,12 @@ using MoveVector = std::vector<Move>;
 
 class Board {
     using Squares = std::array<Piece, kNumSquares>;
-    Squares _squares;
+    Squares _squares = {};
 
 public:
-    Board() { _squares.fill(Piece::_); }
+    constexpr Board() {
+        for (auto& sq : _squares) sq = Piece::_;
+    };
 
     Piece& operator[](Square sq) { return _squares[sq]; }
     const Piece& operator[](Square sq) const { return _squares[sq]; }
@@ -344,11 +346,11 @@ class alignas(4) Turn {
     Color active : 1;
 
 public:
-    Turn(Color active,
-         CastlingMask castlingAvailability,
-         Square enPassantTarget,
-         int halfmoveClock = 0,
-         int fullmoveNumber = 1)
+    constexpr Turn(Color active,
+                   CastlingMask castlingAvailability,
+                   Square enPassantTarget,
+                   int halfmoveClock = 0,
+                   int fullmoveNumber = 1)
         : enPassantTarget(toEnPassantTarget(enPassantTarget)),
           halfmoveClock(halfmoveClock),
           castlingAvailability(castlingAvailability),
@@ -401,6 +403,31 @@ static_assert(sizeof(Turn) == 4);
 struct alignas(8) Position {
     Board board;
     Turn turn = {Color::w};
+    static constexpr Position initial() {
+        Position pos;
+        pos.board = Board();
+        // Set up initial position
+        pos.board[a1] = Piece::R;
+        pos.board[b1] = Piece::N;
+        pos.board[c1] = Piece::B;
+        pos.board[d1] = Piece::Q;
+        pos.board[e1] = Piece::K;
+        pos.board[f1] = Piece::B;
+        pos.board[g1] = Piece::N;
+        pos.board[h1] = Piece::R;
+        for (Square sq = a2; sq <= h2; sq = Square(int(sq) + 1)) pos.board[sq] = Piece::P;
+        for (Square sq = a7; sq <= h7; sq = Square(int(sq) + 1)) pos.board[sq] = Piece::p;
+        pos.board[a8] = Piece::r;
+        pos.board[b8] = Piece::n;
+        pos.board[c8] = Piece::b;
+        pos.board[d8] = Piece::q;
+        pos.board[e8] = Piece::k;
+        pos.board[f8] = Piece::b;
+        pos.board[g8] = Piece::n;
+        pos.board[h8] = Piece::r;
+        pos.turn = Turn(Color::w, CastlingMask::KQkq, noEnPassantTarget, 0, 1);
+        return pos;
+    }
     Color active() const { return turn.activeColor(); }
     bool operator==(const Position& other) const {
         return board == other.board && turn == other.turn;
