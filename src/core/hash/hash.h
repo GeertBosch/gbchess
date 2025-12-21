@@ -1,29 +1,30 @@
 #pragma once
 #include <array>
-#include <cstdint>
 #include <functional>
-#include <type_traits>
 
 #include "core/core.h"
-#include "core/options.h"
 
 // Implement a hashing method for chess positions using Zobrist hashing
 // https://en.wikipedia.org/wiki/Zobrist_hashing. This relies just on the number of locations
 // ("squares") and number of pieces. The hash allows for efficient incremental updating of the hash
 // value when a move is made.
+//
+// Note: While initially implemented using 64-bit hashes, this is not quite enough to avoid
+// collissions for applications like perft caching. As there is very little cost to using 128-bit
+// hashes instead, that is now the only option.
 
 // 1 for black to move, 1 for each castling right, 8 for en passant file
 static constexpr int kNumExtraVectors = 13;
 static constexpr int kNumBoardVectors = kNumPieces * kNumSquares;
 static constexpr int kNumHashVectors = kNumBoardVectors + kNumExtraVectors;
 
-using HashValue = std::conditional_t<options::hash128, uint128_t, uint64_t>;
+using HashValue = uint128_t;
 
-// A random 64- or 128-bit integer for each piece on each square, as well as the extra vectors.
+// A random 128-bit integer for each piece on each square, as well as the extra vectors.
 extern std::array<HashValue, kNumHashVectors> hashVectors;
 
-// A Hash is a 64- or 128-bit integer that represents a position. It is the XOR of the hash vectors
-// for each piece on each square, as well as the applicable extra vectors.
+// A Hash is a 128-bit integer that represents a position. It is the XOR of the hash vectors for
+// each piece on each square, as well as the applicable extra vectors.
 class Hash {
 
 public:
