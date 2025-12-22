@@ -25,7 +25,7 @@ class TimeControl {
 
     static constexpr int8_t kUseIncrementPercent = 80;  // Use 80% of increment time
     static constexpr int8_t kMinDefaultMovesToGo = 10;  // Assume at least 10 moves to go if unknown
-    static constexpr int8_t kExpectedGameMoves = 20;    // Expected moves in a game
+    static constexpr int8_t kExpectedGameMoves = 30;    // Expected moves in a game
 
     int64_t whiteMillis;
     int64_t blackMillis;
