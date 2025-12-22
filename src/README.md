@@ -17,9 +17,13 @@ graph TD
     core([**core**
     Foundational Types
     ])
+    book([**book**
+    Opening Book
+    ])
 
     engine --> search
-    engine --> move
+    book --> move
+    engine --> book
     search --> move
     engine ~~~ core
     search --> eval
@@ -27,11 +31,12 @@ graph TD
     eval --> core
 
     %% Styling
-    style core fill:#e1f5fe,stroke:#333,stroke-width:2px
-    style eval fill:#fff3e0,stroke:#333,stroke-width:2px
-    style move fill:#e8f5e8,stroke:#333,stroke-width:2px
-    style search fill:#e8eaf6,stroke:#333,stroke-width:2px
-    style engine fill:#fce4ec,stroke:#333,stroke-width:2px
+    style engine fill:#fda,stroke:#333,stroke-width:2px
+    style book fill:#ffc,stroke:#333,stroke-width:2px
+    style move fill:#cec,stroke:#333,stroke-width:2px
+    style search fill:#eba,stroke:#333,stroke-width:2px
+    style eval fill:#edf,stroke:#333,stroke-width:2px
+    style core fill:#cef,stroke:#333,stroke-width:2px
 ```
 
 ## File Organization
@@ -62,84 +67,87 @@ changes.
 graph TD
 
     %% Core module - foundational types
-    C[core.h]
-        CI[castling_info.h]
-        PS[piece_set.h]
-        O[options.h]
-        CU[uint128_str.h]
+    Core[core.h]
+        CastlingInfo[castling_info.h]
+        PieceSet[piece_set.h]
+        Options[options.h]
+        Uint128[uint128_str.h]
+        SquareSet[square_set.h]
+        Hash[hash.h]
 
     %% UCI Engine
-    U[engine.cpp]
+    Engine[engine.cpp]
+        FEN[fen.h]
+        PerftCore[perft_core.h]
+        Book[book.h]
+        PGN[pgn.h]
 
     %% Eval module - position evaluation
-    E[eval.h]
-        EN[nnue.h]
-
-    %% FEN module - Forsyth-Edwards notation
-    F[fen.h]
-
-    %% Hash module - Zobrist hashing
-    H[hash.h]
+    Eval[eval.h]
+        NNUE[nnue.h]
 
     %% Move module - Move generation
-    M[move.h]
+    Move[move.h]
         %% Move Magic module - Sliding move generation
-        MM[magic.h]
-    MO[occupancy.h]
+        MoveMagic[magic.h]
+        Occupancy[occupancy.h]
 
-    %% Perft module - move generator testing
-    PC[perft_core.h]
 
     %% Search module
     PV[pv.h]
-    S[search.h]
+    Search[search.h]
 
-    SS[square_set.h]
-
-    T[time.h]
+    Time[time.h]
 
     %% The following are include dependencies between the above modules.
     %% The order is chosen to be able to render a planar graph, without crossing edges.
     %% Transitive dependencies are generally omitted for the graph.
-    U --> T
-    T ----> C
-    U --> F
-    U --> S
-    U --> PC
-    F -----> C
-    S --> M
-    U ----> CU
-    CU ---> C
-    PC -----> C
-    M --> MO
-    MO --> SS
-    M --> MM
-    SS --> C
-    S --> EN
-    S --> H
-    S --> PV
-    PV ---> E
-    EN --> E
-    M --> CI
-    M ---> PS
-    MM --> SS
-    CI --> C
-    PS ---> C
-    H --> O
-    O ~~~ C
-    H --> C
-    E ----> C
+    Engine --> Time
+    Time ----> Core
+
+    Book --> Move
+    Engine --> Book
+    Engine --> FEN
+    Engine --> Search
+    Engine --> PerftCore
+    FEN -----> Core
+    Search --> Move
+    PerftCore -----> Core
+    Engine ----> Uint128
+    Uint128 ---> Core
+    Engine --> Options
+    Options ~~~~ Core
+    PGN ----> Core
+    Move --> Occupancy
+    Book --> PGN
+    Occupancy --> SquareSet
+    Move --> MoveMagic
+    SquareSet --> Core
+    Search --> NNUE
+    Search --> Hash
+    Search --> PV
+    PV ---> Eval
+    NNUE --> Eval
+    Move --> CastlingInfo
+    Move ---> PieceSet
+    MoveMagic --> SquareSet
+    CastlingInfo --> Core
+    PieceSet ---> Core
+    Hash --> Core
+    Eval ---> Core
 
     %% Styling
-    classDef core fill:#e1f5fe,stroke:#333,stroke-width:2px,font-family:monospace
-    classDef move fill:#e8f5e8,stroke:#333,stroke-width:2px,font-family:monospace
-    classDef eval fill:#fff3e0,stroke:#333,stroke-width:2px,font-family:monospace
-    classDef engine fill:#fce4ec,stroke:#333,stroke-width:2px,font-family:monospace
-    classDef search fill:#e8eaf6,stroke:#333,stroke-width:2px,font-family:monospace
+    classDef engine fill:#fda,stroke:#333,stroke-width:2px,font-family:monospace
+    classDef book fill:#ffc,stroke:#333,stroke-width:2px,font-family:monospace
+    classDef move fill:#cec,stroke:#333,stroke-width:2px,font-family:monospace
+    classDef search fill:#eba,stroke:#333,stroke-width:2px,font-family:monospace
+    classDef eval fill:#edf,stroke:#333,stroke-width:2px,font-family:monospace
+    classDef core fill:#cef,stroke:#333,stroke-width:2px,font-family:monospace
 
-    class C,PS,CI,SS,H,O,CU core
-    class MM,MO,M move
-    class E,EN eval
-    class S,PV search
-    class F,U,PC,T engine
+    class FEN,Engine,PerftCore,Time engine
+    class Book,PGN book
+    class MoveMagic,Occupancy,Move move
+    class Search,PV search
+    class Eval,NNUE eval
+    class Core,PieceSet,CastlingInfo,SquareSet,Hash,Options,Uint128 core
 ```

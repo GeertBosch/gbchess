@@ -7,6 +7,12 @@
  * 08. 10.18637/jss.v008.i14. https://www.researchgate.net/publication/5142825_Xorshift_RNGs
  */
 struct xorshift {
+    using result_type = uint64_t;
+
+    /**
+     * Initializes the PRNG with a given seed. A zero seed will yield only zeros, other seeds will
+     * produce a sequence of all 2**64-1 non-zero uint64_t values.
+     */
     xorshift(uint64_t seed = 0xc1f651c67c62c6e0ull) : state(seed) {}
     uint64_t operator()() {
         auto result = state * 0xd989bcacc137dcd5ull;
@@ -15,5 +21,7 @@ struct xorshift {
         state ^= state >> 18;
         return result;
     }
+    static constexpr uint64_t min() { return 0; }
+    static constexpr uint64_t max() { return UINT64_MAX; }
     uint64_t state;
 };

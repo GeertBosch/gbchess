@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-#include "engine/pgn/pgn.h"
+#include "book/pgn/pgn.h"
 
 namespace {
 
@@ -18,6 +18,9 @@ bool verbose = false;
 template <typename E, typename T, size_t N>
 class EnumArray {
 public:
+    static_assert(std::is_enum_v<E>);
+    static_assert(N <= static_cast<size_t>(std::numeric_limits<std::underlying_type_t<E>>::max()));
+
     using value_type = T;
     using reference = value_type&;
     using const_reference = const value_type&;

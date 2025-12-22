@@ -10,16 +10,16 @@ awk '
 /```mermaid/ { mermaid = 1; next }
 /```/ { mermaid = 0 }
 
-# Match Mermaid lines like A[aheader.h]
-mermaid && /^ +[A-Z0-9_]+[[][^]]+]$/ {
+# Match Mermaid lines like AModule[aheader.h]
+mermaid && /^ +[A-Za-z0-9_]+[[][^]]+]$/ {
     sub(/]/, "")
     sub(/[[]/, " ")
     mod2file[$1]=$2
     file2mod[$2]=$1
 }
 
-#  Match Mermaid lines like A --> B
-mermaid && match($0, /^ +[A-Z0-9_]+ [-]+-> [A-Z0-9_]+$/) {
+#  Match Mermaid lines like SomeModule --> AnotherModule
+mermaid && match($0, /^ +[A-Z0-9_][A-Za-z0-9_]* [-]+-> [A-Z0-9_][A-Za-z0-9+]*$/) {
     sub(/^ +/, "")
     if (!mod2file[$1]) {
         print "Skip dependency for unknown module " $1 " in: " $0

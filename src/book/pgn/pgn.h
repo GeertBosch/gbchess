@@ -49,7 +49,6 @@ struct SAN {
  */
 Move move(Position position, SAN san);
 
-
 /**
  * Represents a PGN game with tags and movetext.
  */
@@ -60,12 +59,12 @@ struct PGN {
     std::string movetext;
 
     /** Returns true iff the PGN object contains a non-empty movetext. */
-    operator bool() const { return !movetext.empty(); }
+    explicit operator bool() const { return !movetext.empty(); }
 
     /** Returns the value of the specified tag, or an empty string if not found. */
-    std::string operator[](const std::string& tag) const {
-        for (auto&& t : tags)
-            if (t.first == tag) return t.second;
+    std::string operator[](std::string_view tag) const {
+        for (auto&& [key, value] : tags)
+            if (key == tag) return value;
         return {};
     }
 

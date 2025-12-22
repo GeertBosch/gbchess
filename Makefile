@@ -76,7 +76,8 @@ ${DBGOBJ}/%-debug: ${DBGOBJ}/%_test.o
 NNUE_SRCS=eval/nnue/nnue.cpp eval/nnue/nnue_stats.cpp eval/nnue/nnue_incremental.cpp core/square_set/square_set.cpp
 MOVES_SRCS=move/move.cpp move/move_table.cpp move/move_gen.cpp move/magic/magic.cpp core/square_set/square_set.cpp
 EVAL_SRCS=eval/eval.cpp core/hash/hash.cpp ${NNUE_SRCS} ${MOVES_SRCS}
-SEARCH_SRCS=${EVAL_SRCS} search/search.cpp
+BOOK_SRCS=book/book.cpp book/pgn/pgn.cpp
+SEARCH_SRCS=${EVAL_SRCS} ${BOOK_SRCS} search/search.cpp
 ENGINE_SRCS=engine/engine.cpp engine/perft/perft_core.cpp engine/fen/fen.cpp ${SEARCH_SRCS}
 
 define test_rules
@@ -104,7 +105,8 @@ $(eval $(call test_rules,move/move_table,move/move_table.cpp engine/fen/fen.cpp)
 $(eval $(call test_rules,move/magic/magic,move/magic/magic.cpp ${MOVES_SRCS} engine/fen/fen.cpp))
 $(eval $(call test_rules,eval/nnue/nnue,${NNUE_SRCS} engine/fen/fen.cpp))
 $(eval $(call test_rules,search/elo,))
-$(eval $(call test_rules,engine/pgn/pgn,${MOVES_SRCS} engine/pgn/pgn.cpp))
+$(eval $(call test_rules,book/pgn/pgn,${MOVES_SRCS} book/pgn/pgn.cpp))
+$(eval $(call test_rules,book/book,book/book.cpp ${MOVES_SRCS} book/pgn/pgn.cpp engine/fen/fen.cpp core/hash/hash.cpp))
 
 .deps: $(call calc_deps,${OPTOBJ},${ALLSRCS}) $(call calc_deps,${DBGOBJ},${ALLSRCS})
 
@@ -266,6 +268,7 @@ magic: build/magic-test
 
 test-cpp: build ${CPP_TESTS}
 	@(cd build && echo Symlinking NNUE files && ln -fs ../*.nnue .)
+	@(cd build && echo Symlinking book files && ln -fs ../lichess/lichess_db_broadcast_2025-11.pgn book.pgn)
 	@echo "Checking that all C++ unit tests have been built"
 	@find src -name "*_test.cpp" -exec basename {} _test.cpp \; | sort > .test_sources.tmp
 	@find build -depth 1 -a -name "*-test" -exec basename {} -test \; | sort > .test_executables.tmp

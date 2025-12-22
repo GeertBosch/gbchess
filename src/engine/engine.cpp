@@ -8,6 +8,7 @@
 #include <thread>
 
 
+#include "book/book.h"
 #include "core/core.h"
 #include "core/options.h"
 #include "core/uint128_str.h"
@@ -28,6 +29,7 @@ inline std::ostream& operator<<(std::ostream& os, Move mv) {
 }
 
 namespace {
+uint64_t seeds = 1;  // Deterministic seed generator for UCI. Used for book move selection.
 MoveVector parseUCIMoves(Position position, const std::vector<std::string>& moves) {
     MoveVector vector;
     for (auto uci : moves)
@@ -72,6 +74,8 @@ public:
 private:
     using UCICommandHandler = std::function<void(std::ostream&, UCIArguments args)>;
 
+    book::Book book = book::loadBook("book.pgn");
+    uint64_t bookMoveCount = 0;
     Position position = fen::parsePosition(fen::initialPosition);
     TimeControl timeControl{180'000};  // Default to 3 minutes per side
     MoveVector moves;
@@ -173,10 +177,16 @@ private:
         }
 
         stop();
+
+        // Check opening book first - if we have a book move, use it without searching
+        if (auto bookMove = book.choose(position, moves))
+            return ++bookMoveCount, respond("bestmove " + to_string(bookMove));
+
         auto search =
             [this, depth, pos = position, moves = moves, &startTime = startTime]() {
                 auto position = pos;  // need to copy the position
                 auto timeMillis = timeControl.computeMillisForMove(position.turn);
+
                 auto pv = search::computeBestMove(
                     position,
                     depth,
@@ -233,6 +243,10 @@ void UCIRunner::execute(std::string line) {
         std::exit(0);
     } else if (command == "ucinewgame") {
         search::newGame();
+        // Reseed the opening book random generator
+        uint64_t random = ++seeds;  // Non-zero random seed
+        book.reseed(random);        // Use seed 0 for deterministic book moves in new game
+        respond("info string book reseeded with " + to_string(random));
         timeControl = TimeControl{180'000};  // Default to 3 minutes per side
         moves.clear();
         position = fen::parsePosition(fen::initialPosition);
