@@ -252,13 +252,10 @@ searches: searches1 searches2 searches3 searches4 searches5 searches6
 test/out/uci-%.out: test/uci-%.in build/engine
 	@mkdir -p test/out
 	@./build/engine $< 2>&1 | grep -wv "expect" > "$@"
-	@grep -w "^expect" $< | \
-	while read expect pattern ; do \
-		grep -He "$$pattern" "$@" || \
-			(echo "$@: no match for \"$$pattern\"" && cat "$@" && rm -f "$@" && false) ; \
-	done | uniq
 
+.PHONY: uci
 uci: $(patsubst test/uci-%.in,test/out/uci-%.out,$(wildcard test/uci-*.in))
+	@./test/check-uci.sh
 
 magic: build/magic-test
 # To accept any changes on test failure, pipe the output to the `patch` command
