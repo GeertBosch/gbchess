@@ -98,7 +98,7 @@ $(eval $(call test_rules,core/hash/hash,core/hash/hash.cpp ${MOVES_SRCS} engine/
 $(eval $(call test_rules,engine/uci/uci,engine/uci/uci.cpp ${SEARCH_SRCS} engine/fen/fen.cpp))
 $(eval $(call test_rules,eval/eval,eval/eval.cpp ${EVAL_SRCS} engine/fen/fen.cpp))
 $(eval $(call test_rules,core/square_set/square_set,core/square_set/square_set.cpp engine/fen/fen.cpp))
-$(eval $(call test_rules,search/search,search/search.cpp ${SEARCH_SRCS} engine/fen/fen.cpp))
+$(eval $(call test_rules,search/search,search/search.cpp ${SEARCH_SRCS} book/pgn/pgn.cpp engine/fen/fen.cpp))
 $(eval $(call test_rules,move/move,move/move.cpp ${MOVES_SRCS} engine/fen/fen.cpp))
 $(eval $(call test_rules,move/move_gen,move/move_gen.cpp ${MOVES_SRCS} engine/fen/fen.cpp))
 $(eval $(call test_rules,move/move_table,move/move_table.cpp engine/fen/fen.cpp))
@@ -221,7 +221,7 @@ build/perft-test.ok: build/perft-test
 build/perft-debug.ok: build/perft-debug
 	./build/perft-debug && touch $@
 
-debug: $(patsubst %-test,%-debug,$(CPP_TESTS)) build/perft-debug
+debug: $(patsubst %-test,%-debug,$(CPP_TESTS)) build/perft-debug build/engine-debug
 build: $(CPP_TESTS) $(COMPILE_COMMANDS) build/perft build/engine build/perft-simple
 	@echo "\n✅ Build complete\n"
 	@./check-arch.sh

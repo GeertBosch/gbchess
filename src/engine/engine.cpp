@@ -39,6 +39,11 @@ MoveVector parseUCIMoves(Position position, const std::vector<std::string>& move
     return vector;
 }
 
+Position applyMoves(Position position, const MoveVector& moves) {
+    for (auto move : moves) position = moves::applyMove(position, move);
+    return position;
+}
+
 template <class InputIt, class OutputIt, class Joiner>
 OutputIt join(InputIt first, InputIt last, Joiner joiner, OutputIt d_first) {
     for (; first != last; ++first) {
@@ -66,7 +71,9 @@ using clock = steady_clock;
 
 class UCIRunner {
 public:
-    UCIRunner(std::ostream& out, std::ostream& log) : out(out), log(log) {}
+    UCIRunner(std::ostream& out, std::ostream& log) : out(out), log(log) {
+        if (debug) timeControl.setFixedTimeMillis(36'000'000);  // 10 hours per side in debug mode
+    }
     ~UCIRunner() { stop(); }
 
     void execute(std::string line);
@@ -74,10 +81,11 @@ public:
 private:
     using UCICommandHandler = std::function<void(std::ostream&, UCIArguments args)>;
 
-    book::Book book = book::loadBook("book.pgn");
+    book::Book book;
     uint64_t bookMoveCount = 0;
+    bool useOwnBook = true;
     Position position = fen::parsePosition(fen::initialPosition);
-    TimeControl timeControl{180'000};  // Default to 3 minutes per side
+    TimeControl timeControl{180'000};  // 3 minutes default per side
     MoveVector moves;
     std::atomic_bool stopping = false;
     time_point<clock> startTime;
@@ -97,6 +105,20 @@ private:
         UCIArguments args;
         std::copy(std::istream_iterator<std::string>(in), {}, std::back_inserter(args));
         return args;
+    }
+
+    void setOption(UCIArguments args) {
+        if (args.size() < 4 || args[0] != "name" || args[2] != "value") return;
+
+        const std::string& name = args[1];
+        const std::string& value = args[3];
+
+        if (name == "OwnBook") {
+            useOwnBook = (value == "true");
+            respond("info string OwnBook set to " + value);
+        } else {
+            respond("info string unknown option: " + name);
+        }
     }
 
     void parsePosition(std::string positionKind, UCIArguments posArgs) {
@@ -179,7 +201,7 @@ private:
         stop();
 
         // Check opening book first - if we have a book move, use it without searching
-        if (auto bookMove = book.choose(position, moves))
+        if (auto bookMove = useOwnBook ? book.choose(position, moves) : Move{})
             return ++bookMoveCount, respond("bestmove " + to_string(bookMove));
 
         auto search =
@@ -236,6 +258,7 @@ void UCIRunner::execute(std::string line) {
     if (command == "uci") {
         out << "id name " << cmdName << "\n";
         out << "id author " << authorName << "\n";
+        out << "option name OwnBook type check default true\n";
         out << "uciok\n";
     } else if (command == "isready") {
         out << "readyok\n";
@@ -243,6 +266,7 @@ void UCIRunner::execute(std::string line) {
         std::exit(0);
     } else if (command == "ucinewgame") {
         search::newGame();
+        if (!book) book = book::loadBook("book.pgn");
         // Reseed the opening book random generator
         uint64_t random = ++seeds;  // Non-zero random seed
         book.reseed(random);        // Use seed 0 for deterministic book moves in new game
@@ -258,8 +282,10 @@ void UCIRunner::execute(std::string line) {
         go(getUCIArguments(in));
     } else if (command == "stop") {
         stop();
+    } else if (command == "setoption") {
+        setOption(getUCIArguments(in));
     } else if (command == "d") {
-        out << fen::to_string(position) << "\n";
+        out << fen::to_string(applyMoves(position, moves)) << "\n";
     } else if (command == "sleep") {
         // Test command to sleep for a number of milliseconds
         int ms;
@@ -290,7 +316,7 @@ void enterUCI(std::istream& in, std::ostream& out, std::ostream& log) {
 }
 
 void fromStdIn() {
-    std::ofstream log("uci_test.log");
+    std::ofstream log("engine.log");
     log << "Entering UCI\n";
     enterUCI(std::cin, std::cout, log);
 }
