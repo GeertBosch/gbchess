@@ -7,6 +7,7 @@
 #include <sstream>
 #include <string>
 
+#include "book/pgn/pgn.h"
 #include "core/core.h"
 #include "core/hash/hash.h"
 #include "core/options.h"
@@ -67,8 +68,15 @@ PrincipalVariation analyzePosition(Position position, int maxdepth) {
     return pv;
 }
 
-PrincipalVariation analyzeMoves(Position position, int maxdepth) {
-    MoveVector moves;
+Position applyMoves(Position position, MoveVector const& moves) {
+    for (auto move : moves) position = moves::applyMove(position, move);
+
+    return position;
+}
+
+PrincipalVariation analyzeMoves(Position position, int maxdepth, MoveVector moves) {
+    applyMoves(position, moves);
+
     PrincipalVariation pv;
 
     if (maxdepth > 0) moves = moves::allLegalMovesAndCaptures(position.turn, position.board);
@@ -155,15 +163,16 @@ void printEvalRate(const F& fun) {
               << std::endl;
 }
 
-void printBestMove(Position position, int maxdepth) {
-    auto bestMove = search::computeBestMove(position, maxdepth);
-    std::cout << "Best Move: " << bestMove << " for " << fen::to_string(position) << std::endl;
+void printBestMove(Position position, int maxdepth, MoveVector moves) {
+    auto bestMove = search::computeBestMove(position, maxdepth, moves);
+    std::cout << "Best Move: " << bestMove << " for " << fen::to_string(applyMoves(position, moves))
+              << std::endl;
 }
 
-void printAnalysis(Position position, int maxdepth) {
-    auto analyzed = analyzeMoves(position, maxdepth);
+void printAnalysis(Position position, int maxdepth, MoveVector moves) {
+    auto analyzed = analyzeMoves(position, maxdepth, moves);
     std::cerr << "Analyzed: " << analyzed << std::endl;
-    auto bestMove = search::computeBestMove(position, maxdepth);
+    auto bestMove = search::computeBestMove(position, maxdepth, moves);
     std::cerr << "Computed: " << bestMove << std::endl;
 
     // In the case of identical scores, there may be multiple best moves.
@@ -194,12 +203,6 @@ int find(T t, std::string what) {
     auto it = std::find(t.begin(), t.end(), what);
     if (it == t.end()) usage("Missing field \"" + what + "\"");
     return it - t.begin();
-}
-
-Position applyMoves(Position position, MoveVector const& moves) {
-    for (auto move : moves) position = moves::applyMove(position, move);
-
-    return position;
 }
 
 using ScoreWithReason = std::pair<Score, std::string>;
@@ -445,15 +448,36 @@ bool isAllDigits(std::string number) {
     return !number.empty() && std::all_of(number.begin(), number.end(), ::isdigit);
 }
 
-void parseMoves(Position& position, int argc, char* argv[]) {
-    // Parse moves from the command line in UCI format, like:
-    //   moves e2e4 e7e5 g1f3 ...
-    if (argc < 3 || strcmp(argv[2], "moves")) return;
+MoveVector parseMovetext(Position position, int argc, char* argv[]) {
 
-    for (int i = 3; i < argc; ++i) {
+    MoveVector moves;
+    for (int i = 2; i < argc; ++i) {
+        pgn::PGN pgn = {{}, argv[i]};
+        for (auto san : pgn) {
+            if (!san) usage("Invalid SAN syntax: " + std::string(san));
+            Move move = pgn::move(position, san);
+            if (!move) usage("Invalid SAN move: " + std::string(san));
+            moves.push_back(move);
+            position = moves::applyMove(position, move);
+        }
+    }
+    return moves;
+}
+MoveVector parseMoves(Position position, int argc, char* argv[]) {
+    // Parse moves from the command line in either UCI format, like:
+    //   moves e2e4 e7e5 g1f3 ...
+    // or SAN format as used in PGN files, like:
+    //   movetext Nf3 Nc6 Bb5 a6 ...
+    if (argc >= 2 && !strcmp(argv[1], "movetext")) return parseMovetext(position, argc, argv);
+    if (argc < 2 || strcmp(argv[1], "moves")) return {};
+
+    MoveVector moves;
+    for (int i = 2; i < argc; ++i) {
         Move move = fen::parseUCIMove(position.board, argv[i]);
+        moves.push_back(move);
         position = moves::applyMove(position, move);
     }
+    return moves;
 }
 
 bool isOption(char* arg, std::string shortOpt, std::string longOpt) {
@@ -497,26 +521,30 @@ int main(int argc, char* argv[]) {
     // If the last argument is a number, it's the search depth
     int depth = isAllDigits(argv[argc - 1]) ? std::stoi(argv[--argc]) : 0;
 
-    std::string fen(argv[1]);
+    // Any remaining argument is the FEN string, use initial position if none given
+    std::string fen(--argc < 1 ? fen::initialPosition : *++argv);
 
     // Parse the FEN string into a Position
     Position position = fen::parsePosition(fen);
 
     // Apply any moves specified on the command line
-    parseMoves(position, argc, argv);
+    auto moves = parseMoves(position, argc, argv);
 
-    Score quiescenceEval = search::quiesce(position, options::quiescenceDepth);
-    if (position.active() == Color::b) quiescenceEval = -quiescenceEval;
-    std::cout << "Quiescence search: " << std::string(quiescenceEval) << " (white side)\n";
+    {
+        auto newPos = applyMoves(position, moves);
+        Score quiescenceEval = search::quiesce(newPos, options::quiescenceDepth);
+        if (newPos.active() == Color::b) quiescenceEval = -quiescenceEval;
+        std::cout << "Quiescence search: " << std::string(quiescenceEval) << " (white side)\n";
+    }
 
     if (depth) {
         nnue::resetTimingStats();
-        printEvalRate([&]() { printBestMove(position, depth); });
+        printEvalRate([&]() { printBestMove(position, depth, moves); });
         if (verbose && nnue::g_totalEvaluations) {
             nnue::printTimingStats();
             nnue::analyzeComputationalComplexity();
         }
-        if (debug) printEvalRate([&]() { printAnalysis(position, depth); });
+        if (debug) printEvalRate([&]() { printAnalysis(position, depth, moves); });
     }
     return 0;
 }
