@@ -99,10 +99,10 @@
       },
       {
          "type": "shell",
-         "label": "build: uci-debug",
+         "label": "build: engine-debug",
          "command": "make",
          "args": [
-            "build/uci-debug"
+            "build/engine-debug"
          ],
          "group": "build",
          "problemMatcher": [

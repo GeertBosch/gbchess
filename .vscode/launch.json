@@ -36,8 +36,12 @@
                 // "r3k2r/pb1p1ppp/1b4q1/1Q2P3/8/2NP1PP1/PP4P1/R1B2R1K b kq - 0 17",
                 // "8/2p4r/1p3k2/p2PR1p1/P1P2pP1/1P3P1r/4R1K1/8 b - - 0 4",
                 // "3",
-                "R7/P7/8/5p2/5kp1/8/r5PK/8 b - - 0 41",
-                "6",
+                // "R7/P7/8/5p2/5kp1/8/r5PK/8 b - - 0 41",
+                // "6",
+                "startpos",
+                "movetext",
+                "1. g3 Nf6 2. Nf3 d5 3. Bg2 Nc6 4. d4 e6 5. O-O Be7 6. c4 dxc4 7. Qa4 O-O 8. Qxc4 Qd5 9. Qa4 Bd7 10. Nc3 Qh5 11. Qd1 a6 12. e4 Rfd8 13. Bf4 Qa5 14. a3 Qb6 15. b4 Na7 16. Qc2 a5 17. bxa5 Qxa5 18. Rfb1 Bc6 19. h4 Rd7 20. d5 exd5 21. Ne5 Rdd8 22. exd5 Bxd5 23. Nxd5 Nxd5 24. Qf5 Bf6 25. Nxf7 Kxf7 26. Bxc7 Qxc7 27. Bxd5+ Kf8 28. Rxb7 Rxd5 29. Qxd5 Rd8 30. Qb3 Rd3 31. Qxd3 Qxb7 32. Rb1 Qc7 33. Qxh7 Nc6 34. Qe4 Qd7 35. Kg2 Qe8 36. Qxe8+ Kxe8 37. a4 Kd7 38. h5 Kd6 39. Rb5 Bc3 40. f4 Nd4 41. Rb6+ Kc7 42. Ra6 Nc6 43. Ra8 Kd6 44. Rf8 Ke6 45. Rc8 Kd7 46. Rf8 Ke6 47. Rc8 Kd7",
+                "5"
             ],
         },
         {
@@ -132,16 +136,16 @@
             "args": [],
         },
         {
-            "name": "uci-debug",
+            "name": "engine-debug",
             "type": "lldb-dap",
             "request": "launch",
-            "preLaunchTask": "build: uci-debug",
+            "preLaunchTask": "build: engine-debug",
             "initCommands": [
                "command source ${workspaceRoot}/chess.lldbinit"
             ],
-            "program": "${workspaceFolder}/build/uci-debug",
+            "program": "${workspaceFolder}/build/engine-debug",
             "args": [
-               "${workspaceFolder}/test/ut5.in",
+            "${workspaceFolder}/test/uci-avoid-repetition.in",
             ],
       },
     ]

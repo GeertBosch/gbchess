@@ -76,9 +76,9 @@ ${DBGOBJ}/%-debug: ${DBGOBJ}/%_test.o
 NNUE_SRCS=eval/nnue/nnue.cpp eval/nnue/nnue_stats.cpp eval/nnue/nnue_incremental.cpp core/square_set/square_set.cpp
 MOVES_SRCS=move/move.cpp move/move_table.cpp move/move_gen.cpp move/magic/magic.cpp core/square_set/square_set.cpp
 EVAL_SRCS=eval/eval.cpp core/hash/hash.cpp ${NNUE_SRCS} ${MOVES_SRCS}
-BOOK_SRCS=book/book.cpp book/pgn/pgn.cpp
-SEARCH_SRCS=${EVAL_SRCS} ${BOOK_SRCS} search/search.cpp
-ENGINE_SRCS=engine/engine.cpp engine/perft/perft_core.cpp engine/fen/fen.cpp ${SEARCH_SRCS}
+BOOK_SRCS=book/book.cpp book/pgn/pgn.cpp engine/fen/fen.cpp
+SEARCH_SRCS=${EVAL_SRCS} search/search.cpp
+ENGINE_SRCS=engine/engine.cpp engine/perft/perft_core.cpp ${BOOK_SRCS} ${SEARCH_SRCS}
 
 define test_rules
 ${OPTOBJ}/$(1)-test: $$(call test_objs,$(1)-test,$(2))
@@ -91,6 +91,16 @@ build/engine: $(call calc_objs,${OPTOBJ},$(call prefix_src,${ENGINE_SRCS}))
 	@${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 build/engine-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,${ENGINE_SRCS}))
 	@${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+
+BOOK_GEN_SRCS=book/book_gen.cpp book/pgn/pgn.cpp engine/fen/fen.cpp core/hash/hash.cpp ${MOVES_SRCS}
+build/book-gen: $(call calc_objs,${OPTOBJ},$(call prefix_src,${BOOK_GEN_SRCS}))
+	@${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+
+# Generate book.csv from all PGN files in lichess directory
+LICHESS_PGNS=$(wildcard lichess/*.pgn)
+book.csv: build/book-gen ${LICHESS_PGNS}
+	@echo "Generating book.csv from $(words ${LICHESS_PGNS}) PGN files..."
+	@./build/book-gen ${LICHESS_PGNS} book.csv
 
 $(eval $(call test_rules,core/core))
 $(eval $(call test_rules,engine/fen/fen,engine/fen/fen.cpp))
@@ -106,7 +116,7 @@ $(eval $(call test_rules,move/magic/magic,move/magic/magic.cpp ${MOVES_SRCS} eng
 $(eval $(call test_rules,eval/nnue/nnue,${NNUE_SRCS} engine/fen/fen.cpp))
 $(eval $(call test_rules,search/elo,))
 $(eval $(call test_rules,book/pgn/pgn,${MOVES_SRCS} book/pgn/pgn.cpp))
-$(eval $(call test_rules,book/book,book/book.cpp ${MOVES_SRCS} book/pgn/pgn.cpp engine/fen/fen.cpp core/hash/hash.cpp))
+$(eval $(call test_rules,book/book,${BOOK_SRCS} ${MOVES_SRCS} core/hash/hash.cpp))
 
 .deps: $(call calc_deps,${OPTOBJ},${ALLSRCS}) $(call calc_deps,${DBGOBJ},${ALLSRCS})
 
@@ -263,9 +273,9 @@ magic: build/magic-test
 	&& echo Magic tests passed \
 	|| (echo "\n*** To accept these changes, pipe this output to the patch command ***" && false)
 
-test-cpp: build ${CPP_TESTS}
+test-cpp: build ${CPP_TESTS} book.csv
 	@(cd build && echo Symlinking NNUE files && ln -fs ../*.nnue .)
-	@(cd build && echo Symlinking book files && ln -fs ../lichess/lichess_db_broadcast_2025-11.pgn book.pgn)
+	@(cd build && echo Symlinking book files && ln -fs ../book.csv .)
 	@echo "Checking that all C++ unit tests have been built"
 	@find src -name "*_test.cpp" -exec basename {} _test.cpp \; | sort > .test_sources.tmp
 	@find build -depth 1 -a -name "*-test" -exec basename {} -test \; | sort > .test_executables.tmp

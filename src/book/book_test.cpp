@@ -31,6 +31,140 @@ pgn::VerifiedGame makeGame(const std::vector<std::string>& moveStrs, pgn::Termin
     return {moves, term};
 }
 
+double winRate(BookEntry entry, Color active) {
+    uint64_t wins = active == Color::w ? entry.white : entry.black;
+    return (wins + 0.5 * entry.draw) / entry.total();
+}
+
+DirichletPrior computePrior(const Book& book) {
+    uint64_t totalW = 0, totalD = 0, totalL = 0;
+    for (const auto& [key, entry] : book.entries) {
+        totalW += entry.white;
+        totalD += entry.draw;
+        totalL += entry.black;
+    }
+    return DirichletPrior::fromGlobalStats(totalW, totalD, totalL);
+}
+
+struct MoveInfo {
+    Move move;
+    uint32_t games;
+    double winRate;
+};
+
+std::vector<MoveInfo> collectOpeningMoves(const Book& book, const Position& pos) {
+    std::vector<MoveInfo> moves;
+    Board board = pos.board;
+    MoveVector legalMoves = moves::allLegalMoves(pos.turn, board);
+
+    for (Move move : legalMoves) {
+        Position afterMove = moves::applyMove(pos, move);
+        uint64_t key = Hash(afterMove)();
+        if (book.entries.count(key)) {
+            const auto& entry = book.entries.at(key);
+            moves.push_back(
+                {move, static_cast<uint32_t>(entry.total()), winRate(entry, pos.active())});
+        }
+    }
+
+    std::sort(moves.begin(), moves.end(), [](const MoveInfo& a, const MoveInfo& b) {
+        return a.games > b.games;
+    });
+    return moves;
+}
+
+void printOpeningMoveTable(const std::vector<MoveInfo>& moves,
+                           const Book& book,
+                           const DirichletPrior& prior,
+                           const Position& pos) {
+    std::cout << "White's opening moves:\n";
+    std::cout << std::setw(6) << "Move" << " | " << std::setw(8) << "Games" << " | " << std::setw(8)
+              << "Win Rate" << " (posterior)" << "\n";
+    std::cout << std::string(50, '-') << "\n";
+
+    for (const auto& info : moves) {
+        Position afterMove = moves::applyMove(pos, info.move);
+        uint64_t key = Hash(afterMove)();
+        const auto& entry = book.entries.at(key);
+        double postMean = entry.posteriorMean(pos.active(), prior);
+        std::cout << std::setw(6) << to_string(info.move) << " | " << std::setw(8) << info.games
+                  << " | " << std::setw(7) << std::fixed << std::setprecision(1)
+                  << (info.winRate * 100.0) << "% (" << (postMean * 100.0) << "%)" << "\n";
+    }
+}
+
+void printBlackReplies(Book& book, const std::vector<MoveInfo>& whiteMoves, const Position& pos) {
+    std::cout << "\n=== Black's Best Replies (seed 0) ===\n\n";
+    book.reseed(0);
+
+    for (const auto& whiteMove : whiteMoves) {
+        if (whiteMove.games < 10) continue;
+
+        Move blackReply = book.choose(pos, {whiteMove.move});
+        std::cout << "After " << to_string(whiteMove.move);
+
+        if (blackReply) {
+            Position afterWhite = moves::applyMove(pos, whiteMove.move);
+            Position afterBlack = moves::applyMove(afterWhite, blackReply);
+            uint64_t blackKey = Hash(afterBlack)();
+
+            if (book.entries.count(blackKey)) {
+                const auto& entry = book.entries[blackKey];
+                std::cout << ", best reply: " << to_string(blackReply) << " (" << entry.black
+                          << "W/" << entry.draw << "D/" << entry.white << "L"
+                          << ", Black win rate: " << std::fixed << std::setprecision(1)
+                          << (winRate(entry, Color::b) * 100.0) << "%)\n";
+            } else {
+                std::cout << ", reply: " << to_string(blackReply) << "\n";
+            }
+        } else {
+            std::cout << ", no book reply found\n";
+        }
+    }
+}
+
+void printOpeningDistribution(Book& book, const DirichletPrior& prior, const Position& pos) {
+    std::cout << "\n=== Opening Move Distribution (100 games) ===\n\n";
+
+    std::map<std::string, int> moveCount;
+    std::map<std::string, BookEntry> moveEntries;
+
+    for (int seed = 1; seed <= 100; ++seed) {
+        book.reseed(seed);
+        Move move = book.choose(pos, {});
+        if (move) {
+            std::string moveStr = to_string(move);
+            moveCount[moveStr]++;
+
+            if (moveEntries.find(moveStr) == moveEntries.end()) {
+                Position afterMove = moves::applyMove(pos, move);
+                uint64_t key = Hash(afterMove)();
+                if (book.entries.count(key)) moveEntries[moveStr] = book.entries[key];
+            }
+        }
+    }
+
+    std::vector<std::pair<std::string, int>> sortedMoves(moveCount.begin(), moveCount.end());
+    std::sort(sortedMoves.begin(), sortedMoves.end(), [](const auto& a, const auto& b) {
+        return a.second > b.second;
+    });
+
+    std::cout << std::setw(6) << "Move" << " | " << std::setw(9) << "Selected" << " | "
+              << std::setw(12) << "W/D/L" << " | " << std::setw(9) << "Post.Rate" << "\n";
+    std::cout << std::string(60, '-') << "\n";
+
+    for (const auto& [moveStr, count] : sortedMoves) {
+        if (moveEntries.count(moveStr)) {
+            const auto& entry = moveEntries[moveStr];
+            double postMean = entry.posteriorMean(pos.active(), prior);
+            std::cout << std::setw(6) << moveStr << " | " << std::setw(9) << count << " | "
+                      << std::setw(4) << entry.white << "/" << std::setw(3) << entry.draw << "/"
+                      << std::setw(3) << entry.black << " | " << std::setw(7) << std::fixed
+                      << std::setprecision(1) << (postMean * 100.0) << "%" << "\n";
+        }
+    }
+}
+
 void testBasicBookOperations() {
     Book book;
 
@@ -215,11 +349,94 @@ void testNoBookMoves() {
     std::cout << "No book moves test passed\n";
 }
 
-double winRate(BookEntry entry, Color active) {
-    uint64_t wins = active == Color::w ? entry.white : entry.black;
-    return (wins + 0.5 * entry.draw) / entry.total();
+void testOpeningDistribution(Book& book, const Position& initialPos, const DirichletPrior& prior) {
+
+    std::map<std::string, int> moveCount;
+    std::map<std::string, BookEntry> moveEntries;
+
+    for (int seed = 1; seed <= 100; ++seed) {
+        book.reseed(seed);
+        Move move = book.choose(initialPos, {});
+        if (move) {
+            std::string moveStr = to_string(move);
+            moveCount[moveStr]++;
+
+            if (moveEntries.find(moveStr) == moveEntries.end()) {
+                Position afterMove = moves::applyMove(initialPos, move);
+                uint64_t key = Hash(afterMove)();
+                if (book.entries.count(key)) moveEntries[moveStr] = book.entries[key];
+            }
+        }
+    }
+
+    std::vector<std::pair<std::string, int>> sortedMoves(moveCount.begin(), moveCount.end());
+    std::sort(sortedMoves.begin(), sortedMoves.end(), [](const auto& a, const auto& b) {
+        return a.second > b.second;
+    });
+
+    std::cout << "\nOpening move distribution over 100 selections:\n";
+    std::cout << std::setw(6) << "Move" << " | " << std::setw(9) << "Selected" << " | "
+              << std::setw(12) << "W/D/L" << " | " << std::setw(9) << "Post.Rate" << "\n";
+    std::cout << std::string(60, '-') << "\n";
+
+    for (const auto& [moveStr, count] : sortedMoves) {
+        if (moveEntries.count(moveStr)) {
+            const auto& entry = moveEntries[moveStr];
+            double postMean = entry.posteriorMean(Color::w, prior);
+            std::cout << std::setw(6) << moveStr << " | " << std::setw(9) << count << " | "
+                      << std::setw(4) << entry.white << "/" << std::setw(3) << entry.draw << "/"
+                      << std::setw(3) << entry.black << " | " << std::setw(7) << std::fixed
+                      << std::setprecision(1) << (postMean * 100.0) << "%" << "\n";
+        } else {
+            std::cout << std::setw(6) << moveStr << " | " << std::setw(9) << count
+                      << " | (no entry)\n";
+        }
+    }
+
+    std::cout << "\nOpening distribution test passed - selected " << moveCount.size()
+              << " different moves\n";
 }
 
+void testTemperature() {
+    Book book = loadBook("book.csv");
+    if (!book) {
+        std::cout << "Skipping temperature test - no book.csv found\n";
+        return;
+    }
+
+    Position initialPos = Position::initial();
+    std::vector<double> temperatures = {0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0};
+
+    std::cout << "\n=== Temperature Effect on Move Selection ===\n";
+
+    for (double temp : temperatures) {
+        book.setTemperature(temp);
+        std::map<std::string, int> moveCount;
+
+        // Use different seed ranges for each temperature to get independent samples
+        int baseSeed = static_cast<int>(temp * 1000);
+        for (int i = 0; i < 100; ++i) {
+            book.reseed(baseSeed + i);
+            Move move = book.choose(initialPos, {});
+            if (move) moveCount[to_string(move)]++;
+        }
+
+        // Sort by selection count
+        std::vector<std::pair<std::string, int>> sortedMoves(moveCount.begin(), moveCount.end());
+        std::sort(sortedMoves.begin(), sortedMoves.end(), [](const auto& a, const auto& b) {
+            return a.second > b.second;
+        });
+
+        std::cout << "\nTemperature = " << std::fixed << std::setprecision(1) << temp
+                  << " (variety: " << moveCount.size() << " different moves)\n";
+        for (size_t i = 0; i < std::min(size_t(6), sortedMoves.size()); ++i) {
+            std::cout << "  " << std::setw(6) << sortedMoves[i].first << ": " << std::setw(3)
+                      << sortedMoves[i].second << "%\n";
+        }
+    }
+
+    std::cout << "\nTemperature test passed\n";
+}
 
 void analyzeOpeningBook(const char* filename) {
     std::cout << "\n=== Analyzing Opening Book: " << filename << " ===\n\n";
@@ -231,87 +448,12 @@ void analyzeOpeningBook(const char* filename) {
     }
 
     Position initialPos = Position::initial();
+    DirichletPrior prior = computePrior(book);
 
-    // Collect all first moves for White
-    struct MoveInfo {
-        Move move;
-        uint32_t games;
-        double winRate;
-    };
-    std::vector<MoveInfo> whiteMoves;
-
-    // Get all legal moves from initial position
-    Board board = initialPos.board;
-    MoveVector legalMoves = moves::allLegalMoves(initialPos.turn, board);
-
-    for (Move move : legalMoves) {
-        Position afterMove = moves::applyMove(initialPos, move);
-        uint64_t key = Hash(afterMove)();
-
-        if (book.entries.count(key)) {
-            const auto& entry = book.entries[key];
-            whiteMoves.push_back(
-                {move, static_cast<uint32_t>(entry.total()), winRate(entry, Color::w)});
-        }
-    }
-
-    // Sort by number of games (descending)
-    std::sort(whiteMoves.begin(), whiteMoves.end(), [](const MoveInfo& a, const MoveInfo& b) {
-        return a.games > b.games;
-    });
-
-    std::cout << "White's opening moves:\n";
-    std::cout << std::setw(6) << "Move" << " | " << std::setw(8) << "Games" << " | " << std::setw(8)
-              << "Win Rate" << " (posterior)" << "\n";
-    std::cout << std::string(50, '-') << "\n";
-
-    // Compute prior for displaying posterior means
-    uint64_t totalW = 0, totalD = 0, totalL = 0;
-    for (const auto& [key, entry] : book.entries) {
-        totalW += entry.white;
-        totalD += entry.draw;
-        totalL += entry.black;
-    }
-    DirichletPrior prior = DirichletPrior::fromGlobalStats(totalW, totalD, totalL);
-
-    for (const auto& info : whiteMoves) {
-        Position afterMove = moves::applyMove(initialPos, info.move);
-        uint64_t key = Hash(afterMove)();
-        const auto& entry = book.entries[key];
-        double postMean = entry.posteriorMean(Color::w, prior);
-        std::cout << std::setw(6) << to_string(info.move) << " | " << std::setw(8) << info.games
-                  << " | " << std::setw(7) << std::fixed << std::setprecision(1)
-                  << (info.winRate * 100.0) << "% (" << (postMean * 100.0) << "%)" << "\n";
-    }
-
-    // Now for each popular White opening, show Black's best reply
-    std::cout << "\n=== Black's Best Replies (seed 0) ===\n\n";
-
-    book.reseed(0);  // Use seed 0 for deterministic selection
-
-    for (const auto& whiteMove : whiteMoves) {
-        if (whiteMove.games < 10) continue;  // Only show popular openings
-
-        Move blackReply = book.choose(initialPos, {whiteMove.move});
-
-        if (blackReply) {
-            Position afterWhite = moves::applyMove(initialPos, whiteMove.move);
-            Position afterBlack = moves::applyMove(afterWhite, blackReply);
-            uint64_t blackKey = Hash(afterBlack)();
-
-            std::cout << "After " << to_string(whiteMove.move);
-            if (book.entries.count(blackKey)) {
-                const auto& entry = book.entries[blackKey];
-                std::cout << ", best reply: " << to_string(blackReply)
-                          << " (games: " << entry.total() << ", Black win rate: " << std::fixed
-                          << std::setprecision(1) << (winRate(entry, Color::b) * 100.0) << "%)\n";
-            } else {
-                std::cout << ", reply: " << to_string(blackReply) << "\n";
-            }
-        } else {
-            std::cout << "After " << to_string(whiteMove.move) << ", no book reply found\n";
-        }
-    }
+    std::vector<MoveInfo> whiteMoves = collectOpeningMoves(book, initialPos);
+    printOpeningMoveTable(whiteMoves, book, prior, initialPos);
+    printBlackReplies(book, whiteMoves, initialPos);
+    testOpeningDistribution(book, initialPos, prior);
 
     std::cout << "\n";
 }
@@ -329,6 +471,7 @@ int main(int argc, char** argv) {
     testVarietyWithNonZeroSeed();
     testLaterPosition();
     testNoBookMoves();
+    testTemperature();
 
     std::cout << "All book tests passed!\n";
     return 0;

@@ -266,7 +266,7 @@ void UCIRunner::execute(std::string line) {
         std::exit(0);
     } else if (command == "ucinewgame") {
         search::newGame();
-        if (!book) book = book::loadBook("book.pgn");
+        if (!book) book = book::loadBook("book.csv");
         // Reseed the opening book random generator
         uint64_t random = ++seeds;  // Non-zero random seed
         book.reseed(random);        // Use seed 0 for deterministic book moves in new game

@@ -2,6 +2,7 @@
 #include "core/core.h"
 #include "core/hash/hash.h"
 #include "core/random.h"
+#include "engine/fen/fen.h"
 #include "move/move.h"
 #include "move/move_gen.h"
 
@@ -109,7 +110,8 @@ std::vector<MoveStat> collectMoveStats(const Position& position,
 Move selectMove(const Position& position,
                 const std::unordered_map<uint64_t, BookEntry>& entries,
                 const std::vector<MoveStat>& moveStats,
-                const DirichletPrior& prior) {
+                const DirichletPrior& prior,
+                double temperature) {
     if (moveStats.empty()) return Move();
 
     // Use Thompson sampling: sample from each move's Dirichlet posterior and pick max
@@ -127,23 +129,37 @@ Move selectMove(const Position& position,
         uint64_t l = position.active() == Color::w ? entry.black : entry.white;
 
         double sampledScore = samplePosteriorScore(w, d, l, prior);
-        if (sampledScore > bestScore)
-            std::tie(bestScore, bestMove) = std::make_pair(sampledScore, ms.move);
+
+        // Apply temperature to the sampled score (the stochastic component)
+        // Lower temperature = more exploitation (amplify differences from 0.5)
+        // Higher temperature = more exploration (compress toward 0.5)
+        sampledScore = 0.5 + (sampledScore - 0.5) / temperature;
+
+        // Add game count bonus, scaled by temperature^2 to reduce its influence at high temp
+        // At high temperature, we want mostly stochastic exploration
+        double gameCountBonus =
+            (kGameCountBonus * std::log(entry.total())) / (temperature * temperature);
+
+        // Add uniform noise that scales with temperature for true exploration at high temperatures
+        // This ensures that at very high temperature, selection approaches uniform random
+        double noise = (temperature - 1.0) * uniformRandom() * 0.1;
+
+        double finalScore = sampledScore + gameCountBonus + noise;
+
+        if (finalScore > bestScore)
+            std::tie(bestScore, bestMove) = std::make_pair(finalScore, ms.move);
     }
 
     return bestMove;
 }
 }  // namespace
 
-bool BookEntry::add(Term term) {
-    if (full()) return false;  // Avoid overflow without bias
-
-    switch (term) {
-    case Term::WHITE_WIN: return ++white;
-    case Term::BLACK_WIN: return ++black;
-    case Term::DRAW: return ++draw;
-    default: return false;
-    }
+uint64_t BookEntry::add(Term term) {
+    return full()                 ? 0  // Avoid overflow
+        : term == Term::WHITE_WIN ? ++white + black + draw
+        : term == Term::BLACK_WIN ? ++black + white + draw
+        : term == Term::DRAW      ? ++draw + white + black
+                                  : 0;
 }
 
 double BookEntry::posteriorMean(Color active, const DirichletPrior& prior) const {
@@ -186,36 +202,55 @@ Move Book::choose(Position position, const MoveVector& moves) {
     // Apply any moves to reach the current position
     for (auto move : moves) position = moves::applyMove(position, move);
 
-    // Compute prior from global statistics
-    uint64_t totalW = 0, totalD = 0, totalL = 0;
-    for (const auto& [key, entry] : entries) {
-        totalW += entry.white;
-        totalD += entry.draw;
-        totalL += entry.black;
-    }
-    DirichletPrior prior = DirichletPrior::fromGlobalStats(totalW, totalD, totalL);
-
     auto moveStats = collectMoveStats(position, entries, prior);
-    return selectMove(position, entries, moveStats, prior);
+    return selectMove(position, entries, moveStats, prior, temperature);
 }
-Book loadBook(std::string pgnfile) {
-    std::ifstream in(pgnfile);
-    if (!in || !in.is_open()) std::cerr << "Could not open book file: " << pgnfile << "\n";
+
+Book loadBook(std::string csvfile) {
+    std::ifstream in(csvfile);
+    if (!in || !in.is_open()) {
+        std::cerr << "Could not open book file: " << csvfile << "\n";
+        return Book();
+    }
 
     Book book;
-    uint64_t gameCount = 0;
-    while (in) {
-        auto game = pgn::readPGN(in);
-        auto whiteElo = game["WhiteElo"];
-        auto blackElo = game["BlackElo"];
-        if (!whiteElo.empty() && std::stoi(whiteElo) < 2400) continue;  // Skip low-rated games
-        if (!blackElo.empty() && std::stoi(blackElo) < 2400) continue;  //
-        auto verifiedGame = pgn::verify(game);
-        ++gameCount;
-        book.insert(verifiedGame);
+    std::string line;
+
+    // Skip header line
+    std::getline(in, line);
+
+    uint64_t totalW = 0, totalD = 0, totalL = 0;
+
+    while (std::getline(in, line)) {
+
+        // Parse CSV: fen,white,draw,black
+        size_t pos1 = line.rfind(',');
+        if (pos1 == std::string::npos) continue;
+
+        size_t pos2 = line.rfind(',', pos1 - 1);
+        if (pos2 == std::string::npos) continue;
+
+        size_t pos3 = line.rfind(',', pos2 - 1);
+        if (pos3 == std::string::npos) continue;
+
+        std::string fenStr = line.substr(0, pos3);
+        uint64_t white = std::stoull(line.substr(pos3 + 1, pos2 - pos3 - 1));
+        uint64_t draw = std::stoull(line.substr(pos2 + 1, pos1 - pos2 - 1));
+        uint64_t black = std::stoull(line.substr(pos1 + 1));
+
+        Position pos = fen::parsePosition(fenStr);
+        uint64_t key = Hash(pos)();
+
+        book.entries[key] = {white, draw, black};
+
+        totalW += white;
+        totalD += draw;
+        totalL += black;
     }
-    std::cout << "Loaded book " << pgnfile << " with " << book.entries.size() << " positions from "
-              << gameCount << " games\n";
+
+    book.prior = DirichletPrior::fromGlobalStats(totalW, totalD, totalL);
+
+    std::cout << "Loaded book " << csvfile << " with " << book.entries.size() << " positions\n";
     return book;
 }
 }  // namespace book

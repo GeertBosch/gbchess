@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <sys/types.h>
 #include <unordered_map>
 
@@ -16,7 +17,14 @@ namespace book {
 static constexpr uint32_t kMinGames = 10;
 
 // Prior strength for Bayesian shrinkage (virtual games)
-static constexpr double kPriorStrength = 50.0;
+static constexpr double kPriorStrength = 250.0;
+
+// Game count bonus coefficient - adds log(games) * kGameCountBonus to sampled scores
+static constexpr double kGameCountBonus = 0.01;
+
+// Temperature for Thompson sampling: higher = more variety, lower = more greedy
+// Temperature = 1.0 is standard Thompson sampling
+static constexpr double kDefaultTemperature = 2.0;
 
 struct DirichletPrior {
     double ɑW;  // Prior pseudo-count for wins
@@ -37,7 +45,7 @@ struct BookEntry {
     uint64_t draw : kCountBits;   // Draws
     uint64_t black : kCountBits;  // Black wins
 
-    bool add(pgn::Termination term);  // Accepts: WHITE_WIN, DRAW, BLACK_WIN
+    uint64_t add(pgn::Termination term);  // Accepts: WHITE_WIN, DRAW, BLACK_WIN
     bool full() const { return std::max({white, draw, black}) == kMaxResultCount; }
     uint64_t total() const { return white + draw + black; }  // May be up to 3 * kMaxResultCount
 
@@ -48,7 +56,13 @@ struct BookEntry {
 struct Book {
     std::unordered_map<uint64_t, BookEntry> entries;
 
+    double temperature = kDefaultTemperature;
+    DirichletPrior prior = {kPriorStrength / 3.0, kPriorStrength / 3.0, kPriorStrength / 3.0};
+
     operator bool() const { return !entries.empty(); }
+
+    /** Set temperature for move selection (higher = more variety, lower = more greedy) */
+    void setTemperature(double t) { temperature = t; }
 
     /** Reset the random number generator with the given seed. Zero disables random selection. */
     static void reseed(uint64_t seed);
@@ -61,9 +75,8 @@ struct Book {
      * move if none is available.
      */
     Move choose(Position position, const MoveVector& moves);
-
 };
 
-/** Loads a book based on a file with PGN games. Returns an empty book if file cannot be opened. */
-Book loadBook(std::string pgnfile);
+/** Loads a book from a CSV file with format: fen,white,draw,black */
+Book loadBook(std::string csvfile);
 }  // namespace book
