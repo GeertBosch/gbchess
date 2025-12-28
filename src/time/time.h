@@ -86,18 +86,18 @@ public:
 
     void setFixedTimeMillis(uint32_t fixedMillis) { setFixedTimeMillis(fixedMillis, fixedMillis); }
 
-    int64_t computeMillisForMove(Turn turn) const {
-        if (fixedTime) return getMillis(turn.activeColor());
+    int64_t computeMillisForMove(Color color, uint16_t fullmove) const {
+        if (fixedTime) return getMillis(color);
 
         int movesToGo = this->movesToGo;
         // If no moves to go is specified, estimate it based on expected game length and number of
         // moves played so far. Toward the end of the game, never assume less than 10 moves left.
         if (!movesToGo)
             movesToGo = kMinDefaultMovesToGo +
-                std::max(0, kExpectedGameMoves - kMinDefaultMovesToGo - turn.fullmove());
+                std::max(0, kExpectedGameMoves - kMinDefaultMovesToGo - fullmove);
 
-        int64_t baseMillis = getMillis(turn.activeColor()) / movesToGo;
-        int64_t incrementMillis = getIncrementMillis(turn.activeColor());
+        int64_t baseMillis = getMillis(color) / movesToGo;
+        int64_t incrementMillis = getIncrementMillis(color);
         incrementMillis = incrementMillis * kUseIncrementPercent / 100;
         return baseMillis + incrementMillis;
     }

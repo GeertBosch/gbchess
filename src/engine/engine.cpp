@@ -207,7 +207,11 @@ private:
         auto search =
             [this, depth, pos = position, moves = moves, &startTime = startTime]() {
                 auto position = pos;  // need to copy the position
-                auto timeMillis = timeControl.computeMillisForMove(position.turn);
+                auto color = position.turn.activeColor();
+                if (moves.size() % 2 == 1) color = !color;
+                auto timeMillis = timeControl.computeMillisForMove(
+                    color, position.turn.fullmove() + moves.size() / 2);
+                std::string turn = position.turn == Color::w ? "white" : "black";
 
                 auto pv = search::computeBestMove(
                     position,
