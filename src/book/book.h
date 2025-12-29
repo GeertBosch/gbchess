@@ -14,17 +14,17 @@ namespace book {
 // strength, uncertainty, and variety without tuning constants).
 
 // Minimum number of games required to consider a move from the book
-static constexpr uint32_t kMinGames = 10;
+static constexpr uint32_t kMinGames = 25;
 
 // Prior strength for Bayesian shrinkage (virtual games)
-static constexpr double kPriorStrength = 250.0;
+static constexpr double kPriorStrength = 2500.0;
 
 // Game count bonus coefficient - adds log(games) * kGameCountBonus to sampled scores
 static constexpr double kGameCountBonus = 0.01;
 
 // Temperature for Thompson sampling: higher = more variety, lower = more greedy
 // Temperature = 1.0 is standard Thompson sampling
-static constexpr double kDefaultTemperature = 2.0;
+static constexpr double kDefaultTemperature = 1.4;
 
 struct DirichletPrior {
     double ɑW;  // Prior pseudo-count for wins
