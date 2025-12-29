@@ -24,8 +24,8 @@ class TimeControl {
     static constexpr int64_t kMaxIncrementMillis = 31 * kDayMillis;
 
     static constexpr int8_t kUseIncrementPercent = 80;  // Use 80% of increment time
-    static constexpr int8_t kMinDefaultMovesToGo = 15;  // Assume at least 12 moves to go if unknown
-    static constexpr int8_t kExpectedGameMoves = 40;    // Expected moves in a game
+    static constexpr int8_t kMinDefaultMovesToGo = 20;  // Assume at least 20 moves to go if unknown
+    static constexpr int8_t kExpectedGameMoves = 50;    // Expected moves in a game
 
     int64_t whiteMillis;
     int64_t blackMillis;
@@ -91,7 +91,7 @@ public:
 
         int movesToGo = this->movesToGo;
         // If no moves to go is specified, estimate it based on expected game length and number of
-        // moves played so far. Toward the end of the game, never assume less than 10 moves left.
+        // moves played so far. Toward the end of the game, never assume less than 20 moves left.
         if (!movesToGo)
             movesToGo = kMinDefaultMovesToGo +
                 std::max(0, kExpectedGameMoves - kMinDefaultMovesToGo - fullmove);
