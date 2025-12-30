@@ -208,12 +208,12 @@ void testThresholdFiltering() {
     // d4: 95 wins, 5 draws = 97.5% (very good, should be selected frequently)
     // Nf3: 30 wins, 20 draws, 50 losses = 40% (poor, should be selected rarely)
 
-    for (int i = 0; i < 100; ++i) book.insert(makeGame({"e2e4"}, pgn::Termination::WHITE_WIN));
-    for (int i = 0; i < 95; ++i) book.insert(makeGame({"d2d4"}, pgn::Termination::WHITE_WIN));
-    for (int i = 0; i < 5; ++i) book.insert(makeGame({"d2d4"}, pgn::Termination::DRAW));
-    for (int i = 0; i < 30; ++i) book.insert(makeGame({"g1f3"}, pgn::Termination::WHITE_WIN));
-    for (int i = 0; i < 20; ++i) book.insert(makeGame({"g1f3"}, pgn::Termination::DRAW));
-    for (int i = 0; i < 50; ++i) book.insert(makeGame({"g1f3"}, pgn::Termination::BLACK_WIN));
+    for (int i = 0; i < 1000; ++i) book.insert(makeGame({"e2e4"}, pgn::Termination::WHITE_WIN));
+    for (int i = 0; i < 950; ++i) book.insert(makeGame({"d2d4"}, pgn::Termination::WHITE_WIN));
+    for (int i = 0; i < 50; ++i) book.insert(makeGame({"d2d4"}, pgn::Termination::DRAW));
+    for (int i = 0; i < 300; ++i) book.insert(makeGame({"g1f3"}, pgn::Termination::WHITE_WIN));
+    for (int i = 0; i < 200; ++i) book.insert(makeGame({"g1f3"}, pgn::Termination::DRAW));
+    for (int i = 0; i < 500; ++i) book.insert(makeGame({"g1f3"}, pgn::Termination::BLACK_WIN));
 
     Position pos = Position::initial();
 
