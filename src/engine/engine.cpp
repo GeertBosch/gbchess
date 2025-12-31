@@ -267,6 +267,7 @@ void UCIRunner::execute(std::string line) {
     } else if (command == "isready") {
         out << "readyok\n";
     } else if (command == "quit") {
+        if (thread.joinable()) thread.join();
         std::exit(0);
     } else if (command == "ucinewgame") {
         search::newGame();
