@@ -7,3 +7,4 @@ PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,GameUrl,Open
 03JeC,5rk1/3PQppp/p7/6P1/8/2pq4/P5PP/4R2K b - - 0 30,c3c2 e7f8 g8f8 e1e8,1577,79,89,34,attraction endgame mate mateIn2 sacrifice short,https://lichess.org/yY9Iks5E/black#59,
 05lSk,6k1/ppr2p2/2r1pBp1/4P1P1/2PpR3/1P6/P4P2/7K b - - 0 35,g8f8 e4h4 f8e8 h4h8 e8d7 h8d8,1697,75,92,541,endgame long mate mateIn3,https://lichess.org/u5wgVSA3/black#70,
 08Lta,8/ppp2ppp/2k1p3/4P3/1P1B1PP1/b1PK4/4P2P/8 b - - 0 25,c6d5 b4b5 a7a6 c3c4,2002,117,84,30,bishopEndgame endgame mate mateIn2 quietMove short,https://lichess.org/ALYfMu1E/black#50,
+06b0A,7k/1pp5/pb1p2Bp/4p1rP/PP2P1r1/2PP4/5PP1/R4RK1 w - - 3 29,d3d4 g4g2 g1h1 g2g4 f2f3 g4h4,1748,75,89,2032,endgame kingsideAttack long mate mateIn3,https://lichess.org/oFLORhmS#56,
