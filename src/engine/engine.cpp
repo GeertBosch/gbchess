@@ -63,6 +63,33 @@ OutputIt skip(InputIt first, InputIt last, size_t skip, OutputIt d_first) {
     }
     return d_first;
 }
+void printStatistics(std::ostream& os) {
+    using namespace search;
+    // === gbchess Search Statistics ===
+    // Total nodes: 47
+    // Null move attempts: 0 (0% of nodes)
+    // Null move cutoffs: 0 (0% of attempts)
+    // Beta cutoffs: 14 (29% of nodes)
+    // First-move cutoffs: 14 (100% of beta cutoffs)
+    // ===================================
+    os << "\n=== " + std::string(cmdName) + " Search Statistics ===\n";
+    os << "Total nodes: " << search::nodeCount << "\n";
+    os << "Null move attempts: " << search::nullMoveAttempts << " ("
+       << (search::nodeCount ? (search::nullMoveAttempts * 100 / search::nodeCount) : 0)
+       << "% of nodes)\n";
+    os << "Null move cutoffs: " << search::nullMoveCutoffs << " ("
+       << (search::nullMoveAttempts ? (search::nullMoveCutoffs * 100 / search::nullMoveAttempts)
+                                    : 0)
+       << "% of attempts)\n";
+    os << "Beta cutoffs: " << search::betaCutoffs << " ("
+       << (search::nodeCount ? (search::betaCutoffs * 100 / search::nodeCount) : 0)
+       << "% of nodes)\n";
+    os << "First-move cutoffs: " << search::firstMoveCutoffs << " ("
+       << (search::betaCutoffs ? (search::firstMoveCutoffs * 100 / search::betaCutoffs) : 0)
+       << "% of beta cutoffs)\n";
+    os << "===================================\n";
+}
+
 }  // namespace
 
 using namespace std::chrono;
@@ -268,6 +295,7 @@ void UCIRunner::execute(std::string line) {
         out << "readyok\n";
     } else if (command == "quit") {
         if (thread.joinable()) thread.join();
+        printStatistics(out);
         std::exit(0);
     } else if (command == "ucinewgame") {
         search::newGame();
