@@ -132,3 +132,202 @@ When making changes:
 3. **Review ALL failures** at once - don't fix incrementally
 4. **Only then** use specific tests like `make test-cpp` to debug individual issues
 5. **Performance check**: `make perft-bench` after algorithmic changes
+
+## Data-Driven Optimization Protocol
+
+**CRITICAL**: When optimizing search or evaluation, follow this scientific methodology to avoid
+regressions. Past experience shows that making multiple simultaneous changes without proper
+validation leads to correctness bugs and performance regressions that are hard to diagnose.
+
+### Phase 1: Establish Baseline (No Code Changes)
+
+Before making ANY optimization changes, record comprehensive baseline metrics:
+
+1. **Performance Metrics**:
+   ```bash
+   # Record node counts at multiple depths
+   ./search.sh gbchess "test-position-fen" 2
+   ./search.sh gbchess "test-position-fen" 4
+   ./search.sh gbchess "test-position-fen" 8
+
+   # Compare with Stockfish
+   ./search.sh stockfish "test-position-fen" 8
+   ```
+
+2. **Quality Metrics**:
+   ```bash
+   make test -j          # All tests must pass
+   make mate123 mate45   # Mate-finding ability
+   make puzzles          # maintain 93/100 minimum
+   ```
+
+3. **Document Current State**:
+   - Node counts at depth 2, 4, 8 for standard test positions
+   - Time to depth for real game positions
+   - Puzzle success rate
+   - All UCI test results
+   - Current vs Stockfish node ratio at each depth
+
+4. **Identify Specific Problems**:
+   - Which puzzles fail and why?
+   - Which positions show biggest node explosion vs Stockfish?
+   - Where does search spend most time? (main search vs quiescence)
+
+### Phase 2: Gather Diagnostic Data
+
+Before implementing "fixes", understand the root cause:
+
+1. **Instrument Both Engines**:
+   - Add verbose logging to trace specific problem positions
+   - Log quiescence search decisions: moves tried, pruning reasons, depth reached
+   - Compare gbchess vs Stockfish behavior on identical positions
+   - Track statistics: TT hit rates, move ordering effectiveness, pruning frequency
+
+2. **Profile Resource Usage**:
+   - What % of nodes are in quiescence vs main search?
+   - Which pruning techniques fire and how often?
+   - What's the first-move cutoff rate? (should be >85%)
+   - What's the TT hit rate? (should be >80%)
+
+3. **Analyze Specific Cases**:
+   - Pick one problem position and understand it completely
+   - Why does Stockfish use fewer nodes on this position?
+   - What decisions differ between the engines?
+
+**Do NOT proceed to Phase 3 until you have concrete data explaining the performance difference.**
+
+### Phase 3: One Change at a Time
+
+For each potential optimization:
+
+1. **State Clear Hypothesis**:
+   - "Delta pruning will reduce QS nodes by ~X% without hurting quality"
+   - "Improving TT hit rate from Y% to Z% will reduce nodes by W%"
+   - Base hypothesis on Phase 2 diagnostic data, not assumptions
+
+2. **Implement ONLY One Change**:
+   - Change one thing: one pruning technique, one parameter, one algorithm
+   - Do not combine multiple optimizations
+   - Keep changes small and reversible
+
+3. **Validate Completely Before Proceeding**:
+   ```bash
+   # All tests must pass
+   make test -j
+
+   # Quality must not degrade
+   make puzzles  # Must maintain 93/100+
+   make mate123 mate45  # Must pass
+
+   # Record new performance
+   ./search.sh gbchess "test-position-fen" 2
+   ./search.sh gbchess "test-position-fen" 8
+
+   # Compare to baseline
+   ```
+
+4. **Decision Criteria**:
+   - **Keep**: If ALL tests pass AND (nodes decrease OR time decreases OR quality improves)
+   - **Revert**: If ANY test fails OR quality drops OR no measurable improvement
+   - **Commit**: Immediately after deciding to keep, before trying next change
+
+5. **Document Results**:
+   - What changed (code + rationale)
+   - Baseline vs new metrics
+   - Why it worked or didn't work
+   - Commit message should reference the hypothesis and results
+
+### Phase 4: Priority Order Based on Data
+
+Only after Phase 2 diagnostics, prioritize optimizations. Example priority:
+
+1. **If TT hit rate is low (<80%)**:
+   - Investigate TT usage in quiescence
+   - Check replacement policy
+   - Verify depth calculations
+
+2. **If move ordering is poor (<85% first-move cutoffs)**:
+   - Improve move scoring
+   - Try different heuristics (countermove, killer moves)
+   - Compare ordering to Stockfish
+
+3. **If many nodes in quiescence**:
+   - Analyze quiescence depth strategy
+   - Test pruning techniques (delta, SEE, futility)
+   - Validate each independently
+
+4. **If main search inefficient**:
+   - Test null-move pruning parameters
+   - Try late move reductions
+   - Check extension criteria
+
+**Process each item completely before moving to the next.**
+
+### Anti-Patterns to Avoid
+
+1. **Making Multiple Changes Simultaneously**:
+   - ❌ "Let me add delta pruning, change QS depth, and modify SEE all at once"
+   - ✅ Add delta pruning, test completely, commit. Then consider QS depth separately.
+
+2. **Assuming Something is Broken**:
+   - ❌ "This std::clamp looks buggy, let me fix it"
+   - ✅ "Let me measure current behavior and verify it's actually a problem"
+
+3. **Copying Stockfish Without Understanding**:
+   - ❌ "Stockfish does X, so we should too"
+   - ✅ "Stockfish does X. Let me understand why and test if it helps us"
+
+4. **Optimizing Without Measuring**:
+   - ❌ "This change should reduce nodes"
+   - ✅ "Baseline is N nodes. After change, it's M nodes. Impact: (M-N)/N%"
+
+5. **Prioritizing Nodes Over Correctness**:
+   - ❌ "We reduced nodes by 50% but puzzles dropped from 93 to 92"
+   - ✅ "Maintain 93/100+ puzzles. Only accept optimizations that preserve quality"
+
+6. **Ignoring Test Failures**:
+   - ❌ "These tests fail but the optimization is good overall"
+   - ✅ "Any test failure means the change is rejected, no exceptions"
+
+### Key Principles
+
+1. **Measure Everything**: Before, during, and after. No assumptions.
+
+2. **One Variable at a Time**: Change one thing, test completely, commit or revert, repeat.
+
+3. **Validate Assumptions**: "This should help" → Test it. "Stockfish does X" → Understand why.
+
+4. **Quality Over Speed**: Better to find the right move slowly than the wrong move quickly.
+
+5. **Scientific Method**:
+   - Hypothesis (based on data)
+   - Experiment (isolated change)
+   - Measure (objective metrics)
+   - Conclude (based on results, not intentions)
+
+6. **Reversibility**: Every change must be easily revertible. Commit working states frequently.
+
+### Example: Good Optimization Process
+
+```
+1. Baseline: Record depth 8 = 72,603 nodes, puzzles = 93/100
+2. Diagnose: Profile shows 60% of time in quiescence search
+3. Analyze: Quiescence tries many losing captures
+4. Hypothesis: "Delta pruning in QS will reduce nodes by 10-15%"
+5. Implement: Add ONLY delta pruning to quiesce()
+6. Test: make test -j → PASS, puzzles → 93/100, depth 8 → 61,756 nodes (15% reduction)
+7. Commit: "Add delta pruning in quiescence: 15% node reduction at depth 8"
+8. Next: Now consider next optimization (futility pruning)
+```
+
+### Example: Failed Optimization (What Not To Do)
+
+```
+❌ 1. Notice: "Stockfish uses std::clamp differently"
+❌ 2. Change: Rewrite QS depth logic + add delta pruning + modify SEE + change node counting
+❌ 3. Test: Multiple failures, unclear which change caused problems
+❌ 4. Debug: Try to fix failures incrementally, making more changes
+❌ 5. Result: Worse performance, broken tests, unclear how to recover
+```
+
+**If you find yourself in this situation, stop immediately and revert all changes. Start over with Phase 1.**
