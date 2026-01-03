@@ -479,6 +479,7 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score 
 }
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
+    ++quiescenceCount;  // Increment quiescence count
     Score stand_pat;
     if (options::useNNUE)
         // Use NNUE evaluation, which is more accurate than the piece-square evaluation
@@ -495,12 +496,6 @@ struct Depth {
     int left;
     Depth operator+(int i) const { return {current + i, left - i}; }
 };
-
-Score quiesce(Position& position, Score alpha, Score beta, Depth depth) {
-    ++quiescenceCount;  // Increment quiescence count
-    int qdepth = std::clamp(2, depth.current, options::quiescenceDepth);
-    return quiesce(position, alpha, beta, qdepth);
-}
 
 Score quiesce(Position& position, int depthleft) {
     return quiesce(position, Score::min(), Score::max(), depthleft);
@@ -746,8 +741,8 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
 
 PrincipalVariation toplevelAlphaBeta(
     Position& position, Score alpha, Score beta, int depthleft, InfoFn info) {
+    assert(depthleft > 0);
     Depth depth = {0, depthleft};
-    if (depthleft <= 0) return {{}, quiesce(position, alpha, beta, depth)};
 
     Hash hash(position);
 
