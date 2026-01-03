@@ -32,6 +32,7 @@ constexpr int nullMoveMinDepth = 2;           // Minimum depth to try null move
 constexpr bool futilityPruning = true;        // Enable futility pruning
 constexpr int futilityMaxDepth = 7;           // Maximum depth for futility pruning
 constexpr bool useCountermove = false;        // Use the countermove heuristic
+constexpr bool verboseSearch = false;         // Print detailed search tree for debugging
 
 /**
  * Caching options for the perft program

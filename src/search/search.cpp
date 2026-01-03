@@ -21,6 +21,7 @@
 namespace search {
 EvalTable evalTable;
 uint64_t evalCount = 0;
+uint64_t nodeCount = 0;
 uint64_t quiescenceCount = 0;
 uint64_t cacheCount = 0;
 uint64_t nullMoveAttempts = 0;
@@ -50,6 +51,7 @@ using timepoint = clock::time_point;
 
 // Copy various counters at the start of the search, so they can be reported later
 uint64_t searchEvalCount = 0;
+uint64_t searchNodeCount = 0;
 uint64_t searchQuiescenceCount = 0;
 uint64_t searchCacheCount = 0;
 timepoint searchStartTime = {};
@@ -445,13 +447,15 @@ bool isQuiet(Position& position, int depthleft) {
 }
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score standPat) {
-    ++evalCount;
+    ++nodeCount;
 
     if (!depthleft) return standPat;
 
     if (standPat >= beta && isQuiet(position, depthleft)) return beta;
 
     if (standPat > alpha && isQuiet(position, depthleft)) alpha = standPat;
+
+    ++evalCount;
 
     // The moveList includes moves needed to get out of check; an empty list means mate
     auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, depthleft);
@@ -494,7 +498,7 @@ struct Depth {
 
 Score quiesce(Position& position, Score alpha, Score beta, Depth depth) {
     ++quiescenceCount;  // Increment quiescence count
-    int qdepth = std::clamp(3, depth.current, options::quiescenceDepth);
+    int qdepth = std::clamp(2, depth.current, options::quiescenceDepth);
     return quiesce(position, alpha, beta, qdepth);
 }
 
@@ -599,6 +603,7 @@ bool tryNullMovePruning(Position& position, Hash hash, Score alpha, Score beta, 
  */
 PrincipalVariation alphaBeta(
     Position& position, Hash hash, Score alpha, Score beta, Depth depth, Move lastMove) {
+    ++nodeCount;
     // Track maximum selective depth reached in main search (excludes quiescence)
     if (depth.current > maxSelDepth) maxSelDepth = depth.current;
 
@@ -708,7 +713,7 @@ bool currmoveInfo(InfoFn info, int depthleft, Move currmove, int currmovenumber)
     if (!info || depthleft < options::currmoveMinDepthLeft) return false;
     std::stringstream ss;
     ss << "depth " << std::to_string(depthleft)     //
-       << " nodes " << evalCount - searchEvalCount  //
+       << " nodes " << nodeCount - searchNodeCount  //
        << " currmove " << to_string(currmove)       //
        << " currmovenumber " + std::to_string(currmovenumber);
     auto stop = info(ss.str());
@@ -725,7 +730,7 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
     else
         pvString += " score cp " + std::to_string(score.cp());
 
-    auto nodes = evalCount - searchEvalCount;
+    auto nodes = nodeCount - searchNodeCount;
     pvString += " nodes " + std::to_string(nodes);
 
     auto millis = duration_cast<milliseconds>(clock::now() - searchStartTime).count();
