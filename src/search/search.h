@@ -19,6 +19,18 @@ extern uint64_t betaCutoffs;
 extern uint64_t firstMoveCutoffs;
 extern int maxSelDepth;
 
+// Diagnostic counters for null move skipping reasons
+extern uint64_t nullMoveSkippedInCheck;
+extern uint64_t nullMoveSkippedMate;
+extern uint64_t nullMoveSkippedEndgame;
+extern uint64_t nullMoveSkippedPV;
+extern uint64_t nullMoveSkippedBehind;
+extern uint64_t futilityPruned;
+extern uint64_t ttCutoffs;
+extern uint64_t ttRefinements;
+extern uint64_t countermoveAttempts;
+extern uint64_t countermoveHits;
+
 constexpr bool transpositionTableDebug = false;
 constexpr bool alphaBetaDebug = false;
 

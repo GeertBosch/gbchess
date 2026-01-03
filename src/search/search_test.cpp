@@ -116,6 +116,11 @@ void printEvalRate(const F& fun) {
     auto startLMRResearch = search::lmrResearches;
     auto startBetaCutoffs = search::betaCutoffs;
     auto startFirstMoveCutoffs = search::firstMoveCutoffs;
+    auto startTTRefinements = search::ttRefinements;
+    auto startTTCutoffs = search::ttCutoffs;
+    auto startFutilityPruned = search::futilityPruned;
+    auto startCountermoveAttempts = search::countermoveAttempts;
+    auto startCountermoveHits = search::countermoveHits;
     search::maxSelDepth = 0;
     fun();
     auto endTime = std::chrono::high_resolution_clock::now();
@@ -128,6 +133,11 @@ void printEvalRate(const F& fun) {
     auto endLMRResearch = search::lmrResearches;
     auto endBetaCutoffs = search::betaCutoffs;
     auto endFirstMoveCutoffs = search::firstMoveCutoffs;
+    auto endTTRefinements = search::ttRefinements;
+    auto endTTCutoffs = search::ttCutoffs;
+    auto endFutilityPruned = search::futilityPruned;
+    auto endCountermoveAttempts = search::countermoveAttempts;
+    auto endCountermoveHits = search::countermoveHits;
 
     auto quiesce = endQuiescence - startQuiescence;
     auto nullMoveAttempts = endNullMoveAttempts - startNullMoveAttempts;
@@ -136,6 +146,11 @@ void printEvalRate(const F& fun) {
     auto lmrResearch = endLMRResearch - startLMRResearch;
     auto betaCuts = endBetaCutoffs - startBetaCutoffs;
     auto firstMoveCuts = endFirstMoveCutoffs - startFirstMoveCutoffs;
+    auto ttRefinements = endTTRefinements - startTTRefinements;
+    auto ttCutoffs = endTTCutoffs - startTTCutoffs;
+    auto futilityPruned = endFutilityPruned - startFutilityPruned;
+    auto countermoveAttempts = endCountermoveAttempts - startCountermoveAttempts;
+    auto countermoveHits = endCountermoveHits - startCountermoveHits;
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
     auto evals = endEvals - startEvals;
     auto cached = endCache - startCache;
@@ -159,6 +174,15 @@ void printEvalRate(const F& fun) {
                       << " first-move = " << (firstMoveCuts * 100 / betaCuts) << "%)";
         std::cerr << "\n";
     }
+    if (ttRefinements || ttCutoffs)
+        std::cerr << "  " << ttRefinements << " TT refinements, " << ttCutoffs << " TT cutoffs\n";
+
+    if (futilityPruned) std::cerr << "  " << futilityPruned << " futility pruned\n";
+
+    if (countermoveAttempts)
+        std::cerr << "  " << countermoveAttempts << " countermove attempts (" << countermoveHits
+                  << " hits = " << (countermoveHits * 100 / countermoveAttempts) << "%)\n";
+
     std::cerr << "  " << duration.count() / 1000 << " ms @ " << evalRate / 1000.0 << "K evals/sec"
               << std::endl;
 }

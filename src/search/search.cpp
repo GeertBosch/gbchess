@@ -31,6 +31,18 @@ uint64_t betaCutoffs = 0;
 uint64_t firstMoveCutoffs = 0;
 int maxSelDepth = 0;
 
+// Diagnostic counters
+uint64_t nullMoveSkippedInCheck = 0;
+uint64_t nullMoveSkippedMate = 0;
+uint64_t nullMoveSkippedEndgame = 0;
+uint64_t nullMoveSkippedPV = 0;
+uint64_t nullMoveSkippedBehind = 0;
+uint64_t futilityPruned = 0;
+uint64_t ttCutoffs = 0;
+uint64_t ttRefinements = 0;
+uint64_t countermoveAttempts = 0;
+uint64_t countermoveHits = 0;
+
 namespace {
 using namespace std::chrono;
 using clock = high_resolution_clock;
@@ -133,6 +145,7 @@ struct TranspositionTable {
         ++stats.numHits;
 
         ++cacheCount;
+        ++ttRefinements;
         switch (entry.type) {
         case EXACT: alpha = beta = entry.eval.score; break;
         case LOWERBOUND: alpha = std::max(alpha, entry.eval.score); break;
@@ -486,21 +499,35 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
 bool tryNullMovePruning(Position& position, Hash hash, Score alpha, Score beta, Depth depth) {
     if (!options::nullMovePruning) return false;
     if (depth.left < options::nullMoveMinDepth) return false;
-    if (isInCheck(position)) return false;
-    if (beta.mate()) return false;                    // Avoid null move near mate
-    if (!hasNonPawnMaterial(position)) return false;  // Don't do null move in endgame
+    if (isInCheck(position)) {
+        ++nullMoveSkippedInCheck;
+        return false;
+    }
+    if (beta.mate()) {
+        ++nullMoveSkippedMate;
+        return false;
+    }
+    if (!hasNonPawnMaterial(position)) {
+        ++nullMoveSkippedEndgame;
+        return false;
+    }
 
     // Don't try null move in PV nodes (where alpha+1 == beta)
     // These need exact scores, not just fail-high/fail-low
-    if (beta - 1_cp <= alpha) return false;
+    if (beta.cp() - 1 <= alpha.cp()) {
+        ++nullMoveSkippedPV;
+        return false;
+    }
 
     // Get quick evaluation for pruning decisions
-    // Use quiescence search for better tactical accuracy instead of static eval
     Score staticEval = Score::fromCP(nnue::evaluate(position, *network));
     if (position.active() == Color::b) staticEval = -staticEval;
     ++evalCount;
 
-    if (staticEval < beta) return false;  // Must be ahead to prune
+    if (staticEval < beta) {
+        ++nullMoveSkippedBehind;
+        return false;
+    }
 
     ++nullMoveAttempts;
 
@@ -541,7 +568,7 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
     // Early cutoff: if the position is already outside the search window, we can return
     // immediately with a transition table based PV if we have one.
     if (alpha >= beta)
-        if (auto pv = transpositionTable.pv(position, depth.left)) return pv;
+        if (auto pv = transpositionTable.pv(position, depth.left)) return ++ttCutoffs, pv;
 
     // Try null move pruning (only in non-PV nodes)
     if (tryNullMovePruning(position, hash, alpha, beta, depth)) return {{}, beta};
