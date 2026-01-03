@@ -29,6 +29,8 @@ extern uint64_t nullMoveSkippedBehind;
 extern uint64_t futilityPruned;
 extern uint64_t ttCutoffs;
 extern uint64_t ttRefinements;
+extern uint64_t qsTTCutoffs;
+extern uint64_t qsTTRefinements;
 extern uint64_t countermoveAttempts;
 extern uint64_t countermoveHits;
 

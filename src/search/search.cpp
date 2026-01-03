@@ -41,6 +41,8 @@ uint64_t nullMoveSkippedBehind = 0;
 uint64_t futilityPruned = 0;
 uint64_t ttCutoffs = 0;
 uint64_t ttRefinements = 0;
+uint64_t qsTTCutoffs = 0;
+uint64_t qsTTRefinements = 0;
 uint64_t countermoveAttempts = 0;
 uint64_t countermoveHits = 0;
 

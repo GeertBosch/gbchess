@@ -118,6 +118,8 @@ void printEvalRate(const F& fun) {
     auto startFirstMoveCutoffs = search::firstMoveCutoffs;
     auto startTTRefinements = search::ttRefinements;
     auto startTTCutoffs = search::ttCutoffs;
+    auto startQsTTRefinements = search::qsTTRefinements;
+    auto startQsTTCutoffs = search::qsTTCutoffs;
     auto startFutilityPruned = search::futilityPruned;
     auto startCountermoveAttempts = search::countermoveAttempts;
     auto startCountermoveHits = search::countermoveHits;
@@ -135,6 +137,8 @@ void printEvalRate(const F& fun) {
     auto endFirstMoveCutoffs = search::firstMoveCutoffs;
     auto endTTRefinements = search::ttRefinements;
     auto endTTCutoffs = search::ttCutoffs;
+    auto endQsTTRefinements = search::qsTTRefinements;
+    auto endQsTTCutoffs = search::qsTTCutoffs;
     auto endFutilityPruned = search::futilityPruned;
     auto endCountermoveAttempts = search::countermoveAttempts;
     auto endCountermoveHits = search::countermoveHits;
@@ -148,6 +152,8 @@ void printEvalRate(const F& fun) {
     auto firstMoveCuts = endFirstMoveCutoffs - startFirstMoveCutoffs;
     auto ttRefinements = endTTRefinements - startTTRefinements;
     auto ttCutoffs = endTTCutoffs - startTTCutoffs;
+    auto qsTTRefinements = endQsTTRefinements - startQsTTRefinements;
+    auto qsTTCutoffs = endQsTTCutoffs - startQsTTCutoffs;
     auto futilityPruned = endFutilityPruned - startFutilityPruned;
     auto countermoveAttempts = endCountermoveAttempts - startCountermoveAttempts;
     auto countermoveHits = endCountermoveHits - startCountermoveHits;
@@ -176,6 +182,9 @@ void printEvalRate(const F& fun) {
     }
     if (ttRefinements || ttCutoffs)
         std::cerr << "  " << ttRefinements << " TT refinements, " << ttCutoffs << " TT cutoffs\n";
+    if (qsTTRefinements || qsTTCutoffs)
+        std::cerr << "  " << qsTTRefinements << " QS TT refinements, " << qsTTCutoffs
+                  << " QS TT cutoffs\n";
 
     if (futilityPruned) std::cerr << "  " << futilityPruned << " futility pruned\n";
 
