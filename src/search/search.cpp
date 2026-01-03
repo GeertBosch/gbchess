@@ -873,6 +873,7 @@ thread_local SearchContext searchContext;
 
 PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector moves, InfoFn info) {
     evalTable = EvalTable{position.board, true};
+    searchNodeCount = nodeCount;
     searchEvalCount = evalCount;
     searchQuiescenceCount = quiescenceCount;
     searchCacheCount = cacheCount;

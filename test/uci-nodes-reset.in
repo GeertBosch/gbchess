@@ -1,0 +1,8 @@
+# Check that node count resets between searches
+# Bug: nodes statistic doesn't reset between searches
+uci
+position startpos
+go depth 3 wait
+go depth 3 wait
+# We should see "info depth 1 nodes 0 currmove" appear twice (once per search)
+expect-count 2 ^info depth 1 nodes 0 currmove
