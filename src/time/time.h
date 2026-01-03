@@ -42,11 +42,17 @@ public:
           blackIncrementMillis(std::min<uint32_t>(incrementMillis, kMaxIncrementMillis)),
           movesToGo(0),
           fixedTime(false) {
-        assert(timeMillis >= -kMaxTimeMillis && timeMillis < kMaxTimeMillis);
+        assert(timeMillis >= -kMaxTimeMillis && timeMillis <= kMaxTimeMillis);
         assert(incrementMillis <= kMaxIncrementMillis);
     }
 
-    // assignment operator
+    constexpr static TimeControl infinite() {
+        TimeControl tc{kMaxTimeMillis};
+        tc.fixedTime = true;
+        return tc;
+    }
+
+    TimeControl(const TimeControl& other) = default;
     TimeControl& operator=(const TimeControl& other) = default;
 
     int64_t getMillis(Color color) const { return color == Color::w ? whiteMillis : blackMillis; }
@@ -72,9 +78,9 @@ public:
             blackIncrementMillis = millis;
     }
 
-    void setFixedTimeMillis(uint32_t whiteFixedMillis, uint32_t blackFixedMillis) {
-        whiteMillis = std::min<uint32_t>(whiteFixedMillis, kMaxIncrementMillis);
-        blackMillis = std::min<uint32_t>(blackFixedMillis, kMaxIncrementMillis);
+    void setFixedTimeMillis(int64_t whiteFixedMillis, int64_t blackFixedMillis) {
+        whiteMillis = std::min(whiteFixedMillis, kMaxTimeMillis);
+        blackMillis = std::min(blackFixedMillis, kMaxTimeMillis);
         whiteIncrementMillis = blackIncrementMillis = 0;
         fixedTime = true;
     }

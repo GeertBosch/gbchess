@@ -112,7 +112,7 @@ private:
     uint64_t bookMoveCount = 0;
     bool useOwnBook = true;
     Position position = fen::parsePosition(fen::initialPosition);
-    TimeControl timeControl{180'000};  // 3 minutes default per side
+    TimeControl timeControl = TimeControl::infinite();  // No time limits by default
     MoveVector moves;
     std::atomic_bool stopping = false;
     time_point<clock> startTime;
