@@ -286,6 +286,9 @@ void UCIRunner::execute(std::string line) {
     std::string command;
     in >> command;
 
+    if (command != "stop" && thread.joinable())
+        thread.join();  // Wait for previous search to finish
+
     if (command == "uci") {
         out << "id name " << cmdName << "\n";
         out << "id author " << authorName << "\n";
@@ -294,7 +297,6 @@ void UCIRunner::execute(std::string line) {
     } else if (command == "isready") {
         out << "readyok\n";
     } else if (command == "quit") {
-        if (thread.joinable()) thread.join();
         printStatistics(out);
         std::exit(0);
     } else if (command == "ucinewgame") {
@@ -329,8 +331,8 @@ void UCIRunner::execute(std::string line) {
     } else if (command == "#" || command == "expect") {
         // This is to allow comments and expected output in UCI test scripts
         std::cerr << line << "\n";
-    } else {
-        out << "Unknown command: " << command << "\n";
+    } else if (command != "") {
+        out << "Unknown command: '" << command << "'\n";
     }
     std::flush(log);
 }
