@@ -573,6 +573,25 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
     // Try null move pruning (only in non-PV nodes)
     if (tryNullMovePruning(position, hash, alpha, beta, depth)) return {{}, beta};
 
+    // Futility pruning: if static eval is way above beta at shallow depth, return early
+    // This is also called "reverse futility pruning" or "static null move pruning"
+    bool isPVNode = beta.cp() - alpha.cp() > 1;
+    if (options::futilityPruning && !isPVNode && depth.left < options::futilityMaxDepth &&
+        !isInCheck(position)) {
+        // Get static evaluation
+        Score staticEval = Score::fromCP(nnue::evaluate(position, *network));
+        if (position.active() == Color::b) staticEval = -staticEval;
+        ++evalCount;
+
+        // Futility margin increases with depth (more conservative at higher depths)
+        Score futilityMargin = Score::fromCP(200 * depth.left);
+
+        if (staticEval - futilityMargin >= beta && !beta.mate()) {
+            ++futilityPruned;
+            return {{}, staticEval};
+        }
+    }
+
     auto moveList = moves::allLegalMovesAndCaptures(position.turn, position.board);
 
     // Forced moves don't count towards depth
