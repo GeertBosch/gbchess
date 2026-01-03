@@ -10,7 +10,7 @@
 
 namespace {
 
-bool verbose = false;
+int verbose = 0;  // 0 = no, 1 = only for listed files, 2 = also include basic tests
 
 /**
  * A fixed-size array indexed by enum values.
@@ -72,16 +72,16 @@ int testFromStream(std::istream& in, bool progress) {
 
         if (verbose || !valid) {
             std::cout << "\n=== Game " << gameCount << " ===\n";
-            std::cout << "  Valid: " << (valid ? "Yes" : "No") << "\n";
+            std::cout << "Valid: " << (valid ? "Yes" : "No") << "\n";
             if (!valid)
-                std::cout << "  Error at move: \""
+                std::cout << "Error at move: \""
                           << game.error(std::next(game.begin(), moves.size())) << "\"\n";
 
             for (const auto& [tag, value] : game.tags)
-                std::cout << "    " << tag << ": " << value << "\n";
+                std::cout << "  " << tag << ": " << value << "\n";
 
-            std::cout << "  Movetext length: " << game.movetext.size() << " chars\n";
-            std::cout << "  Moves: " << to_string(moves) << "\n";
+            std::cout << "Movetext length: " << game.movetext.size() << " chars\n";
+            std::cout << "Moves: " << to_string(moves) << "\n";
         }
 
         if (progress && gameCount % 100 == 0) std::cerr << gameCount << "\r";
@@ -243,10 +243,15 @@ int main(int argc, char* argv[]) {
         ++argv;
     }
 
-    // Always run basic unit tests
-    extractMovesTests();
-    basicPGNtests();
-    disambiguationTests();
+    // Always run basic unit tests, but reduce verbosity unless requested
+    {
+        int saveVerbose = verbose;
+        verbose = std::max(0, verbose - 1);
+        extractMovesTests();
+        basicPGNtests();
+        disambiguationTests();
+        verbose = saveVerbose;
+    }
 
     // Run tests from each provided file
     for (int i = 1; i < argc; ++i) testFromFile(argv[i]);
