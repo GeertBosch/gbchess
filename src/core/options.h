@@ -29,7 +29,7 @@ constexpr bool incrementalEvaluation = true;  // Compute QS evaluation using del
 constexpr bool nullMovePruning = true;        // Enable null move pruning
 constexpr int nullMoveReduction = 3;          // Depth reduction for null move search
 constexpr int nullMoveMinDepth = 2;           // Minimum depth to try null move
-constexpr bool futilityPruning = false;       // Enable futility pruning
+constexpr bool futilityPruning = true;        // Enable futility pruning
 constexpr int futilityMaxDepth = 7;           // Maximum depth for futility pruning
 constexpr bool useCountermove = false;        // Use the countermove heuristic
 
