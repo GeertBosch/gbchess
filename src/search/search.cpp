@@ -218,6 +218,12 @@ struct TranspositionTable {
 size_t history[2][kNumSquares][kNumSquares] = {{{0}}};
 
 /**
+ * Countermove heuristic: stores the best move to play in response to opponent's last move.
+ * Indexed by [color][to_square] of the opponent's move.
+ */
+Move countermoves[2][kNumSquares] = {{}};
+
+/**
  * Killer move heuristic: stores the best quiet moves that caused beta cutoffs at each depth.
  */
 constexpr int MAX_KILLER_MOVES = 2;
@@ -310,6 +316,18 @@ public:
 
 using MoveIt = MoveVector::iterator;
 
+[[maybe_unused]] MoveIt sortCountermove(Move countermove, MoveIt begin, MoveIt end) {
+    if (!countermove) return begin;
+
+    ++countermoveAttempts;
+    auto it = std::find(begin, end, countermove);
+    if (it != end) {
+        ++countermoveHits;
+        std::swap(*begin++, *it);
+    }
+    return begin;
+}
+
 [[maybe_unused]] MoveIt sortKillerMoves(int depth, MoveIt begin, MoveIt end) {
     if (depth >= MAX_DEPTH) return begin;
 
@@ -354,9 +372,9 @@ MoveIt sortTransposition(Hash hash, MoveIt begin, MoveIt end) {
 /**
  * Sorts the moves in the range [begin, end) in place, so that captures come before
  * non-captures, and captures are sorted by victim value, attacker value, and move kind.
- * Killer moves are placed among the quiet moves.
+ * Countermove and killer moves are placed among the quiet moves.
  */
-MoveIt sortMoves(const Position& position, MoveIt begin, MoveIt end, int depth = 0) {
+MoveIt sortMoves(const Position& position, MoveIt begin, MoveIt end, Move lastMove, int depth = 0) {
     if (begin == end) return begin;
 
     // First, partition captures from quiet moves using MoveKind
@@ -369,7 +387,14 @@ MoveIt sortMoves(const Position& position, MoveIt begin, MoveIt end, int depth =
         return scoreMove(position.board, a) > scoreMove(position.board, b);
     });
 
-    // For quiet moves, first try to place killer moves at the front
+    // For quiet moves, first try countermove, then killer moves
+    if constexpr (options::useCountermove) {
+        if (lastMove) {
+            auto piece = position.board[lastMove.to];
+            Move countermove = countermoves[int(color(piece))][lastMove.to];
+            quietBegin = sortCountermove(countermove, quietBegin, end);
+        }
+    }
     if constexpr (options::useKillerMoves) quietBegin = sortKillerMoves(depth, quietBegin, end);
 
     // Then sort remaining quiet moves by history heuristic
@@ -381,9 +406,10 @@ MoveIt sortMoves(const Position& position, MoveIt begin, MoveIt end, int depth =
     return begin;
 }
 
-void sortMoves(const Position& position, Hash hash, MoveIt begin, MoveIt end, int depth = 0) {
+void sortMoves(
+    const Position& position, Hash hash, MoveIt begin, MoveIt end, Move lastMove, int depth = 0) {
     begin = sortTransposition(hash, begin, end);
-    begin = sortMoves(position, begin, end, depth);
+    begin = sortMoves(position, begin, end, lastMove, depth);
 }
 
 std::pair<moves::UndoPosition, Score> makeMoveWithEval(Position& position, Move move, Score eval) {
@@ -430,7 +456,7 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score 
     // The moveList includes moves needed to get out of check; an empty list means mate
     auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, depthleft);
     if (moveList.empty() && isInCheck(position)) return Score::min();
-    sortMoves(position, moveList.begin(), moveList.end());  // No killer moves in quiescence
+    sortMoves(position, moveList.begin(), moveList.end(), Move());  // No killer moves in quiescence
     for (auto move : moveList) {
         if (options::staticExchangeEvaluation && move.kind == MoveKind::Capture &&
             staticExchangeEvaluation(position.board, move.from, move.to) < 0_cp &&
@@ -476,7 +502,14 @@ Score quiesce(Position& position, int depthleft) {
     return quiesce(position, Score::min(), Score::max(), depthleft);
 }
 
-bool betaCutoff(Score score, Score beta, Move move, int moveCount, Color side, int depthleft) {
+bool betaCutoff(Score score,
+                Score beta,
+                Move move,
+                int moveCount,
+                Color side,
+                int depthleft,
+                const Board& board,
+                Move lastMove) {
     if (score < beta) return false;  // No beta cutoff
     ++betaCutoffs;
     if (moveCount == 1) ++firstMoveCutoffs;
@@ -485,12 +518,19 @@ bool betaCutoff(Score score, Score beta, Move move, int moveCount, Color side, i
     if (move.kind == MoveKind::Quiet_Move || move.kind == MoveKind::Double_Push) {
         if (options::historyStore) history[int(side)][move.from][move.to] += depthleft * depthleft;
         storeKillerMove(move, depthleft);
+
+        // Store countermove: this move is a good response to the opponent's last move
+        if (options::useCountermove && lastMove) {
+            auto piece = board[lastMove.to];
+            countermoves[int(color(piece))][lastMove.to] = move;
+        }
     }
     return true;
 }
 
 // Forward declaration for null move pruning
-PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score beta, Depth depth);
+PrincipalVariation alphaBeta(
+    Position& position, Hash hash, Score alpha, Score beta, Depth depth, Move lastMove = Move());
 
 /**
  * Attempts null move pruning. Returns true if we can prune (cutoff occurred).
@@ -540,7 +580,7 @@ bool tryNullMovePruning(Position& position, Hash hash, Score alpha, Score beta, 
     // Search with reduced depth
     auto nullDepth =
         Depth{depth.current + 1, std::max(0, depth.left - 1 - options::nullMoveReduction)};
-    auto nullResult = -alphaBeta(position, nullHash, -beta, -beta + 1_cp, nullDepth);
+    auto nullResult = -alphaBeta(position, nullHash, -beta, -beta + 1_cp, nullDepth, Move());
 
     position.turn = savedTurn;
 
@@ -555,8 +595,10 @@ bool tryNullMovePruning(Position& position, Hash hash, Score alpha, Score beta, 
  * The alpha represents the best score that the maximizing player can guarantee at the current
  * level, and beta the best score that the minimizing player can guarantee. The function returns
  * the best score that the current player can guarantee, assuming the opponent plays optimally.
+ * lastMove is the opponent's last move, used for countermove heuristic.
  */
-PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score beta, Depth depth) {
+PrincipalVariation alphaBeta(
+    Position& position, Hash hash, Score alpha, Score beta, Depth depth, Move lastMove) {
     // Track maximum selective depth reached in main search (excludes quiescence)
     if (depth.current > maxSelDepth) maxSelDepth = depth.current;
 
@@ -601,7 +643,7 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
     auto drawState = repetitions.enter(hash);
     if (drawState.drawn(position.turn.halfmove())) return {{}, Score()};
 
-    sortMoves(position, hash, moveList.begin(), moveList.end(), depth.current);
+    sortMoves(position, hash, moveList.begin(), moveList.end(), lastMove, depth.current);
 
     PrincipalVariation pv;
     int moveCount = 0;
@@ -630,16 +672,29 @@ PrincipalVariation alphaBeta(Position& position, Hash hash, Score alpha, Score b
         if (applyLMR) ++lmrReductions;
 
         // Perform a reduced-depth search
-        auto newVar = -alphaBeta(
-            position, newHash, -beta, -newAlpha, {depth.current + 1, depth.left - 1 - applyLMR});
+        auto newVar = -alphaBeta(position,
+                                 newHash,
+                                 -beta,
+                                 -newAlpha,
+                                 {depth.current + 1, depth.left - 1 - applyLMR},
+                                 move);
 
         // Re-search at full depth if the reduced search fails high
         if (applyLMR && newVar.score > alpha && ++lmrResearches)
-            newVar = -alphaBeta(position, newHash, -beta, -newAlpha, depth + 1);
+            newVar = -alphaBeta(
+                position, newHash, -beta, -newAlpha, {depth.current + 1, depth.left - 1}, move);
         unmakeMove(position, undo);
 
         if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
-        if (betaCutoff(pv.score, beta, move, moveCount, position.active(), depth.current)) break;
+        if (betaCutoff(pv.score,
+                       beta,
+                       move,
+                       moveCount,
+                       position.active(),
+                       depth.current,
+                       position.board,
+                       lastMove))
+            break;
     }
 
     if (moveList.empty() && !isInCheck(position)) pv.score = Score();  // Stalemate
@@ -699,7 +754,7 @@ PrincipalVariation toplevelAlphaBeta(
     if (moveList.size() == 1) ++depth.left;
 
     // computeBestMove already entered the current position in the repetition table
-    sortMoves(position, hash, moveList.begin(), moveList.end(), depthleft);
+    sortMoves(position, hash, moveList.begin(), moveList.end(), Move(), depthleft);
     PrincipalVariation pv;
 
     int currmovenumber = 0;
@@ -709,10 +764,21 @@ PrincipalVariation toplevelAlphaBeta(
 
         auto newPosition = moves::applyMove(position, move);
         Hash newHash(newPosition);
-        auto newVar =
-            -alphaBeta(newPosition, newHash, -beta, -std::max(alpha, pv.score), depth + 1);
+        auto newVar = -alphaBeta(newPosition,
+                                 newHash,
+                                 -beta,
+                                 -std::max(alpha, pv.score),
+                                 {depth.current + 1, depth.left - 1},
+                                 move);
         if (newVar.score > pv.score || !pv.front()) pv = {move, newVar};
-        if (betaCutoff(pv.score, beta, move, currmovenumber, position.active(), depth.current))
+        if (betaCutoff(pv.score,
+                       beta,
+                       move,
+                       currmovenumber,
+                       position.active(),
+                       depth.current,
+                       position.board,
+                       Move()))
             break;
     }
     if (moveList.empty() && !isInCheck(position)) pv = {Move(), Score()};
@@ -771,6 +837,11 @@ void newGame() {
     std::fill(&killerMoves[0][0],
               &killerMoves[0][0] + sizeof(killerMoves) / sizeof(killerMoves[0][0]),
               Move());
+    std::fill(&countermoves[0][0],
+              &countermoves[0][0] + sizeof(countermoves) / sizeof(countermoves[0][0]),
+              Move());
+    countermoveAttempts = 0;
+    countermoveHits = 0;
 }
 
 // Forward declaration for incremental NNUE context

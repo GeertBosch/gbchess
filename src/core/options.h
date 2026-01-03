@@ -31,6 +31,7 @@ constexpr int nullMoveReduction = 3;          // Depth reduction for null move s
 constexpr int nullMoveMinDepth = 2;           // Minimum depth to try null move
 constexpr bool futilityPruning = false;       // Enable futility pruning
 constexpr int futilityMaxDepth = 7;           // Maximum depth for futility pruning
+constexpr bool useCountermove = false;        // Use the countermove heuristic
 
 /**
  * Caching options for the perft program
