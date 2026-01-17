@@ -1,0 +1,4 @@
+position startpos moves d2d4 g7g6 e2e4 f8g7 g1f3 d7d6 f1e2
+go wtime 10 btime 50000
+go wtime 10 btime 50000
+expect-count 0 bestmove 0000
