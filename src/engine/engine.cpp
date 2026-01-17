@@ -272,8 +272,8 @@ private:
             stopping = true;
             std::flush(out);
             thread.join();
-            stopping = false;
         }
+        stopping = false;
     }
 
     std::ostream& out;
@@ -328,7 +328,7 @@ void UCIRunner::execute(std::string line) {
         std::cerr << "sleeping for " << ms << "ms\n";
         std::this_thread::sleep_for(std::chrono::milliseconds(ms));
         std::cerr << "waking from sleep after " << ms << "ms\n";
-    } else if (command == "#" || command == "expect") {
+    } else if (command == "#" || command == "expect" || command == "expect-count") {
         // This is to allow comments and expected output in UCI test scripts
         std::cerr << line << "\n";
     } else if (command != "") {
