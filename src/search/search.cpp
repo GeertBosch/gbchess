@@ -840,7 +840,7 @@ PrincipalVariation iterativeDeepening(Position& position, int maxdepth, InfoFn i
         auto newpv = aspirationWindows(position, pv.score, depth, info);
         if (pvInfo(info, depth, newpv.score, newpv.moves)) break;
         pv = newpv;  // Avoid losing the previous principal variation due to an aborted search
-        if (pv.score.mate() && depth > static_cast<int>(pv.moves.size())) break;
+        if (pv.score.mate() && pv && depth > static_cast<int>(pv.moves.size())) break;
     }
     return pv;
 }
