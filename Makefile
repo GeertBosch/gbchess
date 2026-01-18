@@ -203,7 +203,7 @@ build/puzzles.csv: ${PUZZLES}
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
 mate123: build/search-test build/mate123.csv
-	@./build/search-test 5 build/mate123.csv
+	@./build/search-test 7 build/mate123.csv
 
 mate45: build/search-test build/mate45.csv
 	@./build/search-test 11 build/mate45.csv

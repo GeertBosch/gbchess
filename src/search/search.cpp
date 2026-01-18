@@ -149,7 +149,11 @@ struct TranspositionTable {
         ++stats.numHits;
 
         ++cacheCount;
-        ++ttRefinements;
+        if (depthleft)
+            ++ttRefinements;
+        else
+            ++qsTTRefinements;
+
         switch (entry.type) {
         case EXACT: alpha = beta = entry.eval.score; break;
         case LOWERBOUND: alpha = std::max(alpha, entry.eval.score); break;
@@ -450,6 +454,15 @@ bool isQuiet(Position& position, int depthleft) {
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score standPat) {
     ++nodeCount;
+
+    if constexpr (options::useQsTT) {
+        Hash hash(position);
+        transpositionTable.refineAlphaBeta(hash, 0, alpha, beta);
+        if (alpha >= beta) {
+            ++qsTTCutoffs;
+            return beta;
+        }
+    }
 
     if (!depthleft) return standPat;
 

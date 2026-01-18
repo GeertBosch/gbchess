@@ -31,7 +31,8 @@ constexpr int nullMoveReduction = 3;          // Depth reduction for null move s
 constexpr int nullMoveMinDepth = 2;           // Minimum depth to try null move
 constexpr bool futilityPruning = true;        // Enable futility pruning
 constexpr int futilityMaxDepth = 7;           // Maximum depth for futility pruning
-constexpr bool useCountermove = false;        // Use the countermove heuristic
+constexpr bool useCountermove = true;         // Use the countermove heuristic
+constexpr bool useQsTT = true;                // Use transposition table in quiescence search
 constexpr bool verboseSearch = false;         // Print detailed search tree for debugging
 
 /**
