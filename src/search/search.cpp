@@ -855,8 +855,6 @@ void newGame() {
     std::fill(&countermoves[0][0],
               &countermoves[0][0] + sizeof(countermoves) / sizeof(countermoves[0][0]),
               Move());
-    countermoveAttempts = 0;
-    countermoveHits = 0;
 }
 
 // Forward declaration for incremental NNUE context
