@@ -113,9 +113,11 @@ private:
     bool useOwnBook = true;
     Position position = fen::parsePosition(fen::initialPosition);
     TimeControl timeControl = TimeControl::infinite();  // No time limits by default
+    uint64_t maxNodes = options::fixedNodesSearch;
     MoveVector moves;
     std::atomic_bool stopping = false;
-    time_point<clock> startTime;
+    time_point<clock> startTime = {};
+    uint64_t startNodes = 0;
 
     void respond(std::ostream& out, const std::string& response) {
         out << response << "\n";
@@ -137,10 +139,18 @@ private:
         auto pv = search::computeBestMove(
             position, depth, moves, [this, timeMillis](std::string info) -> bool {
                 auto elapsed = duration_cast<milliseconds>(clock::now() - startTime).count();
+                auto nodes = search::nodeCount - startNodes;
+                bool nodesExceeded = maxNodes && nodes > maxNodes;
+                bool timeExceeded = timeMillis && elapsed > timeMillis;
+
                 respond("info " + info);
-                if (elapsed > timeMillis) {
+                if (nodesExceeded) {
                     stopping.store(true);
-                    respond("info string time exceeded " + std::to_string(timeMillis) + "ms");
+                    respond("info string nodes exceeded " + std::to_string(nodes) + " nodes");
+
+                } else if (timeExceeded && !maxNodes) {
+                    stopping.store(true);
+                    respond("info string time exceeded " + std::to_string(elapsed) + "ms");
                 }
                 return stopping;
             });
@@ -234,6 +244,8 @@ private:
                 movestogo = std::stoul(arguments[i]);
             else if (arguments[i] == "wait")
                 wait = true;
+            else if (arguments[i] == "nodes" && ++i < arguments.size())
+                maxNodes = std::stoull(arguments[i]);
             else if (arguments[i] == "perft" && ++i < arguments.size())
                 return perft(std::stoi(arguments[i]));
         }
@@ -254,6 +266,8 @@ private:
             return ++bookMoveCount, respond("bestmove " + to_string(bookMove));
 
         startTime = clock::now();
+        startNodes = search::nodeCount;
+        assert(!stopping);
         if (wait)
             performSearch(depth, position, moves);
         else
