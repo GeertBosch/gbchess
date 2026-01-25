@@ -14,9 +14,16 @@ for infile in test/uci-*.in; do
         grep -w "^expect-count" "$infile" | \
         while read expect_count expected_count pattern ; do
             actual_count=$(grep -ce "$pattern" "$outfile" || true)
-            if [ "$actual_count" -ne "$expected_count" ]; then
-                echo "Expected $expected_count occurrences of \"$pattern\", found $actual_count"
-            fi
+
+            # Support: n (exact), +n (greater), -n (less than)
+            case "$expected_count" in
+                -*) op=lt threshold=${expected_count:1} msg="less than" ;;
+                +*) op=gt threshold=${expected_count:1} msg="more than" ;;
+                *)  op=eq threshold=$expected_count msg="exactly" ;;
+            esac
+
+            [ "$actual_count" "-$op" "$threshold" ] || \
+                echo "Expected $msg $threshold occurrences of \"$pattern\", found $actual_count"
         done > "$errors"
 
         if [ -s "$errors" ]; then
