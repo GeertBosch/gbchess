@@ -3,11 +3,41 @@
 # where caches affect the engine's behavior, such as when an aborted search leads to storing an
 # incorrect evaluation in the transposition table.
 usage() {
-    echo "usage: $0 [white|black] pgnfile depth" >&2
+    echo "usage: $0 [-m[X][-[Y]]] [white|black] pgnfile depth" >&2
+    echo "  -mX-Y: limit replay to moves X through Y (inclusive)" >&2
     exit 1
 }
+
+# Parse options
+start_move=1
+end_move=""
+while getopts "m:" opt; do
+    case $opt in
+        m)
+            if [[ $OPTARG =~ ^([0-9]*)-([0-9]*)$ ]]; then
+                if [ -n "${BASH_REMATCH[1]}" ]; then
+                    start_move=${BASH_REMATCH[1]}
+                fi
+                if [ -n "${BASH_REMATCH[2]}" ]; then
+                    end_move=${BASH_REMATCH[2]}
+                fi
+                if [ -n "$end_move" ] && [ $start_move -gt $end_move ]; then
+                    echo "Error: start move must be <= end move" >&2
+                    usage
+                fi
+            else
+                echo "Error: -m option must be in format [X]-[Y]" >&2
+                usage
+            fi
+            ;;
+        *)
+            usage
+            ;;
+    esac
+done
+shift $((OPTIND-1))
+
 if [ $# -lt 3 ] ; then
-    echo "$#"
     usage
 fi
 
@@ -25,8 +55,9 @@ shift
 depth=$1
 shift
 
-egrep  "Black |White |Result "  "$pgnfile" | while read line ; do
-    echo "# ${line/ /: }" | tr -d '[]"'
+# Include the origin PGN as comments, omitting empty and zero tags
+egrep -v '"[0]?"' "$pgnfile" | while read line ; do
+    echo "# $line"
 done
 moves=$(build/pgn-test -v "$pgnfile" | awk '/^Moves: / { sub(/^Moves: /, ""); print $0 }')
 
@@ -42,6 +73,15 @@ echo "ucinewgame"
 for j in $(seq $((side - 1)) 2 $(echo $moves | wc -w)) ; do
     # Show move number and UCI moves for white and black
     num=$((j / 2 + 1))
+
+    # Skip if outside requested range
+    if [ $num -lt $start_move ]; then
+        continue
+    fi
+    if [ -n "$end_move" ] && [ $num -gt $end_move ]; then
+        continue
+    fi
+
     move_uci=$(echo $moves | cut -d' ' -f$((num * 2 - 1))-$((num * 2)))
     echo "# $num. $move_uci"
 
