@@ -9,15 +9,17 @@ if [ $# -lt 3 ] ; then
 fi
 engine=$1
 shift
-position=startpos
 
 pgnfile=$1
 shift
-moves=$(build/pgn-test -v "$pgnfile" | awk '/^Moves: / { sub(/^Moves: /, ""); print $0 }')
 
 depth=$1
 shift
 
+egrep  "Black |White |Result "  "$pgnfile"
+moves=$(build/pgn-test -v "$pgnfile" | awk '/^Moves: / { sub(/^Moves: /, ""); print $0 }')
+
+position="startpos moves"
 for move in $moves ; do
     position="$position $move"
     echo -e "position $position\ngo depth $depth\n"
