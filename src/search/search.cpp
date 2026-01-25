@@ -807,40 +807,43 @@ PrincipalVariation toplevelAlphaBeta(Position& position, int maxdepth, InfoFn in
     return toplevelAlphaBeta(position, Score::min(), Score::max(), maxdepth, info);
 }
 
-PrincipalVariation aspirationWindows(Position position, Score expected, int maxdepth, InfoFn info) {
+PrincipalVariation aspirationWindows(Position position,
+                                     PrincipalVariation pv,
+                                     int maxdepth,
+                                     InfoFn info) {
     auto windows = options::aspirationWindows;
     auto maxWindow = windows.empty() ? 0_cp : Score::fromCP(windows.back());
-    expected = std::clamp(expected, Score::min() + maxWindow, Score::max() - maxWindow);
+    auto expected = std::clamp(pv.score, Score::min() + maxWindow, Score::max() - maxWindow);
     auto alphaIt = windows.begin();
     auto betaIt = windows.begin();
 
-    PrincipalVariation pv;
+    PrincipalVariation newpv;
     while (maxdepth >= options::aspirationWindowMinDepth && alphaIt != windows.end() &&
            betaIt != windows.end()) {
         auto alpha = expected - Score::fromCP(*alphaIt);
         auto beta = expected + Score::fromCP(*betaIt);
 
-        pv = toplevelAlphaBeta(position, alpha, beta, maxdepth, info);
+        newpv = toplevelAlphaBeta(position, alpha, beta, maxdepth, info);
 
-        if (pv.score <= alpha)
+        if (newpv.score <= alpha)
             ++alphaIt;
-        else if (pv.score >= beta)
+        else if (newpv.score >= beta)
             ++betaIt;
         else
             break;
-        pv = {};
+        newpv = {};
     }
-    if (!pv) pv = toplevelAlphaBeta(position, maxdepth, info);
+    if (!newpv) newpv = toplevelAlphaBeta(position, maxdepth, info);
 
-    return pv;
+    return newpv ? newpv : pv;
 }
 
 PrincipalVariation iterativeDeepening(Position& position, int maxdepth, InfoFn info) {
-    PrincipalVariation pv = {{}, evaluateBoard(position.board, position.active(), evalTable)};
-    for (auto depth = 1; depth <= maxdepth; ++depth) {
-        auto newpv = aspirationWindows(position, pv.score, depth, info);
-        if (pvInfo(info, depth, newpv.score, newpv.moves)) break;
-        pv = newpv;  // Avoid losing the previous principal variation due to an aborted search
+    auto pv = toplevelAlphaBeta(position, 1, info);
+    if (pvInfo(info, 1, pv.score, pv.moves)) return pv;
+    for (auto depth = 2; depth <= maxdepth; ++depth) {
+        pv = aspirationWindows(position, pv, depth, info);
+        if (pvInfo(info, depth, pv.score, pv.moves)) break;
         if (pv.score.mate() && pv && depth > static_cast<int>(pv.moves.size())) break;
     }
     return pv;
