@@ -101,7 +101,7 @@ public:
     UCIRunner(std::ostream& out, std::ostream& log) : out(out), log(log) {
         if (debug) timeControl.setFixedTimeMillis(36'000'000);  // 10 hours per side in debug mode
     }
-    ~UCIRunner() { stop(); }
+    ~UCIRunner() { wait(); }
 
     void execute(std::string line);
 
@@ -274,12 +274,14 @@ private:
             thread = std::thread(&UCIRunner::performSearch, this, depth, position, moves);
     }
 
+    void wait() {
+        if (thread.joinable()) thread.join();
+        std::flush(out);
+    }
+
     void stop() {
-        if (thread.joinable()) {
-            stopping = true;
-            std::flush(out);
-            thread.join();
-        }
+        stopping = true;
+        wait();
         stopping = false;
     }
 
