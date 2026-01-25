@@ -128,6 +128,28 @@ private:
         respond(log, response);
     }
 
+    void performSearch(int depth, Position position, MoveVector moves) {
+        auto color = position.turn.activeColor();
+        if (moves.size() % 2 == 1) color = !color;
+        auto timeMillis =
+            timeControl.computeMillisForMove(color, position.turn.fullmove() + moves.size() / 2);
+
+        auto pv = search::computeBestMove(
+            position, depth, moves, [this, timeMillis](std::string info) -> bool {
+                auto elapsed = duration_cast<milliseconds>(clock::now() - startTime).count();
+                respond("info " + info);
+                if (elapsed > timeMillis) {
+                    stopping.store(true);
+                    respond("info string time exceeded " + std::to_string(timeMillis) + "ms");
+                }
+                return stopping;
+            });
+        std::stringstream ss;
+        ss << "bestmove " << pv.front();
+        if (Move ponder = pv[1]) ss << " ponder " << ponder;
+        respond(ss.str());
+    }
+
     UCIArguments getUCIArguments(std::istream& in) {
         UCIArguments args;
         std::copy(std::istream_iterator<std::string>(in), {}, std::back_inserter(args));
@@ -231,40 +253,11 @@ private:
         if (auto bookMove = useOwnBook ? book.choose(position, moves) : Move{})
             return ++bookMoveCount, respond("bestmove " + to_string(bookMove));
 
-        auto search =
-            [this, depth, pos = position, moves = moves, &startTime = startTime]() {
-                auto position = pos;  // need to copy the position
-                auto color = position.turn.activeColor();
-                if (moves.size() % 2 == 1) color = !color;
-                auto timeMillis = timeControl.computeMillisForMove(
-                    color, position.turn.fullmove() + moves.size() / 2);
-                std::string turn = position.turn == Color::w ? "white" : "black";
-
-                auto pv = search::computeBestMove(
-                    position,
-                    depth,
-                    moves,
-                    [this, timeMillis, &startTime](std::string info) -> bool {
-                        auto elapsed =
-                            duration_cast<milliseconds>(clock::now() - startTime).count();
-                        respond("info " + info);
-                        if (elapsed > timeMillis) {
-                            stopping.store(true);
-                            respond("info string time exceeded " + std::to_string(timeMillis) +
-                                    "ms");
-                        }
-                        return stopping;
-                    });
-                std::stringstream ss;
-                ss << "bestmove " << pv.front();
-                if (Move ponder = pv[1]) ss << " ponder " << ponder;
-                respond(ss.str());
-            };
         startTime = clock::now();
         if (wait)
-            search();
+            performSearch(depth, position, moves);
         else
-            thread = std::thread(search);
+            thread = std::thread(&UCIRunner::performSearch, this, depth, position, moves);
     }
 
     void stop() {
