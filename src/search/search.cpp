@@ -617,6 +617,10 @@ PrincipalVariation alphaBeta(
     // Track maximum selective depth reached in main search (excludes quiescence)
     if (depth.current > maxSelDepth) maxSelDepth = depth.current;
 
+    // Check for draws due to repetition or the fifty-move rule
+    auto drawState = repetitions.enter(hash);
+    if (drawState.drawn(position.turn.halfmove())) return {{}, Score()};
+
     if (depth.left <= 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
 
     // Check the transposition table, which may tighten one or both search bounds
@@ -653,10 +657,6 @@ PrincipalVariation alphaBeta(
 
     // Forced moves don't count towards depth
     if (moveList.size() == 1) ++depth.left;
-
-    // Check for draws due to repetition or the fifty-move rule
-    auto drawState = repetitions.enter(hash);
-    if (drawState.drawn(position.turn.halfmove())) return {{}, Score()};
 
     sortMoves(position, hash, moveList.begin(), moveList.end(), lastMove, depth.current);
 
@@ -779,6 +779,7 @@ PrincipalVariation toplevelAlphaBeta(
 
         auto newPosition = moves::applyMove(position, move);
         Hash newHash(newPosition);
+
         auto newVar = -alphaBeta(newPosition,
                                  newHash,
                                  -beta,
