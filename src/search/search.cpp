@@ -294,7 +294,8 @@ public:
         }
 
         /**
-         * Returns true iff the state represents a game drawn by repetition or the fifty move rule
+         * Returns true iff the state represents a game drawn by repetition or the fifty move rule.
+         * Avoid any repetition if possible, so the transposition table remains accurate.
          */
         bool drawn(int halfmove) const {
             // Need at least 4 half moves since the last irreversible move, to get to draw by
@@ -302,8 +303,8 @@ public:
             if (halfmove < 4) return false;
             if (halfmove >= 100) return true;  // Fifty-move rule
 
-            // Check for three-fold repetition
-            return repetitions.count(repetitions.back(), halfmove) >= 3;
+            // Check for repetition
+            return repetitions.count(repetitions.back(), halfmove) >= 2;  // Avoid repeating
         }
     };
 

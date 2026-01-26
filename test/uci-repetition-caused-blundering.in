@@ -1,0 +1,39 @@
+# [Date "2026.01.25"]
+# [White "GNU Chess 6.2.9"]
+# [Black "gbchess"]
+# [Result "1-0"]
+# 
+# 1. Nf3 c5 2. e4 Nc6 3. Bb5 g6 4. O-O Bg7 5. Nc3 d6 6. d3 Bd7 7. Re1 Nf6 8. e5
+# Nxe5 9. Nxe5 dxe5 10. Rxe5 Bxb5 11. Nxb5 a6 12. Nc3 b6 13. Qf3 O-O 14. Bg5 h6
+# 15. Bd2 Ra7 16. a4 Rd7 17. a5 c4 18. axb6 cxd3 19. cxd3 Qxb6 20. Qe2 Qxb2 21.
+# Rxa6 Rfd8 22. Ra2 Qb4 23. Be1 e6 24. Nb5 Qb3 25. d4 Nd5 26. Rb2 Qa4 27. Ra2 Qb3
+# 28. Rb2 Qa4 29. Ra2 Bxe5 30. Rxa4 Bg7 31. g4 Rb7 32. Bd2 Rdb8 33. Nc3 Nxc3 34.
+# Bxc3 Rb1+ 35. Kg2 Rc1 36. Qf3 Rb3 37. Ra7 f6 38. Qa8+ Bf8 39. Qe8 Rg1+ 40. Kxg1
+# Rb1+ 41. Kg2 Rg1+ 42. Kxg1 h5 43. Qxg6+ Kh8 44. Qh7# 1-0 {Xboard adjudication: Checkmate}
+# 
+
+ucinewgame
+# 24. c3b5 b4b3
+position startpos moves g1f3 c7c5 e2e4 b8c6 f1b5 g7g6 e1g1 f8g7 b1c3 d7d6 d2d3 c8d7 f1e1 g8f6 e4e5 c6e5 f3e5 d6e5 e1e5 d7b5 c3b5 a7a6 b5c3 b7b6 d1f3 e8g8 c1g5 h7h6 g5d2 a8a7 a2a4 a7d7 a4a5 c5c4 a5b6 c4d3 c2d3 d8b6 f3e2 b6b2 a1a6 f8d8 a6a2 b2b4 d2e1 e7e6 c3b5
+d
+go depth 10
+# 25. d3d4 f6d5
+position startpos moves g1f3 c7c5 e2e4 b8c6 f1b5 g7g6 e1g1 f8g7 b1c3 d7d6 d2d3 c8d7 f1e1 g8f6 e4e5 c6e5 f3e5 d6e5 e1e5 d7b5 c3b5 a7a6 b5c3 b7b6 d1f3 e8g8 c1g5 h7h6 g5d2 a8a7 a2a4 a7d7 a4a5 c5c4 a5b6 c4d3 c2d3 d8b6 f3e2 b6b2 a1a6 f8d8 a6a2 b2b4 d2e1 e7e6 c3b5 b4b3 d3d4
+d
+go depth 10
+# 26. a2b2 b3a4
+position startpos moves g1f3 c7c5 e2e4 b8c6 f1b5 g7g6 e1g1 f8g7 b1c3 d7d6 d2d3 c8d7 f1e1 g8f6 e4e5 c6e5 f3e5 d6e5 e1e5 d7b5 c3b5 a7a6 b5c3 b7b6 d1f3 e8g8 c1g5 h7h6 g5d2 a8a7 a2a4 a7d7 a4a5 c5c4 a5b6 c4d3 c2d3 d8b6 f3e2 b6b2 a1a6 f8d8 a6a2 b2b4 d2e1 e7e6 c3b5 b4b3 d3d4 f6d5 a2b2
+d
+go depth 10
+# 27. b2a2 a4b3
+position startpos moves g1f3 c7c5 e2e4 b8c6 f1b5 g7g6 e1g1 f8g7 b1c3 d7d6 d2d3 c8d7 f1e1 g8f6 e4e5 c6e5 f3e5 d6e5 e1e5 d7b5 c3b5 a7a6 b5c3 b7b6 d1f3 e8g8 c1g5 h7h6 g5d2 a8a7 a2a4 a7d7 a4a5 c5c4 a5b6 c4d3 c2d3 d8b6 f3e2 b6b2 a1a6 f8d8 a6a2 b2b4 d2e1 e7e6 c3b5 b4b3 d3d4 f6d5 a2b2 b3a4 b2a2
+d
+go depth 10
+# 28. a2b2 b3a4
+position startpos moves g1f3 c7c5 e2e4 b8c6 f1b5 g7g6 e1g1 f8g7 b1c3 d7d6 d2d3 c8d7 f1e1 g8f6 e4e5 c6e5 f3e5 d6e5 e1e5 d7b5 c3b5 a7a6 b5c3 b7b6 d1f3 e8g8 c1g5 h7h6 g5d2 a8a7 a2a4 a7d7 a4a5 c5c4 a5b6 c4d3 c2d3 d8b6 f3e2 b6b2 a1a6 f8d8 a6a2 b2b4 d2e1 e7e6 c3b5 b4b3 d3d4 f6d5 a2b2 b3a4 b2a2 a4b3 a2b2
+d
+go depth 8
+# 29. b2a2 g7e5
+position startpos moves g1f3 c7c5 e2e4 b8c6 f1b5 g7g6 e1g1 f8g7 b1c3 d7d6 d2d3 c8d7 f1e1 g8f6 e4e5 c6e5 f3e5 d6e5 e1e5 d7b5 c3b5 a7a6 b5c3 b7b6 d1f3 e8g8 c1g5 h7h6 g5d2 a8a7 a2a4 a7d7 a4a5 c5c4 a5b6 c4d3 c2d3 d8b6 f3e2 b6b2 a1a6 f8d8 a6a2 b2b4 d2e1 e7e6 c3b5 b4b3 d3d4 f6d5 a2b2 b3a4 b2a2 a4b3 a2b2 b3a4 b2a2
+d
+go depth 2
