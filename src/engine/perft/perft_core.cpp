@@ -113,7 +113,7 @@ NodeCount perft2(Board& board, Hash hash, moves::SearchState state) {
     dassert(!options::cachePerft || hash == Hash(Position{board, state.turn}));
 
     if constexpr (options::cachePerft)
-        if (auto count = lookup2(hash())) return perftCached.fetch_add(count), count;
+        if (auto count = lookup2(hash())) return count;
     NodeCount nodes = 0;
     auto newState = state;
     auto pawn = addColor(PieceType::PAWN, !state.active());
@@ -149,8 +149,7 @@ NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
     // Unlike normal Zobrist hashing, we need to include the level.
 
     if constexpr (options::cachePerft)
-        if (auto entry = perftHashTable.lookup(hash(), depth))
-            return perftCached.fetch_add(entry->value()), entry->value();
+        if (auto entry = perftHashTable.lookup(hash(), depth)) return entry->value();
 
     NodeCount nodes = 0;
     auto newState = state;
