@@ -96,8 +96,19 @@ BOOK_GEN_SRCS=book/book_gen.cpp book/pgn/pgn.cpp engine/fen/fen.cpp core/hash/ha
 build/book-gen: $(call calc_objs,${OPTOBJ},$(call prefix_src,${BOOK_GEN_SRCS}))
 	@${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
 
+LAST_12_MONTHS := $(shell for i in {1..12}; do date -v-$${i}m +%Y-%m; done | xargs)
+BROADCAST_FILES := $(addprefix lichess/lichess_db_broadcast_,$(addsuffix .pgn,$(LAST_12_MONTHS)))
+
 # Generate book.csv from all PGN files in lichess directory
-LICHESS_PGNS=$(wildcard lichess/*.pgn)
+LICHESS_PGNS=$(wildcard lichess/*.pgn) $(BROADCAST_FILES)
+
+lichess/lichess_db_broadcast_%.pgn: lichess/lichess_db_broadcast_%.pgn.zst
+	zstd -d $<
+lichess/lichess_db_broadcast_%.pgn.zst:
+	@
+	mkdir -p lichess
+	cd lichess && wget https://database.lichess.org/broadcast/$(notdir $@)
+
 book.csv: build/book-gen ${LICHESS_PGNS}
 	@echo "Generating book.csv from $(words ${LICHESS_PGNS}) PGN files..."
 	@./build/book-gen ${LICHESS_PGNS} book.csv
