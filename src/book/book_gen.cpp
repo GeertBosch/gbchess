@@ -29,8 +29,8 @@ static constexpr size_t kChunkSize = 8 * 1024 * 1024;
 
 /** Reference to a position in a PGN file for lazy FEN generation */
 struct PositionRef {
-    uint16_t fileIndex;  // Index into the list of PGN files
     uint64_t offset;     // Byte offset in the file where game starts
+    uint16_t fileIndex;  // Index into the list of PGN files
     uint16_t ply;        // Ply number (half-moves from start)
 };
 
@@ -73,8 +73,12 @@ bool shouldIncludeGame(const pgn::PGN& game) {
     auto whiteElo = game["WhiteElo"];
     auto blackElo = game["BlackElo"];
 
-    if (parsePositiveInt(whiteElo) < kMinElo) return false;
-    if (parsePositiveInt(blackElo) < kMinElo) return false;
+    if (whiteElo.size() && parsePositiveInt(whiteElo) < kMinElo) return false;
+    if (blackElo.size() && parsePositiveInt(blackElo) < kMinElo) return false;
+
+    // Exclude non-standard variants and games starting from a specific position
+    if (game["Variant"] != "Standard") return false;
+    if (game["FEN"].size()) return false;
 
     // Parse TimeControl format: "base+increment" (in seconds)
     auto timeControl = game["TimeControl"];
@@ -119,7 +123,7 @@ void insertGame(const pgn::VerifiedGame& verifiedGame,
 
         // Store position reference (file offset + ply) for later FEN reconstruction
         if (!pos.hasRef) {
-            pos.ref = {gameRef.fileIndex, gameRef.offset, ply};
+            pos.ref = {gameRef.offset, gameRef.fileIndex, ply};
             pos.hasRef = true;
         }
         if (position.turn.fullmove() >= kMaxOpeningMoves) break;  // Only index opening moves
@@ -213,7 +217,7 @@ void processChunk(int fd,
         if (!shouldIncludeGame(game)) continue;
 
         auto verifiedGame = pgn::verify(game);
-        PositionRef gameRef = {fileIndex, gameStartOffset, 0};
+        PositionRef gameRef = {gameStartOffset, fileIndex, 0};
         insertGame(verifiedGame, localPositions, gameRef);
         ++stats.gamesAccepted;
     }
@@ -329,16 +333,14 @@ BookStats processPGNFile(const std::string& pgnFile,
     auto chunks = createChunkBoundaries(fd, fileSize, adaptiveChunkSize);
 
     std::cout << "  Processing " << chunks.size() << " chunks with " << numThreads << " threads";
-    if (adaptiveChunkSize > kChunkSize) {
+    if (adaptiveChunkSize > kChunkSize)
         std::cout << " (adaptive chunk size: " << adaptiveChunkSize / (1024 * 1024) << " MB)";
-    }
+
     std::cout << " (~" << (chunks.size() + numThreads - 1) / numThreads << " chunks/thread)\n";
 
     // Distribute chunks round-robin to threads for load balancing
     std::vector<std::vector<size_t>> threadChunks(numThreads);
-    for (size_t i = 0; i < chunks.size(); ++i) {
-        threadChunks[i % numThreads].push_back(i);
-    }
+    for (size_t i = 0; i < chunks.size(); ++i) threadChunks[i % numThreads].push_back(i);
 
     // Spawn threads and track statistics
     std::mutex mutex;
@@ -361,14 +363,11 @@ BookStats processPGNFile(const std::string& pgnFile,
     }
 
     // Join all threads
-    for (auto& thread : threads) {
-        thread.join();
-    }
+    for (auto& thread : threads) thread.join();
 
     // Print final 100% progress line if we printed any progress
-    if (chunks.size() >= 100) {
+    if (chunks.size() >= 100)
         std::cout << chunks.size() << "/" << chunks.size() << " chunks processed (100.0%)\n";
-    }
 
     // Aggregate stats
     BookStats totalStats;
