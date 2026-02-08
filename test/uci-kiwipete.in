@@ -1,4 +1,4 @@
 position fen r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1
 go depth 2 wait
 # At depth 1, we should search less than 1,000 nodes
-expect info depth 1 .\\+ nodes [1-9][0-9][0-9] .\\+ pv 
+expect info depth 1 .+ nodes [1-9][0-9][0-9] .+ pv

@@ -2,5 +2,5 @@
 uci
 position startpos
 go depth 10 nodes 0 movetime 10 wait
-expect time exceeded [1-9][0-9]\\+ms
+expect time exceeded [1-9][0-9]+ms
 expect bestmove

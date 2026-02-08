@@ -13,7 +13,7 @@ for infile in test/uci-*.in; do
         errors=$(mktemp)
         grep -w "^expect-count" "$infile" | \
         while read expect_count expected_count pattern ; do
-            actual_count=$(grep -ce "$pattern" "$outfile" || true)
+            actual_count=$(grep -cE "$pattern" "$outfile" || true)
 
             # Support: n (exact), +n (greater), -n (less than)
             case "$expected_count" in
@@ -42,7 +42,7 @@ for infile in test/uci-*.in; do
         missing=$(mktemp)
         grep "^expect " "$infile" | \
         while read expect pattern ; do
-            if ! grep -qe "$pattern" "$outfile"; then
+            if ! grep -qE "$pattern" "$outfile"; then
                 echo "$pattern"
             fi
         done > "$missing"
