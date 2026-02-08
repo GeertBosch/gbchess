@@ -30,6 +30,19 @@
             "args": [],
         },
         {
+            "name": "engine-debug with current file",
+            "type": "lldb-dap",
+            "request": "launch",
+            "preLaunchTask": "build: engine-debug",
+            "initCommands": [
+                "command source ${workspaceRoot}/chess.lldbinit"
+            ],
+            "program": "${workspaceFolder}/build/engine-debug",
+            "args": [
+                "${file}"
+            ],
+        },
+        {
             "name": "pgn-debug",
             "type": "lldb-dap",
             "request": "launch",

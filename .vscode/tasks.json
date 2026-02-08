@@ -144,6 +144,28 @@
          "problemMatcher": [
             "$gcc"
          ]
+      },
+      {
+         "type": "shell",
+         "label": "run: engine-debug with current file",
+         "command": "build/engine-debug",
+         "args": [
+            "<",
+            "${file}"
+         ],
+         "options": {
+            "shell": {
+               "executable": "/bin/bash",
+               "args": [
+                  "-c"
+               ]
+            }
+         },
+         "presentation": {
+            "reveal": "always",
+            "panel": "dedicated"
+         },
+         "problemMatcher": []
       }
    ]
 }
