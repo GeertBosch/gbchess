@@ -330,6 +330,22 @@ void UCIRunner::execute(std::string line) {
         setOption(getUCIArguments(in));
     } else if (command == "d") {
         out << fen::to_string(applyMoves(position, moves)) << "\n";
+    } else if (command == "save") {
+        std::string filename;
+        in >> filename;
+        if (filename.empty()) filename = "search_state.bin";
+        if (search::saveState(filename))
+            respond("info string saved search state to " + filename);
+        else
+            respond("info string failed to save search state to " + filename);
+    } else if (command == "restore") {
+        std::string filename;
+        in >> filename;
+        if (filename.empty()) filename = "search_state.bin";
+        if (search::restoreState(filename))
+            respond("info string restored search state from " + filename);
+        else
+            respond("info string failed to restore search state from " + filename);
     } else if (command == "sleep") {
         // Test command to sleep for a number of milliseconds
         int ms;

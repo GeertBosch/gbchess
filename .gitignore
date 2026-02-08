@@ -16,4 +16,5 @@ players.dat
 lichess/lichess_*.csv*
 lichess_*
 *.csv
+*.bin
 Stockfish

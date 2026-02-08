@@ -73,6 +73,18 @@ PrincipalVariation computeBestMove(Position position,
 void newGame();
 
 /**
+ * Save current search state (TT, repetitions, countermoves, killer moves) to a file.
+ * Returns true on success, false on failure.
+ */
+bool saveState(const std::string& filename);
+
+/**
+ * Restore search state from a previously saved file.
+ * Returns true on success, false on failure.
+ */
+bool restoreState(const std::string& filename);
+
+/**
  * Search all tactical moves necessary to achieve a quiet position and return the best score
  */
 Score quiesce(Position& position, int depthleft);
