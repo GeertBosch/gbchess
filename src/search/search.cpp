@@ -194,6 +194,13 @@ struct TranspositionTable {
             insert(hash, move, depthleft, TranspositionTable::LOWERBOUND);
     }
 
+    void remove(Hash hash) {
+        if constexpr (kNumEntries == 0) return;
+        auto idx = hash() % kNumEntries;
+        auto& entry = entries[idx];
+        if (entry.hash() == hash()) entry.eval = {};
+    }
+
     void clear() {
         if (debug && transpositionTableDebug && stats.numInserted) {
             printStats();
@@ -457,8 +464,12 @@ bool isQuiet(Position& position, int depthleft) {
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score standPat) {
     ++nodeCount;
 
+    // Check for draws due to repetition or the fifty-move rule
+    Hash hash(position);
+    auto drawState = repetitions.enter(hash);
+    if (drawState.drawn(position.turn.halfmove())) return Score();
+
     if constexpr (options::useQsTT) {
-        Hash hash(position);
         transpositionTable.refineAlphaBeta(hash, 0, alpha, beta);
         if (alpha >= beta) {
             ++qsTTCutoffs;
@@ -957,11 +968,14 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
     // Initialize incremental NNUE context for this search
     searchContext.initializeNNUE(position);
 
-    auto drawState = repetitions.enter(Hash(position));
+    auto hash = Hash(position);
+    auto drawState = repetitions.enter(hash);
     for (auto move : moves) {
         position = moves::applyMove(position, move);
-        repetitions.enter(drawState, Hash(position));
+        repetitions.enter(drawState, hash = Hash(position));
     }
+
+    if (drawState.drawn(position.turn.halfmove() + 1)) transpositionTable.remove(hash);
 
     auto pv = options::iterativeDeepening ? iterativeDeepening(position, maxdepth, info)
                                           : toplevelAlphaBeta(position, maxdepth, info);
