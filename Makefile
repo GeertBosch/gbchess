@@ -98,8 +98,8 @@ build/book-gen: $(call calc_objs,${OPTOBJ},$(call prefix_src,${BOOK_GEN_SRCS}))
 build/book-gen-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,${BOOK_GEN_SRCS}))
 	@${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
-LAST_12_MONTHS := $(shell for i in {1..12}; do date -v-$${i}m +%Y-%m; done | xargs)
-BROADCAST_FILES := $(addprefix lichess/lichess_db_broadcast_,$(addsuffix .pgn,$(LAST_12_MONTHS)))
+LAST_24_MONTHS := $(shell for i in {1..24}; do date -v-$${i}m +%Y-%m; done | xargs)
+BROADCAST_FILES := $(addprefix lichess/lichess_db_broadcast_,$(addsuffix .pgn,$(LAST_24_MONTHS)))
 
 # Generate book.csv from all PGN files in lichess directory
 LICHESS_PGNS=$(wildcard lichess/*.pgn) $(BROADCAST_FILES)
