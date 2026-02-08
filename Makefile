@@ -95,6 +95,8 @@ build/engine-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,${ENGINE_SRCS})
 BOOK_GEN_SRCS=book/book_gen.cpp book/pgn/pgn.cpp engine/fen/fen.cpp core/hash/hash.cpp ${MOVES_SRCS}
 build/book-gen: $(call calc_objs,${OPTOBJ},$(call prefix_src,${BOOK_GEN_SRCS}))
 	@${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+build/book-gen-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,${BOOK_GEN_SRCS}))
+	@${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
 
 LAST_12_MONTHS := $(shell for i in {1..12}; do date -v-$${i}m +%Y-%m; done | xargs)
 BROADCAST_FILES := $(addprefix lichess/lichess_db_broadcast_,$(addsuffix .pgn,$(LAST_12_MONTHS)))
@@ -242,8 +244,8 @@ build/perft-test.ok: build/perft-test
 build/perft-debug.ok: build/perft-debug
 	./build/perft-debug && touch $@
 
-debug: $(patsubst %-test,%-debug,$(CPP_TESTS)) build/perft-debug build/engine-debug
-build: $(CPP_TESTS) $(COMPILE_COMMANDS) build/perft build/engine build/perft-simple
+debug: $(patsubst %-test,%-debug,$(CPP_TESTS)) build/perft-debug build/engine-debug build/book-gen-debug
+build: $(CPP_TESTS) $(COMPILE_COMMANDS) build/perft build/engine build/perft-simple build/book-gen
 	@echo "\n✅ Build complete\n"
 	@./check-arch.sh
 
