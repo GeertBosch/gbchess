@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>  // For std::exit
@@ -9,6 +8,7 @@
 
 #include "core/core.h"
 #include "core/options.h"
+#include "core/text_util.h"
 #include "engine/fen/fen.h"
 #include "move/move.h"
 #include "move/move_gen.h"
@@ -40,21 +40,6 @@ void printAvailableMovesAndCaptures(const Position& position) {
     for (auto move : moves)
         if (!isCapture(move.kind)) std::cout << to_string(move) << " ";
     std::cout << "]\n";
-}
-
-std::vector<std::string> split(std::string line, char delim) {
-    std::vector<std::string> res;
-    std::string word;
-    for (auto c : line) {
-        if (c == delim) {
-            res.emplace_back(std::move(word));
-            word = "";
-        } else {
-            word.push_back(c);
-        }
-    }
-    if (word.size()) res.emplace_back(std::move(word));
-    return res;
 }
 
 /**
@@ -237,13 +222,6 @@ int parseMoves(Position& position, int* argc, char** argv[]) {
     return moves;
 }
 
-template <typename T>
-int find(T t, std::string what) {
-    auto it = std::find(t.begin(), t.end(), what);
-    if (it == t.end()) usage(cmdName, "Missing field \"" + what + "\"");
-    return it - t.begin();
-}
-
 std::string computeStatistics(const std::vector<float>& diffs) {
     if (diffs.empty()) return "No data";
     double sum = 0;
@@ -275,7 +253,7 @@ void testFromStream(nnue::NNUE& network, std::ifstream& stream) {
 
     auto startTime = high_resolution_clock::now();
     while (std::getline(stream, line)) {
-        auto columns = split(line, ',');
+        columns = split(line, ',');
         if (columns.size() < 2) continue;
         int expected = 100.0f * std::stof(columns[cpCol]);
         auto fen = columns[fenCol];

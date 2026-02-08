@@ -11,6 +11,7 @@
 #include "core/core.h"
 #include "core/hash/hash.h"
 #include "core/options.h"
+#include "core/text_util.h"
 #include "elo.h"
 #include "engine/fen/fen.h"
 #include "eval/eval.h"
@@ -24,9 +25,9 @@ namespace {
 bool verbose = false;
 std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
     os << "[";
-    for (const auto& move : moves) {
+    for (const auto& move : moves)
         if (move) os << to_string(move) << ", ";
-    }
+
     os << "]";
     return os;
 }
@@ -216,27 +217,6 @@ void printAnalysis(Position position, int maxdepth, MoveVector moves) {
     assert(analyzed.adjustScore() == bestMove.adjustScore());
 }
 
-std::vector<std::string> split(std::string line, char delim) {
-    std::vector<std::string> res;
-    std::string word;
-    for (auto c : line) {
-        if (c == delim) {
-            res.emplace_back(std::move(word));
-            word = "";
-        } else {
-            word.push_back(c);
-        }
-    }
-    if (word.size()) res.emplace_back(std::move(word));
-    return res;
-}
-
-template <typename T>
-int find(T t, std::string what) {
-    auto it = std::find(t.begin(), t.end(), what);
-    if (it == t.end()) usage("Missing field \"" + what + "\"");
-    return it - t.begin();
-}
 
 using ScoreWithReason = std::pair<Score, std::string>;
 ScoreWithReason computeScore(Position position, MoveVector moves) {
