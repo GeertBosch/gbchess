@@ -5,6 +5,31 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "book-gen-debug",
+            "type": "lldb-dap",
+            "request": "launch",
+            "preLaunchTask": "build: book-gen-debug",
+            "initCommands": [
+                "command source ${workspaceRoot}/chess.lldbinit"
+            ],
+            "program": "${workspaceFolder}/build/book-gen-debug",
+            "args": [
+                "${workspaceFolder}/lichess/lichess_db_broadcast_2026-01.pgn",
+                "/dev/stdout",
+            ],
+        },
+        {
+            "name": "book-debug",
+            "type": "lldb-dap",
+            "request": "launch",
+            "preLaunchTask": "build: book-debug",
+            "initCommands": [
+                "command source ${workspaceRoot}/chess.lldbinit"
+            ],
+            "program": "${workspaceFolder}/build/book-debug",
+            "args": [],
+        },
+        {
             "name": "pgn-debug",
             "type": "lldb-dap",
             "request": "launch",

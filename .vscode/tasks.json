@@ -120,6 +120,30 @@
          "problemMatcher": [
             "$gcc"
          ]
+      },
+      {
+         "type": "shell",
+         "label": "build: book-gen-debug",
+         "command": "make",
+         "args": [
+            "build/book-gen-debug"
+         ],
+         "group": "build",
+         "problemMatcher": [
+            "$gcc"
+         ]
+      },
+      {
+         "type": "shell",
+         "label": "build: book-debug",
+         "command": "make",
+         "args": [
+            "build/book-debug"
+         ],
+         "group": "build",
+         "problemMatcher": [
+            "$gcc"
+         ]
       }
    ]
 }
