@@ -1,0 +1,6 @@
+ucinewgame
+setoption name OwnBook value false
+go depth 5
+expect bestmove
+# Check that we don't use the book and actually search
+expect info depth
