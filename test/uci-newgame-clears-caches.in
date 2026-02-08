@@ -1,0 +1,7 @@
+# prevent ucinewgame from loading the opening book
+setoption name OwnBook value false
+go depth 5
+ucinewgame
+go depth 5
+# Should get no searches with less than 100 nodes searched
+expect-count 0 info depth 5 .*nodes ..? .*pv
