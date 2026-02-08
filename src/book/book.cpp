@@ -2,6 +2,7 @@
 #include "core/core.h"
 #include "core/hash/hash.h"
 #include "core/random.h"
+#include "core/text_util.h"
 #include "engine/fen/fen.h"
 #include "move/move.h"
 #include "move/move_gen.h"
@@ -216,29 +217,26 @@ Book loadBook(std::string csvfile) {
     Book book;
     std::string line;
 
-    // Skip header line
+    // Read header line to fine column positions
     std::getline(in, line);
+    auto header = split(line, ',');
+    auto fenCol = find(header, "fen");
+    auto whiteCol = find(header, "white");
+    auto drawCol = find(header, "draw");
+    auto blackCol = find(header, "black");
 
     uint64_t totalW = 0, totalD = 0, totalL = 0;
 
     while (std::getline(in, line)) {
+        auto columns = split(line, ',');
+        if (columns.size() < header.size()) continue;  // Skip malformed lines
 
-        // Parse CSV: fen,white,draw,black
-        size_t pos1 = line.rfind(',');
-        if (pos1 == std::string::npos) continue;
+        // Parse CSV fields
+        auto pos = fen::parsePosition(columns[fenCol]);
+        auto white = std::stoull(columns[whiteCol]);
+        auto draw = std::stoull(columns[drawCol]);
+        auto black = std::stoull(columns[blackCol]);
 
-        size_t pos2 = line.rfind(',', pos1 - 1);
-        if (pos2 == std::string::npos) continue;
-
-        size_t pos3 = line.rfind(',', pos2 - 1);
-        if (pos3 == std::string::npos) continue;
-
-        std::string fenStr = line.substr(0, pos3);
-        uint64_t white = std::stoull(line.substr(pos3 + 1, pos2 - pos3 - 1));
-        uint64_t draw = std::stoull(line.substr(pos2 + 1, pos1 - pos2 - 1));
-        uint64_t black = std::stoull(line.substr(pos1 + 1));
-
-        Position pos = fen::parsePosition(fenStr);
         uint64_t key = Hash(pos)();
 
         book.entries[key] = {white, draw, black};
