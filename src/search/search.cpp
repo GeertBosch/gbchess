@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <chrono>
-#include <fstream>
 #include <iostream>
 #include <optional>
 #include <sstream>
@@ -874,64 +873,62 @@ void newGame() {
               Move());
 }
 
-bool saveState(const std::string& filename) {
-    std::ofstream file(filename, std::ios::binary);
-    if (!file) return false;
+bool saveState(std::ostream& out) {
+    if (!out) return false;
 
     // Save transposition table
     size_t numEntries = transpositionTable.entries.size();
-    file.write(reinterpret_cast<const char*>(&numEntries), sizeof(numEntries));
-    file.write(reinterpret_cast<const char*>(&transpositionTable.numGenerations),
-               sizeof(transpositionTable.numGenerations));
-    file.write(reinterpret_cast<const char*>(transpositionTable.entries.data()),
-               numEntries * sizeof(TranspositionTable::Entry));
+    out.write(reinterpret_cast<const char*>(&numEntries), sizeof(numEntries));
+    out.write(reinterpret_cast<const char*>(&transpositionTable.numGenerations),
+              sizeof(transpositionTable.numGenerations));
+    out.write(reinterpret_cast<const char*>(transpositionTable.entries.data()),
+              numEntries * sizeof(TranspositionTable::Entry));
 
     // Don't save repetitions - they are position-specific and should be
     // rebuilt from move history when restoring
     size_t repSize = 0;
-    file.write(reinterpret_cast<const char*>(&repSize), sizeof(repSize));
+    out.write(reinterpret_cast<const char*>(&repSize), sizeof(repSize));
 
     // Save history table
-    file.write(reinterpret_cast<const char*>(&history[0][0][0]), sizeof(history));
+    out.write(reinterpret_cast<const char*>(&history[0][0][0]), sizeof(history));
 
     // Save killer moves
-    file.write(reinterpret_cast<const char*>(&killerMoves[0][0]), sizeof(killerMoves));
+    out.write(reinterpret_cast<const char*>(&killerMoves[0][0]), sizeof(killerMoves));
 
     // Save countermoves
-    file.write(reinterpret_cast<const char*>(&countermoves[0][0]), sizeof(countermoves));
+    out.write(reinterpret_cast<const char*>(&countermoves[0][0]), sizeof(countermoves));
 
-    return file.good();
+    return out.good();
 }
 
-bool restoreState(const std::string& filename) {
-    std::ifstream file(filename, std::ios::binary);
-    if (!file) return false;
+bool restoreState(std::istream& in) {
+    if (!in) return false;
 
     // Restore transposition table
     size_t numEntries;
-    file.read(reinterpret_cast<char*>(&numEntries), sizeof(numEntries));
+    in.read(reinterpret_cast<char*>(&numEntries), sizeof(numEntries));
     if (numEntries != transpositionTable.entries.size()) return false;
 
-    file.read(reinterpret_cast<char*>(&transpositionTable.numGenerations),
-              sizeof(transpositionTable.numGenerations));
-    file.read(reinterpret_cast<char*>(transpositionTable.entries.data()),
-              numEntries * sizeof(TranspositionTable::Entry));
+    in.read(reinterpret_cast<char*>(&transpositionTable.numGenerations),
+            sizeof(transpositionTable.numGenerations));
+    in.read(reinterpret_cast<char*>(transpositionTable.entries.data()),
+                numEntries * sizeof(TranspositionTable::Entry));
 
-    // Clear repetitions - they will be rebuilt from move history
-    size_t repSize;
-    file.read(reinterpret_cast<char*>(&repSize), sizeof(repSize));
-    repetitions.clear();
+        // Clear repetitions - they will be rebuilt from move history
+        size_t repSize;
+        in.read(reinterpret_cast<char*>(&repSize), sizeof(repSize));
+        repetitions.clear();
 
-    // Restore history table
-    file.read(reinterpret_cast<char*>(&history[0][0][0]), sizeof(history));
+        // Restore history table
+        in.read(reinterpret_cast<char*>(&history[0][0][0]), sizeof(history));
 
-    // Restore killer moves
-    file.read(reinterpret_cast<char*>(&killerMoves[0][0]), sizeof(killerMoves));
+        // Restore killer moves
+        in.read(reinterpret_cast<char*>(&killerMoves[0][0]), sizeof(killerMoves));
 
-    // Restore countermoves
-    file.read(reinterpret_cast<char*>(&countermoves[0][0]), sizeof(countermoves));
+        // Restore countermoves
+        in.read(reinterpret_cast<char*>(&countermoves[0][0]), sizeof(countermoves));
 
-    return file.good();
+        return in.good();
 }
 
 // Forward declaration for incremental NNUE context
