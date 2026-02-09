@@ -142,6 +142,7 @@ clean:
 	rm -f game.??? log.??? players.dat # XBoard outputs
 	rm -rf test/out *.dSYM .DS_Store
 	rm -f $(COMPILE_COMMANDS)
+	rm book.csv
 
 realclean: clean
 	rm -f lichess/*.csv
