@@ -99,9 +99,16 @@ struct PGN {
     /**
      * Call with it == end for games with missing termination, or !*it for SAN errors. If the SAN
      * move is syntactically valid, assumes that the error is due to move legality. Produces an
-     * appropriate error string with line, column and message
+     * appropriate error string with line, column and message.
      */
     std::string error(iterator it) const;
+};
+
+struct MoveText {
+    std::string movetext;
+    operator bool() const { return !movetext.empty(); }
+    PGN::iterator begin() const { return PGN::iterator(movetext); }
+    PGN::iterator end() const { return PGN::iterator(movetext.data() + movetext.size()); }
 };
 
 /** Represents the termination marker of the PGN game, or ERROR if the game was invalid. */
