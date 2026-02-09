@@ -70,7 +70,8 @@ position=startpos
 (
 echo "ucinewgame"
 # For white, j is 0,2,4,... ; for black, j is 1,3,5,...
-for j in $(seq $((side - 1)) 2 $(echo $moves | wc -w)) ; do
+n=$(echo $moves | wc -w)
+for j in $(seq $((side - 1)) 2 $n) ; do
     # Show move number and UCI moves for white and black
     num=$((j / 2 + 1))
 
@@ -92,5 +93,9 @@ for j in $(seq $((side - 1)) 2 $(echo $moves | wc -w)) ; do
     fi
     echo "position $position"
     echo "d"
+    # During the last iteration, save the search state
+    if [ $num -eq $end_move ] ; then
+        echo "save"
+    fi
     echo "go depth $depth"
 done)
