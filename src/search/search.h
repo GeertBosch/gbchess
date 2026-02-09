@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <iosfwd>
 
 #include "core/core.h"
 #include "eval/eval.h"
@@ -73,16 +74,16 @@ PrincipalVariation computeBestMove(Position position,
 void newGame();
 
 /**
- * Save current search state (TT, repetitions, countermoves, killer moves) to a file.
+ * Save current search state (TT, repetitions, countermoves, killer moves) to a stream.
  * Returns true on success, false on failure.
  */
-bool saveState(const std::string& filename);
+bool saveState(std::ostream& out);
 
 /**
- * Restore search state from a previously saved file.
+ * Restore search state from a previously saved stream.
  * Returns true on success, false on failure.
  */
-bool restoreState(const std::string& filename);
+bool restoreState(std::istream& in);
 
 /**
  * Search all tactical moves necessary to achieve a quiet position and return the best score

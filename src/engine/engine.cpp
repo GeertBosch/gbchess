@@ -180,6 +180,56 @@ private:
         }
     }
 
+    /** Append the current UCI position and non-default options to the output stream. */
+    void writeUCIState(std::ostream& stream) const {
+        if (!useOwnBook) stream << "setoption name OwnBook value false\n";
+        stream << "position fen " << fen::to_string(position);
+        if (!moves.empty()) {
+            stream << " moves";
+            for (auto move : moves) stream << " " << move;
+        }
+        stream << "\n";
+    }
+
+    /** Restore the current UCI position and options from the remaining stream data. */
+    void restoreUCIState(std::istream& stream) {
+        for (std::string line; std::getline(stream, line);) {
+            if (line.empty()) continue;
+            auto in = std::stringstream(line);
+            std::string command;
+            in >> command;
+            if (command == "setoption")
+                setOption(getUCIArguments(in));
+            else if (command == "position") {
+                std::string positionKind;
+                in >> positionKind >> std::ws;
+                parsePosition(positionKind, getUCIArguments(in));
+            }
+        }
+    }
+
+    /** Save search state and UCI state to the given file path. */
+    bool saveStateToFile(const std::string& filename) {
+        std::ofstream file(filename, std::ios::binary);
+        if (!file) return false;
+
+        if (!search::saveState(file)) return false;
+
+        writeUCIState(file);
+        return file.good();
+    }
+
+    /** Restore search state and UCI state from the given file path. */
+    bool restoreStateFromFile(const std::string& filename) {
+        std::ifstream file(filename, std::ios::binary);
+        if (!file) return false;
+
+        if (!search::restoreState(file)) return false;
+
+        restoreUCIState(file);
+        return true;
+    }
+
     void parsePosition(std::string positionKind, UCIArguments posArgs) {
         UCIArguments moveArgs;
         Position position;
@@ -334,7 +384,7 @@ void UCIRunner::execute(std::string line) {
         std::string filename;
         in >> filename;
         if (filename.empty()) filename = "search_state.bin";
-        if (search::saveState(filename))
+        if (saveStateToFile(filename))
             respond("info string saved search state to " + filename);
         else
             respond("info string failed to save search state to " + filename);
@@ -342,7 +392,7 @@ void UCIRunner::execute(std::string line) {
         std::string filename;
         in >> filename;
         if (filename.empty()) filename = "search_state.bin";
-        if (search::restoreState(filename))
+        if (restoreStateFromFile(filename))
             respond("info string restored search state from " + filename);
         else
             respond("info string failed to restore search state from " + filename);

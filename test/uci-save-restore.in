@@ -1,9 +1,9 @@
 setoption name OwnBook value false
 ucinewgame
 go depth 5
-save test/out/save-restore.bin
+save test/out/uci-save-restore.bin
 ucinewgame
-restore test/out/save-restore.bin
+restore test/out/uci-save-restore.bin
 go depth 5
 # Less than 100 nodes as we this should be cached
 expect info depth 5 .*nodes ..? .*pv
