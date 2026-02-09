@@ -1,13 +1,13 @@
-#include "core/core.h"
 #include <cassert>
 #include <istream>
 #include <string>
 #include <string_view>
 
+#include "pgn.h"
+
+#include "core/core.h"
 #include "move/move.h"
 #include "move/move_gen.h"
-#include "pgn.h"
-#include <sys/types.h>
 
 namespace pgn {
 namespace {
