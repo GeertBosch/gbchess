@@ -74,10 +74,30 @@ PrincipalVariation computeBestMove(Position position,
 void newGame();
 
 /**
+ * The search save state consists of the following parts:
+ *     ┌────────────────────────────────────────────────────────┐
+ *     │  uint64_t  numEntries                                  │
+ *     │  uint8_t   numGenerations                              │  Transposition Table
+ *     │  Entry     ttTable[numEntries]                         │
+ *     ├────────────────────────────────────────────────────────┤
+ *     │  size_t    history[2][kNumSquares][kNumSquares]        │  History Heuristic Table
+ *     ├────────────────────────────────────────────────────────┤
+ *     │  Move      killerMoves[maxKillerDepth][maxKillerMoves] │  Killer Move Table
+ *     ├────────────────────────────────────────────────────────┤
+ *     │  Move      countermoves[2][kNumSquares]                │  Best countermove per color/square
+ *     └────────────────────────────────────────────────────────┘
+ */
+
+/**
  * Save current search state (TT, repetitions, countermoves, killer moves) to a stream.
  * Returns true on success, false on failure.
  */
 bool saveState(std::ostream& out);
+
+/**
+ * Clear internal search state such as the transposition table, countermoves, and killer moves.
+ */
+void clearState();
 
 /**
  * Restore search state from a previously saved stream.

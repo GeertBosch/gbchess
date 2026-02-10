@@ -180,21 +180,24 @@ private:
         }
     }
 
+    static std::string to_string(Position pos) {
+        return pos == Position::initial() ? "startpos" : "fen \"" + fen::to_string(pos) + '"';
+    }
+
     /** Append the current UCI position and non-default options to the output stream. */
-    void writeUCIState(std::ostream& stream) const {
-        if (!useOwnBook) stream << "setoption name OwnBook value false\n";
-        stream << "position fen " << fen::to_string(position);
-        if (!moves.empty()) {
-            stream << " moves";
-            for (auto move : moves) stream << " " << move;
-        }
-        stream << "\n";
+    bool saveUCIState(std::ostream& stream) const {
+        // First save the position and moves, for easy retrieval using head -1 when debugging
+        stream << "position " << to_string(position);
+        if (moves.size()) stream << " moves " << ::to_string(moves);
+        if (!useOwnBook) stream << "\nsetoption name OwnBook value false";
+        stream << "\n\n";  // Empty line indicates end of UCI state
+        return stream.good();
     }
 
     /** Restore the current UCI position and options from the remaining stream data. */
-    void restoreUCIState(std::istream& stream) {
+    bool restoreUCIState(std::istream& stream) {
         for (std::string line; std::getline(stream, line);) {
-            if (line.empty()) continue;
+            if (line.empty()) break;  // End of UCI state
             auto in = std::stringstream(line);
             std::string command;
             in >> command;
@@ -206,6 +209,7 @@ private:
                 parsePosition(positionKind, getUCIArguments(in));
             }
         }
+        return stream.good();
     }
 
     /** Save search state and UCI state to the given file path. */
@@ -213,10 +217,8 @@ private:
         std::ofstream file(filename, std::ios::binary);
         if (!file) return false;
 
-        if (!search::saveState(file)) return false;
-
-        writeUCIState(file);
-        return file.good();
+        if (!saveUCIState(file)) return false;
+        return search::saveState(file);
     }
 
     /** Restore search state and UCI state from the given file path. */
@@ -224,10 +226,8 @@ private:
         std::ifstream file(filename, std::ios::binary);
         if (!file) return false;
 
-        if (!search::restoreState(file)) return false;
-
-        restoreUCIState(file);
-        return true;
+        if (!restoreUCIState(file)) return false;
+        return search::restoreState(file);
     }
 
     void parsePosition(std::string positionKind, UCIArguments posArgs) {
@@ -267,7 +267,7 @@ private:
         auto moves = this->moves;
         auto totalNodes = NodeCount(0);
         totalNodes = ::perft(position, depth);
-        respond("Nodes searched: " + to_string(totalNodes));
+        respond("Nodes searched: " + ::to_string(totalNodes));
     }
 
     void go(UCIArguments arguments) {
@@ -313,7 +313,7 @@ private:
 
         // Check opening book first - if we have a book move, use it without searching
         if (auto bookMove = useOwnBook ? book.choose(position, moves) : Move{})
-            return ++bookMoveCount, respond("bestmove " + to_string(bookMove));
+            return ++bookMoveCount, respond("bestmove " + ::to_string(bookMove));
 
         startTime = clock::now();
         startNodes = search::nodeCount;
@@ -364,7 +364,7 @@ void UCIRunner::execute(std::string line) {
         // Reseed the opening book random generator
         uint64_t random = ++seeds;  // Non-zero random seed
         book.reseed(random);        // Use seed 0 for deterministic book moves in new game
-        respond("info string book reseeded with " + to_string(random));
+        respond("info string book reseeded with " + ::to_string(random));
         timeControl = TimeControl{180'000};  // Default to 3 minutes per side
         moves.clear();
         position = fen::parsePosition(fen::initialPosition);
@@ -383,19 +383,14 @@ void UCIRunner::execute(std::string line) {
     } else if (command == "save") {
         std::string filename;
         in >> filename;
-        if (filename.empty()) filename = "search_state.bin";
-        if (saveStateToFile(filename))
-            respond("info string saved search state to " + filename);
-        else
-            respond("info string failed to save search state to " + filename);
+        if (filename.empty()) filename = "save-state.bin";
+        if (saveStateToFile(filename)) respond("info string saved engine state to " + filename);
     } else if (command == "restore") {
         std::string filename;
         in >> filename;
-        if (filename.empty()) filename = "search_state.bin";
+        if (filename.empty()) filename = "save-state.bin";
         if (restoreStateFromFile(filename))
-            respond("info string restored search state from " + filename);
-        else
-            respond("info string failed to restore search state from " + filename);
+            respond("info string restored engine state from " + filename);
     } else if (command == "sleep") {
         // Test command to sleep for a number of milliseconds
         int ms;

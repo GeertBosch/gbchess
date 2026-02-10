@@ -848,15 +848,7 @@ PrincipalVariation iterativeDeepening(Position& position, int maxdepth, InfoFn i
 }
 
 void newGame() {
-    transpositionTable.clear();
-    repetitions.clear();
-    std::fill(&history[0][0][0], &history[0][0][0] + sizeof(history) / sizeof(history[0][0][0]), 0);
-    std::fill(&killerMoves[0][0],
-              &killerMoves[0][0] + sizeof(killerMoves) / sizeof(killerMoves[0][0]),
-              Move());
-    std::fill(&countermoves[0][0],
-              &countermoves[0][0] + sizeof(countermoves) / sizeof(countermoves[0][0]),
-              Move());
+    clearState();
 }
 
 bool saveState(std::ostream& out) {
@@ -870,11 +862,6 @@ bool saveState(std::ostream& out) {
     out.write(reinterpret_cast<const char*>(transpositionTable.entries.data()),
               numEntries * sizeof(TranspositionTable::Entry));
 
-    // Don't save repetitions - they are position-specific and should be
-    // rebuilt from move history when restoring
-    size_t repSize = 0;
-    out.write(reinterpret_cast<const char*>(&repSize), sizeof(repSize));
-
     // Save history table
     out.write(reinterpret_cast<const char*>(&history[0][0][0]), sizeof(history));
 
@@ -887,8 +874,21 @@ bool saveState(std::ostream& out) {
     return out.good();
 }
 
+void clearState() {
+    transpositionTable.clear();
+    repetitions.clear();
+    std::fill(&history[0][0][0], &history[0][0][0] + sizeof(history) / sizeof(history[0][0][0]), 0);
+    std::fill(&killerMoves[0][0],
+              &killerMoves[0][0] + sizeof(killerMoves) / sizeof(killerMoves[0][0]),
+              Move());
+    std::fill(&countermoves[0][0],
+              &countermoves[0][0] + sizeof(countermoves) / sizeof(countermoves[0][0]),
+              Move());
+}
+
 bool restoreState(std::istream& in) {
     if (!in) return false;
+    clearState();
 
     // Restore transposition table
     size_t numEntries;
@@ -900,21 +900,16 @@ bool restoreState(std::istream& in) {
     in.read(reinterpret_cast<char*>(transpositionTable.entries.data()),
                 numEntries * sizeof(TranspositionTable::Entry));
 
-        // Clear repetitions - they will be rebuilt from move history
-        size_t repSize;
-        in.read(reinterpret_cast<char*>(&repSize), sizeof(repSize));
-        repetitions.clear();
+    // Restore history table
+    in.read(reinterpret_cast<char*>(&history[0][0][0]), sizeof(history));
 
-        // Restore history table
-        in.read(reinterpret_cast<char*>(&history[0][0][0]), sizeof(history));
+    // Restore killer moves
+    in.read(reinterpret_cast<char*>(&killerMoves[0][0]), sizeof(killerMoves));
 
-        // Restore killer moves
-        in.read(reinterpret_cast<char*>(&killerMoves[0][0]), sizeof(killerMoves));
+    // Restore countermoves
+    in.read(reinterpret_cast<char*>(&countermoves[0][0]), sizeof(countermoves));
 
-        // Restore countermoves
-        in.read(reinterpret_cast<char*>(&countermoves[0][0]), sizeof(countermoves));
-
-        return in.good();
+    return in.good();
 }
 
 // Forward declaration for incremental NNUE context
