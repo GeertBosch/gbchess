@@ -72,7 +72,6 @@ std::string pct(uint64_t some, uint64_t all) {
  * zero indicates a draw. Units of evaluation are roughly the value of a pawn.
  */
 struct TranspositionTable {
-    static constexpr size_t kNumEntries = options::transpositionTableEntries;
 
     enum EntryType : uint8_t { EXACT, LOWERBOUND, UPPERBOUND };
     struct Eval {
@@ -102,10 +101,13 @@ struct TranspositionTable {
         uint64_t numHits = 0;
         uint64_t numMisses = 0;
     };
-    Stats stats;
+
+    static constexpr size_t MB = 1024 * 1024;
+    static constexpr size_t kNumEntries = options::transpositionTableMB * MB / sizeof(Entry);
 
     std::vector<Entry> entries{kNumEntries};
     uint8_t numGenerations = 0;
+    Stats stats;
 
     ~TranspositionTable() {
         if (transpositionTableDebug) printStats();
@@ -241,12 +243,10 @@ Move countermoves[2][kNumSquares] = {{}};
 /**
  * Killer move heuristic: stores the best quiet moves that caused beta cutoffs at each depth.
  */
-constexpr int MAX_KILLER_MOVES = 2;
-constexpr int MAX_DEPTH = 64;
-Move killerMoves[MAX_DEPTH][MAX_KILLER_MOVES] = {{{}}};
+Move killerMoves[options::maxKillerDepth][options::maxKillerMoves] = {{{}}};
 
 void storeKillerMove(Move move, int depth) {
-    if (depth >= MAX_DEPTH || depth < 0) return;
+    if (depth >= options::maxKillerDepth || depth < 0 || !options::maxKillerMoves) return;
 
     // Only store quiet moves (not captures, promotions, or castling)
     if (move.kind != MoveKind::Quiet_Move && move.kind != MoveKind::Double_Push) return;
@@ -254,8 +254,10 @@ void storeKillerMove(Move move, int depth) {
     // Don't store if it's already the first killer move
     if (killerMoves[depth][0] == move) return;
 
-    // Shift moves: second becomes first, new move becomes second
-    killerMoves[depth][1] = killerMoves[depth][0];
+    // Shift moves: second becomes first, new move becomes second, etc.
+    for (int i = options::maxKillerMoves - 1; i > 0; --i)
+        killerMoves[depth][i] = killerMoves[depth][i - 1];
+
     killerMoves[depth][0] = move;
 }
 
@@ -345,25 +347,21 @@ using MoveIt = MoveVector::iterator;
 }
 
 [[maybe_unused]] MoveIt sortKillerMoves(int depth, MoveIt begin, MoveIt end) {
-    if (depth >= MAX_DEPTH) return begin;
+    if (depth >= options::maxKillerDepth) return begin;
 
     MoveIt current = begin;
 
     // Try to find and move killer moves to the front
-    for (int i = 0; i < MAX_KILLER_MOVES && current < end; ++i) {
+    for (int i = 0; i < options::maxKillerMoves && current < end; ++i) {
         Move killer = killerMoves[depth][i];
         if (!killer) continue;
 
         auto it = std::find(current, end, killer);
-        if (it != end) {
-            std::swap(*current++, *it);
-        }
+        if (it != end) std::swap(*current++, *it);
     }
 
     return current;
 }
-
-uint64_t totalMovesEvaluated = 0;
 }  // namespace
 
 /**
@@ -411,7 +409,8 @@ MoveIt sortMoves(const Position& position, MoveIt begin, MoveIt end, Move lastMo
             quietBegin = sortCountermove(countermove, quietBegin, end);
         }
     }
-    if constexpr (options::useKillerMoves) quietBegin = sortKillerMoves(depth, quietBegin, end);
+    if constexpr (options::maxKillerMoves > 0 && options::maxKillerDepth > 0)
+        quietBegin = sortKillerMoves(depth, quietBegin, end);
 
     // Then sort remaining quiet moves by history heuristic
     std::stable_sort(quietBegin, end, [&](const Move& a, const Move& b) {
@@ -676,7 +675,6 @@ PrincipalVariation alphaBeta(
     int moveCount = 0;
 
     for (auto move : moveList) {
-        ++totalMovesEvaluated;  // Increment total moves evaluated
         ++moveCount;
         auto newHash = hash;
 
@@ -787,7 +785,6 @@ PrincipalVariation toplevelAlphaBeta(
     int currmovenumber = 0;
     for (auto move : moveList) {
         if (currmoveInfo(info, depthleft, move, ++currmovenumber)) break;
-        ++totalMovesEvaluated;  // Increment total moves evaluated
 
         auto newPosition = moves::applyMove(position, move);
         Hash newHash(newPosition);

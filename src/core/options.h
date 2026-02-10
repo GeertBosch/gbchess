@@ -13,7 +13,8 @@ constexpr int quiescenceDepth = 5;                          // Depth of the quie
 constexpr bool iterativeDeepening = true;                   // Aspiration windows need this
 constexpr bool lateMoveReductions = true;                   // Reduce moves at the end of the search
 constexpr bool staticExchangeEvaluation = true;             // Use static exchange evaluation
-constexpr bool useKillerMoves = true;                       // Use the killer move heuristic
+constexpr int maxKillerMoves = 2;                           // Max killer moves per depth (0=off)
+constexpr int maxKillerDepth = 64;                          // Max depth for killer moves (0=off)
 constexpr bool historyStore = true;                         // Use beta cutoffs for move ordering
 constexpr std::array<int, 2> aspirationWindows{30, 125};    // Given in centipawns, {} disables
 constexpr int aspirationWindowMinDepth = 2;                 // Minimum depth for aspiration windows
@@ -21,7 +22,7 @@ constexpr int promotionMinDepthLeft = quiescenceDepth - 2;  // Minimum depth lef
 constexpr int checksMinDepthLeft = quiescenceDepth;         // Minimum depth left for checks in QS
 constexpr int checksMaxPiecesLeft = 12;                     // Max pieces left for checks in QS
 constexpr int currmoveMinDepthLeft = 1;                     // Min depth left for currmove progress
-constexpr size_t transpositionTableEntries = 1ull << 20;    // Zero means not enabled
+constexpr size_t transpositionTableMB = 32;                 // Zero means not enabled
 constexpr int defaultMoveTime = 20'000;                     // Max time for a move in milliseconds
 constexpr bool useNNUE = true;                              // Use NNUE evaluation
 constexpr bool incrementalNNUE = false;       // Use incremental NNUE updates (experimental)
@@ -41,6 +42,6 @@ constexpr int fixedNodesSearch = 250'000;     // Fixed nodes per search (0 to di
  */
 constexpr bool cachePerft = true;           // Allow caching
 constexpr size_t cachePerftMB = 2 * 1024;   // Memory for perft cache in MB
-constexpr size_t cachePerftMinNodes = 100;  // Minimum nodes to cache perft results
+constexpr int cachePerftMinNodes = 100;     // Minimum nodes to cache perft results
 constexpr int perftProgressMillis = 100;    // Milliseconds between progress updates
 };  // namespace options
