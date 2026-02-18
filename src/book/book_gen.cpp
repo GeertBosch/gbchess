@@ -24,7 +24,8 @@ namespace {
 // Minimum game time in seconds (excludes bullet and blitz games)
 static constexpr int kMinGameTimeSeconds = 180;
 static constexpr int kMaxOpeningMoves = 12;
-static constexpr int kMinElo = 2400;
+static constexpr int kMinElo = 2700;  // Average ELO to include the game into the book
+static constexpr int kMaxEloSpread = 300;
 
 // Chunk size for parallel processing ( MB)
 static constexpr size_t kChunkSize = 8 * 1024 * 1024;
@@ -235,16 +236,19 @@ static int parsePositiveInt(const std::string& str) {
 
 /** Check if a game meets quality criteria for inclusion in the book */
 bool shouldIncludeGame(const pgn::PGN& game, BookStats& stats) {
-    auto whiteElo = game["WhiteElo"];
-    auto blackElo = game["BlackElo"];
+    auto whiteElo = parsePositiveInt(game["WhiteElo"]);
+    auto blackElo = parsePositiveInt(game["BlackElo"]);
+    auto eloSpread = std::abs(whiteElo - blackElo);
 
-    // Exclude games with missing or low Elo ratings to avoid noise from weak players and bots.
-    if (!whiteElo.size() || parsePositiveInt(whiteElo) < kMinElo || !blackElo.size() ||
-        parsePositiveInt(blackElo) < kMinElo)
-        return ++stats.droppedLowElo, false;
+    // Use average if spread is reasonable, otherwise penalize the higher ELO
+    auto gameElo = eloSpread <= kMaxEloSpread ? (whiteElo + blackElo) / 2
+                                              : std::min(whiteElo, blackElo) + kMaxEloSpread / 2;
+
+    // Exclude games with low ELO, as they are more likely to contain moves that pollute the book.
+    if (gameElo < kMinElo) return ++stats.droppedLowElo, false;
 
     // Exclude non-standard variants and games starting from a specific position
-    if (game["Variant"] != "Standard") {
+    if (game["Variant"].size() && game["Variant"] != "Standard") {
         return ++stats.droppedVariants, false;
     }
     if (game["FEN"].size()) return ++stats.droppedVariants, false;
@@ -623,7 +627,18 @@ size_t writeBookCSV(const std::string& csvFile,
     out << "eco,name,fen,white,draw,black\n";
     size_t writtenCount = 0;
 
-    for (const auto& [key, pos] : positions) {
+    // Sort positions by ECO code and name for better readability
+    std::vector<std::pair<uint64_t, BookPosition>> sortedPositions(positions.begin(),
+                                                                   positions.end());
+    std::sort(sortedPositions.begin(), sortedPositions.end(), [](const auto& a, const auto& b) {
+        const auto& posA = a.second;
+        const auto& posB = b.second;
+        if (posA.opening.eco.min != posB.opening.eco.min)
+            return posA.opening.eco.min < posB.opening.eco.min;
+        return posA.opening.name < posB.opening.name;
+    });
+
+    for (const auto& [key, pos] : sortedPositions) {
         const auto& entry = pos.entry;
         if (entry.total() >= kMinGames && pos.ref) {
             auto it = allFENs.find(key);

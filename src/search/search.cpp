@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <iostream>
 #include <optional>
 #include <sstream>
@@ -9,6 +10,7 @@
 #include "core/core.h"
 #include "core/hash/hash.h"
 #include "core/options.h"
+#include "engine/fen/fen.h"
 #include "eval/eval.h"
 #include "eval/nnue/nnue.h"
 #include "eval/nnue/nnue_incremental.h"
@@ -58,12 +60,20 @@ uint64_t searchQuiescenceCount = 0;
 uint64_t searchCacheCount = 0;
 timepoint searchStartTime = {};
 
-std::optional<nnue::NNUE> network = nnue::loadNNUE("nn-82215d0fd0df.nnue");
+static Hash debugHash = {};
+
+std::optional<nnue::NNUE> network = nnue::loadNNUE("nn-82215d0fd0df.nnue", nnue::kQuiet);
 
 std::string pct(uint64_t some, uint64_t all) {
     return all ? " " + std::to_string((some * 100) / all) + "%" : "";
 }
+}  // namespace
+void debugPosition(Position position) {
+    debugHash = Hash(position);
+    std::cerr << "Debugging position:\n" << fen::to_string(position) << "\n";
+}
 
+namespace {
 /**
  * The transposition table is a hash table that stores the best move found for a position, so it can
  * be reused in subsequent searches. The table is indexed by the hash of the position, and stores
@@ -73,7 +83,15 @@ std::string pct(uint64_t some, uint64_t all) {
  */
 struct TranspositionTable {
 
-    enum EntryType : uint8_t { EXACT, LOWERBOUND, UPPERBOUND };
+    enum class EntryType : uint8_t { EXACT, LOWERBOUND, UPPERBOUND };
+    std::string to_string(EntryType type) const {
+        switch (type) {
+        case EntryType::EXACT: return "EXACT";
+        case EntryType::LOWERBOUND: return "LOWERBOUND";
+        case EntryType::UPPERBOUND: return "UPPERBOUND";
+        default: return "UNKNOWN";
+        }
+    }
     struct Eval {
         Move move;
         Score score = Score::min();
@@ -84,12 +102,23 @@ struct TranspositionTable {
         Hash hash;
         Eval eval;
         uint8_t depthleft = 0;
-        EntryType type = EXACT;
+        EntryType type = EntryType::EXACT;
         uint8_t generation;
+        int16_t fullMoveNumber;  // for informational purposes only, not used in lookups
         Entry() = default;
 
-        Entry(Hash hash, Eval move, uint8_t depth, EntryType type, uint8_t generation)
-            : hash(hash), eval(move), depthleft(depth), type(type), generation(generation) {}
+        Entry(Hash hash,
+              Eval move,
+              uint8_t depth,
+              EntryType type,
+              uint8_t generation,
+              int16_t fullMoveNumber)
+            : hash(hash),
+              eval(move),
+              depthleft(depth),
+              type(type),
+              generation(generation),
+              fullMoveNumber(fullMoveNumber) {}
     };
 
     struct Stats {
@@ -113,11 +142,20 @@ struct TranspositionTable {
         if (transpositionTableDebug) printStats();
     }
 
-    Eval find(Hash hash) {
+    Eval find(Hash hash, bool exactOnly) {
         if constexpr (kNumEntries == 0) return {Move(), Score()};
         ++stats.numHits;
         auto& entry = entries[hash() % kNumEntries];
-        if (entry.hash() == hash() && entry.generation == numGenerations) return entry.eval;
+        if (entry.hash() == hash() && (!exactOnly || entry.type == EntryType::EXACT) &&
+            entry.generation == numGenerations) {
+            if (hash == debugHash) {
+                std::cout << "Found debug position with move " << ::to_string(entry.eval.move)
+                          << " score " << std::string(entry.eval.score) << " depthleft "
+                          << int(entry.depthleft) << " type " << to_string(entry.type) << "\n";
+                return entry.eval;
+            }
+            return entry.eval;
+        }
         --stats.numHits;
         ++stats.numMisses;
         return {};  // no move found
@@ -126,7 +164,7 @@ struct TranspositionTable {
     PrincipalVariation pv(Position pos, int depth) {
         if constexpr (kNumEntries == 0) return {};
         auto hash = Hash(pos);
-        auto eval = find(hash);
+        auto eval = find(hash, false);
         auto move = eval.move;
         if (!move) return {};
         PrincipalVariation pv(Move(), eval.score);
@@ -134,7 +172,7 @@ struct TranspositionTable {
             pv.moves.push_back(move);
             pos = moves::applyMove(pos, move);
             hash = Hash(pos);
-        } while ((move = find(hash).move) && --depth > 0);
+        } while ((move = find(hash, false).move) && --depth > 0);
         return pv;
     }
 
@@ -157,20 +195,21 @@ struct TranspositionTable {
             ++qsTTRefinements;
 
         switch (entry.type) {
-        case EXACT: alpha = beta = entry.eval.score; break;
-        case LOWERBOUND: alpha = std::max(alpha, entry.eval.score); break;
-        case UPPERBOUND: beta = std::min(beta, entry.eval.score); break;
+        case EntryType::EXACT: alpha = beta = entry.eval.score; break;
+        case EntryType::LOWERBOUND: alpha = std::max(alpha, entry.eval.score); break;
+        case EntryType::UPPERBOUND: beta = std::min(beta, entry.eval.score); break;
         }
     }
 
-    void insert(Hash hash, Eval move, uint8_t depthleft, EntryType type) {
+    void insert(Hash hash, int16_t fullMoveNumber, Eval move, uint8_t depthleft, EntryType type) {
         if constexpr (kNumEntries == 0) return;
         if (!move || depthleft < 1) return;
         auto idx = hash() % kNumEntries;
         auto& entry = entries[idx];
         ++stats.numWorse;
-        if (entry.type == EXACT && depthleft < entry.depthleft && entry.eval.move &&
-            (type != EXACT || move.score <= entry.eval.score) && entry.generation == numGenerations)
+        if (entry.type == EntryType::EXACT && depthleft <= entry.depthleft && entry.eval.move &&
+            (type != EntryType::EXACT || move.score <= entry.eval.score) &&
+            entry.generation == numGenerations)
             return;
         --stats.numWorse;
         ++stats.numInserted;
@@ -183,16 +222,25 @@ struct TranspositionTable {
         else
             ++stats.numOccupied;  // nothing in this slot yet
 
-        entry = Entry{hash, move, depthleft, type, numGenerations};
+        if (hash == debugHash) {
+            std::cout << "Inserting debug position with move " << ::to_string(move.move)
+                      << " score " << std::string(move.score) << " depthleft " << int(depthleft)
+                      << " type " << to_string(type) << "\n";
+        }
+
+        entry = Entry{hash, move, depthleft, type, numGenerations, fullMoveNumber};
     }
 
-    void insert(Hash hash, Eval move, uint8_t depthleft, Score alpha, Score beta) {
+    void insert(
+        Hash hash, int16_t fullMoveNumber, Eval move, uint8_t depthleft, Score alpha, Score beta) {
         if (move.score > alpha && move.score < beta)
-            insert(hash, move, depthleft, TranspositionTable::EXACT);
+            insert(hash, fullMoveNumber, move, depthleft, TranspositionTable::EntryType::EXACT);
         else if (move.score <= alpha)
-            insert(hash, move, depthleft, TranspositionTable::UPPERBOUND);
+            insert(
+                hash, fullMoveNumber, move, depthleft, TranspositionTable::EntryType::UPPERBOUND);
         else if (move.score >= beta)
-            insert(hash, move, depthleft, TranspositionTable::LOWERBOUND);
+            insert(
+                hash, fullMoveNumber, move, depthleft, TranspositionTable::EntryType::LOWERBOUND);
     }
 
     void remove(Hash hash) {
@@ -370,7 +418,7 @@ using MoveIt = MoveVector::iterator;
  */
 MoveIt sortTransposition(Hash hash, MoveIt begin, MoveIt end) {
     // See if the current position is a transposition of a previously seen one
-    auto cachedMove = transpositionTable.find(hash);
+    auto cachedMove = transpositionTable.find(hash, false);
     if (!cachedMove.move) return begin;
 
     // If the move is not part of the current legal moves, nothing to do here.
@@ -724,7 +772,8 @@ PrincipalVariation alphaBeta(
 
     if (moveList.empty() && !isInCheck(position)) pv.score = Score();  // Stalemate
 
-    transpositionTable.insert(hash, {pv.front(), pv.score}, depth.left, alpha, beta);
+    transpositionTable.insert(
+        hash, position.turn.fullmove(), {pv.front(), pv.score}, depth.left, alpha, beta);
 
     return pv;
 }
@@ -807,7 +856,8 @@ PrincipalVariation toplevelAlphaBeta(
             break;
     }
     if (moveList.empty() && !isInCheck(position)) pv = {Move(), Score()};
-    transpositionTable.insert(hash, {pv.front(), pv.score}, depthleft, alpha, beta);
+    transpositionTable.insert(
+        hash, position.turn.fullmove(), {pv.front(), pv.score}, depthleft, alpha, beta);
 
     return pv;
 }
@@ -853,7 +903,7 @@ PrincipalVariation iterativeDeepening(Position& position, int maxdepth, InfoFn i
     for (auto depth = 2; depth <= maxdepth; ++depth) {
         pv = aspirationWindows(position, pv, depth, info);
         if (pvInfo(info, depth, pv.score, pv.moves)) break;
-        if (pv.score.mate() && pv && depth > static_cast<int>(pv.moves.size())) break;
+        if (pv.score.mate() && pv && isCheckmate(moves::applyMoves(position, pv.moves))) break;
     }
     return pv;
 }

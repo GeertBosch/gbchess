@@ -10,6 +10,20 @@ OPTOBJ=build/opt
 DBGOBJ=build/dbg
 COMPILE_COMMANDS=build/compile_commands.json
 
+Q := @
+VOPT :=
+# Redirect output to log files and just report on overall pass / fail
+
+ifndef V
+	REDIR = > $@ && echo "  ✅ $@ passed" | tee -a $@ || { echo "  ❌ error in $@" | tee -a $@ ; mv $@ $(basename $@).log ; false; }
+else
+	Q :=
+	REDIR = | tee -a $@ && echo "  ✅ $@ passed" | tee -a $@ || { echo "  ❌ error in $@" | tee -a $@ ; mv $@ $(basename $@).log ; false; }
+	VOPT := -v
+endif
+
+RUNCMD = $(Q)$(1) || { echo "  ❌ error making $@"; false; }
+
 # MacOS specific stuff - why can't thinks just work  by default?
 ifeq ($(_system_type),Darwin)
     export MallocNanoZone=0
@@ -40,37 +54,41 @@ test_objs=$(call calc_objs,$(call test_dir,$(1)),$(call prefix_src,$(call test_s
 
 ALLSRCS=$(wildcard src/*.cpp src/*/*.cpp src/*/*/*.cpp)
 
-all: build debug test perft-bench perft-test mate123 mate45 puzzles
-	@echo "\n✅ All tests passed!\n"
+all: .deps build debug test perft-bench perft-test build/mate123.out build/mate45.out build/puzzles.out
+	@echo "✅ All tests passed!"
 
 -include $(call calc_deps,${OPTOBJ},${ALLSRCS})
 -include $(call calc_deps,${DBGOBJ},${ALLSRCS})
 
 ${OPTOBJ}/%.d: src/%.cpp
-	@mkdir -p $(dir $@)
-	@${GPP} -MT $(subst .d,.o,$@) -MM ${CCFLAGS} -Isrc -o $@ $< > $@
+	$(Q)mkdir -p $(dir $@)
+	$(call RUNCMD,${GPP} -MT $(subst .d,.o,$@) -MM ${CCFLAGS} -Isrc -o $@ $< > $@)
 
 ${OPTOBJ}/%.o: src/%.cpp ${OPTOBJ}/%.d
-	@mkdir -p $(dir $@)
-	@${GPP} -c ${CCFLAGS} -Isrc -O2 -o $@ $<
+	$(Q)mkdir -p $(dir $@)
+	$(call RUNCMD,${GPP} -c ${CCFLAGS} -Isrc -O2 -o $@ $<)
 
 ${DBGOBJ}/%.d: src/%.cpp
-	@mkdir -p $(dir $@)
-	@${GPP} -MM ${CCFLAGS} -Isrc -o $@ $< > $@
+	$(Q)mkdir -p $(dir $@)
+	$(call RUNCMD,${GPP} -MM ${CCFLAGS} -Isrc -o $@ $< > $@)
 
-${DBGOBJ}/%.o: src/%.cpp
-	@mkdir -p $(dir $@)
-	@${CLANGPP} -MMD -c ${CCFLAGS} ${DEBUGFLAGS} -Isrc -o $@ $<
+# By making debug objects depend on the optimized objects, most compiler errors will only be
+# reported once, and final compilation speed appears effectively unchanged.
+${DBGOBJ}/%.o: src/%.cpp # ${OPTOBJ}/%.o
+	$(Q)mkdir -p $(dir $@)
+	$(call RUNCMD,${CLANGPP} -MMD -c ${CCFLAGS} ${DEBUGFLAGS} -Isrc -o $@ $<)
 
 ${OPTOBJ}/%-test: ${OPTOBJ}/%_test.o
-	@mkdir -p build
-	@${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
-	@ln -sf $$(echo "$@" | sed 's|build/||') build/$(notdir $@)
+	$(Q)mkdir -p build
+	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^)
+	$(Q)ln -sf $$(echo "$@" | sed 's|build/||') build/$(notdir $@)
+	@echo "  ✅ build/$(notdir $@) built"
 
 ${DBGOBJ}/%-debug: ${DBGOBJ}/%_test.o
-	@mkdir -p build
-	@${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
-	@ln -sf $$(echo "$@" | sed 's|build/||') build/$(notdir $@)
+	$(Q)mkdir -p build
+	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^)
+	$(Q)ln -sf $$(echo "$@" | sed 's|build/||') build/$(notdir $@)
+	@echo "  ✅ build/$(notdir $@) built"
 
 # Test dependency definitions
 NNUE_SRCS=eval/nnue/nnue.cpp eval/nnue/nnue_stats.cpp eval/nnue/nnue_incremental.cpp core/square_set/square_set.cpp
@@ -88,15 +106,15 @@ build/$(notdir $1)-debug: ${DBGOBJ}/$(1)-debug
 endef
 
 build/engine: $(call calc_objs,${OPTOBJ},$(call prefix_src,${ENGINE_SRCS}))
-	@${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^)
 build/engine-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,${ENGINE_SRCS}))
-	@${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^)
 
 BOOK_GEN_SRCS=book/book_gen.cpp book/pgn/pgn.cpp engine/fen/fen.cpp core/hash/hash.cpp ${MOVES_SRCS}
 build/book-gen: $(call calc_objs,${OPTOBJ},$(call prefix_src,${BOOK_GEN_SRCS}))
-	@${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^)
 build/book-gen-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,${BOOK_GEN_SRCS}))
-	@${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^)
 
 LAST_24_MONTHS := $(shell for i in {1..24}; do date -v-$${i}m +%Y-%m; done | xargs)
 BROADCAST_FILES := $(addprefix lichess/lichess_db_broadcast_,$(addsuffix .pgn,$(LAST_24_MONTHS)))
@@ -105,15 +123,19 @@ BROADCAST_FILES := $(addprefix lichess/lichess_db_broadcast_,$(addsuffix .pgn,$(
 LICHESS_PGNS=$(wildcard lichess/*.pgn) $(BROADCAST_FILES)
 
 lichess/lichess_db_broadcast_%.pgn: lichess/lichess_db_broadcast_%.pgn.zst
-	zstd -d $<
+	$(call RUNCMD,zstd -d -f -k "$<" -o "$@")
+	$(Q)touch "$@"
 lichess/lichess_db_broadcast_%.pgn.zst:
-	@
+	$(Q)
 	mkdir -p lichess
 	cd lichess && wget https://database.lichess.org/broadcast/$(notdir $@)
 
-book.csv: build/book-gen ${LICHESS_PGNS}
-	@echo "Generating book.csv from $(words ${LICHESS_PGNS}) PGN files..."
-	@./build/book-gen ${LICHESS_PGNS} book.csv
+book.csv build/book.out: build/book-gen ${LICHESS_PGNS}
+	$(Q)echo "Generating book.csv from $(words ${LICHESS_PGNS}) PGN files..." > build/book.out
+	$(Q)./build/book-gen ${LICHESS_PGNS} book.csv >> build/book.out 2>&1 \
+		&& echo "  ✅ build/book.out passed" | tee -a build/book.out \
+		|| { echo "  ❌ error in build/book.out" | tee -a build/book.out ; false; }
+	$(Q)[ -n "$(V)" ] && cat build/book.out || true
 
 $(eval $(call test_rules,core/core))
 $(eval $(call test_rules,engine/fen/fen,engine/fen/fen.cpp))
@@ -132,6 +154,8 @@ $(eval $(call test_rules,book/pgn/pgn,${MOVES_SRCS} book/pgn/pgn.cpp))
 $(eval $(call test_rules,book/book,${BOOK_SRCS} ${MOVES_SRCS} core/hash/hash.cpp))
 
 .deps: $(call calc_deps,${OPTOBJ},${ALLSRCS}) $(call calc_deps,${DBGOBJ},${ALLSRCS})
+	$(Q)./check-arch.sh
+	@echo  "\n✅ All dependencies up to date"
 
 .SUFFIXES: # Delete the default suffix rules
 
@@ -142,7 +166,7 @@ clean:
 	rm -f game.??? log.??? players.dat # XBoard outputs
 	rm -rf test/out *.dSYM .DS_Store
 	rm -f $(COMPILE_COMMANDS)
-	rm book.csv
+	rm -f book.csv
 
 realclean: clean
 	rm -f lichess/*.csv
@@ -150,179 +174,179 @@ realclean: clean
 PERFT_SRCS=$(call prefix_src,engine/perft/perft.cpp engine/perft/perft_core.cpp ${MOVES_SRCS} engine/fen/fen.cpp core/hash/hash.cpp)
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
 build/perft: $(call calc_objs,${OPTOBJ},${PERFT_SRCS})
-	@${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^)
 
 PERFT_TEST_SRCS=$(call prefix_src,engine/perft/perft_test.cpp engine/perft/perft_core.cpp ${MOVES_SRCS} engine/fen/fen.cpp core/hash/hash.cpp)
 build/perft-test: $(call calc_objs,${OPTOBJ},${PERFT_TEST_SRCS})
-	@${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^)
 build/perft-debug: $(call calc_objs,${DBGOBJ},${PERFT_TEST_SRCS})
-	@${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^
+	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^)
 
 PERFT_SIMPLE_SRCS=$(call prefix_src,engine/perft/perft_simple.cpp ${MOVES_SRCS} engine/fen/fen.cpp)
 # perft_simple is a simplified version without caching or 128-bit ints
 build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
-	@${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^
+	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^)
 
 # Build the perft tool with some different compilation options for speed comparison
 build/perft-clang-sse2: ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
-	@mkdir -p build
-	@${CLANGPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
+	$(Q)mkdir -p build
+	$(call RUNCMD,${CLANGPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
 build/perft-clang-emul:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
-	@mkdir -p build
-	@${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
+	$(Q)mkdir -p build
+	$(call RUNCMD,${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
 build/perft-gcc-sse2:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
-	@mkdir -p build
-	@${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
+	$(Q)mkdir -p build
+	$(call RUNCMD,${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
 build/perft-gcc-emul:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
-	@mkdir -p build
-	@${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^)
+	$(Q)mkdir -p build
+	$(call RUNCMD,${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
 
 # Test the Kiwipete position at depth 4 as it exercises captures, en passant, castling,
 # promotions, checks, discovered checks, double checks, checkmates, etc at low depth.
 KIWIPETE=r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1
-build/perft-%.ok: build/perft-%
-	@./$< "$(KIWIPETE)" 5 > $(basename $@).out
-	@grep -q "Nodes searched: 193690690" $(basename $@).out && touch $@
-	@grep -H nodes/sec $(basename $@).out || true
+build/perft-%.out: build/perft-%
+	$(Q)./$< "$(KIWIPETE)" 5 | grep -q "Nodes searched: 193690690" $(REDIR)
 
-build/perft.ok: build/perft
-	@./build/perft "$(KIWIPETE)" 5 | grep -q "Nodes searched: 193690690" && touch $@
+build/perft.out: build/perft
+	$(Q)./build/perft "$(KIWIPETE)" 5 | grep -q "Nodes searched: 193690690" $(REDIR)
 
 # Aliases for perft test targets
-perft-bench: build/perft-clang-emul.ok build/perft-gcc-emul.ok build/perft-clang-sse2.ok build/perft-gcc-sse2.ok
+perft-bench: build/perft-clang-emul.out build/perft-gcc-emul.out build/perft-clang-sse2.out build/perft-gcc-sse2.out
 
-perft-test: build/perft.ok build/perft-test.ok build/perft-debug.ok build/perft-simple.ok
+perft-test: build/perft.out build/perft-test.out build/perft-debug.out build/perft-simple.out
 
 # Download the lichess puzzles database if not already present. As the puzzles change over time, and
 # the file is large, we don't normally clean and refetch it.
 ${PUZZLES}: ${PUZZLES}.zst
-	zstd -d $<
+	$(call RUNCMD,zstd -d -f -k "$<" -o "$@")
+	$(Q)touch "$@"
 
 ${PUZZLES}.zst:
-	mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) \
+	$(Q)mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) \
 		&& wget https://database.lichess.org/$(notdir ${PUZZLES}).zst
 
 # Create derived puzzle files for different test targets
 build/mate123.csv: ${PUZZLES}
-	@mkdir -p build
-	@egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -4001 > $@
+	$(Q)mkdir -p build
+	$(Q)egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -4001 > $@
 
 build/mate45.csv: ${PUZZLES}
-	@mkdir -p build
-	@egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -101 > $@
+	$(Q)mkdir -p build
+	$(Q)egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -101 > $@
 
 build/puzzles.csv: ${PUZZLES}
-	@mkdir -p build
-	@egrep -v "mateIn[12345]" ${PUZZLES} | head -101 > $@
+	$(Q)mkdir -p build
+	$(Q)egrep -v "mateIn[12345]" ${PUZZLES} | head -101 > $@
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
-mate123: build/search-test build/mate123.csv
-	@./build/search-test 7 build/mate123.csv
+build/mate123.out: build/search-test build/mate123.csv
+	$(Q)./build/search-test $(VOPT) 7 build/mate123.csv $(REDIR)
 
-mate45: build/search-test build/mate45.csv
-	@./build/search-test 11 build/mate45.csv
+build/mate45.out: build/search-test build/mate45.csv
+	$(Q)./build/search-test $(VOPT) 11 build/mate45.csv $(REDIR)
 
-.PHONY: puzzles build
-puzzles: build/search-test build/puzzles.csv
-	@./build/search-test 7 build/puzzles.csv
+.PHONY: build
+build/puzzles.out: build/search-test build/puzzles.csv
+	$(Q)./build/search-test $(VOPT) 7 build/puzzles.csv $(REDIR)
 
 lichess/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
 	mkdir -p $(dir $@) && ./$< $(@:lichess/lichess_%_evals.csv=%) > $@
 
-evals: build/eval-test ${EVALS}
-	@./build/eval-test ${EVALS}
+build/evals.out: build/eval-test ${EVALS}
+	$(Q)./build/eval-test ${EVALS} $(REDIR)
 
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:
-	@echo "\n*** C++ Source Code ***\n"
+	$(Q)echo "\n*** C++ Source Code ***\n"
 	cloc --by-percent cmb `find src -name \*.cpp -o -name \*.h | egrep -v '_test[.]|debug'` 2>/dev/null || echo "Error combining source files"
-	@echo "\n*** C++ Test Code ***\n"
+	$(Q)echo "\n*** C++ Test Code ***\n"
 	cloc --by-percent cmb `find src -name \*.cpp -o -name \*.h | egrep '_test[.]|debug'` 2>/dev/null || echo "Error combining source files"
 
 # Verify well-known perft results. Great for checking correct move generation.
-build/perft-test.ok: build/perft-test
-	./build/perft-test && touch $@
-build/perft-debug.ok: build/perft-debug
-	./build/perft-debug && touch $@
+build/perft-test.out: build/perft-test
+	$(Q)./build/perft-test $(REDIR)
+build/perft-debug.out: build/perft-debug
+	$(Q)./build/perft-debug $(REDIR)
 
 debug: $(patsubst %-test,%-debug,$(CPP_TESTS)) build/perft-debug build/engine-debug build/book-gen-debug
-build: $(CPP_TESTS) $(COMPILE_COMMANDS) build/perft build/engine build/perft-simple build/book-gen
-	@echo "\n✅ Build complete\n"
-	@./check-arch.sh
+build: .deps $(CPP_TESTS) $(COMPILE_COMMANDS) build/perft build/engine build/perft-simple build/book-gen
+	$(Q)echo "\n✅ Build complete\n"
 
-fixed-puzzles: build/search-test
-	./build/search-test 7 < ${FIXED_PUZZLES}
+build/fixed-puzzles.out: build/search-test $(FIXED_PUZZLES)
+	$(Q)./build/search-test $(VOPT) 7 < $(FIXED_PUZZLES) $(REDIR)
 
-searches1: build/search-debug
-	./build/search-debug "5r1k/pp4pp/5p2/1BbQp1r1/7K/7P/1PP3P1/3R3R b - - 3 26" 3
+build/searches.out: build/search-debug
+	$(Q){ \
+		./build/search-debug "5r1k/pp4pp/5p2/1BbQp1r1/7K/7P/1PP3P1/3R3R b - - 3 26" 3; \
+		./build/search-test $(VOPT) "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 5; \
+		./build/search-test $(VOPT) "8/8/8/8/8/4bk1p/2R2Np1/6K1 b - - 7 62" 3; \
+		./build/search-test $(VOPT) "3r2k1/1p3ppp/pq1Q1b2/8/8/1P3N2/P4PPP/3R2K1 w - - 4 28" 3; \
+		./build/search-test $(VOPT) "8/1N3k2/6p1/8/2P3P1/pr6/R7/5K2 b - - 2 56" 5; \
+		./build/search-test $(VOPT) "r4rk1/p3ppbp/Pp3np1/3PpbB1/2q5/2N2P2/1PPQ2PP/3RR2K w - - 0 20" 1; \
+	} $(REDIR)
 
-searches2: build/search-test
-	./build/search-test "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 5
+searches: build/searches.out
 
-searches3: build/search-test
-	./build/search-test "8/8/8/8/8/4bk1p/2R2Np1/6K1 b - - 7 62" 3
+build/uci-%.out: test/uci-%.in build/engine
+	$(Q)./build/engine $< 2>&1 | grep -wv "expect" $(REDIR)
 
-searches4: build/search-test
-	./build/search-test "3r2k1/1p3ppp/pq1Q1b2/8/8/1P3N2/P4PPP/3R2K1 w - - 4 28" 3
+build/uci.out: $(patsubst test/uci-%.in,build/uci-%.out,$(wildcard test/uci-*.in))
+	$(Q)./test/check-uci.sh ${REDIR}
 
-searches5: build/search-test
-	./build/search-test "8/1N3k2/6p1/8/2P3P1/pr6/R7/5K2 b - - 2 56" 5
-
-searches6: build/search-test
-	./build/search-test "r4rk1/p3ppbp/Pp3np1/3PpbB1/2q5/2N2P2/1PPQ2PP/3RR2K w - - 0 20" 1
-
-searches: searches1 searches2 searches3 searches4 searches5 searches6
-
-test/out/uci-%.out: test/uci-%.in build/engine
-	@mkdir -p test/out
-	@./build/engine $< 2>&1 | grep -wv "expect" > "$@"
-
-.PHONY: uci
-uci: $(patsubst test/uci-%.in,test/out/uci-%.out,$(wildcard test/uci-*.in))
-	@./test/check-uci.sh
-
-magic: build/magic-test
+build/magic.out: build/magic-test
 # To accept any changes on test failure, pipe the output to the `patch` command
-	@(./build/magic-test --verbose | diff -u src/move/magic/magic_gen.h -) \
+	$(Q) { (./build/magic-test --verbose | diff -u src/move/magic/magic_gen.h -) 2>&1 \
 	&& echo Magic tests passed \
-	|| (echo "\n*** To accept these changes, pipe this output to the patch command ***" && false)
+	|| (echo "\n*** To accept these changes, pipe this output to the patch command ***" && false) \
+	} $(REDIR)
 
-test-cpp: build ${CPP_TESTS} book.csv
-	@(cd build && echo Symlinking NNUE files && ln -fs ../*.nnue .)
-	@(cd build && echo Symlinking book files && ln -fs ../book.csv .)
-	@echo "Checking that all C++ unit tests have been built"
-	@find src -name "*_test.cpp" -exec basename {} _test.cpp \; | sort > .test_sources.tmp
-	@find build -depth 1 -a -name "*-test" -exec basename {} -test \; | sort > .test_executables.tmp
-	@diff -u .test_sources.tmp .test_executables.tmp \
-		&& (echo "All C++ unit tests have been built" \
-			&& rm -f .test_sources.tmp .test_executables.tmp) \
-		|| (echo "\n*** Extra or missing C++ unit tests! ***\n"  && false)
-	@echo ${CPP_TESTS}
-	@echo "Running C++ unit test executables..."
-	@(cd build && failed=0; for file in *-test; do \
-		/bin/echo -n Run $$file ; \
-		if ./$$file < /dev/null > /dev/null; then \
-			echo " passed"; \
-		else \
-			echo " FAILED"; \
-			./$$file < /dev/null || true; \
-			failed=1; \
-		fi; \
-	done; \
-	if [ $$failed -eq 0 ]; then \
-		echo "\n✅ All C++ unit tests passed!\n"; \
-	else \
-		echo "\n❌ Some C++ unit tests failed!\n"; \
-		exit 1; \
-	fi)
+build/test-cpp.out: ${CPP_TESTS} book.csv
+	$(Q){ \
+		(cd build && echo Symlinking NNUE files && ln -fs ../*.nnue .); \
+		(cd build && echo Symlinking book files && ln -fs ../book.csv .); \
+		echo "Checking that all C++ unit tests have been built"; \
+		find src -name "*_test.cpp" -exec basename {} _test.cpp \; | sort > .test_sources.tmp; \
+		find build -depth 1 -a -name "*-test" -exec basename {} -test \; | sort > .test_executables.tmp; \
+		diff -u .test_sources.tmp .test_executables.tmp \
+			&& (echo "All C++ unit tests have been built" \
+				&& rm -f .test_sources.tmp .test_executables.tmp) \
+			|| (echo "\n*** Extra or missing C++ unit tests! ***\n"  && false); \
+		echo ${CPP_TESTS}; \
+		echo "Running C++ unit test executables..."; \
+		(cd build && failed=0; for file in *-test; do \
+			/bin/echo -n Run $$file ; \
+			if ./$$file < /dev/null > /dev/null; then \
+				echo " passed"; \
+			else \
+				echo " FAILED"; \
+				./$$file < /dev/null || true; \
+				failed=1; \
+			fi; \
+		done; \
+		if [ $$failed -ne 0 ]; then \
+			echo "\n❌ $$failed C++ unit tests failed!\n"; \
+			exit 1; \
+		fi); \
+	} $(REDIR)
 
-test: test-cpp fixed-puzzles searches evals uci magic
+test: build/test-cpp.out build/fixed-puzzles.out build/searches.out build/evals.out build/uci.out build/magic.out
+
+SPRT_NEW ?= build/engine
+SPRT_BASE ?= build/engine-prev
+SPRT_STOCKFISH12 ?= stockfish-12
+SPRT_ARGS ?=
+
+sprt-self: build/engine
+	$(Q)./test/sprt.sh --new-cmd "$(SPRT_NEW)" --base-cmd "$(SPRT_BASE)" --new-name gbchess-new --base-name gbchess-base $(SPRT_ARGS)
+
+sprt-sf12: build/engine
+	$(Q)./test/sprt.sh --new-cmd "$(SPRT_NEW)" --base-cmd "$(SPRT_STOCKFISH12)" --new-name gbchess --base-name stockfish-12 $(SPRT_ARGS)
 
 # Generate compile_commands.json for clangd
 $(COMPILE_COMMANDS):
-	@mkdir -p build
-	@echo '[' > $@
-	@first=true; \
+	$(Q)mkdir -p build
+	$(Q)echo '[' > $@
+	$(Q)first=true; \
 	for src in $(wildcard src/*.cpp src/*/*.cpp src/*/*/*.cpp); do \
 		[ "$$first" = true ] && first=false || echo ',' >> $@; \
 		echo '  {' >> $@; \
@@ -331,7 +355,8 @@ $(COMPILE_COMMANDS):
 		echo "    \"file\": \"$$src\"" >> $@; \
 		printf '  }' >> $@; \
 	done
-	@echo >> $@
-	@echo ']' >> $@
+	$(Q)echo >> $@
+	$(Q)echo ']' >> $@
 
 .PHONY: ${COMPILE_COMMANDS}
+.PHONY: sprt-self sprt-sf12

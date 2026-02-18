@@ -183,7 +183,10 @@
             ],
             "program": "${workspaceFolder}/build/engine-debug",
             "args": [
-            "${workspaceFolder}/test/uci-avoid-repetition.in",
+            "--cmd",
+            "restore",
+            "debug fen \"5R2/2k5/r7/8/p3K3/8/8/8 b - - 2 63\"",
+            "go",
             ],
       },
     ]

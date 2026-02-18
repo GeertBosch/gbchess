@@ -1,9 +1,9 @@
 setoption name OwnBook value false
 position fen rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq d6 0 2 moves e2e4 e7e5 d4e5
 go depth 5
-save test/out/uci-save-restore-ownbook-false.bin
+save build/uci-save-restore-ownbook-false.bin
 ucinewgame
-restore test/out/uci-save-restore-ownbook-false.bin
-# Note that this also restores the position and moves 
+restore build/uci-save-restore-ownbook-false.bin
+# Note that this also restores the position and moves
 go depth 5
 expect info depth 5 .*nodes ..? .*pv d5e4
