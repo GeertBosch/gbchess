@@ -1,0 +1,162 @@
+{
+    "resign": {
+        "move_count": 1,
+        "score": 0,
+        "twosided": false,
+        "enabled": false
+    },
+    "draw": {
+        "move_number": 0,
+        "move_count": 1,
+        "score": 0,
+        "enabled": false
+    },
+    "maxmoves": {
+        "move_count": 1,
+        "enabled": false
+    },
+    "tb_adjudication": {
+        "syzygy_dirs": "",
+        "max_pieces": 0,
+        "ignore_50_move_rule": false,
+        "enabled": false
+    },
+    "opening": {
+        "file": "build/sprt-openings.epd",
+        "format": 0,
+        "order": 0,
+        "plies": 4,
+        "start": 1
+    },
+    "pgn": {
+        "additional_lines_rgx": [],
+        "event_name": "Fastchess Tournament",
+        "site": "?",
+        "file": "build/sprt-20260217-235950.pgn",
+        "notation": 2,
+        "append_file": true,
+        "track_nodes": false,
+        "track_seldepth": false,
+        "track_nps": false,
+        "track_hashfull": false,
+        "track_tbhits": false,
+        "track_timeleft": false,
+        "track_latency": false,
+        "track_pv": false,
+        "min": false,
+        "crc": false
+    },
+    "epd": {
+        "file": "",
+        "append_file": true
+    },
+    "sprt": {
+        "alpha": 0.05,
+        "beta": 0.05,
+        "elo0": 0.0,
+        "elo1": 5.0,
+        "model": "normalized",
+        "enabled": true
+    },
+    "config_name": "config.json",
+    "output": 0,
+    "seed": 5641159038472579362,
+    "variant": 0,
+    "type": 0,
+    "gauntlet_seeds": 1,
+    "ratinginterval": 10,
+    "scoreinterval": 1,
+    "wait": 0,
+    "autosaveinterval": 20,
+    "games": 2,
+    "rounds": 40,
+    "concurrency": 2,
+    "force_concurrency": false,
+    "recover": true,
+    "noswap": false,
+    "reverse": false,
+    "report_penta": true,
+    "affinity": false,
+    "show_latency": false,
+    "log": {
+        "file": "",
+        "level": 2,
+        "append_file": true,
+        "compress": false,
+        "realtime": true,
+        "engine_coms": false
+    },
+    "engines": [
+        {
+            "name": "gbchess-new",
+            "dir": "",
+            "cmd": "build/engine",
+            "args": "",
+            "restart": false,
+            "options": [
+                [
+                    "Threads",
+                    "1"
+                ],
+                [
+                    "Hash",
+                    "64"
+                ]
+            ],
+            "limit": {
+                "tc": {
+                    "increment": 50,
+                    "fixed_time": 0,
+                    "time": 5000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        },
+        {
+            "name": "gbchess-base",
+            "dir": "",
+            "cmd": "build/engine-prev",
+            "args": "",
+            "restart": false,
+            "options": [
+                [
+                    "Threads",
+                    "1"
+                ],
+                [
+                    "Hash",
+                    "64"
+                ]
+            ],
+            "limit": {
+                "tc": {
+                    "increment": 50,
+                    "fixed_time": 0,
+                    "time": 5000,
+                    "moves": 0,
+                    "timemargin": 0
+                },
+                "nodes": 0,
+                "plies": 0
+            },
+            "variant": 0
+        }
+    ],
+    "stats": {
+        "gbchess-new vs gbchess-base": {
+            "wins": 16,
+            "losses": 16,
+            "draws": 8,
+            "penta_WW": 0,
+            "penta_WD": 0,
+            "penta_WL": 16,
+            "penta_DD": 4,
+            "penta_LD": 0,
+            "penta_LL": 0
+        }
+    }
+}
