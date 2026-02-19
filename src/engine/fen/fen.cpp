@@ -155,8 +155,11 @@ Position parsePosition(std::stringstream ss) {
     return position;
 }
 
-Position parsePosition(const std::string& fen) {
+Position parsePosition(const std::string& fen) try {
     return parsePosition(std::stringstream(fen));
+} catch (std::exception&) {
+    std::cerr << "Error parsing FEN string: " << fen << "\n";
+    throw ParseError("Invalid FEN format: " + fen);
 }
 
 bool maybeFEN(std::string fen) {
