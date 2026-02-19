@@ -335,19 +335,16 @@ private:
         stopping = false;
     }
 
+    void dispatch(const std::string& command, std::istream& in, const std::string& line);
+
     std::ostream& out;
     std::ostream& log;
     std::thread thread;
 };
 
-void UCIRunner::execute(std::string line) {
-    auto in = std::stringstream(line);
-    std::string command;
-    in >> command;
-
-    if (command != "stop" && thread.joinable())
-        thread.join();  // Wait for previous search to finish
-
+void UCIRunner::dispatch(const std::string& command,
+                         std::istream& in,
+                         const std::string& line) try {
     if (command == "uci") {
         out << "id name " << cmdName << "\n";
         out << "id author " << authorName << "\n";
@@ -404,6 +401,21 @@ void UCIRunner::execute(std::string line) {
     } else if (command != "") {
         out << "Unknown command: '" << command << "'\n";
     }
+} catch (const std::exception& e) {
+    auto message = "error processing command '" + line + "': " + e.what();
+    std::cerr << message << "\n";
+    respond("info string " + message);
+}
+
+void UCIRunner::execute(std::string line) {
+    auto in = std::stringstream(line);
+    std::string command;
+    in >> command;
+
+    if (command != "stop" && thread.joinable())
+        thread.join();  // Wait for previous search to finish
+
+    dispatch(command, in, line);
     std::flush(log);
 }
 
