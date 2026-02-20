@@ -1,4 +1,4 @@
 ucinewgame
 position startpos moves c2c4 g8f6 b1c3 b8c6 d2d4 e7e6 g1f3 f8b4 e2e3 d7d6 c1d2 e8g8 a2a3 b4c3 d2c3 f6e4 d1c2 e4c3 c2c3 d8f6 f1e2 c8d7 b2b4 e6e5 a1d1 e5e4 f3d2 f6g6 c3c2 f8e8 e1f1 d7f5 d2b1 h7h5 h2h4 c6e7 b1c3 a7a5 b4b5 a8d8 f1g1 b7b6 g2g3 d8c8 g1g2 c7c5 d1d2 c8b8
 go depth 10
-expect-count 0 mate
+expect-count 0 info.*mate

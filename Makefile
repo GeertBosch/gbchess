@@ -273,12 +273,12 @@ searches6: build/search-test
 
 searches: searches1 searches2 searches3 searches4 searches5 searches6
 
-test/out/uci-%.out: test/uci-%.in build/engine
+build/out/uci-%.out: test/uci-%.in build/engine
 	@mkdir -p test/out
 	@./build/engine $< 2>&1 | grep -wv "expect" > "$@"
 
 .PHONY: uci
-uci: $(patsubst test/uci-%.in,test/out/uci-%.out,$(wildcard test/uci-*.in))
+uci: $(patsubst test/uci-%.in,build/uci-%.out,$(wildcard test/uci-*.in))
 	@./test/check-uci.sh
 
 magic: build/magic-test
