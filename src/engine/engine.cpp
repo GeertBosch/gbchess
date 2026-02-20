@@ -388,6 +388,8 @@ void UCIRunner::dispatch(const std::string& command,
         if (filename.empty()) filename = "save-state.bin";
         if (restoreStateFromFile(filename))
             respond("info string restored engine state from " + filename);
+    } else if (command == "debug") {
+        search::debugPosition(applyMoves(position, moves));
     } else if (command == "sleep") {
         // Test command to sleep for a number of milliseconds
         int ms;
