@@ -405,7 +405,7 @@ void testTemperature() {
     }
 
     Position initialPos = Position::initial();
-    std::vector<double> temperatures = {0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0};
+    std::vector<double> temperatures = {0.1, 0.2, 0.5, 1.0, 1.2, 1.4, 2.0, 2.8, 4.0, 5.6, 8.0};
 
     std::cout << "\n=== Temperature Effect on Move Selection ===\n";
 
