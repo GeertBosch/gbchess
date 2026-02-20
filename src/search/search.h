@@ -105,6 +105,7 @@ void clearState();
  */
 bool restoreState(std::istream& in);
 
+void debugPosition(Position position);
 /**
  * Search all tactical moves necessary to achieve a quiet position and return the best score
  */
