@@ -623,7 +623,18 @@ size_t writeBookCSV(const std::string& csvFile,
     out << "eco,name,fen,white,draw,black\n";
     size_t writtenCount = 0;
 
-    for (const auto& [key, pos] : positions) {
+    // Sort positions by ECO code and name for better readability
+    std::vector<std::pair<uint64_t, BookPosition>> sortedPositions(positions.begin(),
+                                                                   positions.end());
+    std::sort(sortedPositions.begin(), sortedPositions.end(), [](const auto& a, const auto& b) {
+        const auto& posA = a.second;
+        const auto& posB = b.second;
+        if (posA.opening.eco.min != posB.opening.eco.min)
+            return posA.opening.eco.min < posB.opening.eco.min;
+        return posA.opening.name < posB.opening.name;
+    });
+
+    for (const auto& [key, pos] : sortedPositions) {
         const auto& entry = pos.entry;
         if (entry.total() >= kMinGames && pos.ref) {
             auto it = allFENs.find(key);
