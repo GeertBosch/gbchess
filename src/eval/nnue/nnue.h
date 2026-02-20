@@ -113,6 +113,8 @@ int32_t evaluate(const Position& position, const NNUE& network);
  */
 Accumulator transform(const Position& position, const InputTransform& inputTransform);
 
-NNUE loadNNUE(const std::string& filename);
+enum Verbosity { kQuiet, kNormal };
+
+NNUE loadNNUE(const std::string& filename, Verbosity verbosity);
 
 }  // namespace nnue

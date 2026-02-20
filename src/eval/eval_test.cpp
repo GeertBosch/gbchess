@@ -312,7 +312,7 @@ int main(int argc, char* argv[]) {
 
     std::optional<nnue::NNUE> network;
     if (options::useNNUE)
-        network.emplace(nnue::loadNNUE("nn-82215d0fd0df.nnue"));
+        network.emplace(nnue::loadNNUE("nn-82215d0fd0df.nnue", nnue::kNormal));
     else
         std::cout << "\n*** Skipping NNUE evaluation as it is disabled in options. ***\n";
 
