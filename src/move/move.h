@@ -80,6 +80,8 @@ void unmakeMove(Position& position, UndoPosition undo);
  */
 [[nodiscard]] Position applyMove(Position position, Move move);
 
+[[nodiscard]] Position applyMoves(Position position, MoveVector moves);
+
 Turn applyMove(Turn turn, MoveWithPieces mwp);
 
 /**

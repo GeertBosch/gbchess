@@ -157,6 +157,12 @@ Position applyMove(Position position, Move move) {
     return position;
 }
 
+Position applyMoves(Position position, MoveVector moves) {
+    for (auto move : moves) position = applyMove(position, move);
+
+    return position;
+}
+
 bool isAttacked(const Board& board, Square square, Occupancy occupancy) {
     // We're using this function to find out if empty squares are attacked for determining
     // legality of castling, so we can't assume that the capture square is occupied.

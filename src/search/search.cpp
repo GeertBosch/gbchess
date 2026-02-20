@@ -892,7 +892,7 @@ PrincipalVariation iterativeDeepening(Position& position, int maxdepth, InfoFn i
     for (auto depth = 2; depth <= maxdepth; ++depth) {
         pv = aspirationWindows(position, pv, depth, info);
         if (pvInfo(info, depth, pv.score, pv.moves)) break;
-        if (pv.score.mate() && pv && depth > static_cast<int>(pv.moves.size())) break;
+        if (pv.score.mate() && pv && isCheckmate(moves::applyMoves(position, pv.moves))) break;
     }
     return pv;
 }
