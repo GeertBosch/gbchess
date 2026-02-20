@@ -20,3 +20,9 @@ Within this experiment around using LLMs as coding assistants, there are a host 
 and undisclosed sub-experiments, hidden in plain sight. When you see some of these choices and think
 I should know better, thank you for you faith. Yes, but even where I do, I might want to relive and
 relearn the why, or just delight in just the "what if I don't". Here, it's all fun and games.
+
+## Additional docs
+
+- [USING_PERFT.md](USING_PERFT.md)
+- [USING_PUZZLES.md](USING_PUZZLES.md)
+- [USING_SPRT.md](USING_SPRT.md)
