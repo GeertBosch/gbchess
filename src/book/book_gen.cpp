@@ -24,7 +24,12 @@ namespace {
 // Minimum game time in seconds (excludes bullet and blitz games)
 static constexpr int kMinGameTimeSeconds = 180;
 static constexpr int kMaxOpeningMoves = 12;
+// Inclusion of a game depends on the average ELO of the players, but if there is a large difference
+// the game ELO is capped to that of the weakest player plus half of the max spread. This reflects
+// the expectation that a game between to slightly differently rated players may still be a strong
+// game and is a balance between exclusing too many games and including games of lower quality.
 static constexpr int kMinElo = 2400;
+static constexpr int kMaxEloSpread = 200;
 
 // Chunk size for parallel processing ( MB)
 static constexpr size_t kChunkSize = 8 * 1024 * 1024;
@@ -235,16 +240,19 @@ static int parsePositiveInt(const std::string& str) {
 
 /** Check if a game meets quality criteria for inclusion in the book */
 bool shouldIncludeGame(const pgn::PGN& game, BookStats& stats) {
-    auto whiteElo = game["WhiteElo"];
-    auto blackElo = game["BlackElo"];
+    auto whiteElo = parsePositiveInt(game["WhiteElo"]);
+    auto blackElo = parsePositiveInt(game["BlackElo"]);
+    auto eloSpread = std::abs(whiteElo - blackElo);
 
-    // Exclude games with missing or low Elo ratings to avoid noise from weak players and bots.
-    if (!whiteElo.size() || parsePositiveInt(whiteElo) < kMinElo || !blackElo.size() ||
-        parsePositiveInt(blackElo) < kMinElo)
-        return ++stats.droppedLowElo, false;
+    // Use average if spread is reasonable, otherwise penalize the higher ELO
+    auto gameElo = eloSpread <= kMaxEloSpread ? (whiteElo + blackElo) / 2
+                                              : std::min(whiteElo, blackElo) + kMaxEloSpread / 2;
+
+    // Exclude games with low ELO, as they are more likely to contain moves that pollute the book.
+    if (gameElo < kMinElo) return ++stats.droppedLowElo, false;
 
     // Exclude non-standard variants and games starting from a specific position
-    if (game["Variant"] != "Standard") {
+    if (game["Variant"].size() && game["Variant"] != "Standard") {
         return ++stats.droppedVariants, false;
     }
     if (game["FEN"].size()) return ++stats.droppedVariants, false;
