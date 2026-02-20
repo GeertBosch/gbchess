@@ -6,7 +6,9 @@ set -e
 failed=0
 
 for infile in test/uci-*.in; do
-    outfile=test/out/$(basename "$infile" .in).out
+    outfile=build/$(basename "$infile" .in).out
+    file_failed=0
+    matches=$(mktemp)
 
     # Check expect-count directives (must match exact count)
     if grep -qw "^expect-count" "$infile"; then
@@ -22,16 +24,21 @@ for infile in test/uci-*.in; do
                 *)  op=eq threshold=$expected_count msg="exactly" ;;
             esac
 
-            [ "$actual_count" "-$op" "$threshold" ] || \
-                echo "Expected $msg $threshold occurrences of \"$pattern\", found $actual_count"
-        done > "$errors"
+            if [ "$actual_count" "-$op" "$threshold" ]; then
+                echo "expect-count $expected_count \"$pattern\" (found $actual_count)"
+                continue
+            fi
+
+            echo "Expected $msg $threshold occurrences of \"$pattern\", found $actual_count" >> "$errors"
+        done >> "$matches"
 
         if [ -s "$errors" ]; then
             printf "  ❌ %s\n" "$outfile"
             while read error; do
                 printf "     %s\n" "$error"
             done < "$errors"
-            failed=1
+            failed=$((failed + 1))
+            file_failed=1
         fi
         rm -f "$errors"
     fi
@@ -42,25 +49,35 @@ for infile in test/uci-*.in; do
         missing=$(mktemp)
         grep "^expect " "$infile" | \
         while read expect pattern ; do
-            if ! grep -qE "$pattern" "$outfile"; then
-                echo "$pattern"
+            if grep -qE "$pattern" "$outfile"; then
+                echo "expect \"$pattern\""
+                continue
             fi
-        done > "$missing"
+
+            echo "$pattern" >> "$missing"
+        done >> "$matches"
 
         if [ -s "$missing" ]; then
             printf "  ❌ %s\n" "$outfile"
             while read pattern; do
                 printf "     Missing: \"%s\"\n" "$pattern"
             done < "$missing"
-            failed=1
+            failed=$((failed + 1))
+            file_failed=1
         fi
         rm -f "$missing"
     fi
+
+    if [ "$file_failed" -eq 0 ] && [ -s "$matches" ]; then
+        printf "  ✅ %s\n" "$outfile"
+        while read match; do
+            printf "     Matched: %s\n" "$match"
+        done < "$matches"
+    fi
+    rm -f "$matches"
 done
 
-if [ $failed -eq 0 ]; then
-    printf "\n✅ All UCI tests passed!\n\n"
-else
-    printf "\n❌ Some UCI tests failed!\n\n"
+if [ $failed -ne 0 ]; then
+    printf "\n ❌ $failed UCI tests failed!\n\n"
     exit 1
 fi
