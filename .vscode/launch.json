@@ -183,7 +183,9 @@
             ],
             "program": "${workspaceFolder}/build/engine-debug",
             "args": [
-            "${workspaceFolder}/test/uci-avoid-repetition.in",
+            "--cmd",
+            "restore",
+            "go depth 10",
             ],
       },
     ]
