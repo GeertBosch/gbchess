@@ -163,6 +163,8 @@ void printEvalRate(const F& fun) {
     auto cached = endCache - startCache;
     auto evalRate = evals / (duration.count() / 1000'000.0);  // evals per second
 
+    if (!verbose) return;
+
     std::cerr << evals << " evals, " << cached << " cached, " << quiesce << " quiesced";
     if (search::maxSelDepth) std::cerr << " (seldepth " << search::maxSelDepth << ")";
     std::cerr << "\n";
@@ -205,9 +207,9 @@ void printBestMove(Position position, int maxdepth, MoveVector moves) {
 
 void printAnalysis(Position position, int maxdepth, MoveVector moves) {
     auto analyzed = analyzeMoves(position, maxdepth, moves);
-    std::cerr << "Analyzed: " << analyzed << std::endl;
+    std::cout << "Analyzed: " << analyzed << std::endl;
     auto bestMove = search::computeBestMove(position, maxdepth, moves);
-    std::cerr << "Computed: " << bestMove << std::endl;
+    std::cout << "Computed: " << bestMove << std::endl;
 
     // In the case of identical scores, there may be multiple best moves.
     if (bestMove.score != analyzed.score)
