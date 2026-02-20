@@ -432,25 +432,51 @@ void enterUCI(std::istream& in, std::ostream& out, std::ostream& log) {
     }
 }
 
-void fromStdIn() {
+void usage() {
+    // engine [uci_tests_script ...]
+    // engine --cmd [command1 command2 ...]
+    std::cerr
+        << "usage: " << cmdName << " [uci_tests_script ...]\n       " << cmdName
+        << " --cmd [command1 command2 ...]\n\n"
+        << "If no arguments are given, the engine will read UCI commands from standard input.\n"
+        << "If one or more file paths are given as arguments, the engine will read UCI commands "
+           "from each file in order. This is useful for running UCI test scripts.\n"
+        << "If the first argument is '--cmd', the engine will execute each of the remaining "
+           "arguments as "
+           "a UCI command. This is useful for debugging  without needing "
+           "to create a full test script.\n";
+    std::exit(1);
+}
+
+void fromStream(std::istream& stream) {
     std::ofstream log("engine.log");
     log << "Entering UCI\n";
-    enterUCI(std::cin, std::cout, log);
+    enterUCI(stream, std::cout, log);
 }
 
 void fromFile(const char* filename) {
     std::ifstream file(filename);
     if (file.is_open()) {
-        enterUCI(file, std::cout, std::cout);
+        fromStream(file);
     } else {
         std::cerr << "Failed to open file: " << filename << std::endl;
         std::exit(2);
     }
 }
 
+void fromArgs(int argc, char** argv) {
+    std::stringstream ss;
+    if (argc < 3) usage();
+    for (int i = 2; i < argc; ++i) ss << argv[i] << "\n";
+    std::istringstream iss(ss.str());
+    enterUCI(iss, std::cout, std::cout);
+}
+
 int main(int argc, char** argv) {
     if (argc == 1)
-        fromStdIn();
+        fromStream(std::cin);
+    else if (std::string(argv[1]) == "--cmd")
+        fromArgs(argc, argv);
     else
         for (int i = 1; i < argc; i++) fromFile(argv[i]);
 
