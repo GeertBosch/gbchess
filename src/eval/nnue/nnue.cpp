@@ -81,10 +81,11 @@ FileHeader readHeader(std::ifstream& file) {
     std::string ok[2] = {"not OK", "OK"};
 
     // For early diagnostics
-    std::cout << "Version: " << toHex(version) << ", " << ok[versionOK] << "\n"
-              << "Hash: " << toHex(hash) << ", " << ok[hashOK] << "\n"
-              << "Name: " << (nameOK ? header.name : "not OK, " + std::to_string(size) + " bytes")
-              << "\n";
+    if (nnueDebug)
+        std::cout << "Version: " << toHex(version) << ", " << ok[versionOK] << "\n"
+                  << "Hash: " << toHex(hash) << ", " << ok[hashOK] << "\n"
+                  << "Name: "
+                  << (nameOK ? header.name : "not OK, " + std::to_string(size) + " bytes") << "\n";
 
     // Check for errors
     if (!nameOK) throw std::runtime_error("Invalid NNUE name (not printable ASCII)");
@@ -255,7 +256,7 @@ Accumulator::Accumulator(const InputTransform& inputTransform) {
     for (auto bias : inputTransform.bias) *out1++ = *out2++ = bias;
 }
 
-NNUE loadNNUE(const std::string& filename) {
+NNUE loadNNUE(const std::string& filename, Verbosity verbosity) {
     std::ifstream file(filename, std::ios::binary);
     if (!file) throw std::runtime_error("Cannot open NNUE file: " + filename);
     NNUE net;
@@ -263,7 +264,8 @@ NNUE loadNNUE(const std::string& filename) {
     net.header = readHeader(file);
     readInputTransform(file, net.input);
     readNetwork(file, net.network);
-    std::cout << "NNUE network loaded successfully from: " << filename << "\n";
+    if (verbosity == kNormal)
+        std::cout << "NNUE network loaded successfully from: " << filename << "\n";
 
     return net;
 }

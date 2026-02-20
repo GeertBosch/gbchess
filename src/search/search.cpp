@@ -58,7 +58,7 @@ uint64_t searchQuiescenceCount = 0;
 uint64_t searchCacheCount = 0;
 timepoint searchStartTime = {};
 
-std::optional<nnue::NNUE> network = nnue::loadNNUE("nn-82215d0fd0df.nnue");
+std::optional<nnue::NNUE> network = nnue::loadNNUE("nn-82215d0fd0df.nnue", nnue::kQuiet);
 
 std::string pct(uint64_t some, uint64_t all) {
     return all ? " " + std::to_string((some * 100) / all) + "%" : "";

@@ -57,7 +57,7 @@ void testEvaluate(const nnue::NNUE& network) {
 }
 
 int process_argument(const std::string& arg) try {
-    auto nnue = nnue::loadNNUE(arg);
+    auto nnue = nnue::loadNNUE(arg, nnue::kNormal);
     std::cout << "NNUE loaded successfully from: " << arg << std::endl;
 
     // Test transform method with starting position
