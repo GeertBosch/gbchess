@@ -1,10 +1,17 @@
 #!/bin/bash
-# Generate UCI commands to replay a PGN file for testing. This is especially useful for scenarios
-# where caches affect the engine's behavior, such as when an aborted search leads to storing an
-# incorrect evaluation in the transposition table.
 usage() {
-    echo "usage: $0 [-m[X][-[Y]]] [white|black] pgnfile depth" >&2
+    echo "usage: $0 [-m[X][-[Y]]] <w|b|white|black> pgnfile [goopts]\n" >&2
     echo "  -mX-Y: limit replay to moves X through Y (inclusive)" >&2
+    echo "goopts: additional options to pass to the engine, such as:" >&2
+    echo "        depth <n>: set the search depth to <n>" >&2
+    echo "        movetime <n>: set the maximum time to search to <n> ms per move" >&2
+    echo
+    echo "Generate UCI commands to replay a PGN file for testing. This is especially useful for"
+    echo "scenarios where caches affect the engine's behavior, such as when an aborted search leads"
+    echo "to storing an incorrect evaluation in the transposition table. A final save command"
+    echo "will cause the gbchess engine to generate a dump of its caches, allowing the engine to"
+    echo "resume from that state through a quick restore instead of a complete replay."
+
     exit 1
 }
 
@@ -43,8 +50,8 @@ fi
 
 # Set 'side' to 1 for white or 2 for black
 case "$1" in
-    white) side=1 ;;
-    black) side=2 ;;
+    w|white) side=1 ;;
+    b|black) side=2 ;;
     *) usage ;;
 esac
 shift
@@ -52,8 +59,13 @@ shift
 pgnfile=$1
 shift
 
-depth=$1
+goopt=$1
 shift
+
+if [ ! -f "$pgnfile" ] ; then
+    echo "PGN file not found: $pgnfile" >&2
+    exit 2
+fi
 
 # Include the origin PGN as comments, omitting empty and zero tags
 egrep -v '"[0]?"' "$pgnfile" | while read line ; do
@@ -71,6 +83,9 @@ position=startpos
 echo "ucinewgame"
 # For white, j is 0,2,4,... ; for black, j is 1,3,5,...
 n=$(echo $moves | wc -w)
+if [ -z "$end_move" ]; then
+    end_move=$(( (n + 1) / 2 ))
+fi
 for j in $(seq $((side - 1)) 2 $n) ; do
     # Show move number and UCI moves for white and black
     num=$((j / 2 + 1))
@@ -97,5 +112,5 @@ for j in $(seq $((side - 1)) 2 $n) ; do
     if [ $num -eq $end_move ] ; then
         echo "save"
     fi
-    echo "go depth $depth"
+    echo "go $goopt"
 done)
