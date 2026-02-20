@@ -334,3 +334,16 @@ $(COMPILE_COMMANDS):
 	@echo ']' >> $@
 
 .PHONY: ${COMPILE_COMMANDS}
+
+SPRT_NEW ?= build/engine
+SPRT_BASE ?= build/engine-prev
+SPRT_STOCKFISH12 ?= stockfish-12
+SPRT_ARGS ?= --tc 60+2
+
+sprt-self: build/engine
+	$(Q)./test/sprt.sh --new-cmd "$(SPRT_NEW)" --base-cmd "$(SPRT_BASE)" --new-name gbchess-new --base-name gbchess-base $(SPRT_ARGS)
+
+sprt-sf12: build/engine
+	$(Q)./test/sprt.sh --new-cmd "$(SPRT_NEW)" --base-cmd "$(SPRT_STOCKFISH12)" --new-name gbchess --base-name stockfish-12 $(SPRT_ARGS)
+
+.PHONY: sprt-self sprt-sf12
