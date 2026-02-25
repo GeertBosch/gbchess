@@ -1,5 +1,8 @@
 PUZZLES=lichess/lichess_db_puzzle.csv
 FIXED_PUZZLES=lichess/fixed_puzzles.csv
+CI_MATE123_PUZZLES=lichess/ci_mate123_4000.csv
+CI_MATE45_PUZZLES=lichess/ci_mate45_100.csv
+CI_NONMATE_PUZZLES=lichess/ci_nonmate_100.csv
 PHASES=opening middlegame endgame
 EVALS=$(foreach phase,${PHASES},lichess/lichess_${phase}_evals.csv)
 CCFLAGS=-std=c++17 -Werror -Wall -Wextra
@@ -9,6 +12,8 @@ DEBUGFLAGS=-DDEBUG -O0 -g
 OPTOBJ=build/opt
 DBGOBJ=build/dbg
 COMPILE_COMMANDS=build/compile_commands.json
+NNUE_URL=https://raw.githubusercontent.com/official-stockfish/networks/refs/heads/master/nn-82215d0fd0df.nnue
+NNUE_FILE=$(notdir ${NNUE_URL})
 
 Q := @
 VOPT :=
@@ -128,7 +133,7 @@ lichess/lichess_db_broadcast_%.pgn: lichess/lichess_db_broadcast_%.pgn.zst
 lichess/lichess_db_broadcast_%.pgn.zst:
 	$(Q)
 	mkdir -p lichess
-	cd lichess && wget https://database.lichess.org/broadcast/$(notdir $@)
+	cd lichess && wget -q https://database.lichess.org/broadcast/$(notdir $@)
 
 book.csv build/book.out: build/book-gen ${LICHESS_PGNS}
 	$(Q)echo "Generating book.csv from $(words ${LICHESS_PGNS}) PGN files..." > build/book.out
@@ -223,31 +228,21 @@ ${PUZZLES}: ${PUZZLES}.zst
 
 ${PUZZLES}.zst:
 	$(Q)mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) \
-		&& wget https://database.lichess.org/$(notdir ${PUZZLES}).zst
-
-# Create derived puzzle files for different test targets
-build/mate123.csv: ${PUZZLES}
-	$(Q)mkdir -p build
-	$(Q)egrep "FEN,Moves|mateIn[123]" ${PUZZLES} | head -4001 > $@
-
-build/mate45.csv: ${PUZZLES}
-	$(Q)mkdir -p build
-	$(Q)egrep "FEN,Moves|mateIn[45]" ${PUZZLES} | head -101 > $@
-
-build/puzzles.csv: ${PUZZLES}
-	$(Q)mkdir -p build
-	$(Q)egrep -v "mateIn[12345]" ${PUZZLES} | head -101 > $@
+		&& wget -q https://database.lichess.org/$(notdir ${PUZZLES}).zst
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
-build/mate123.out: build/search-test build/mate123.csv
-	$(Q)./build/search-test $(VOPT) 7 build/mate123.csv $(REDIR)
+build/mate123.out: build/search-test ${CI_MATE123_PUZZLES} ${NNUE_FILE}
+	$(Q)./build/search-test $(VOPT) 7 ${CI_MATE123_PUZZLES} $(REDIR)
 
-build/mate45.out: build/search-test build/mate45.csv
-	$(Q)./build/search-test $(VOPT) 11 build/mate45.csv $(REDIR)
+build/mate45.out: build/search-test ${CI_MATE45_PUZZLES} ${NNUE_FILE}
+	$(Q)./build/search-test $(VOPT) 11 ${CI_MATE45_PUZZLES} $(REDIR)
 
 .PHONY: build
-build/puzzles.out: build/search-test build/puzzles.csv
-	$(Q)./build/search-test $(VOPT) 7 build/puzzles.csv $(REDIR)
+build/puzzles.out: build/search-test ${CI_NONMATE_PUZZLES} ${NNUE_FILE}
+	$(Q)./build/search-test $(VOPT) 7 ${CI_NONMATE_PUZZLES} $(REDIR)
+
+${NNUE_FILE}:
+	$(Q)wget -q ${NNUE_URL}
 
 lichess/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
 	mkdir -p $(dir $@) && ./$< $(@:lichess/lichess_%_evals.csv=%) > $@
@@ -272,10 +267,10 @@ debug: $(patsubst %-test,%-debug,$(CPP_TESTS)) build/perft-debug build/engine-de
 build: .deps $(CPP_TESTS) $(COMPILE_COMMANDS) build/perft build/engine build/perft-simple build/book-gen
 	$(Q)echo "\n✅ Build complete\n"
 
-build/fixed-puzzles.out: build/search-test $(FIXED_PUZZLES)
+build/fixed-puzzles.out: build/search-test $(FIXED_PUZZLES) ${NNUE_FILE}
 	$(Q)./build/search-test $(VOPT) 7 < $(FIXED_PUZZLES) $(REDIR)
 
-build/searches.out: build/search-debug
+build/searches.out: build/search-debug ${NNUE_FILE}
 	$(Q){ \
 		./build/search-debug "5r1k/pp4pp/5p2/1BbQp1r1/7K/7P/1PP3P1/3R3R b - - 3 26" 3; \
 		./build/search-test $(VOPT) "6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1" 5; \
@@ -287,11 +282,13 @@ build/searches.out: build/search-debug
 
 searches: build/searches.out
 
-build/uci-%.out: test/uci-%.in build/engine
+build/uci-%.out: test/uci-%.in build/engine ${NNUE_FILE}
 	$(Q)./build/engine $< 2>&1 | grep -wv "expect" $(REDIR)
 
 build/uci.out: $(patsubst test/uci-%.in,build/uci-%.out,$(wildcard test/uci-*.in))
 	$(Q)./test/check-uci.sh ${REDIR}
+
+uci: build/uci.out
 
 build/magic.out: build/magic-test
 # To accept any changes on test failure, pipe the output to the `patch` command
@@ -300,7 +297,7 @@ build/magic.out: build/magic-test
 	|| (echo "\n*** To accept these changes, pipe this output to the patch command ***" && false) \
 	} $(REDIR)
 
-build/test-cpp.out: ${CPP_TESTS} book.csv
+build/test-cpp.out: ${CPP_TESTS} book.csv ${NNUE_FILE}
 	$(Q){ \
 		(cd build && echo Symlinking NNUE files && ln -fs ../*.nnue .); \
 		(cd build && echo Symlinking book files && ln -fs ../book.csv .); \
@@ -331,6 +328,9 @@ build/test-cpp.out: ${CPP_TESTS} book.csv
 
 test: build/test-cpp.out build/fixed-puzzles.out build/searches.out build/evals.out build/uci.out build/magic.out
 
+ci: build perft-test build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate123.out build/mate45.out build/puzzles.out
+	@echo "\n✅ CI checks passed\n"
+
 # Generate compile_commands.json for clangd
 $(COMPILE_COMMANDS):
 	$(Q)mkdir -p build
@@ -347,7 +347,7 @@ $(COMPILE_COMMANDS):
 	$(Q)echo >> $@
 	$(Q)echo ']' >> $@
 
-.PHONY: ${COMPILE_COMMANDS}
+.PHONY: ${COMPILE_COMMANDS} ci
 
 SPRT_NEW ?= build/engine
 SPRT_BASE ?= build/engine-prev
