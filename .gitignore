@@ -11,10 +11,17 @@ build
 dairy.md
 evals
 game.*
+gbchess-*
 nn-*.nnue
 players.dat
 lichess/lichess_*.csv*
 lichess_*
+lichess/Lichess Elite Database
 *.csv
+config.json
+!lichess/fixed_puzzles.csv
+!lichess/ci_mate123_4000.csv
+!lichess/ci_mate45_100.csv
+!lichess/ci_nonmate_100.csv
 *.bin
 Stockfish
