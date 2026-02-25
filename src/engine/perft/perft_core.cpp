@@ -313,7 +313,8 @@ NodeCount perft(Position position, int depth, const ProgressCallback& callback) 
     // For that we take the perft at depth 4 and estimate the apparent depth assuming an average of
     // 20 moves per ply.
     auto perft4 = std::max<NodeCount>(perft(position.board, Hash{position}, state, 4), 1);
-    int apparentDepth = depth - 4 + static_cast<int>(std::log(perft4) / std::log(20.0));
+    int apparentDepth =
+        depth - 4 + static_cast<int>(std::log(static_cast<double>(perft4)) / std::log(20.0));
     if (apparentDepth <= 5) return perft(position.board, Hash{position}, state, depth, callback);
     return threadedPerft(position, depth, callback);
 }
