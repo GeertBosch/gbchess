@@ -35,7 +35,7 @@ mermaid && match($0, /^ +[A-Z0-9_][A-Za-z0-9_]* [-]+-> [A-Z0-9_][A-Za-z0-9+]*$/)
 }
 
 function basename(path) {
-    gsub("^\([a-zA-Z_]+/\)+", "", path)
+    gsub("^([a-zA-Z_]+/)+", "", path)
     return path
 }
 

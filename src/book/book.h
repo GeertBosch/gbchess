@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <sys/types.h>
@@ -46,7 +47,9 @@ struct BookEntry {
     uint64_t black : kCountBits;  // Black wins
 
     uint64_t add(pgn::Termination term);  // Accepts: WHITE_WIN, DRAW, BLACK_WIN
-    bool full() const { return std::max({white, draw, black}) == kMaxResultCount; }
+    bool full() const {
+        return std::max({uint64_t(white), uint64_t(draw), uint64_t(black)}) == kMaxResultCount;
+    }
     uint64_t total() const { return white + draw + black; }  // May be up to 3 * kMaxResultCount
 
     /** Compute posterior mean score using Bayesian shrinkage with given prior */

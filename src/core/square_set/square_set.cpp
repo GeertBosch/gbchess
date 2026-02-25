@@ -1,3 +1,5 @@
+#include <cstring>
+
 #include "square_set.h"
 #include "core/sse2.h"
 

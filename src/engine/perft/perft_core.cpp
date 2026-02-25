@@ -1,10 +1,11 @@
 #include "perft_core.h"
-#include "core/options.h"
 #include "core/hash/hash.h"
+#include "core/options.h"
 #include "move/move.h"
 #include "move/move_gen.h"
 #include "move/move_table.h"
 #include <atomic>
+#include <cmath>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
@@ -228,6 +229,13 @@ NodeCount threadedPerft(Position position, int depth, const ProgressCallback& ca
 
     std::atomic<size_t> taskIndex{0};
 
+    auto addNodes = [](std::atomic<NodeCount>& total, NodeCount delta) {
+        auto expected = total.load(std::memory_order_relaxed);
+        while (!total.compare_exchange_weak(
+            expected, expected + delta, std::memory_order_relaxed, std::memory_order_relaxed)) {
+        }
+    };
+
     // Create a bounded number of threads to process the tasks
     const auto numThreads = std::max<unsigned int>(4, std::thread::hardware_concurrency());
     std::vector<std::thread> threads;
@@ -278,7 +286,7 @@ NodeCount threadedPerft(Position position, int depth, const ProgressCallback& ca
                 if (idx >= tasks.size()) break;
                 PerftTask task = tasks[idx];
                 auto state = moves::SearchState(task.position.board, task.position.turn);
-                nodes.fetch_add(perft(task.position.board, Hash(task.position), state, task.depth));
+                addNodes(nodes, perft(task.position.board, Hash(task.position), state, task.depth));
                 completedTasks.fetch_add(1);
                 progressCondition.notify_one();
             }

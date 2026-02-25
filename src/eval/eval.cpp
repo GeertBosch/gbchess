@@ -1,5 +1,7 @@
 #include <algorithm>
+#include <cstdlib>
 #include <map>
+#include <stdexcept>
 #include <string>
 
 #include "core/core.h"
@@ -112,6 +114,7 @@ struct EvalTables {
         auto it = entries.find(name);
         if (it != entries.end()) return it->second;
         throw std::invalid_argument("Unknown eval table set: " + name);
+        std::abort();
     }
 } evalTables;
 
@@ -349,6 +352,7 @@ int scoreMVVLVA(const Board& board, Move move) {
         case PieceType::KING: return 10000;
         case PieceType::EMPTY: return 100;  // Empty square indicates en passant capture
         }
+        std::abort();
     };
 
     int victimValue = getSimpleValue(victim);
