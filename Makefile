@@ -28,6 +28,11 @@ else
 endif
 
 RUNCMD = $(Q)$(1) || { echo "  ❌ error making $@"; false; }
+UNAME_S := $(shell uname -s)
+
+ifeq ($(UNAME_S),Linux)
+	LINKFLAGS:=${LINKFLAGS} -latomic
+endif
 
 # MacOS specific stuff - why can't thinks just work  by default?
 ifeq ($(_system_type),Darwin)
