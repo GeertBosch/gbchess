@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cassert>
 #include <istream>
 #include <string>
@@ -234,7 +235,7 @@ SAN::SAN(std::string_view move) {
     to = makeSquare(fileChar - 'a', rankChar - '1');
 
     // Parse capture if present
-    kind = parseEnd(move, 'x') ? kind = CAPTURE : MOVE;
+    kind = parseEnd(move, 'x') ? CAPTURE : MOVE;
 
     // Finally handle disambiguation
     disambiguationRank = parseRangeEnd(move, '1', '1' + kNumRanks);

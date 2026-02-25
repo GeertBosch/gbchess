@@ -1,6 +1,4 @@
-#include "eval/nnue/nnue.h"
-#include "core/core.h"
-#include "eval/nnue/nnue_stats.h"
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <iomanip>
@@ -8,7 +6,10 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "core/core.h"
 #include "core/square_set/square_set.h"
+#include "eval/nnue/nnue.h"
+#include "eval/nnue/nnue_stats.h"
 
 namespace nnue {
 
@@ -130,10 +131,10 @@ struct Feature {
         : whiteIndex(index(color) * 64), blackIndex(whiteIndex ^ 64) {}
     constexpr Feature(Piece piece)  // Create a feature from a non-king piece
         : Feature{Feature(type(piece)) + Feature(color(piece))} {}
-    Feature operator+(const Feature& other) const {
+    constexpr Feature operator+(const Feature& other) const {
         return Feature(whiteIndex + other.whiteIndex, blackIndex + other.blackIndex);
     }
-    Feature operator*(const Feature& other) const {  // For deriving king features
+    constexpr Feature operator*(const Feature& other) const {  // For deriving king features
         return Feature(whiteIndex * other.whiteIndex, blackIndex * other.blackIndex);
     }
     constexpr bool operator==(const Feature& other) const {

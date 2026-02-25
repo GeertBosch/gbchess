@@ -332,12 +332,12 @@ class alignas(4) Turn {
         // clang-format on
     };
     static constexpr auto noEnPassantTarget = EnPassantTarget::_;
-    static Square toSquare(EnPassantTarget target) {
+    static constexpr Square toSquare(EnPassantTarget target) {
         uint16_t value = static_cast<uint16_t>(target);
         value += (value & 8) * 2;  // Shift rank 4 to rank 6, not affecting rank 3 or value 0.
         return Square(value);
     }
-    static EnPassantTarget toEnPassantTarget(Square square) {
+    static constexpr EnPassantTarget toEnPassantTarget(Square square) {
         uint16_t value = square;
         value -= (value & 32) / 2;  // Shift rank 6 to rank 4, not affecting rank 3 or value 0.
         return EnPassantTarget(value);
@@ -372,7 +372,8 @@ public:
         dassert(fullmoveNumber > 0 && fullmoveNumber < 32768);
     }
 
-    Turn(Color color) : Turn(color, CastlingMask::KQkq, Square(noEnPassantTarget), 0, 1) {}
+    constexpr Turn(Color color)
+        : Turn(color, CastlingMask::KQkq, Square(noEnPassantTarget), 0, 1) {}
 
     Color activeColor() const { return active; };
     void setActive(Color color) { active = color; };
