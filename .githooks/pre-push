@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "[pre-push] Running CI gate: make -j ci"
+make -j ci

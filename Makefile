@@ -334,6 +334,11 @@ test: build/test-cpp.out build/fixed-puzzles.out build/searches.out build/evals.
 ci: build perft-test build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate123.out build/mate45.out build/puzzles.out
 	@echo "\n✅ CI checks passed\n"
 
+install-hooks:
+	$(Q)git config core.hooksPath .githooks
+	$(Q)chmod +x .githooks/pre-push
+	@echo "✅ Installed git hooks from .githooks"
+
 # Generate compile_commands.json for clangd
 $(COMPILE_COMMANDS):
 	$(Q)mkdir -p build
@@ -350,7 +355,7 @@ $(COMPILE_COMMANDS):
 	$(Q)echo >> $@
 	$(Q)echo ']' >> $@
 
-.PHONY: ${COMPILE_COMMANDS} ci
+.PHONY: ${COMPILE_COMMANDS} ci install-hooks
 
 SPRT_NEW ?= build/engine
 SPRT_BASE ?= build/engine-prev
