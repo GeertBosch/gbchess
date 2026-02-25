@@ -241,7 +241,7 @@ NodeCount threadedPerft(Position position, int depth, const ProgressCallback& ca
     };
 
     // Create a bounded number of threads to process the tasks
-    const auto numThreads = std::max<unsigned int>(4, std::thread::hardware_concurrency());
+    const auto numThreads = std::max<unsigned int>(1, std::thread::hardware_concurrency());
     std::vector<std::thread> threads;
     std::mutex progressMutex;
     std::condition_variable progressCondition;
