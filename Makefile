@@ -28,10 +28,11 @@ else
 endif
 
 RUNCMD = $(Q)$(1) || { echo "  ❌ error making $@"; false; }
+LIBS :=
 UNAME_S := $(shell uname -s)
 
 ifeq ($(UNAME_S),Linux)
-	LINKFLAGS:=${LINKFLAGS} -latomic
+	LIBS:=${LIBS} -latomic
 endif
 
 # MacOS specific stuff - why can't thinks just work  by default?
@@ -90,13 +91,13 @@ ${DBGOBJ}/%.o: src/%.cpp # ${OPTOBJ}/%.o
 
 ${OPTOBJ}/%-test: ${OPTOBJ}/%_test.o
 	$(Q)mkdir -p build
-	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^)
+	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
 	$(Q)ln -sf $$(echo "$@" | sed 's|build/||') build/$(notdir $@)
 	@echo "  ✅ build/$(notdir $@) built"
 
 ${DBGOBJ}/%-debug: ${DBGOBJ}/%_test.o
 	$(Q)mkdir -p build
-	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^)
+	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
 	$(Q)ln -sf $$(echo "$@" | sed 's|build/||') build/$(notdir $@)
 	@echo "  ✅ build/$(notdir $@) built"
 
@@ -116,15 +117,15 @@ build/$(notdir $1)-debug: ${DBGOBJ}/$(1)-debug
 endef
 
 build/engine: $(call calc_objs,${OPTOBJ},$(call prefix_src,${ENGINE_SRCS}))
-	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^)
+	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
 build/engine-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,${ENGINE_SRCS}))
-	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^)
+	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
 
 BOOK_GEN_SRCS=book/book_gen.cpp book/pgn/pgn.cpp engine/fen/fen.cpp core/hash/hash.cpp ${MOVES_SRCS}
 build/book-gen: $(call calc_objs,${OPTOBJ},$(call prefix_src,${BOOK_GEN_SRCS}))
-	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^)
+	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
 build/book-gen-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,${BOOK_GEN_SRCS}))
-	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^)
+	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
 
 LAST_24_MONTHS := $(shell for i in $$(seq 1 24); do date -d "$$i month ago" +%Y-%m 2>/dev/null || date -v-$$im +%Y-%m 2>/dev/null; done | xargs)
 BROADCAST_FILES := $(addprefix lichess/lichess_db_broadcast_,$(addsuffix .pgn,$(LAST_24_MONTHS)))
@@ -184,18 +185,18 @@ realclean: clean
 PERFT_SRCS=$(call prefix_src,engine/perft/perft.cpp engine/perft/perft_core.cpp ${MOVES_SRCS} engine/fen/fen.cpp core/hash/hash.cpp)
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
 build/perft: $(call calc_objs,${OPTOBJ},${PERFT_SRCS})
-	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^)
+	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
 
 PERFT_TEST_SRCS=$(call prefix_src,engine/perft/perft_test.cpp engine/perft/perft_core.cpp ${MOVES_SRCS} engine/fen/fen.cpp core/hash/hash.cpp)
 build/perft-test: $(call calc_objs,${OPTOBJ},${PERFT_TEST_SRCS})
-	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^)
+	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
 build/perft-debug: $(call calc_objs,${DBGOBJ},${PERFT_TEST_SRCS})
-	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^)
+	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
 
 PERFT_SIMPLE_SRCS=$(call prefix_src,engine/perft/perft_simple.cpp ${MOVES_SRCS} engine/fen/fen.cpp)
 # perft_simple is a simplified version without caching or 128-bit ints
 build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
-	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^)
+	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
 
 # Build the perft tool with some different compilation options for speed comparison
 build/perft-clang-sse2: ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
