@@ -86,24 +86,24 @@ struct HashTable {
 };
 
 static HashTable perftHashTable;
-static std::atomic<NodeCount> perftCached{0};
+static NodeCount perftCached = 0;
 
 // For perft depth 2 caching, we don't need many bits for the counts, as there can at most be
 // about 218 * 218 = 47,524 moves. If the table is at least 64K entries, we only need
 // 128 - 16 = 112 bits for the key and 16 bits for the counts.
-static constexpr size_t kPerft2CacheSize = options::cachePerftMB * MB / 2 / sizeof(uint128_t);
-static std::vector<std::atomic<uint128_t>> perft2cache(kPerft2CacheSize);
+static constexpr size_t kPerft2CacheSize = options::cachePerftMB * MB / 2 / sizeof(uint64_t);
+static std::vector<std::atomic<uint64_t>> perft2cache(kPerft2CacheSize);
 
 uint32_t lookup2(HashValue hash) {
     size_t idx = static_cast<size_t>(hash % kPerft2CacheSize);
-    uint128_t key = hash >> 16;
-    uint128_t entry = perft2cache[idx].load(std::memory_order_relaxed);
+    uint64_t key = hash >> 16;
+    uint64_t entry = perft2cache[idx].load(std::memory_order_relaxed);
     return static_cast<HashValue>(entry >> 16) == key ? static_cast<uint32_t>(entry & 0xffff) : 0;
 }
 
 void enter2(HashValue hash, uint32_t count) {
     size_t idx = static_cast<size_t>(hash % kPerft2CacheSize);
-    uint128_t entry = ((hash >> 16) << 16) | count;
+    uint64_t entry = ((hash >> 16) << 16) | count;
     perft2cache[idx].store(entry, std::memory_order_relaxed);
 }
 
@@ -222,18 +222,22 @@ TaskList expandTasks(TaskList tasks, size_t number) {
 }
 
 NodeCount threadedPerft(Position position, int depth, const ProgressCallback& callback) {
-    std::atomic<NodeCount> nodes{0};
+    NodeCount nodes = 0;
+    std::mutex nodesMutex;
     TaskList tasks;
     tasks.emplace_back(PerftTask{position, depth});
     tasks = expandTasks(tasks, depth > 4 ? depth * depth * depth : 100);
 
     std::atomic<size_t> taskIndex{0};
 
-    auto addNodes = [](std::atomic<NodeCount>& total, NodeCount delta) {
-        auto expected = total.load(std::memory_order_relaxed);
-        while (!total.compare_exchange_weak(
-            expected, expected + delta, std::memory_order_relaxed, std::memory_order_relaxed)) {
-        }
+    auto addNodes = [&](NodeCount delta) {
+        std::lock_guard<std::mutex> lock(nodesMutex);
+        nodes += delta;
+    };
+
+    auto getNodes = [&]() {
+        std::lock_guard<std::mutex> lock(nodesMutex);
+        return nodes;
     };
 
     // Create a bounded number of threads to process the tasks
@@ -249,14 +253,14 @@ NodeCount threadedPerft(Position position, int depth, const ProgressCallback& ca
             uint128_t nodes;
             uint128_t cached;
         };
-        Progress last = {nodes.load(), perftCached.load()};
+        Progress last = {getNodes(), perftCached};
         // Remember the time of the last update
         auto lastUpdate = std::chrono::high_resolution_clock::now();
         auto interval = std::chrono::milliseconds(options::perftProgressMillis);
 
         while (completedTasks.load() < tasks.size() && callback) {
             std::unique_lock<std::mutex> lock(progressMutex);
-            Progress current = {nodes.load(), perftCached.load()};
+            Progress current = {getNodes(), perftCached};
             auto reportNodes = current.nodes;
 
             if (current.nodes == last.nodes)
@@ -275,7 +279,7 @@ NodeCount threadedPerft(Position position, int depth, const ProgressCallback& ca
             lastUpdate = currentTime;
         }
         // Ensure that the final update reflects all nodes
-        if (callback) callback(nodes.load());
+        if (callback) callback(getNodes());
     });
 
     for (unsigned int i = 0; i < numThreads; ++i) {
@@ -286,7 +290,7 @@ NodeCount threadedPerft(Position position, int depth, const ProgressCallback& ca
                 if (idx >= tasks.size()) break;
                 PerftTask task = tasks[idx];
                 auto state = moves::SearchState(task.position.board, task.position.turn);
-                addNodes(nodes, perft(task.position.board, Hash(task.position), state, task.depth));
+                addNodes(perft(task.position.board, Hash(task.position), state, task.depth));
                 completedTasks.fetch_add(1);
                 progressCondition.notify_one();
             }
@@ -296,7 +300,7 @@ NodeCount threadedPerft(Position position, int depth, const ProgressCallback& ca
 
     progressThread.join();
     for (auto& thread : threads) thread.join();
-    return nodes;
+    return getNodes();
 }
 
 NodeCount perft(Position position, int depth, const ProgressCallback& callback) {
