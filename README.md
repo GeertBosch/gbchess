@@ -1,5 +1,7 @@
 # GBChess
 
+[![CI](https://github.com/GeertBosch/gbchess/actions/workflows/ci.yml/badge.svg)](https://github.com/GeertBosch/gbchess/actions/workflows/ci.yml)
+
 This project started as an initial attempt to write a basic chess program, where GPT-4 writes all
 C++ code based of my prompts. My initial commits include the prompt used. The organization into
 files as well as the Makefile has been done by me. The goal is to learn about using LLMs to write
