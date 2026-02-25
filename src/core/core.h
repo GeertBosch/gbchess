@@ -247,8 +247,8 @@ public:
         for (auto& sq : _squares) sq = Piece::_;
     };
 
-    Piece& operator[](Square sq) { return _squares[sq]; }
-    const Piece& operator[](Square sq) const { return _squares[sq]; }
+    constexpr Piece& operator[](Square sq) { return _squares[sq]; }
+    constexpr const Piece& operator[](Square sq) const { return _squares[sq]; }
     const auto& squares() const { return _squares; }
     bool operator==(const Board& other) const { return _squares == other._squares; }
     bool operator!=(const Board& other) const { return _squares != other._squares; }
