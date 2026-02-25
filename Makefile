@@ -210,10 +210,10 @@ build/perft-gcc-emul:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/en
 # promotions, checks, discovered checks, double checks, checkmates, etc at low depth.
 KIWIPETE=r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1
 build/perft-%.out: build/perft-%
-	$(Q)./$< "$(KIWIPETE)" 5 | grep -q "Nodes searched: 193690690" $(REDIR)
+	$(Q)./$< -q "$(KIWIPETE)" 5 | grep -q "Nodes searched: 193690690" $(REDIR)
 
 build/perft.out: build/perft
-	$(Q)./build/perft "$(KIWIPETE)" 5 | grep -q "Nodes searched: 193690690" $(REDIR)
+	$(Q)./build/perft -q "$(KIWIPETE)" 5 | grep -q "Nodes searched: 193690690" $(REDIR)
 
 # Aliases for perft test targets
 perft-bench: build/perft-clang-emul.out build/perft-gcc-emul.out build/perft-clang-sse2.out build/perft-gcc-sse2.out
