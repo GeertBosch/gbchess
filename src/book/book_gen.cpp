@@ -218,22 +218,6 @@ struct BookStats {
     }
 };
 
-enum class OutputFormat { CSV, EPD };
-
-/** Parse output format from command-line option value */
-bool parseOutputFormat(std::string_view value, OutputFormat& format) {
-    if (value == "csv") return format = OutputFormat::CSV, true;
-    if (value == "epd") return format = OutputFormat::EPD, true;
-
-    return false;
-}
-
-/** Infer output format from output filename extension, defaults to CSV */
-OutputFormat inferOutputFormat(const std::string& outputFile) {
-    return outputFile.size() >= 4 && outputFile.substr(outputFile.size() - 4) == ".epd"
-        ? OutputFormat::EPD
-        : OutputFormat::CSV;
-}
 
 /** Safe positive integer parsing without exceptions - returns 0 for invalid input */
 static int parsePositiveInt(const std::string& str) {
@@ -748,8 +732,7 @@ size_t writeBookEPD(const std::string& epdFile,
 
 /** Print CLI usage for book generation */
 void usage(const char* cmd) {
-    std::cerr << "Usage: " << cmd
-              << " [--format=csv|epd] <input1.pgn> [input2.pgn ...] <output.{csv|epd}>\n";
+    std::cerr << "Usage: " << cmd << "<input1.pgn> [input2.pgn ...] <output.{csv|epd} ...>\n";
 }
 /** Process multiple PGN files and aggregate statistics */
 BookStats processPGNFiles(const std::vector<std::string>& pgnFiles,
@@ -804,34 +787,38 @@ void printSummaryStats(const BookStats& stats, size_t uniquePositions) {
     if (stats.totalDropped()) printDroppedGames(stats);
     std::cout << "Found " << uniquePositions << " unique positions\n";
 }
+
+bool endsWith(const std::string& str, const std::string& suffix) {
+    return str.size() >= suffix.size() &&
+        !str.compare(str.size() - suffix.size(), suffix.size(), suffix);
+}
+
 }  // namespace
 
 /** Generate a book CSV or EPD file from one or more PGN files */
 int main(int argc, char** argv) {
-    int argStart = 1;
-    OutputFormat format = OutputFormat::CSV;
-    bool formatSet = false;
+    // Non-empty means output that format to the specified file.
+    std::string outputCSV;
+    std::string outputEPD;
 
-    if (argc > 1 && !std::string_view(argv[1]).compare(0, 9, "--format=")) {
-        if (!parseOutputFormat(std::string_view(argv[1]).substr(9), format)) {
-            std::cerr << "Invalid format in option: " << argv[1] << "\n";
-            usage(argv[0]);
-            return 1;
-        }
-        formatSet = true;
-        argStart = 2;
+    // Check if the last argument is an output file with supported extension
+    while (argc > 1) {
+        if (endsWith(argv[argc - 1], ".csv") && outputCSV.empty())
+            outputCSV = argv[argc - 1];
+        else if (endsWith(argv[argc - 1], ".epd") && outputEPD.empty())
+            outputEPD = argv[argc - 1];
+        else
+            break;
+        --argc;  // Exclude output file from PGN files}
     }
 
-    if (argc - argStart < 2) {
-        usage(argv[0]);
-        return 1;
-    }
-
-    // Parse arguments
+    // Parse remaining arguments, which should be PGN files
     std::vector<std::string> pgnFiles;
-    for (int i = argStart; i < argc - 1; ++i) pgnFiles.push_back(argv[i]);
-    std::string outputFile = argv[argc - 1];
-    if (!formatSet) format = inferOutputFormat(outputFile);
+    for (int i = 1; i < argc; ++i) pgnFiles.push_back(argv[i]);
+
+    // Remaining arguments should be PGN files
+    if (pgnFiles.empty() || (outputCSV.empty() && outputEPD.empty())) return usage(argv[0]), 1;
+
 
     // Process all PGN files
     std::unordered_map<uint64_t, BookPosition> positions;
@@ -840,12 +827,12 @@ int main(int argc, char** argv) {
     // Print summary
     printSummaryStats(totalStats, positions.size());
 
-    // Write output
-    size_t writtenCount = format == OutputFormat::EPD
-        ? writeBookEPD(outputFile, positions, pgnFiles)
-        : writeBookCSV(outputFile, positions, pgnFiles);
-    std::cout << "Wrote " << writtenCount << " positions with at least " << kMinGames
-              << " games to " << outputFile << "\n";
+    // Write output files
+    if (auto countCSV = outputCSV.empty() ? 0 : writeBookCSV(outputCSV, positions, pgnFiles))
+        std::cout << "Wrote " << countCSV << " positions to " << outputCSV << "\n";
+    if (auto countEPD = outputEPD.empty() ? 0 : writeBookEPD(outputEPD, positions, pgnFiles))
+        std::cout << "Wrote " << countEPD << " positions to " << outputEPD << "\n";
 
-    return writtenCount > 0 ? 0 : 1;
+    // Success if we found any positions
+    return positions.empty();
 }
