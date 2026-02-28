@@ -127,11 +127,11 @@ build/book-gen: $(call calc_objs,${OPTOBJ},$(call prefix_src,${BOOK_GEN_SRCS}))
 build/book-gen-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,${BOOK_GEN_SRCS}))
 	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
 
-LAST_24_MONTHS := $(shell for i in $$(seq 1 24); do date -d "$$i month ago" +%Y-%m 2>/dev/null || date -v-$$im +%Y-%m 2>/dev/null; done | xargs)
-BROADCAST_FILES := $(addprefix lichess/lichess_db_broadcast_,$(addsuffix .pgn,$(LAST_24_MONTHS)))
+BROADCAST_MONTHS := $(foreach year,2024 2025,$(foreach month,01 02 03 04 05 06 07 08 09 10 11 12,$(year)-$(month)))
+BROADCAST_FILES := $(addprefix lichess/lichess_db_broadcast_,$(addsuffix .pgn,$(BROADCAST_MONTHS)))
 
 # Generate book.csv from all PGN files in lichess directory
-LICHESS_PGNS=$(wildcard lichess/*.pgn) $(BROADCAST_FILES)
+LICHESS_PGNS=$(filter-out lichess/lichess_db_broadcast_%.pgn,$(wildcard lichess/*.pgn)) $(BROADCAST_FILES)
 
 lichess/lichess_db_broadcast_%.pgn: lichess/lichess_db_broadcast_%.pgn.zst
 	$(call RUNCMD,zstd -d -f -k "$<" -o "$@")
