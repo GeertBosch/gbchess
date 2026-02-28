@@ -78,6 +78,80 @@ void debugPosition(Position position) {
 }
 
 namespace {
+
+/**
+ * The repetition table stores the hashes of all positions played so far in the game, so we can
+ * detect repetitions and apply the rule that a third repetition is a draw.
+ */
+class Repetitions {
+    std::vector<Hash> hashes;
+    void push_back(Hash hash) { hashes.push_back(hash); }
+    void pop_back() { hashes.pop_back(); }
+    Hash back() const { return hashes.back(); }
+
+    /**
+     * Returns the number of occurrences in the game of a position with the same hash. Only
+     * considers up to halfmove moves, as any capture or pawn move prevents repetition.
+     */
+    int count(Hash hash, int halfmove) const {
+        // When starting with some FEN game positions, we may not have all move history.
+        halfmove = std::min(halfmove, int(hashes.size()));
+
+        int count = 0;
+        for (auto it = hashes.begin() + hashes.size() - halfmove; it != hashes.end(); ++it) {
+            count += (*it == hash);
+        }
+        return count;
+    }
+
+public:
+    Repetitions() = default;
+    void clear() { hashes.clear(); }
+
+    /**
+     * RAII type that will remove the hashes from the repetition table when it goes out of scope.
+     */
+    class State {
+        friend class Repetitions;
+        Repetitions& repetitions;
+        size_t count;
+        State(Repetitions& repetitions) : repetitions(repetitions), count(1) {};
+
+    public:
+        ~State() {
+            while (count--) repetitions.pop_back();
+        }
+    };
+
+    /**
+     * Returns true iff the state represents a game drawn by repetition or the fifty move rule.
+     * Avoid any repetition if possible, so the transposition table remains accurate.
+     */
+    bool drawn(int halfmove) const {
+        // Need at least 4 half moves since the last irreversible move, to get to draw by
+        // repetition.
+        if (halfmove < 4) return false;
+        if (halfmove >= 100) return true;  // Fifty-move rule
+
+        // Check for repetition
+        return count(hashes.back(), halfmove) >= 2;  // Avoid repeating
+    }
+
+    /**
+     * Enters a new position in the repetition table. The hash is the hash of the position.
+     * Returns a RAII State object that will remove the hash from the table when it goes out of
+     * scope. The state object reports whether the position is a draw by repetition.
+     */
+    [[nodiscard]] State enter(Hash hash) {
+        push_back(hash);
+        return State(*this);
+    }
+    void enter(State& state, Hash hash) {
+        push_back(hash);
+        ++state.count;
+    }
+} repetitions;
+
 /**
  * The transposition table is a hash table that stores the best move found for a position, so it can
  * be reused in subsequent searches. The table is indexed by the hash of the position, and stores
@@ -179,7 +253,7 @@ struct TranspositionTable {
         return pv;
     }
 
-    void refineAlphaBeta(Hash hash, int depthleft, Score& alpha, Score& beta) {
+    void refineAlphaBeta(Hash hash, Turn turn, int depthleft, Score& alpha, Score& beta) {
         if constexpr (kNumEntries == 0) return;
         auto idx = hash() % kNumEntries;
         auto& entry = entries[idx];
@@ -188,6 +262,9 @@ struct TranspositionTable {
         if (entry.hash() != hash() || entry.depthleft < depthleft ||
             entry.generation != numGenerations)
             return;
+        if (repetitions.drawn(turn.halfmove() + 1))
+            return;  // Don't refine if this position may be drawn by repetition, to avoid polluting
+                     // the table with inaccurate evaluations
         --stats.numMisses;
         ++stats.numHits;
 
@@ -304,77 +381,6 @@ void storeKillerMove(Move move, int depth) {
 
     killerMoves[depth][0] = move;
 }
-
-/**
- * The repetition table stores the hashes of all positions played so far in the game, so we can
- * detect repetitions and apply the rule that a third repetition is a draw.
- */
-class Repetitions {
-    std::vector<Hash> hashes;
-    void push_back(Hash hash) { hashes.push_back(hash); }
-    void pop_back() { hashes.pop_back(); }
-    Hash back() const { return hashes.back(); }
-
-    /**
-     * Returns the number of occurrences in the game of a position with the same hash. Only
-     * considers up to halfmove moves, as any capture or pawn move prevents repetition.
-     */
-    int count(Hash hash, int halfmove) {
-        // When starting with some FEN game positions, we may not have all move history.
-        halfmove = std::min(halfmove, int(hashes.size()));
-
-        int count = 0;
-        for (auto it = hashes.end() - halfmove; it != hashes.end(); ++it) count += (*it == hash);
-        return count;
-    }
-
-public:
-    Repetitions() = default;
-    void clear() { hashes.clear(); }
-
-    /**
-     * RAII type that will remove the hashes from the repetition table when it goes out of scope.
-     */
-    class State {
-        friend class Repetitions;
-        Repetitions& repetitions;
-        size_t count;
-        State(Repetitions& repetitions) : repetitions(repetitions), count(1) {};
-
-    public:
-        ~State() {
-            while (count--) repetitions.pop_back();
-        }
-
-        /**
-         * Returns true iff the state represents a game drawn by repetition or the fifty move rule.
-         * Avoid any repetition if possible, so the transposition table remains accurate.
-         */
-        bool drawn(int halfmove) const {
-            // Need at least 4 half moves since the last irreversible move, to get to draw by
-            // repetition.
-            if (halfmove < 4) return false;
-            if (halfmove >= 100) return true;  // Fifty-move rule
-
-            // Check for repetition
-            return repetitions.count(repetitions.back(), halfmove) >= 2;  // Avoid repeating
-        }
-    };
-
-    /**
-     * Enters a new position in the repetition table. The hash is the hash of the position.
-     * Returns a RAII State object that will remove the hash from the table when it goes out of
-     * scope. The state object reports whether the position is a draw by repetition.
-     */
-    [[nodiscard]] State enter(Hash hash) {
-        push_back(hash);
-        return State(*this);
-    }
-    void enter(State& state, Hash hash) {
-        push_back(hash);
-        ++state.count;
-    }
-} repetitions;
 
 using MoveIt = MoveVector::iterator;
 
@@ -508,7 +514,7 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score 
 
     if constexpr (options::useQsTT) {
         Hash hash(position);
-        transpositionTable.refineAlphaBeta(hash, 0, alpha, beta);
+        transpositionTable.refineAlphaBeta(hash, position.turn, 0, alpha, beta);
         if (alpha >= beta) {
             ++qsTTCutoffs;
             return beta;
@@ -670,12 +676,12 @@ PrincipalVariation alphaBeta(
 
     // Check for draws due to repetition or the fifty-move rule
     auto drawState = repetitions.enter(hash);
-    if (drawState.drawn(position.turn.halfmove())) return {{}, Score()};
+    if (repetitions.drawn(position.turn.halfmove())) return {{}, Score()};
 
     if (depth.left <= 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
 
     // Check the transposition table, which may tighten one or both search bounds
-    transpositionTable.refineAlphaBeta(hash, depth.left, alpha, beta);
+    transpositionTable.refineAlphaBeta(hash, position.turn, depth.left, alpha, beta);
 
     // Early cutoff: if the position is already outside the search window, we can return
     // immediately with a transition table based PV if we have one.
@@ -812,7 +818,7 @@ PrincipalVariation toplevelAlphaBeta(
 
     Hash hash(position);
 
-    transpositionTable.refineAlphaBeta(hash, depth.left, alpha, beta);
+    transpositionTable.refineAlphaBeta(hash, position.turn, depth.left, alpha, beta);
 
     auto moveList = moves::allLegalMovesAndCaptures(position.turn, position.board);
 
