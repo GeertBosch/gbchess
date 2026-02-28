@@ -47,3 +47,14 @@ inline std::string to_string(uint128_t value) {
     }
     return result;
 }
+
+/**
+ * Converts a uint128_t value to its hexadecimal string representation. Just the 32 hex digits.
+ */
+inline std::string to_hex_string(uint128_t value) {
+    constexpr char hexDigits[] = "0123456789abcdef";
+    std::string result(32, '0');
+    for (auto pos = result.size(); value; value /= 16) result[--pos] = hexDigits[value % 16];
+
+    return result;
+}

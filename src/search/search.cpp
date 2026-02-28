@@ -10,6 +10,7 @@
 #include "core/core.h"
 #include "core/hash/hash.h"
 #include "core/options.h"
+#include "core/uint128_str.h"
 #include "engine/fen/fen.h"
 #include "eval/eval.h"
 #include "eval/nnue/nnue.h"
@@ -71,7 +72,9 @@ std::string pct(uint64_t some, uint64_t all) {
 static Hash debugHash = {};
 void debugPosition(Position position) {
     debugHash = Hash(position);
-    std::cerr << "Debugging position:\n" << fen::to_string(position) << "\n";
+    // Convert debugHash to a hexadecimal string
+    std::cerr << "Debugging position:\n"
+              << fen::to_string(position) << ", hash 0x" << to_hex_string(debugHash()) << "\n";
 }
 
 namespace {

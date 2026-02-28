@@ -390,7 +390,10 @@ void UCIRunner::dispatch(const std::string& command,
         if (restoreStateFromFile(filename))
             respond("info string restored engine state from " + filename);
     } else if (command == "debug") {
-        search::debugPosition(applyMoves(position, moves));
+        auto debugPosition = applyMoves(position, moves);
+        in >> std::ws;
+        auto debugMoves = parseUCIMoves(debugPosition, getUCIArguments(in));
+        search::debugPosition(applyMoves(debugPosition, debugMoves));
     } else if (command == "sleep") {
         // Test command to sleep for a number of milliseconds
         int ms;
