@@ -251,6 +251,9 @@ build/mate45.out: build/search-test ${CI_MATE45_PUZZLES} ${NNUE_FILE}
 build/puzzles.out: build/search-test ${CI_NONMATE_PUZZLES} ${NNUE_FILE}
 	$(Q)./build/search-test $(VOPT) 7 ${CI_NONMATE_PUZZLES} $(REDIR)
 
+puzzles: build/search-test ${CI_NONMATE_PUZZLES} ${NNUE_FILE}
+	$(Q)./build/search-test $(VOPT) 7 ${CI_NONMATE_PUZZLES}
+
 ${NNUE_FILE}:
 	$(Q)wget -q ${NNUE_URL}
 
@@ -365,7 +368,7 @@ $(COMPILE_COMMANDS):
 .PHONY: ${COMPILE_COMMANDS} ci install-hooks
 
 SPRT_NEW ?= build/engine
-SPRT_BASE ?= build/engine-prev
+SPRT_BASE ?= build/engine-base
 SPRT_STOCKFISH12 ?= stockfish-12
 SPRT_ARGS ?= --tc 60+2
 
@@ -374,8 +377,8 @@ sprt-base: build/engine
 	@git diff --quiet || { echo "❌ Working tree is not clean, please commit or stash changes before running this target"; exit 1; }
 	# Force tag this commit as sprt-base and save the engine as build/engine-base for SPRT testing.
 	$(Q)git tag -f sprt-base
-	$(Q)cp build/engine build/gbchess-base
-	$(Q)echo "✅ Current commit tagged as sprt-base and engine saved as gbchess-base"
+	$(Q)cp build/engine build/engine-base
+	$(Q)echo "✅ Current commit tagged as sprt-base and engine saved as build/engine-base"
 
 sprt-self: build/engine
 	$(Q)./test/sprt.sh --new-cmd "$(SPRT_NEW)" --base-cmd "$(SPRT_BASE)" --new-name gbchess-new --base-name gbchess-base $(SPRT_ARGS)
