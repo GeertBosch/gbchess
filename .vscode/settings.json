@@ -1,37 +1,12 @@
 {
-    "svg.preview.background": "white",
     "makefile.configureOnOpen": false,
-    "sarif-viewer.connectToGithubCodeScanning": "off",
-    "makefile.launchConfigurations": [
-        {
-            "cwd": "/Users/bosch/gbchess",
-            "binaryPath": "/Users/bosch/gbchess/uci-test",
-            "binaryArgs": []
-        }
-    ],
-    "github.copilot.enable": {
-        "*": true,
-        "plaintext": false,
-        "markdown": false,
-        "scminput": false,
-        "c++": true
-    },
     "clangd.fallbackFlags": [
         "-Wextra",
         "-Wall",
         "-Werror",
         "-std=c++20"
     ],
-    "gitlens.currentLine.enabled": false,
-    "github.copilot.chat.codeGeneration.instructions": [
-        {
-            "text": "Avoid unneccesary braces or parentheses. Prefer early returns to deep nesting. Keep functions small and focused. For non-trivial functions, add a documentation comment using /** ... */ syntax, but do not add doxygen comments and do not add comments for trivial functions.",
-        },
-    ],
-    "editor.formatOnSave": true,
-    "editor.formatOnSaveMode": "modificationsIfAvailable",
     "files.associations": {
         "*.mmd": "mermaid"
-    },
-    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json"
+    }
 }
