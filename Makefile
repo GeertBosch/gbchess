@@ -148,6 +148,13 @@ book.csv build/book.out: build/book-gen ${LICHESS_PGNS}
 		|| { echo "  ❌ error in build/book.out" | tee -a build/book.out ; false; }
 	$(Q)[ -n "$(V)" ] && cat build/book.out || true
 
+book.epd build/book-epd.out: build/book-gen ${LICHESS_PGNS}
+	$(Q)echo "Generating book.epd from $(words ${LICHESS_PGNS}) PGN files..." > build/book-epd.out
+	$(Q)./build/book-gen --format=epd ${LICHESS_PGNS} book.epd >> build/book-epd.out 2>&1 \
+		&& echo "  ✅ build/book-epd.out passed" | tee -a build/book-epd.out \
+		|| { echo "  ❌ error in build/book-epd.out" | tee -a build/book-epd.out ; false; }
+	$(Q)[ -n "$(V)" ] && cat build/book-epd.out || true
+
 $(eval $(call test_rules,core/core))
 $(eval $(call test_rules,engine/fen/fen,engine/fen/fen.cpp))
 $(eval $(call test_rules,core/hash/hash,core/hash/hash.cpp ${MOVES_SRCS} engine/fen/fen.cpp))
@@ -178,6 +185,7 @@ clean:
 	rm -rf test/out *.dSYM .DS_Store
 	rm -f $(COMPILE_COMMANDS)
 	rm -f book.csv
+	rm -f book.epd
 
 realclean: clean
 	rm -f lichess/*.csv
