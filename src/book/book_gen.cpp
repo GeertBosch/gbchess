@@ -218,6 +218,23 @@ struct BookStats {
     }
 };
 
+enum class OutputFormat { CSV, EPD };
+
+/** Parse output format from command-line option value */
+bool parseOutputFormat(std::string_view value, OutputFormat& format) {
+    if (value == "csv") return format = OutputFormat::CSV, true;
+    if (value == "epd") return format = OutputFormat::EPD, true;
+
+    return false;
+}
+
+/** Infer output format from output filename extension, defaults to CSV */
+OutputFormat inferOutputFormat(const std::string& outputFile) {
+    return outputFile.size() >= 4 && outputFile.substr(outputFile.size() - 4) == ".epd"
+        ? OutputFormat::EPD
+        : OutputFormat::CSV;
+}
+
 /** Safe positive integer parsing without exceptions - returns 0 for invalid input */
 static int parsePositiveInt(const std::string& str) {
     if (str.empty()) return 0;
@@ -257,7 +274,6 @@ bool shouldIncludeGame(const pgn::PGN& game, BookStats& stats) {
         return ++stats.droppedVariants, false;
     }
     if (game["FEN"].size()) return ++stats.droppedVariants, false;
-
 
     // Parse TimeControl format: "base+increment" (in seconds)
     auto timeControl = game["TimeControl"];
@@ -586,29 +602,22 @@ void reconstructFENBatch(const std::vector<std::pair<uint64_t, PositionRef>>& ba
     }
 }
 
-/** Write book entries to a CSV file */
-size_t writeBookCSV(const std::string& csvFile,
-                    const std::unordered_map<uint64_t, BookPosition>& positions,
-                    const std::vector<std::string>& pgnFiles) {
-    std::ofstream out(csvFile);
-    if (!out || !out.is_open()) {
-        std::cerr << "Could not open output file: " << csvFile << "\n";
-        return 0;
-    }
-
-    // Collect positions that need FEN reconstruction
+/** Reconstruct FEN strings for positions that meet book output criteria */
+std::unordered_map<uint64_t, std::string> reconstructFENs(
+    const std::unordered_map<uint64_t, BookPosition>& positions,
+    const std::vector<std::string>& pgnFiles) {
     std::vector<std::pair<uint64_t, PositionRef>> toReconstruct;
     for (const auto& [key, pos] : positions)
         if (pos.entry.total() >= kMinGames && pos.ref) toReconstruct.push_back({key, pos.ref});
 
     std::cout << "Reconstructing " << toReconstruct.size() << " FENs...\n";
 
-    // Reconstruct FENs in parallel
     unsigned int numThreads = std::thread::hardware_concurrency();
+    if (!numThreads) numThreads = 1;
+
     std::vector<std::thread> threads;
     std::vector<std::unordered_map<uint64_t, std::string>> threadFENs(numThreads);
 
-    // Distribute positions round-robin to threads
     size_t positionsPerThread = (toReconstruct.size() + numThreads - 1) / numThreads;
     for (unsigned int t = 0; t < numThreads; ++t) {
         size_t start = t * positionsPerThread;
@@ -621,18 +630,17 @@ size_t writeBookCSV(const std::string& csvFile,
             reconstructFENBatch, std::move(batch), std::cref(pgnFiles), std::ref(threadFENs[t]));
     }
 
-    // Wait for all threads
     for (auto& thread : threads) thread.join();
 
-    // Merge FENs from all threads
     std::unordered_map<uint64_t, std::string> allFENs;
     for (const auto& threadMap : threadFENs) allFENs.insert(threadMap.begin(), threadMap.end());
 
-    // Write to CSV
-    out << "eco,name,fen,white,draw,black\n";
-    size_t writtenCount = 0;
+    return allFENs;
+}
 
-    // Sort positions by ECO code and name for better readability
+/** Sort positions by opening ECO and name for deterministic output */
+std::vector<std::pair<uint64_t, BookPosition>> sortPositions(
+    const std::unordered_map<uint64_t, BookPosition>& positions) {
     std::vector<std::pair<uint64_t, BookPosition>> sortedPositions(positions.begin(),
                                                                    positions.end());
     std::sort(sortedPositions.begin(), sortedPositions.end(), [](const auto& a, const auto& b) {
@@ -642,6 +650,50 @@ size_t writeBookCSV(const std::string& csvFile,
             return posA.opening.eco.min < posB.opening.eco.min;
         return posA.opening.name < posB.opening.name;
     });
+
+    return sortedPositions;
+}
+
+/** Convert FEN string to EPD by keeping only the first 4 fields */
+std::string fenToEPD(const std::string& fen) {
+    std::istringstream in(fen);
+    std::string board;
+    std::string turn;
+    std::string castling;
+    std::string ep;
+    if (!(in >> board >> turn >> castling >> ep)) return "";
+    return board + " " + turn + " " + castling + " " + ep;
+}
+
+/** Escape string for quoted EPD opcode values */
+std::string escapeEPDString(const std::string& value) {
+    std::string escaped;
+    escaped.reserve(value.size());
+    for (char c : value) {
+        if (c == '\\' || c == '"') escaped.push_back('\\');
+        escaped.push_back(c);
+    }
+    return escaped;
+}
+
+/** Write book entries to a CSV file */
+size_t writeBookCSV(const std::string& csvFile,
+                    const std::unordered_map<uint64_t, BookPosition>& positions,
+                    const std::vector<std::string>& pgnFiles) {
+    std::ofstream out(csvFile);
+    if (!out || !out.is_open()) {
+        std::cerr << "Could not open output file: " << csvFile << "\n";
+        return 0;
+    }
+
+    auto allFENs = reconstructFENs(positions, pgnFiles);
+
+    // Write to CSV
+    out << "eco,name,fen,white,draw,black\n";
+    size_t writtenCount = 0;
+
+    // Sort positions by ECO code and name for better readability
+    auto sortedPositions = sortPositions(positions);
 
     for (const auto& [key, pos] : sortedPositions) {
         const auto& entry = pos.entry;
@@ -658,6 +710,46 @@ size_t writeBookCSV(const std::string& csvFile,
     }
 
     return writtenCount;
+}
+
+/** Write book entries to an EPD file for fastchess opening book use */
+size_t writeBookEPD(const std::string& epdFile,
+                    const std::unordered_map<uint64_t, BookPosition>& positions,
+                    const std::vector<std::string>& pgnFiles) {
+    std::ofstream out(epdFile);
+    if (!out || !out.is_open()) {
+        std::cerr << "Could not open output file: " << epdFile << "\n";
+        return 0;
+    }
+
+    auto allFENs = reconstructFENs(positions, pgnFiles);
+    auto sortedPositions = sortPositions(positions);
+
+    size_t writtenCount = 0;
+    for (const auto& [key, pos] : sortedPositions) {
+        const auto& entry = pos.entry;
+        if (entry.total() < kMinGames || !pos.ref) continue;
+
+        auto it = allFENs.find(key);
+        if (it == allFENs.end()) continue;
+
+        std::string epdPosition = fenToEPD(it->second);
+        if (epdPosition.empty()) continue;
+
+        out << epdPosition << " id \"" << escapeEPDString(pos.opening.name) << "\";"
+            << " eco \"" << std::string(pos.opening.eco) << "\";"
+            << " c0 \"" << entry.white << "," << entry.draw << "," << entry.black << "\";"
+            << "\n";
+        ++writtenCount;
+    }
+
+    return writtenCount;
+}
+
+/** Print CLI usage for book generation */
+void usage(const char* cmd) {
+    std::cerr << "Usage: " << cmd
+              << " [--format=csv|epd] <input1.pgn> [input2.pgn ...] <output.{csv|epd}>\n";
 }
 /** Process multiple PGN files and aggregate statistics */
 BookStats processPGNFiles(const std::vector<std::string>& pgnFiles,
@@ -714,17 +806,32 @@ void printSummaryStats(const BookStats& stats, size_t uniquePositions) {
 }
 }  // namespace
 
-/** Generate a book CSV file from one or more PGN files */
+/** Generate a book CSV or EPD file from one or more PGN files */
 int main(int argc, char** argv) {
-    if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <input1.pgn> [input2.pgn ...] <output.csv>\n";
+    int argStart = 1;
+    OutputFormat format = OutputFormat::CSV;
+    bool formatSet = false;
+
+    if (argc > 1 && !std::string_view(argv[1]).compare(0, 9, "--format=")) {
+        if (!parseOutputFormat(std::string_view(argv[1]).substr(9), format)) {
+            std::cerr << "Invalid format in option: " << argv[1] << "\n";
+            usage(argv[0]);
+            return 1;
+        }
+        formatSet = true;
+        argStart = 2;
+    }
+
+    if (argc - argStart < 2) {
+        usage(argv[0]);
         return 1;
     }
 
     // Parse arguments
     std::vector<std::string> pgnFiles;
-    for (int i = 1; i < argc - 1; ++i) pgnFiles.push_back(argv[i]);
-    const char* csvFile = argv[argc - 1];
+    for (int i = argStart; i < argc - 1; ++i) pgnFiles.push_back(argv[i]);
+    std::string outputFile = argv[argc - 1];
+    if (!formatSet) format = inferOutputFormat(outputFile);
 
     // Process all PGN files
     std::unordered_map<uint64_t, BookPosition> positions;
@@ -734,9 +841,11 @@ int main(int argc, char** argv) {
     printSummaryStats(totalStats, positions.size());
 
     // Write output
-    size_t writtenCount = writeBookCSV(csvFile, positions, pgnFiles);
+    size_t writtenCount = format == OutputFormat::EPD
+        ? writeBookEPD(outputFile, positions, pgnFiles)
+        : writeBookCSV(outputFile, positions, pgnFiles);
     std::cout << "Wrote " << writtenCount << " positions with at least " << kMinGames
-              << " games to " << csvFile << "\n";
+              << " games to " << outputFile << "\n";
 
     return writtenCount > 0 ? 0 : 1;
 }
