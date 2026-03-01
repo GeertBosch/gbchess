@@ -285,23 +285,47 @@ struct TranspositionTable {
         }
     }
 
-    void insert(Hash hash, int16_t fullMoveNumber, Eval move, uint8_t depthleft, EntryType type) {
-        if constexpr (kNumEntries == 0) return;
+    /**
+     * Decide whether a TT entry should be replaced.
+     */
+    [[nodiscard]] bool shouldReplace(const Entry& oldEntry, const Entry& newEntry) {
+        // Empty slot or past generation, always replace
+        if (!oldEntry.eval.move || oldEntry.generation != newEntry.generation) return true;
 
+        // Collision: prefer replacing shallower entries
+        if (oldEntry.key != newEntry.key) return newEntry.depthleft > oldEntry.depthleft;
+
+        // Same key from here on. Prefer deeper entries
+        if (newEntry.depthleft != oldEntry.depthleft)
+            return newEntry.depthleft > oldEntry.depthleft;
+
+        // Equal depth from here on. Prefer EXACT over bounds.
+        if (oldEntry.type == EntryType::EXACT) return false;
+        if (newEntry.type == EntryType::EXACT) return true;
+
+        // Prefer LOWERBOUND as it can cause beta cutoffs, or tighten lower bounds
+        if (newEntry.type == EntryType::LOWERBOUND)
+            return newEntry.eval.score > oldEntry.eval.score ||
+                oldEntry.type == EntryType::UPPERBOUND;
+
+        // New entry is upper bound. Keep it if it's tighter.
+        return newEntry.eval.score <
+            oldEntry.eval.score;  // tighter upper bound or keep lower bound
+    }
+
+    void insert(Hash hash, int16_t moveNumber, Eval move, uint8_t depthleft, EntryType type) {
+        if constexpr (kNumEntries == 0) return;
         if (!move || depthleft < 1) return;
-        auto& entry = entries[indexOf(hash)];
-        ++stats.numWorse;
-        if (entry.type == EntryType::EXACT && depthleft <= entry.depthleft && entry.eval.move &&
-            (type != EntryType::EXACT || move.score <= entry.eval.score) &&
-            entry.generation == numGenerations)
-            return;
-        --stats.numWorse;
+
+        const Entry newEntry = {hash, move, depthleft, type, numGenerations, uint8_t(moveNumber)};
+        auto& oldEntry = entries[indexOf(hash)];
+        if (!shouldReplace(oldEntry, newEntry) && ++stats.numWorse) return;
         ++stats.numInserted;
 
         // 3 cases: improve existing entry, collision with unrelated entry, or occupy an empty slot
-        if (entry.key == keyOf(hash))
+        if (oldEntry.key == keyOf(hash))
             ++stats.numImproved;
-        else if (entry.eval.move)
+        else if (oldEntry.eval.move)
             ++stats.numCollisions;
         else
             ++stats.numOccupied;  // nothing in this slot yet
@@ -311,7 +335,7 @@ struct TranspositionTable {
                       << " score " << std::string(move.score) << " depthleft " << int(depthleft)
                       << " type " << to_string(type) << "\n";
 
-        entry = Entry{hash, move, depthleft, type, numGenerations, uint8_t(fullMoveNumber)};
+        oldEntry = newEntry;
     }
 
     void insert(
