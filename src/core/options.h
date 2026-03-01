@@ -9,7 +9,7 @@ namespace options {
  * Below options allow disabling or tuning various search optimizations.
  */
 constexpr int defaultDepth = 15;                            // Search depth in half-moves (plies)
-constexpr int quiescenceDepth = 3;                          // Depth of the quiescence search (QS)
+constexpr int quiescenceDepth = 5;                          // Depth of the quiescence search (QS)
 constexpr bool iterativeDeepening = true;                   // Aspiration windows need this
 constexpr bool lateMoveReductions = true;                   // Reduce search depth of late moves
 constexpr bool staticExchangeEvaluation = true;             // Use static exchange evaluation
@@ -18,7 +18,7 @@ constexpr int maxKillerDepth = 256;                         // Max depth for kil
 constexpr bool historyHeuristic = true;                     // Use beta cutoffs for move ordering
 constexpr std::array<int, 2> aspirationWindows{30, 125};    // Given in centipawns, {} disables
 constexpr int aspirationWindowMinDepth = 2;                 // Minimum depth for aspiration windows
-constexpr int promotionMinDepthLeft = quiescenceDepth - 2;  // Minimum depth left for promos in QS
+constexpr int promotionMinDepthLeft = 3;                    // Minimum depth left for promos in QS
 constexpr int checksMinDepthLeft = quiescenceDepth;         // Minimum depth left for checks in QS
 constexpr int checksMaxPiecesLeft = 12;                     // Max pieces left for checks in QS
 constexpr int currmoveMinDepthLeft = 1;                     // Min depth left for currmove progress
