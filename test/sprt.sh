@@ -9,7 +9,7 @@ Usage:
   test/sprt.sh --base-cmd <cmd> [options]
 
 Required:
-  --base-cmd <cmd>           Baseline engine command, e.g. build/engine-prev or stockfish
+  --base-cmd <cmd>           Baseline engine command, e.g. build/engine-base or stockfish
 
 Options:
   --new-cmd <cmd>            New engine command (default: build/engine)
@@ -33,9 +33,9 @@ Options:
   -h, --help                 Show this help
 
 Examples:
-  test/sprt.sh --base-cmd build/engine-prev
+  test/sprt.sh --base-cmd build/engine-base
     test/sprt.sh --base-cmd stockfish-12 --base-name stockfish-12
-    test/sprt.sh --base-cmd build/engine-prev --new-option OwnBook=false --base-option OwnBook=false
+    test/sprt.sh --base-cmd build/engine-base --new-option OwnBook=false --base-option OwnBook=false
 EOF
 }
 
