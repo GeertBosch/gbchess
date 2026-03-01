@@ -24,7 +24,6 @@ constexpr int checksMaxPiecesLeft = 12;                     // Max pieces left f
 constexpr int currmoveMinDepthLeft = 1;                     // Min depth left for currmove progress
 constexpr size_t transpositionTableMB = 16;                 // Zero means not enabled
 constexpr bool useNNUE = true;                              // Use NNUE evaluation
-constexpr bool incrementalNNUE = false;          // Use incremental NNUE updates (experimental)
 constexpr bool incrementalEvaluation = true;     // Compute QS evaluation using deltas
 constexpr bool principleVariationSearch = true;  // Use PVS for moves after the first one
 constexpr bool reverseFutilityPruning = true;    // Enable futility pruning

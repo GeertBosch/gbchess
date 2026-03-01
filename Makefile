@@ -102,7 +102,7 @@ ${DBGOBJ}/%-debug: ${DBGOBJ}/%_test.o
 	@echo "  ✅ build/$(notdir $@) built"
 
 # Test dependency definitions
-NNUE_SRCS=eval/nnue/nnue.cpp eval/nnue/nnue_stats.cpp eval/nnue/nnue_incremental.cpp core/square_set/square_set.cpp
+NNUE_SRCS=eval/nnue/nnue.cpp eval/nnue/nnue_stats.cpp core/square_set/square_set.cpp
 MOVES_SRCS=move/move.cpp move/move_table.cpp move/move_gen.cpp move/magic/magic.cpp core/square_set/square_set.cpp
 EVAL_SRCS=eval/eval.cpp core/hash/hash.cpp ${NNUE_SRCS} ${MOVES_SRCS}
 BOOK_SRCS=book/book.cpp book/pgn/pgn.cpp engine/fen/fen.cpp

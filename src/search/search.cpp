@@ -14,7 +14,6 @@
 #include "engine/fen/fen.h"
 #include "eval/eval.h"
 #include "eval/nnue/nnue.h"
-#include "eval/nnue/nnue_incremental.h"
 #include "move/move.h"
 #include "move/move_gen.h"
 #include "pv.h"
@@ -1002,28 +1001,6 @@ bool restoreState(std::istream& in) {
     return in.good();
 }
 
-// Forward declaration for incremental NNUE context
-class SearchContext {
-public:
-    // Optional incremental NNUE context for this search tree
-    std::optional<nnue::EvaluationContext> nnueContext;
-
-    SearchContext() = default;
-
-    void initializeNNUE(const Position& rootPosition) {
-        if constexpr (options::useNNUE && options::incrementalNNUE) {
-            if (network) {
-                nnueContext.emplace(*network, rootPosition);
-            }
-        }
-    }
-
-    void clear() { nnueContext.reset(); }
-};
-
-// Thread-local search context for incremental evaluation
-thread_local SearchContext searchContext;
-
 PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector moves, InfoFn info) {
     evalTable = EvalTable{position.board, true};
     searchNodeCount = nodeCount;
@@ -1033,9 +1010,6 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
 
     searchStartTime = clock::now();
 
-    // Initialize incremental NNUE context for this search
-    searchContext.initializeNNUE(position);
-
     auto drawState = repetitions.enter(Hash(position));
     for (auto move : moves) {
         position = moves::applyMove(position, move);
@@ -1044,9 +1018,6 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
 
     auto pv = options::iterativeDeepening ? iterativeDeepening(position, maxdepth, info)
                                           : toplevelAlphaBeta(position, maxdepth, info);
-
-    // Clear incremental context after search
-    searchContext.clear();
 
     // Adjust mate scores to reflect the number of moves to mate
     return pv;
