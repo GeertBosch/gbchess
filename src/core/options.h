@@ -11,7 +11,7 @@ namespace options {
 constexpr int defaultDepth = 10;                            // Search depth in half-moves (plies)
 constexpr int quiescenceDepth = 5;                          // Depth of the quiescence search (QS)
 constexpr bool iterativeDeepening = true;                   // Aspiration windows need this
-constexpr bool lateMoveReductions = true;                   // Reduce moves at the end of the search
+constexpr bool lateMoveReductions = true;                   // Reduce search depth of late moves
 constexpr bool staticExchangeEvaluation = true;             // Use static exchange evaluation
 constexpr int maxKillerMoves = 2;                           // Max killer moves per depth (0=off)
 constexpr int maxKillerDepth = 64;                          // Max depth for killer moves (0=off)
@@ -25,17 +25,18 @@ constexpr int currmoveMinDepthLeft = 1;                     // Min depth left fo
 constexpr size_t transpositionTableMB = 32;                 // Zero means not enabled
 constexpr int defaultMoveTime = 20'000;                     // Max time for a move in milliseconds
 constexpr bool useNNUE = true;                              // Use NNUE evaluation
-constexpr bool incrementalNNUE = false;       // Use incremental NNUE updates (experimental)
-constexpr bool incrementalEvaluation = true;  // Compute QS evaluation using deltas
-constexpr bool nullMovePruning = true;        // Enable null move pruning
-constexpr int nullMoveReduction = 3;          // Depth reduction for null move search
-constexpr int nullMoveMinDepth = 2;           // Minimum depth to try null move
-constexpr bool futilityPruning = true;        // Enable futility pruning
-constexpr int futilityMaxDepth = 7;           // Maximum depth for futility pruning
-constexpr bool useCountermove = true;         // Use the countermove heuristic
-constexpr bool useQsTT = true;                // Use transposition table in quiescence search
-constexpr bool verboseSearch = false;         // Print detailed search tree for debugging
-constexpr int fixedNodesSearch = 250'000;     // Fixed nodes per search (0 to disable)
+constexpr bool incrementalNNUE = false;          // Use incremental NNUE updates (experimental)
+constexpr bool incrementalEvaluation = true;     // Compute QS evaluation using deltas
+constexpr bool principleVariationSearch = true;  // Use PVS for moves after the first one
+constexpr bool reverseFutilityPruning = true;    // Enable futility pruning
+constexpr int reverseFutilityMaxDepth = 3;       // Maximum depth for futility pruning
+constexpr bool nullMovePruning = true;           // Enable null move pruning
+constexpr int nullMoveReduction = 3;             // Depth reduction for null move search
+constexpr int nullMoveMinDepth = 2;              // Minimum depth to try null move
+constexpr bool useCountermove = true;            // Use the countermove heuristic
+constexpr bool useQsTT = true;                   // Use transposition table in quiescence search
+constexpr bool verboseSearch = false;            // Print detailed search tree for debugging
+constexpr int fixedNodesSearch = 250'000;        // Fixed nodes per search (0 to disable)
 
 /**
  * Caching options for the perft program
