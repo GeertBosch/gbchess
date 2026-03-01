@@ -23,31 +23,35 @@
 
 namespace search {
 EvalTable evalTable;
+
+int maxSelDepth = 0;
+
+// Diagnostic counters
 uint64_t evalCount = 0;
 uint64_t nodeCount = 0;
 uint64_t quiescenceCount = 0;
 uint64_t cacheCount = 0;
+
+uint64_t betaCutoffs = 0;
+uint64_t countermoveAttempts = 0;
+uint64_t countermoveHits = 0;
+uint64_t firstMoveCutoffs = 0;
+uint64_t futilityPruned = 0;
+uint64_t lmrAttempts = 0;
+uint64_t lmrResearches = 0;
 uint64_t nullMoveAttempts = 0;
 uint64_t nullMoveCutoffs = 0;
-uint64_t lmrReductions = 0;
-uint64_t lmrResearches = 0;
-uint64_t betaCutoffs = 0;
-uint64_t firstMoveCutoffs = 0;
-int maxSelDepth = 0;
-
-// Diagnostic counters
 uint64_t nullMoveSkippedInCheck = 0;
 uint64_t nullMoveSkippedMate = 0;
 uint64_t nullMoveSkippedEndgame = 0;
 uint64_t nullMoveSkippedPV = 0;
 uint64_t nullMoveSkippedBehind = 0;
-uint64_t futilityPruned = 0;
-uint64_t ttCutoffs = 0;
-uint64_t ttRefinements = 0;
+uint64_t pvsAttempts = 0;
+uint64_t pvsResearches = 0;
 uint64_t qsTTCutoffs = 0;
 uint64_t qsTTRefinements = 0;
-uint64_t countermoveAttempts = 0;
-uint64_t countermoveHits = 0;
+uint64_t ttCutoffs = 0;
+uint64_t ttRefinements = 0;
 
 namespace {
 using namespace std::chrono;
@@ -152,6 +156,11 @@ public:
     }
 } repetitions;
 
+// Used to disable transposition table updates in certain situations, to avoid polluting the table
+// with inaccurate evaluations
+
+static int ttUpdateDisabler = 0;
+
 /**
  * The transposition table is a hash table that stores the best move found for a position, so it can
  * be reused in subsequent searches. The table is indexed by the hash of the position, and stores
@@ -209,6 +218,11 @@ struct TranspositionTable {
         uint64_t numMisses = 0;
     };
 
+    struct UpdateDisabler {
+        UpdateDisabler() { ++ttUpdateDisabler; }
+        ~UpdateDisabler() { --ttUpdateDisabler; }
+    };
+
     static constexpr size_t MB = 1024 * 1024;
     static constexpr size_t kNumEntries = options::transpositionTableMB * MB / sizeof(Entry);
 
@@ -222,20 +236,18 @@ struct TranspositionTable {
 
     Eval find(Hash hash) {
         if constexpr (kNumEntries == 0) return {Move(), Score()};
-        ++stats.numHits;
+
         auto& entry = entries[hash() % kNumEntries];
-        if (entry.hash() == hash() && entry.generation == numGenerations) {
-            if (hash == debugHash) {
-                std::cout << "Found debug position with move " << ::to_string(entry.eval.move)
-                          << " score " << std::string(entry.eval.score) << " depthleft "
-                          << int(entry.depthleft) << " type " << to_string(entry.type) << "\n";
-                return entry.eval;
-            }
-            return entry.eval;
-        }
-        --stats.numHits;
         ++stats.numMisses;
-        return {};  // no move found
+        if (entry.hash() != hash() || entry.generation != numGenerations) return {};
+        --stats.numMisses;
+        ++stats.numHits;
+
+        if (hash == debugHash)
+            std::cout << "Found debug position with move " << ::to_string(entry.eval.move)
+                      << " score " << std::string(entry.eval.score) << " depthleft "
+                      << int(entry.depthleft) << " type " << to_string(entry.type) << "\n";
+        return entry.eval;
     }
 
     PrincipalVariation pv(Position pos, int depth) {
@@ -283,7 +295,7 @@ struct TranspositionTable {
 
     void insert(Hash hash, int16_t fullMoveNumber, Eval move, uint8_t depthleft, EntryType type) {
         if constexpr (kNumEntries == 0) return;
-        if (!move || depthleft < 1) return;
+        if (!move || depthleft < 1 || ttUpdateDisabler) return;
         auto idx = hash() % kNumEntries;
         auto& entry = entries[idx];
         ++stats.numWorse;
@@ -302,11 +314,11 @@ struct TranspositionTable {
         else
             ++stats.numOccupied;  // nothing in this slot yet
 
-        if (hash == debugHash) {
+        if (hash == debugHash)
             std::cout << "Inserting debug position with move " << ::to_string(move.move)
                       << " score " << std::string(move.score) << " depthleft " << int(depthleft)
                       << " type " << to_string(type) << "\n";
-        }
+
 
         entry = Entry{hash, move, depthleft, type, numGenerations, fullMoveNumber};
     }
@@ -610,23 +622,25 @@ PrincipalVariation alphaBeta(
 bool tryNullMovePruning(Position& position, Hash hash, Score alpha, Score beta, Depth depth) {
     if (!options::nullMovePruning) return false;
     if (depth.left < options::nullMoveMinDepth) return false;
-    if (isInCheck(position)) {
-        ++nullMoveSkippedInCheck;
-        return false;
-    }
+
     if (beta.mate()) {
         ++nullMoveSkippedMate;
         return false;
     }
-    if (!hasNonPawnMaterial(position)) {
-        ++nullMoveSkippedEndgame;
+
+    // Skip null-move in null-window (PVS probe) nodes.
+    // NMP is noisy there and can destabilize bounds.
+    if (beta.cp() - 1 <= alpha.cp()) {
+        ++nullMoveSkippedPV;
         return false;
     }
 
-    // Don't try null move in PV nodes (where alpha+1 == beta)
-    // These need exact scores, not just fail-high/fail-low
-    if (beta.cp() - 1 <= alpha.cp()) {
-        ++nullMoveSkippedPV;
+    if (isInCheck(position)) {
+        ++nullMoveSkippedInCheck;
+        return false;
+    }
+    if (!hasNonPawnMaterial(position)) {
+        ++nullMoveSkippedEndgame;
         return false;
     }
 
@@ -693,18 +707,20 @@ PrincipalVariation alphaBeta(
 
     // Futility pruning: if static eval is way above beta at shallow depth, return early
     // This is also called "reverse futility pruning" or "static null move pruning"
-    bool isPVNode = beta.cp() - alpha.cp() > 1;
-    if (options::futilityPruning && !isPVNode && depth.left < options::futilityMaxDepth &&
-        !isInCheck(position)) {
+    const bool isPVNode = beta.cp() - alpha.cp() > 1;
+
+    if (options::reverseFutilityPruning && !isPVNode &&
+        depth.left <= options::reverseFutilityMaxDepth && !isInCheck(position) && !beta.mate() &&
+        hasNonPawnMaterial(position)) {
         // Get static evaluation
         Score staticEval = Score::fromCP(nnue::evaluate(position, *network));
         if (position.active() == Color::b) staticEval = -staticEval;
         ++evalCount;
 
         // Futility margin increases with depth (more conservative at higher depths)
-        Score futilityMargin = Score::fromCP(200 * depth.left);
+        Score futilityMargin = Score::fromCP(100 * depth.left + 100);
 
-        if (staticEval - futilityMargin >= beta && !beta.mate()) {
+        if (staticEval - futilityMargin >= beta) {
             ++futilityPruned;
             return {{}, staticEval};
         }
@@ -734,26 +750,48 @@ PrincipalVariation alphaBeta(
 
         auto undo = moves::makeMove(position, move);
         dassert(newHash == Hash(position));
-        auto newAlpha = std::max(alpha, pv.score);
 
         // Apply Late Move Reduction (LMR)
         bool applyLMR = options::lateMoveReductions && depth.left > 2 && moveCount > 2 &&
             isQuiet(position, depth.left);
+        if (applyLMR) ++lmrAttempts;
 
-        if (applyLMR) ++lmrReductions;
+        // Current alpha is the best score found so far at this node
+        const auto curAlpha = std::max(alpha, pv.score);
+        const auto fullDepth = depth.left - 1;
+        const auto reducedDepth = depth.left - 1 - applyLMR;
 
-        // Perform a reduced-depth search
-        auto newVar = -alphaBeta(position,
-                                 newHash,
-                                 -beta,
-                                 -newAlpha,
-                                 {depth.current + 1, depth.left - 1 - applyLMR},
-                                 move);
+        PrincipalVariation newVar;
+        if (moveCount == 1 || !options::principleVariationSearch) {
 
-        // Re-search at full depth if the reduced search fails high
-        if (applyLMR && newVar.score > alpha && ++lmrResearches)
+            // First move: full window (PV candidate)
             newVar = -alphaBeta(
-                position, newHash, -beta, -newAlpha, {depth.current + 1, depth.left - 1}, move);
+                position, newHash, -beta, -curAlpha, {depth.current + 1, reducedDepth}, move);
+            if (newVar.score > curAlpha && applyLMR && ++lmrResearches)
+                // If it beats alpha, re-search at full depth
+                newVar = -alphaBeta(
+                    position, newHash, -beta, -curAlpha, {depth.current + 1, fullDepth}, move);
+
+        } else {
+            // Later moves: Principal Variation Search (PVS) null-window probe first
+            const auto probeBeta = curAlpha + 1_cp;
+
+            ++pvsAttempts;
+
+            // Try the null-window probe first at reduced depth if LMR applies
+            newVar = -alphaBeta(
+                position, newHash, -probeBeta, -curAlpha, {depth.current + 1, reducedDepth}, move);
+            if (newVar.score > curAlpha && applyLMR && ++lmrResearches)
+                // If it fails high, reprobe at full depth as that's cheaper than full window
+                newVar = -alphaBeta(
+                    position, newHash, -probeBeta, -curAlpha, {depth.current + 1, fullDepth}, move);
+
+            // If it still beats alpha, confirm with full window
+            if (newVar.score > curAlpha && newVar.score < beta && ++pvsResearches)
+                newVar = -alphaBeta(
+                    position, newHash, -beta, -curAlpha, {depth.current + 1, fullDepth}, move);
+        }
+
         unmakeMove(position, undo);
 
         if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};

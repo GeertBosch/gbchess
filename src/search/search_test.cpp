@@ -108,93 +108,116 @@ PrincipalVariation analyzeMoves(Position position, int maxdepth, MoveVector move
 
 template <typename F>
 void printEvalRate(const F& fun) {
+    search::maxSelDepth = 0;
     auto startTime = std::chrono::high_resolution_clock::now();
-    auto startEvals = search::evalCount;
-    auto startCache = search::cacheCount;
-    auto startQuiescence = search::quiescenceCount;
-    auto startNullMoveAttempts = search::nullMoveAttempts;
-    auto startNullMove = search::nullMoveCutoffs;
-    auto startLMR = search::lmrReductions;
-    auto startLMRResearch = search::lmrResearches;
+    auto startEvalCount = search::evalCount;
+    auto startCacheCount = search::cacheCount;
+    auto startQuiescenceCount = search::quiescenceCount;
+
     auto startBetaCutoffs = search::betaCutoffs;
-    auto startFirstMoveCutoffs = search::firstMoveCutoffs;
-    auto startTTRefinements = search::ttRefinements;
-    auto startTTCutoffs = search::ttCutoffs;
-    auto startQsTTRefinements = search::qsTTRefinements;
-    auto startQsTTCutoffs = search::qsTTCutoffs;
-    auto startFutilityPruned = search::futilityPruned;
     auto startCountermoveAttempts = search::countermoveAttempts;
     auto startCountermoveHits = search::countermoveHits;
-    search::maxSelDepth = 0;
+    auto startFirstMoveCutoffs = search::firstMoveCutoffs;
+    auto startFutilityPruned = search::futilityPruned;
+    auto startLMRAttempts = search::lmrAttempts;
+    auto startLMRResearch = search::lmrResearches;
+    auto startNullMoveAttempts = search::nullMoveAttempts;
+    auto startNullMoveCutoffs = search::nullMoveCutoffs;
+    auto startPVSAttempts = search::pvsAttempts;
+    auto startPVSResearches = search::pvsResearches;
+    auto startQsTTRefinements = search::qsTTRefinements;
+    auto startQsTTCutoffs = search::qsTTCutoffs;
+    auto startTTRefinements = search::ttRefinements;
+    auto startTTCutoffs = search::ttCutoffs;
+
     fun();
+
     auto endTime = std::chrono::high_resolution_clock::now();
-    auto endEvals = search::evalCount;
-    auto endCache = search::cacheCount;
-    auto endQuiescence = search::quiescenceCount;
-    auto endNullMoveAttempts = search::nullMoveAttempts;
-    auto endNullMove = search::nullMoveCutoffs;
-    auto endLMR = search::lmrReductions;
-    auto endLMRResearch = search::lmrResearches;
+    auto endEvalCount = search::evalCount;
+    auto endCacheCount = search::cacheCount;
+    auto endQuiescenceCount = search::quiescenceCount;
+
     auto endBetaCutoffs = search::betaCutoffs;
-    auto endFirstMoveCutoffs = search::firstMoveCutoffs;
-    auto endTTRefinements = search::ttRefinements;
-    auto endTTCutoffs = search::ttCutoffs;
-    auto endQsTTRefinements = search::qsTTRefinements;
-    auto endQsTTCutoffs = search::qsTTCutoffs;
-    auto endFutilityPruned = search::futilityPruned;
     auto endCountermoveAttempts = search::countermoveAttempts;
     auto endCountermoveHits = search::countermoveHits;
+    auto endFirstMoveCutoffs = search::firstMoveCutoffs;
+    auto endFutilityPruned = search::futilityPruned;
+    auto endLMRAttempts = search::lmrAttempts;
+    auto endLMRResearch = search::lmrResearches;
+    auto endNullMoveAttempts = search::nullMoveAttempts;
+    auto endNullMove = search::nullMoveCutoffs;
+    auto endPVSAttempts = search::pvsAttempts;
+    auto endPVSResearches = search::pvsResearches;
+    auto endQsTTRefinements = search::qsTTRefinements;
+    auto endQsTTCutoffs = search::qsTTCutoffs;
+    auto endTTRefinements = search::ttRefinements;
+    auto endTTCutoffs = search::ttCutoffs;
 
-    auto quiesce = endQuiescence - startQuiescence;
-    auto nullMoveAttempts = endNullMoveAttempts - startNullMoveAttempts;
-    auto nullMove = endNullMove - startNullMove;
-    auto lmr = endLMR - startLMR;
-    auto lmrResearch = endLMRResearch - startLMRResearch;
-    auto betaCuts = endBetaCutoffs - startBetaCutoffs;
-    auto firstMoveCuts = endFirstMoveCutoffs - startFirstMoveCutoffs;
-    auto ttRefinements = endTTRefinements - startTTRefinements;
-    auto ttCutoffs = endTTCutoffs - startTTCutoffs;
-    auto qsTTRefinements = endQsTTRefinements - startQsTTRefinements;
-    auto qsTTCutoffs = endQsTTCutoffs - startQsTTCutoffs;
-    auto futilityPruned = endFutilityPruned - startFutilityPruned;
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+    auto evals = endEvalCount - startEvalCount;
+    auto cached = endCacheCount - startCacheCount;
+    auto quiesced = endQuiescenceCount - startQuiescenceCount;
+
+    auto betaCutoffs = endBetaCutoffs - startBetaCutoffs;
     auto countermoveAttempts = endCountermoveAttempts - startCountermoveAttempts;
     auto countermoveHits = endCountermoveHits - startCountermoveHits;
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
-    auto evals = endEvals - startEvals;
-    auto cached = endCache - startCache;
+    auto firstMoveCutoffs = endFirstMoveCutoffs - startFirstMoveCutoffs;
+    auto futilityPruned = endFutilityPruned - startFutilityPruned;
+    auto lmrAttempts = endLMRAttempts - startLMRAttempts;
+    auto lmrResearch = endLMRResearch - startLMRResearch;
+    auto nullMoveAttempts = endNullMoveAttempts - startNullMoveAttempts;
+    auto nullMoveCutoffs = endNullMove - startNullMoveCutoffs;
+    auto pvsAttempts = endPVSAttempts - startPVSAttempts;
+    auto pvsResearches = endPVSResearches - startPVSResearches;
+    auto qsTTRefinements = endQsTTRefinements - startQsTTRefinements;
+    auto qsTTCutoffs = endQsTTCutoffs - startQsTTCutoffs;
+    auto ttRefinements = endTTRefinements - startTTRefinements;
+    auto ttCutoffs = endTTCutoffs - startTTCutoffs;
+
     auto evalRate = evals / (duration.count() / 1000'000.0);  // evals per second
 
     if (!verbose) return;
 
-    std::cerr << evals << " evals, " << cached << " cached, " << quiesce << " quiesced";
+    std::cerr << evals << " evals, " << cached << " cached, " << quiesced << " quiesced";
     if (search::maxSelDepth) std::cerr << " (seldepth " << search::maxSelDepth << ")";
     std::cerr << "\n";
-    if (nullMoveAttempts) {
-        std::cerr << "  " << nullMoveAttempts << " null-move attempts, " << nullMove << " cutoffs";
-        if (nullMoveAttempts) std::cerr << " (" << (nullMove * 100 / nullMoveAttempts) << "%)";
-        std::cerr << "\n";
-    }
-    if (lmr) std::cerr << "  " << lmr << " LMR reductions";
-    if (lmrResearch) std::cerr << " (" << lmrResearch << " researches)";
-    if (lmr) std::cerr << "\n";
-    if (betaCuts) {
-        std::cerr << "  " << betaCuts << " beta cutoffs";
-        if (firstMoveCuts)
-            std::cerr << " (" << firstMoveCuts
-                      << " first-move = " << (firstMoveCuts * 100 / betaCuts) << "%)";
-        std::cerr << "\n";
-    }
-    if (ttRefinements || ttCutoffs)
-        std::cerr << "  " << ttRefinements << " TT refinements, " << ttCutoffs << " TT cutoffs\n";
-    if (qsTTRefinements || qsTTCutoffs)
-        std::cerr << "  " << qsTTRefinements << " QS TT refinements, " << qsTTCutoffs
-                  << " QS TT cutoffs\n";
 
-    if (futilityPruned) std::cerr << "  " << futilityPruned << " futility pruned\n";
+    if (betaCutoffs) {
+        std::cerr << "  " << betaCutoffs << " beta cutoffs";
+        if (firstMoveCutoffs)
+            std::cerr << " (" << firstMoveCutoffs
+                      << " first-move = " << (firstMoveCutoffs * 100 / betaCutoffs) << "%)";
+        std::cerr << "\n";
+    }
 
     if (countermoveAttempts)
         std::cerr << "  " << countermoveAttempts << " countermove attempts (" << countermoveHits
                   << " hits = " << (countermoveHits * 100 / countermoveAttempts) << "%)\n";
+
+    if (futilityPruned) std::cerr << "  " << futilityPruned << " futility pruned\n";
+
+    if (lmrAttempts) std::cerr << "  " << lmrAttempts << " LMR reductions";
+    if (lmrResearch) std::cerr << " (" << lmrResearch << " researches)";
+    if (lmrAttempts) std::cerr << "\n";
+
+    if (pvsAttempts) std::cerr << "  " << pvsAttempts << " PVS attempts";
+    if (pvsResearches) std::cerr << " (" << pvsResearches << " researches)";
+    if (pvsAttempts) std::cerr << "\n";
+
+    if (qsTTRefinements || qsTTCutoffs)
+        std::cerr << "  " << qsTTRefinements << " QS TT refinements, " << qsTTCutoffs
+                  << " QS TT cutoffs\n";
+
+    if (nullMoveAttempts) {
+        std::cerr << "  " << nullMoveAttempts << " null-move attempts, " << nullMoveCutoffs
+                  << " cutoffs";
+        if (nullMoveAttempts)
+            std::cerr << " (" << (nullMoveCutoffs * 100 / nullMoveAttempts) << "%)";
+        std::cerr << "\n";
+    }
+    if (ttRefinements || ttCutoffs)
+        std::cerr << "  " << ttRefinements << " TT refinements, " << ttCutoffs << " TT cutoffs\n";
+
 
     std::cerr << "  " << duration.count() / 1000 << " ms @ " << evalRate / 1000.0 << "K evals/sec"
               << std::endl;
