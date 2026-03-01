@@ -156,11 +156,6 @@ public:
     }
 } repetitions;
 
-// Used to disable transposition table updates in certain situations, to avoid polluting the table
-// with inaccurate evaluations
-
-static int ttUpdateDisabler = 0;
-
 /**
  * The transposition table is a hash table that stores the best move found for a position, so it can
  * be reused in subsequent searches. The table is indexed by the hash of the position, and stores
@@ -216,11 +211,6 @@ struct TranspositionTable {
         uint64_t numImproved = 0;
         uint64_t numHits = 0;
         uint64_t numMisses = 0;
-    };
-
-    struct UpdateDisabler {
-        UpdateDisabler() { ++ttUpdateDisabler; }
-        ~UpdateDisabler() { --ttUpdateDisabler; }
     };
 
     static constexpr size_t MB = 1024 * 1024;
@@ -295,7 +285,7 @@ struct TranspositionTable {
 
     void insert(Hash hash, int16_t fullMoveNumber, Eval move, uint8_t depthleft, EntryType type) {
         if constexpr (kNumEntries == 0) return;
-        if (!move || depthleft < 1 || ttUpdateDisabler) return;
+        if (!move || depthleft < 1) return;
         auto idx = hash() % kNumEntries;
         auto& entry = entries[idx];
         ++stats.numWorse;
@@ -599,7 +589,8 @@ bool betaCutoff(Score score,
 
     // Only apply heuristics to quiet moves
     if (move.kind == MoveKind::Quiet_Move || move.kind == MoveKind::Double_Push) {
-        if (options::historyStore) history[int(side)][move.from][move.to] += depthleft * depthleft;
+        if (options::historyHeuristic)
+            history[int(side)][move.from][move.to] += depthleft * depthleft;
         storeKillerMove(move, depthleft);
 
         // Store countermove: this move is a good response to the opponent's last move
