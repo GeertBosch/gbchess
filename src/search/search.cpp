@@ -181,12 +181,12 @@ struct TranspositionTable {
     };
 
     struct Entry {
-        Hash hash;
+        uint64_t key = 0;  // High bits of the hash, used to check for collisions
         Eval eval;
         uint8_t depthleft = 0;
         EntryType type = EntryType::EXACT;
         uint8_t generation;
-        int16_t fullMoveNumber;  // for informational purposes only, not used in lookups
+        uint8_t fullMoveNumber;  // for informational purposes only, not used in lookups
         Entry() = default;
 
         Entry(Hash hash,
@@ -194,8 +194,8 @@ struct TranspositionTable {
               uint8_t depth,
               EntryType type,
               uint8_t generation,
-              int16_t fullMoveNumber)
-            : hash(hash),
+              uint8_t fullMoveNumber)
+            : key(keyOf(hash)),
               eval(move),
               depthleft(depth),
               type(type),
@@ -216,6 +216,9 @@ struct TranspositionTable {
     static constexpr size_t MB = 1024 * 1024;
     static constexpr size_t kNumEntries = options::transpositionTableMB * MB / sizeof(Entry);
 
+    static uint64_t keyOf(Hash hash) { return hash() >> 64; }
+    static uint64_t indexOf(Hash hash) { return hash() % kNumEntries; }
+
     std::vector<Entry> entries{kNumEntries};
     uint8_t numGenerations = 0;
     Stats stats;
@@ -227,9 +230,9 @@ struct TranspositionTable {
     Eval find(Hash hash) {
         if constexpr (kNumEntries == 0) return {Move(), Score()};
 
-        auto& entry = entries[hash() % kNumEntries];
+        auto& entry = entries[indexOf(hash)];
         ++stats.numMisses;
-        if (entry.hash() != hash() || entry.generation != numGenerations) return {};
+        if (keyOf(hash) != entry.key || entry.generation != numGenerations) return {};
         --stats.numMisses;
         ++stats.numHits;
 
@@ -257,11 +260,11 @@ struct TranspositionTable {
 
     void refineAlphaBeta(Hash hash, Turn turn, int depthleft, Score& alpha, Score& beta) {
         if constexpr (kNumEntries == 0) return;
-        auto idx = hash() % kNumEntries;
+        auto idx = indexOf(hash);
         auto& entry = entries[idx];
 
         ++stats.numMisses;
-        if (entry.hash() != hash() || entry.depthleft < depthleft ||
+        if (entry.key != keyOf(hash) || entry.depthleft < depthleft ||
             entry.generation != numGenerations)
             return;
         if (repetitions.drawn(turn.halfmove() + 1))
@@ -285,9 +288,9 @@ struct TranspositionTable {
 
     void insert(Hash hash, int16_t fullMoveNumber, Eval move, uint8_t depthleft, EntryType type) {
         if constexpr (kNumEntries == 0) return;
+
         if (!move || depthleft < 1) return;
-        auto idx = hash() % kNumEntries;
-        auto& entry = entries[idx];
+        auto& entry = entries[indexOf(hash)];
         ++stats.numWorse;
         if (entry.type == EntryType::EXACT && depthleft <= entry.depthleft && entry.eval.move &&
             (type != EntryType::EXACT || move.score <= entry.eval.score) &&
@@ -297,7 +300,7 @@ struct TranspositionTable {
         ++stats.numInserted;
 
         // 3 cases: improve existing entry, collision with unrelated entry, or occupy an empty slot
-        if (entry.hash == hash)
+        if (entry.key == keyOf(hash))
             ++stats.numImproved;
         else if (entry.eval.move)
             ++stats.numCollisions;
@@ -309,8 +312,7 @@ struct TranspositionTable {
                       << " score " << std::string(move.score) << " depthleft " << int(depthleft)
                       << " type " << to_string(type) << "\n";
 
-
-        entry = Entry{hash, move, depthleft, type, numGenerations, fullMoveNumber};
+        entry = Entry{hash, move, depthleft, type, numGenerations, uint8_t(fullMoveNumber)};
     }
 
     void insert(
