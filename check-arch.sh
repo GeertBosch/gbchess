@@ -2,7 +2,10 @@
 # Check the source file diagram to ensure it shows all dependencies
 # It is OK for transitive dependencies to be omitted.
 
-set -e
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+"$SCRIPT_DIR/update-file-organization.sh" src/README.md src 2 "## File Organization"
 
 find src \( -name \*.cpp -o -name \*.h \) -exec grep -H '#include "' {} \; |
 awk '
