@@ -43,7 +43,7 @@
             ],
         },
         {
-            "name": "pgn-debug",
+            "name": "pgn-debug with current file",
             "type": "lldb-dap",
             "request": "launch",
             "preLaunchTask": "build: pgn-debug",
@@ -52,7 +52,8 @@
             ],
             "program": "${workspaceFolder}/build/pgn-debug",
             "args": [
-                "${workspaceFolder}/lichess/lichess_db_broadcast_2025-11.pgn",
+                "-v",
+                "${file}",
             ],
         },
 

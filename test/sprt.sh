@@ -192,7 +192,7 @@ CMD=(
     -sprt "elo0=$ELO0" "elo1=$ELO1" "alpha=$ALPHA" "beta=$BETA"
     "${NEW_ENGINE[@]}"
     "${BASE_ENGINE[@]}"
-    -pgnout "file=$PGNOUT" notation=uci
+    -pgnout "file=$PGNOUT" notation=san
 )
 
 if [ "$USE_OPENINGS" -eq 1 ]; then

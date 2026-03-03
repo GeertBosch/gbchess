@@ -56,6 +56,7 @@ std::string extractMoves(const std::string& movetext) {
 
 int testFromStream(std::istream& in, bool progress) {
     uint64_t gameCount = 0;
+    uint64_t invalidCount = 0;
     uint64_t moveCount = 0;
     using TerminationArray = EnumArray<pgn::Termination, uint64_t, size_t(pgn::Termination::COUNT)>;
     TerminationArray counts = {};
@@ -69,6 +70,7 @@ int testFromStream(std::istream& in, bool progress) {
         counts[termination]++;
 
         bool valid = termination >= pgn::Termination::WHITE_WIN;
+        invalidCount += !valid;
 
         if (verbose || !valid) {
             std::cout << "\n=== Game " << gameCount << " ===\n";
@@ -93,6 +95,8 @@ int testFromStream(std::istream& in, bool progress) {
     auto moveRate = moveCount / (micros.count() / 1'000'000.0);
 
     if (!gameCount) return std::cout << "No games processed\n", 0;
+    if (invalidCount) std::cout << invalidCount << " invalid games found\n";
+    gameCount -= invalidCount;
     if (!progress) return gameCount;
 
     std::cerr << gameCount << " games (" << gameRate / 1000 << "K games/sec), " << moveCount
@@ -102,6 +106,7 @@ int testFromStream(std::istream& in, bool progress) {
               << counts[pgn::Termination::DRAW] << " draws, " << counts[pgn::Termination::UNKNOWN]
               << " unknowns\n";
     std::cerr << "    " << counts[pgn::Termination::NOTATION_ERROR] << " notation errors, "
+              << counts[pgn::Termination::FEN_ERROR] << " FEN errors, "
               << counts[pgn::Termination::MOVE_ERROR] << " move errors, "
               << counts[pgn::Termination::INCOMPLETE_ERROR] << " incomplete errors\n";
 
@@ -188,7 +193,59 @@ e4 e5 f4?! exf4 Nf3 g5 h4 g4 Ne5 h5 Bc4 Rh7 d4 Nf6 Bxf4 Nxe4 O-O g3 Bxf7+ Rxf7 Q
 ; Game abandoned during analysis
 )PGN";
 
-    // Test the 4 test cases above
+    // Game with trailing whitespace in a tag value, which should be ignored
+    constexpr std::string_view pgn_4 = "[Event \"Parser Test\"] \n\n1. e4 *";
+
+    // Game continuing from a given FEN position, which should be parsed correctly
+    constexpr std::string_view pgn_5 = R"PGN(
+[Event "Fastchess Tournament"]
+[Site "?"]
+[Date "2026.03.01"]
+[Round "4"]
+[White "gbchess"]
+[Black "stockfish-12"]
+[Result "0-1"]
+[SetUp "1"]
+[FEN "rnbqkb1r/pppppp1p/5np1/8/2PP4/5N2/PP2PPPP/RNBQKB1R b KQkq - 0 1"]
+[GameDuration "00:00:57"]
+[GameStartTime "2026-03-01T16:01:16 -0500"]
+[GameEndTime "2026-03-01T16:02:16 -0500"]
+[PlyCount "79"]
+[Termination "normal"]
+[TimeControl "60+2"]
+[ECO "E60"]
+[Opening "King's Indian Defense: Normal Variation, King's Knight Variation"]
+
+1... Bg7 {-0.45/10 0.020s} 2. g3 {0.00/0 0.000s} c6 {-0.31/10 0.047s}
+3. Bg2 {+0.19/8 1.297s} d5 {-0.29/10 0.030s} 4. cxd5 {+0.14/8 1.468s}
+cxd5 {+0.08/10 0.019s} 5. O-O {+0.23/9 2.012s} Nc6 {-0.26/10 0.023s}
+6. Nc3 {+0.16/9 4.198s} Ne4 {-0.03/10 0.018s} 7. Nd2 {+0.20/8 1.607s}
+Nxd4 {-0.14/10 0.033s} 8. Ndxe4 {-0.07/8 1.402s} dxe4 {+0.18/10 0.011s}
+9. Bxe4 {-0.05/8 1.380s} O-O {+0.12/10 0.015s} 10. Be3 {-0.12/8 1.485s}
+Bh3 {+0.15/10 0.015s} 11. Re1 {-0.03/8 1.673s} Qd7 {+0.38/10 0.021s}
+12. Nd5 {-0.17/7 1.541s} e5 {0.00/10 0.022s} 13. Qd2 {-0.35/7 1.518s}
+Rac8 {+0.41/10 0.029s} 14. Qb4 {-0.48/7 1.357s} Rfe8 {+0.75/10 0.008s}
+15. Rad1 {-0.58/8 1.714s} b5 {+1.36/10 0.022s} 16. Bxd4 {-0.54/7 1.408s}
+exd4 {+1.14/10 0.009s} 17. Bf3 {-0.69/8 1.285s} Be6 {+1.15/10 0.007s}
+18. e4 {-0.65/8 2.119s} Rc2 {+1.45/10 0.018s} 19. e5 {-0.40/8 1.360s}
+Rc4 {+0.80/10 0.016s} 20. Qd6 {-0.71/9 1.478s} Qxd6 {+1.25/10 0.003s}
+21. exd6 {-0.64/10 2.459s} Rd8 {+1.03/10 0.009s} 22. Nf4 {-0.48/9 1.416s}
+Rxd6 {+0.67/10 0.008s} 23. Nxe6 {-0.81/8 1.321s} fxe6 {+0.90/10 0.005s}
+24. Rxe6 {-0.40/10 1.400s} Rxe6 {+4.86/10 0.006s} 25. Bd5 {-0.75/10 0.831s}
+Kf7 {+4.78/10 0.007s} 26. Re1 {-0.83/10 1.273s} Rc6 {+4.98/10 0.004s}
+27. Rxe6 {-7.43/8 1.476s} Rxe6 {+6.01/10 0.016s} 28. f4 {-11.01/10 1.244s}
+Ke7 {+6.01/10 0.018s} 29. Kf2 {-13.20/9 1.257s} Rd6 {+5.90/10 0.009s}
+30. Bf3 {-13.61/8 1.154s} d3 {+6.01/10 0.010s} 31. b3 {-13.82/9 1.509s}
+d2 {+6.76/10 0.013s} 32. f5 {-14.77/7 1.498s} d1=B {+9.19/10 0.012s}
+33. g4 {-14.43/8 2.416s} g5 {+10.51/10 0.011s} 34. h4 {-14.18/8 1.392s}
+gxh4 {+10.72/10 0.009s} 35. f6+ {-14.61/9 1.621s} Rxf6 {+17.40/10 0.003s}
+36. Kg1 {-14.63/8 1.445s} Rxf3 {+18.67/10 0.004s} 37. a4 {-14.80/8 1.660s}
+b4 {+19.48/10 0.004s} 38. a5 {-15.05/8 1.392s} Bd4+ {+66.83/10 0.002s}
+39. Kg2 {-M2/4 0.001s} Rg3+ {+M5/10 0.000s} 40. Kf1 {-M2/2 0.000s}
+Rg1# {+M1/10 0.000s, Black mates} 0-1
+    )PGN";
+
+    // Test the test cases above
     {
         std::istringstream in((std::string(pgn_1)));
         if (verbose) std::cout << "=== Running basic test 1 ===\n";
@@ -203,6 +260,16 @@ e4 e5 f4?! exf4 Nf3 g5 h4 g4 Ne5 h5 Bc4 Rh7 d4 Nf6 Bxf4 Nxe4 O-O g3 Bxf7+ Rxf7 Q
         std::istringstream in((std::string(pgn_3)));
         if (verbose) std::cout << "=== Running basic test 3 ===\n";
         assert(testFromStream(in, false) == 2);
+    }
+    {
+        std::istringstream in((std::string(pgn_4)));
+        if (verbose) std::cout << "=== Running basic test 4 ===\n";
+        assert(testFromStream(in, false) == 1);
+    }
+    {
+        std::istringstream in((std::string(pgn_5)));
+        if (verbose) std::cout << "=== Running basic test 5 ===\n";
+        assert(testFromStream(in, false) == 1);
     }
     std::cout << "All basic PGN tests passed!\n";
 }
