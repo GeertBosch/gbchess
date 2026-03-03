@@ -35,3 +35,13 @@ jobs:
           CC: ${{ matrix.compiler.cc }}
           CXX: ${{ matrix.compiler.cxx }}
         run: make -j"$(nproc)" ci
+
+      - name: Verify architecture docs are up to date
+        run: |
+          ./check-arch.sh
+          if ! git diff --quiet -- src/README.md; then
+            echo "src/README.md is out of date after check-arch.sh"
+            echo "Run ./check-arch.sh and commit the updated file"
+            git --no-pager diff -- src/README.md
+            exit 1
+          fi
