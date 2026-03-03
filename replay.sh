@@ -67,7 +67,7 @@ if [ ! -f "$pgnfile" ] ; then
     exit 2
 fi
 
-# Include the origin PGN as comments, omitting empty and zero tags
+# Include the original PGN as comments, omitting empty and zero tags
 egrep -v '"[0]?"' "$pgnfile" | while read line ; do
     echo "# $line"
 done

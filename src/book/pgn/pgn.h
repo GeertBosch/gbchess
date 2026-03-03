@@ -111,15 +111,16 @@ struct MoveText {
     PGN::iterator end() const { return PGN::iterator(movetext.data() + movetext.size()); }
 };
 
-/** Represents the termination marker of the PGN game, or ERROR if the game was invalid. */
+/** Represents the termination marker of the PGN game, or an ERROR if the game was invalid. */
 enum class Termination : uint8_t {
-    NOTATION_ERROR,
-    MOVE_ERROR,
-    INCOMPLETE_ERROR,
-    WHITE_WIN,
-    BLACK_WIN,
-    DRAW,
-    UNKNOWN,
+    NOTATION_ERROR,    // For syntactically invalid SAN or movetext
+    FEN_ERROR,         // For invalid FEN starting position in the FEN tag
+    MOVE_ERROR,        // For syntactically valid SAN that cannot be applied in the position
+    INCOMPLETE_ERROR,  // For games that end without a valid termination marker
+    WHITE_WIN,         // The game is a win for white, whether by checkmate or otherwise
+    BLACK_WIN,         // The game is a win for black, whether by checkmate or otherwise
+    DRAW,              // The game is a draw, whether by stalemate, repetition, or otherwise
+    UNKNOWN,           // The game is complete but the result is unknown ('*' terminator)
     COUNT
 };
 using VerifiedGame = std::pair<MoveVector, Termination>;  // For now assume initial position

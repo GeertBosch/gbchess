@@ -7,6 +7,7 @@
 #include "pgn.h"
 
 #include "core/core.h"
+#include "engine/fen/fen.h"
 #include "move/move.h"
 #include "move/move_gen.h"
 
@@ -19,6 +20,10 @@ bool hasQuotes(const std::string& str) {
 
 std::string removeQuotes(const std::string& str) {
     return hasQuotes(str) ? str.substr(1, str.size() - 2) : str;
+}
+
+void removeTraillingWhitespace(std::string& str) {
+    while (!str.empty() && std::isspace(str.back())) str.pop_back();
 }
 
 /**
@@ -37,6 +42,7 @@ bool readTags(std::istream& in, PGN::Tags& tags) {
 
     // Process tag lines - an empty line or non-tag line ends the tag section
     while (in.peek() == '[' && std::getline(in, line)) {
+        removeTraillingWhitespace(line);
         if (line.empty() || line[0] != '[' || line.back() != ']') break;  // Stop at non-tag line
 
         // Find the first space separating tag name and value
@@ -349,9 +355,11 @@ std::string PGN::error(iterator it) const {
     return std::to_string(row) + ":" + std::to_string(col) + ": " + msg;
 }
 
-VerifiedGame verify(PGN const& pgn) {
-
+VerifiedGame verify(PGN const& pgn) try {
     Position position = Position::initial();
+    // If a FEN tag is present, use it as the starting position
+    if (auto fen = pgn["FEN"]; !fen.empty()) position = ::fen::parsePosition(fen);
+
     MoveVector moves;
     for (auto san : pgn) {
         if (!san) return {moves, Termination::NOTATION_ERROR};
@@ -367,6 +375,8 @@ VerifiedGame verify(PGN const& pgn) {
             return {moves, Termination::MOVE_ERROR};
     }
     return {moves, Termination::INCOMPLETE_ERROR};  // No terminator found
+} catch (const fen::ParseError&) {
+    return {{}, Termination::FEN_ERROR};
 }
 
 PGN readPGN(std::istream& in) {
