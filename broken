@@ -1,0 +1,744 @@
+commit 86f412a28cddb446b1098faed86fb76f4dd61e75
+Author: Geert Bosch <grbnyc@gmail.com>
+Date:   Fri Mar 6 12:25:32 2026 -0500
+
+    WIP - broken
+
+diff --git a/.vscode/tasks.json b/.vscode/tasks.json
+index a7c8aff..00134d5 100644
+--- a/.vscode/tasks.json
++++ b/.vscode/tasks.json
+@@ -166,6 +166,42 @@
+             "panel": "dedicated"
+          },
+          "problemMatcher": []
++      },
++      {
++         "type": "shell",
++         "label": "asm: current cpp (opt object)",
++         "command": "set -euo pipefail; src='${file}'; rel=\"${src#${workspaceFolder}/}\"; if [[ \"$rel\" == src/* ]]; then rel=\"${rel#src/}\"; fi; if [[ \"$rel\" != *.cpp ]]; then echo 'Current file must be a .cpp file'; exit 1; fi; obj=\"build/opt/${rel%.cpp}.o\"; make -j \"$obj\"; out=\"/tmp/gbchess-asm-${rel%.cpp}.s\"; mkdir -p \"$(dirname \"$out\")\"; xcrun llvm-objdump --demangle --source --disassemble \"$obj\" > \"$out\"; code -r \"$out\"; echo \"Wrote $out\"",
++         "options": {
++            "shell": {
++               "executable": "/bin/bash",
++               "args": [
++                  "-c"
++               ]
++            }
++         },
++         "presentation": {
++            "reveal": "always",
++            "panel": "dedicated"
++         },
++         "problemMatcher": []
++      },
++      {
++         "type": "shell",
++         "label": "asm: selected symbol in current cpp",
++         "command": "set -euo pipefail; src='${file}'; rel=\"${src#${workspaceFolder}/}\"; if [[ \"$rel\" == src/* ]]; then rel=\"${rel#src/}\"; fi; if [[ \"$rel\" != *.cpp ]]; then echo 'Current file must be a .cpp file'; exit 1; fi; sym=\"${selectedText}\"; sym=\"$(printf '%s' \"$sym\" | tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//')\"; if [[ -z \"$sym\" ]]; then echo 'Select the function/method name/signature text first (for example: applyMove or applyMove(Turn, MoveWithPieces))'; exit 1; fi; key=\"$sym\"; key=\"${key%%(*}\"; key=\"${key##* }\"; key=\"${key##*::}\"; if [[ -z \"$key\" ]]; then key=\"$sym\"; fi; obj=\"build/opt/${rel%.cpp}.o\"; make -j \"$obj\"; out=\"/tmp/gbchess-asm-${rel%.cpp}-symbol.s\"; full=\"/tmp/gbchess-asm-${rel%.cpp}-full.s\"; mkdir -p \"$(dirname \"$out\")\"; xcrun llvm-objdump --demangle --source --disassemble \"$obj\" > \"$full\"; awk -v key=\"$key\" 'BEGIN{keep=0} /^[[:space:]]*[0-9a-fA-F]+[[:space:]]+<.*>:/ {keep=(index($0,key)>0)} {if(keep) print}' \"$full\" > \"$out\"; if [[ ! -s \"$out\" ]]; then echo \"No matching symbol block found for selection: $sym\"; echo \"Parsed key: $key\"; echo \"Try selecting just the function name (for example: applyMove)\"; exit 1; fi; code -r \"$out\"; echo \"Wrote $out\"",
++         "options": {
++            "shell": {
++               "executable": "/bin/bash",
++               "args": [
++                  "-c"
++               ]
++            }
++         },
++         "presentation": {
++            "reveal": "always",
++            "panel": "dedicated"
++         },
++         "problemMatcher": []
+       }
+    ]
+ }
+\ No newline at end of file
+diff --git a/Makefile b/Makefile
+index fbdedb7..b4e4ab9 100644
+--- a/Makefile
++++ b/Makefile
+@@ -339,6 +339,7 @@ build/test-cpp.out: ${CPP_TESTS} book.csv ${NNUE_FILE}
+ 		fi); \
+ 	} $(REDIR)
+ 
++test-cpp: build/test-cpp.out
+ test: build/test-cpp.out build/fixed-puzzles.out build/searches.out build/evals.out build/uci.out build/magic.out
+ 
+ ci: build perft-test build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate123.out build/mate45.out build/puzzles.out
+diff --git a/chess.lldbinit b/chess.lldbinit
+index ceb6d86..d4206a9 100644
+--- a/chess.lldbinit
++++ b/chess.lldbinit
+@@ -19,6 +19,7 @@ type sum add -s "${var._squares}" SquareSet
+ type sum add -x "ECORange" -s "${var.min}-${var.max}"
+ type sum add -x "Opening" -c
+ type sum add -c Hash
++type sum add -s "${var.kind} ${var.piece} to ${var.to}" pgn::SAN
+ type format add -f hex HashValue
+ type summary add --summary-string "<${var.first}, ${var.second}>" std::pair<std::string,std::string>
+ type summary add --summary-string "<${var.first}, ${var.second}>" -x "^std::(__[0-9]+::)?pair<.*>$"
+diff --git a/src/README.md b/src/README.md
+index 7afd246..175ad8c 100644
+--- a/src/README.md
++++ b/src/README.md
+@@ -44,20 +44,20 @@ graph TD
+ The file organization represents the module structure.
+ ```
+ src/
+-├── book/
+-│   └── pgn/
++├── book/                   - Opening book reading and book move selection
++│   └── pgn/                - PGN and SAN format parsing
+ ├── core/                   - Core chess types and utilities
+ │   ├── hash/               - Zobrist Hashing
+ │   └── square_set/         - Bitboard operations
+ ├── engine/                 - UCI Chess Engine
+ │   ├── fen/                - FEN position parsing
+-│   └── perft/              - Performance testing
++│   └── perft/              - Move Generation Correctness and Performance
+ ├── eval/                   - Position evaluation
+ │   └── nnue/               - Neural network evaluation
+ ├── move/                   - Move generation and representation
+ │   └── magic/              - Magic bitboard generation
+ ├── search/                 - Search algorithms
+-└── time/
++└── time/                   - Time Control
+ ```
+ 
+ ## Include Dependencies
+diff --git a/src/book/pgn/pgn.cpp b/src/book/pgn/pgn.cpp
+index 7c69391..fc73cc1 100644
+--- a/src/book/pgn/pgn.cpp
++++ b/src/book/pgn/pgn.cpp
+@@ -116,10 +116,8 @@ const char* skipVariations(const char* it) {
+     int depth = 1;
+     ++it;
+     while (*it && depth > 0) {
+-        if (*it == '(')
+-            ++depth;
+-        else if (*it == ')')
+-            --depth;
++        if (*it == '(') ++depth;
++        if (*it == ')') --depth;
+         ++it;
+     }
+     return it;
+diff --git a/src/book/pgn/pgn.h b/src/book/pgn/pgn.h
+index 97e7f77..a9e603d 100644
+--- a/src/book/pgn/pgn.h
++++ b/src/book/pgn/pgn.h
+@@ -28,8 +28,8 @@ struct SAN {
+     };
+     char disambiguationFile = 0;
+     char disambiguationRank = 0;
+-    Square to = {};  // Not set for castles as side to play is unknown here
+-    PieceType piece = PieceType::PAWN;
++    Square to = _;  // Not set for castles as side to play is unknown here
++    PieceType piece = PieceType::EMPTY;
+     PieceType promotion = PieceType::EMPTY;
+     CheckKind check = NONE;
+     NotationKind kind = NOTATION_ERROR;
+diff --git a/src/core/core.h b/src/core/core.h
+index e66fc79..e93eea0 100644
+--- a/src/core/core.h
++++ b/src/core/core.h
+@@ -66,6 +66,7 @@ enum Square : uint16_t {  // uint16_t to allow better packing
+     a6, b6, c6, d6, e6, f6, g6, h6,
+     a7, b7, c7, d7, e7, f7, g7, h7,
+     a8, b8, c8, d8, e8, f8, g8, h8,
++    _,
+     // clang-format on
+ };
+ 
+@@ -232,10 +233,11 @@ inline std::string to_string(Move move) {
+ using MoveVector = std::vector<Move>;
+ 
+ inline std::string to_string(MoveVector moves) {
+-    std::string str = "";
+-    for (auto&& move : moves) str += to_string(move) + " ";
+-    if (!str.empty()) str.pop_back();
+-    return str;
++    if (moves.empty()) return "";
++    std::string result = "";
++    for (auto&& move : moves) result += to_string(move) + " ";
++    result.pop_back();
++    return result;
+ }
+ 
+ class Board {
+@@ -263,15 +265,15 @@ public:
+ };
+ 
+ enum class CastlingMask : uint8_t {
+-    _ = 0,
+-    K = 1,
+-    Q = 2,
+-    k = 4,
+-    q = 8,
++    _ = 0,            // 0
++    K = 1,            // 1
++    Q = 2,            // 2
+     KQ = K | Q,       // 3
++    k = 4,            // 4
+     Kk = K | k,       // 5
+     Qk = Q | k,       // 6
+     KQk = K | Q | k,  // 7
++    q = 8,            // 8
+     Kq = K | q,       // 9
+     Qq = Q | q,       // 10
+     KQq = K | Q | q,  // 11
+@@ -324,6 +326,9 @@ struct BoardChange {
+ };
+ 
+ class alignas(4) Turn {
++    static_assert(kNumFiles == 8 && kNumRanks == 8, "Turn assumes a standard 8x8 chess board");
++
++public:
+     enum class EnPassantTarget : uint16_t {  // 16 bits to allow better packing
+         _ = 0,
+         // clang-format off
+@@ -331,84 +336,99 @@ class alignas(4) Turn {
+         a6 = 24, b6 = 25, c6 = 26, d6 = 27, e6 = 28, f6 = 29, g6 = 30, h6 = 31,
+         // clang-format on
+     };
+-    static constexpr auto noEnPassantTarget = EnPassantTarget::_;
+-    static constexpr Square toSquare(EnPassantTarget target) {
+-        uint16_t value = static_cast<uint16_t>(target);
+-        value += (value & 8) * 2;  // Shift rank 4 to rank 6, not affecting rank 3 or value 0.
+-        return Square(value);
+-    }
++
+     static constexpr EnPassantTarget toEnPassantTarget(Square square) {
+         uint16_t value = square;
+         value -= (value & 32) / 2;  // Shift rank 6 to rank 4, not affecting rank 3 or value 0.
+         return EnPassantTarget(value);
+     }
+ 
+-    // EnPassant target square (5 bits)
+-    EnPassantTarget enPassantTarget : 5;
+-    // Halfmove clock (7 bits)
+-    uint16_t halfmoveClock : 7;
+-    // Castling availability (4 bits)
+-    CastlingMask castlingAvailability : 4;
++    /**
++     * This mask allows efficiently updating the en passant target, as well as resetting castling
++     * rights and the half move clock as needed.
++     */
++    class Mask {
++        const uint16_t mask;  // bits to be masked out of the Turn's packed representation
+ 
+-    // Rather than using a separate full move number and active color bit, we can just use the
+-    // number of half moves to both determine the active side (white on even, black on odd) and
+-    // the full move number (half moves / 2 + 1).
+-    uint16_t fullmoveNumber : 15;
+-    Color active : 1;
++    public:
++        constexpr static uint16_t epm = 31 - uint16_t(EnPassantTarget::_);
++        constexpr Mask(EnPassantTarget ep, CastlingMask castling, bool resetHalfmoveClock)
++            : mask((31 - uint16_t(ep)) | (resetHalfmoveClock ? 127 : 0) << 5 |
++                   uint16_t(castling) << 12) {}
++        constexpr uint32_t operator()() const { return uint32_t(mask) << 16; };
++    };
++
++private:
++    static constexpr auto noEnPassantTarget = EnPassantTarget::_;
++    static constexpr Square toSquare(EnPassantTarget target) {
++        uint16_t value = static_cast<uint16_t>(target);
++        value += (value & 8) * 2;  // Shift rank 4 to rank 6, not affecting rank 3 or value 0.
++        return Square(value);
++    }
++
++    struct Fields {
++        uint16_t fullmoveNumber : 15;
++        Color active : 1;
++        EnPassantTarget enPassantTarget : 5;
++        uint16_t halfmoveClock : 7;
++        CastlingMask castlingAvailability : 4;
++    };
++    union {
++        Fields fields;
++        uint32_t packed;
++    };
+ 
+ public:
+     constexpr Turn(Color active,
+                    CastlingMask castlingAvailability,
+-                   Square enPassantTarget,
+-                   int halfmoveClock = 0,
+-                   int fullmoveNumber = 1)
+-        : enPassantTarget(toEnPassantTarget(enPassantTarget)),
+-          halfmoveClock(halfmoveClock),
+-          castlingAvailability(castlingAvailability),
+-          fullmoveNumber(fullmoveNumber),
+-          active(static_cast<Color>(active)) {
+-        // This code path is suprisingly hot, so only assert in debug mode
+-        dassert(halfmoveClock >= 0 && halfmoveClock < 128);
+-        dassert(fullmoveNumber > 0 && fullmoveNumber < 32768);
+-    }
++                   EnPassantTarget enPassantTarget,
++                   uint8_t halfmoveClock,
++                   uint16_t fullmoveNumber)
++        : fields{fullmoveNumber, active, enPassantTarget, halfmoveClock, castlingAvailability} {}
+ 
+-    constexpr Turn(Color color)
+-        : Turn(color, CastlingMask::KQkq, Square(noEnPassantTarget), 0, 1) {}
++    constexpr Turn(Color color) : Turn(color, CastlingMask::KQkq, EnPassantTarget::_, 0, 1) {}
+ 
+-    Color activeColor() const { return active; };
+-    void setActive(Color color) { active = color; };
++    CastlingMask castling() const { return fields.castlingAvailability; }
++    void setCastling(CastlingMask castling) { fields.castlingAvailability = castling; }
+ 
+-    CastlingMask castling() const { return castlingAvailability; }
+-    void setCastling(CastlingMask castling) { castlingAvailability = castling; }
++    Square enPassant() const { return toSquare(fields.enPassantTarget); }
++    void setEnPassant(Square enPassant) { fields.enPassantTarget = toEnPassantTarget(enPassant); }
+ 
+-    Square enPassant() const { return toSquare(enPassantTarget); }
+-    void setEnPassant(Square enPassant) { enPassantTarget = toEnPassantTarget(enPassant); }
++    uint8_t halfmove() const { return fields.halfmoveClock; }
++    void resetHalfmove() { fields.halfmoveClock = 0; }
+ 
+-    uint8_t halfmove() const { return halfmoveClock; }
+-    void resetHalfmove() { halfmoveClock = 0; }
+-
+-    uint16_t fullmove() const { return fullmoveNumber; }
++    uint16_t fullmove() const { return fields.fullmoveNumber; }
+ 
++    /** Increment the turn, updating the active color, halfmove clock, and fullmove number. */
+     void tick() {
+-        ++halfmoveClock;
+-        // Flip active color and increment fullmove number if active color was black
+-        active = !active;
+-        fullmoveNumber += active == Color::w;
++        // Incrementing the color bit increments the full move number on transition from
++        // black to white. Increment the halfmove clock as well.
++        constexpr uint32_t tickIncrement = 1 << 15 | 1 << 28;
++        packed += tickIncrement;
++    }
++
++    void applyMask(Mask mask) {
++        // Apply the mask to update the en passant target, castling rights, and halfmove clock as
++        // needed.
++        packed &= mask();
+     }
+ 
+     /** Make a null move (switch sides without actually moving a piece) */
+     void makeNullMove() {
+-        active = !active;
+-        enPassantTarget = noEnPassantTarget;  // Reset en passant target
+-        ++halfmoveClock;
+-        fullmoveNumber += active == Color::w;
++        /*
++        fields.active = !fields.active;
++        fields.halfmoveClock++;
++        if (fields.active == Color::w) fields.fullmoveNumber++;
++        fields.enPassantTarget = noEnPassantTarget;
++        */
++        tick();
++        constexpr auto enPassantMask = Mask(EnPassantTarget::_, CastlingMask::_, false)();
++        packed &= ~enPassantMask;  // Reset en passant target
+     }
+ 
+-    bool operator==(const Turn& other) const {
+-        return enPassantTarget == other.enPassantTarget && halfmoveClock == other.halfmoveClock &&
+-            castlingAvailability == other.castlingAvailability &&
+-            fullmoveNumber == other.fullmoveNumber && active == other.active;
+-    }
++    Color activeColor() const { return fields.active; }
++
++    bool operator==(const Turn& other) const { return packed == other.packed; }
+ };
+ static_assert(sizeof(Turn) == 4);
+ 
+@@ -437,7 +457,7 @@ struct alignas(8) Position {
+         pos.board[f8] = Piece::b;
+         pos.board[g8] = Piece::n;
+         pos.board[h8] = Piece::r;
+-        pos.turn = Turn(Color::w, CastlingMask::KQkq, noEnPassantTarget, 0, 1);
++        pos.turn = Turn(Color::w, CastlingMask::KQkq, Turn::EnPassantTarget::_, 0, 1);
+         return pos;
+     }
+     Color active() const { return turn.activeColor(); }
+diff --git a/src/engine/fen/fen.cpp b/src/engine/fen/fen.cpp
+index 09e6f78..e318165 100644
+--- a/src/engine/fen/fen.cpp
++++ b/src/engine/fen/fen.cpp
+@@ -113,12 +113,12 @@ Turn parseTurn(std::stringstream ss) {
+     std::string halfmoveClockStr;
+     std::string fullmoveNumberStr;
+ 
+-
+     // Read other components of the FEN string
+     ss >> activeColorStr >> castlingAvailabilityStr >> enPassantTargetStr >> halfmoveClockStr >>
+         fullmoveNumberStr;
+ 
+     Color active = activeColorStr == "b" ? Color::b : Color::w;
++
+     CastlingMask castling = CastlingMask::_;
+     for (char ch : castlingAvailabilityStr) {
+         switch (ch) {
+@@ -128,18 +128,21 @@ Turn parseTurn(std::stringstream ss) {
+         case 'q': castling |= CastlingMask::q; break;
+         }
+     }
+-    Turn turn(active,
+-              castling,
+-              noEnPassantTarget,
+-              std::stoi(halfmoveClockStr),
+-              std::stoi(fullmoveNumberStr));
++
++    Turn::EnPassantTarget enPassantTarget = Turn::EnPassantTarget::_;
+ 
+     if (enPassantTargetStr != "-") {
+         int file = enPassantTargetStr[0] - 'a';
+         int rank = enPassantTargetStr[1] - '1';
+-        turn.setEnPassant(makeSquare(file, rank));
++        enPassantTarget = Turn::toEnPassantTarget(makeSquare(file, rank));
+     }
+ 
++    Turn turn(active,
++              castling,
++              enPassantTarget,
++              std::stoi(halfmoveClockStr),
++              std::stoi(fullmoveNumberStr));
++
+     return turn;
+ }
+ 
+@@ -158,7 +161,6 @@ Position parsePosition(std::stringstream ss) {
+ Position parsePosition(const std::string& fen) try {
+     return parsePosition(std::stringstream(fen));
+ } catch (std::exception&) {
+-    std::cerr << "Error parsing FEN string: " << fen << "\n";
+     throw ParseError("Invalid FEN format: " + fen);
+ }
+ 
+@@ -197,10 +199,10 @@ std::string to_string(const Board& board) {
+ 
+ std::string to_string(CastlingMask mask) {
+     std::string str = "";
+-    if ((mask & CastlingMask::K) != CastlingMask::_) str += "K";
+-    if ((mask & CastlingMask::Q) != CastlingMask::_) str += "Q";
+-    if ((mask & CastlingMask::k) != CastlingMask::_) str += "k";
+-    if ((mask & CastlingMask::q) != CastlingMask::_) str += "q";
++    if ((mask & CastlingMask::K) != CastlingMask::_) str += 'K';
++    if ((mask & CastlingMask::Q) != CastlingMask::_) str += 'Q';
++    if ((mask & CastlingMask::k) != CastlingMask::_) str += 'k';
++    if ((mask & CastlingMask::q) != CastlingMask::_) str += 'q';
+     if (str == "") str = "-";
+     return str;
+ }
+diff --git a/src/engine/fen/fen.h b/src/engine/fen/fen.h
+index 1583f97..c6ca461 100644
+--- a/src/engine/fen/fen.h
++++ b/src/engine/fen/fen.h
+@@ -63,7 +63,7 @@ Move parseUCIMove(const Board& board, const std::string& move);
+ 
+ /**
+  * Parses a FEN string and returns the corresponding Position object. The input string must follow
+- * the FEN format.
++ * the FEN format or be the word "startpos". Throws ParseError if the FEN string cannot be parsed.
+  */
+ Position parsePosition(const std::string& fen);
+ 
+diff --git a/src/engine/perft/perft_simple.cpp b/src/engine/perft/perft_simple.cpp
+index 72e9661..e9c0ec2 100644
+--- a/src/engine/perft/perft_simple.cpp
++++ b/src/engine/perft/perft_simple.cpp
+@@ -1,5 +1,5 @@
+ /**
+- * Simplified perft implementation for chess position analysis.
++ * Simplified perft implementation for move generation testing.
+  *
+  * This is a streamlined version of perft.cpp that:
+  * - Uses 64-bit node counts instead of 128-bit
+@@ -12,13 +12,14 @@
+  * Example: perft_simple startpos 3
+  */
+ 
++#include <cstdlib>
++#include <iostream>
++#include <string>
++
+ #include "core/core.h"
+ #include "engine/fen/fen.h"
+ #include "move/move.h"
+ #include "move/move_gen.h"
+-#include <cstdlib>
+-#include <iostream>
+-#include <string>
+ 
+ // As there is no caching, each increment will require multiple nanoseconds of work, so the counter
+ // will not overflow for thousands of years, no need to check for overflow in processing.
+@@ -78,14 +79,12 @@ void usage() {
+     std::exit(1);
+ }
+ 
+-void run(const std::string& fen, int depth) try {
++void run(const std::string& fen, int depth) {
+     Position position = fen::parsePosition(fen);
+     perftWithDivide(position, depth);
+-} catch (const std::exception& e) {
+-    error(e.what());
+ }
+ 
+-int main(int argc, char** argv) {
++int main(int argc, char** argv) try {
+     if (argc != 3) usage();
+ 
+     std::string fen = argv[1];
+@@ -95,4 +94,6 @@ int main(int argc, char** argv) {
+ 
+     run(fen, depth);
+     return 0;
++} catch (const std::exception& e) {
++    error(e.what());
+ }
+diff --git a/src/move/move.cpp b/src/move/move.cpp
+index 5495842..edb89c0 100644
+--- a/src/move/move.cpp
++++ b/src/move/move.cpp
+@@ -1,7 +1,6 @@
+ #include <cassert>
+ #include <cstring>
+ 
+-#include "core/castling_info.h"
+ #include "core/core.h"
+ #include "core/piece_set.h"
+ #include "magic/magic.h"
+@@ -49,10 +48,6 @@ SquareSet pinnedPieces(const Board& board, Occupancy occupancy, Square kingSquar
+     return pinned;
+ }
+ 
+-void addMove(MoveVector& moves, Move move) {
+-    moves.emplace_back(move);
+-}
+-
+ BoardChange prepareMove(Board& board, Move move) {
+     // Lookup the compound move for the given move kind and target square. This breaks moves like
+     // castling, en passant and promotion into a simple capture/move and a second move that can be a
+@@ -108,28 +103,13 @@ void unmakeMove(Position& position, UndoPosition undo) {
+     position.turn = undo.turn;
+ }
+ 
+-CastlingMask castlingMask(Square from, Square to) {
+-    static struct MaskTable {
+-        using CM = CastlingMask;
+-        std::array<CM, kNumSquares> mask;
+-        MaskTable() : mask{} {
+-            mask[castlingInfo[0].kingSide[0].from] = CM::KQ;  // White King
+-            mask[castlingInfo[0].kingSide[1].from] = CM::K;   // White King Side Rook
+-            mask[castlingInfo[0].queenSide[1].from] = CM::Q;  // White Queen Side Rook
+-            mask[castlingInfo[1].kingSide[0].from] = CM::kq;  // Black King
+-            mask[castlingInfo[1].kingSide[1].from] = CM::k;   // Black King Side Rook
+-            mask[castlingInfo[1].queenSide[1].from] = CM::q;  // Black Queen Side Rook
+-        }
+-        CM operator[](Square sq) const { return mask[sq]; }
+-    } maskTable;
+-
+-    return maskTable[from] | maskTable[to];
+-}
+-
+ Turn applyMove(Turn turn, MoveWithPieces mwp) {
++    // Increment halfmoveClock, reset en passant, update fulland switch the active side.
++    turn.makeNullMove();
++
+     // Update enPassantTarget
+     // Set the en passant target if a pawn moves two squares forward, otherwise reset it.
+-    turn.setEnPassant(noEnPassantTarget);
++
+     auto move = mwp.move;
+     if (move.kind == MoveKind::Double_Push)
+         turn.setEnPassant(makeSquare(file(move.from), (rank(move.from) + rank(move.to)) / 2));
+@@ -137,8 +117,6 @@ Turn applyMove(Turn turn, MoveWithPieces mwp) {
+     // Update castlingAvailability
+     turn.setCastling(turn.castling() & ~castlingMask(move.from, move.to));
+ 
+-    // Update halfmoveClock and halfmoveNumber, and switch the active side.
+-    turn.tick();
+     // Reset halfmove clock on pawn advance or capture
+     if (type(mwp.piece) == PieceType::PAWN || isCapture(move.kind)) turn.resetHalfmove();
+ 
+diff --git a/src/move/move.h b/src/move/move.h
+index d957af8..5f140f0 100644
+--- a/src/move/move.h
++++ b/src/move/move.h
+@@ -2,9 +2,11 @@
+ 
+ #include <string>
+ 
++#include "core/castling_info.h"
+ #include "core/core.h"
+ #include "core/square_set/occupancy.h"
+ 
++
+ namespace moves {
+ struct MoveError : public std::exception {
+     std::string message;
+@@ -87,5 +89,21 @@ Turn applyMove(Turn turn, MoveWithPieces mwp);
+ /**
+  *  Returns the castling mask for the castling rights cancelled by the given move.
+  */
+-CastlingMask castlingMask(Square from, Square to);
++constexpr CastlingMask castlingMask(Square from, Square to) {
++    constexpr struct MaskTable {
++        using CM = CastlingMask;
++        std::array<CM, kNumSquares> mask;
++        constexpr MaskTable() : mask{} {
++            mask[castlingInfo[0].kingSide[0].from] = CM::KQ;  // White King
++            mask[castlingInfo[0].kingSide[1].from] = CM::K;   // White King Side Rook
++            mask[castlingInfo[0].queenSide[1].from] = CM::Q;  // White Queen Side Rook
++            mask[castlingInfo[1].kingSide[0].from] = CM::kq;  // Black King
++            mask[castlingInfo[1].kingSide[1].from] = CM::k;   // Black King Side Rook
++            mask[castlingInfo[1].queenSide[1].from] = CM::q;  // Black Queen Side Rook
++        }
++        CM operator[](Square sq) const { return mask[sq]; }
++    } maskTable;
++
++    return maskTable[from] | maskTable[to];
++}
+ }  // namespace moves
+\ No newline at end of file
+diff --git a/src/move/move_gen_test.cpp b/src/move/move_gen_test.cpp
+index fe8fa60..4f42cb6 100644
+--- a/src/move/move_gen_test.cpp
++++ b/src/move/move_gen_test.cpp
+@@ -17,7 +17,7 @@ void testLegalPawnMoves() {
+     Board board;
+     board[a2] = Piece::P;
+     board[a4] = Piece::P;  // Block the pawn, so there's no two-square move
+-    Turn turn(Color::w, CastlingMask::_, noEnPassantTarget);
++    Turn turn(Color::w, CastlingMask::_, Turn::EnPassantTarget::_, 0, 1);
+     MoveVector moves = allLegalMovesAndCaptures(turn, board);
+     assert(moves.size() == 2);
+     assert(has(moves, Move(a2, a3, MoveKind::Quiet_Move)));
+@@ -54,11 +54,10 @@ void testDoublePawnPushes() {
+     std::cout << "Double pawn pushes test passed!" << std::endl;
+ }
+ 
+-
+ void testLegalCaptures() {
+     // Test case with a regular captures and one promoting a pawn while capturing
+     Board board = fen::parsePiecePlacement("r3kbnr/pP1qpppp/3p4/4N3/4P3/8/PPP2PPP/RNB1K2R");
+-    Turn turn(Color::w);
++    Turn turn(Color::w, CastlingMask::_, Turn::EnPassantTarget::_, 0, 1);
+     MoveVector captures = allLegalCaptures(turn, board);
+     // We expect 6 captures: 2 from the knight, and 4 from the pawn promotion
+     assert(captures.size() == 6);
+@@ -72,7 +71,7 @@ void testLegalCaptures() {
+ 
+ void testLegalEnPassant() {
+     Board board = fen::parsePiecePlacement("rnbqkbnr/1ppppppp/8/8/pP6/P1P5/3PPPPP/RNBQKBNR");
+-    Turn turn(Color::b, CastlingMask::_, b3);
++    Turn turn(Color::b, CastlingMask::_, Turn::EnPassantTarget::b3, 0, 1);
+     MoveVector moves;
+ 
+     for (auto move : allLegalMovesAndCaptures(turn, board))
+@@ -141,7 +140,7 @@ void testDoesNotCheck() {
+         // We may indicate en passent capture is available, even if it results in check.
+         // So test that we reject the move in this case.
+         Board board = fen::parsePiecePlacement("8/8/3p4/KPp4r/5R2/4P1k1/6P1/8");
+-        Turn turn = {Color::w, CastlingMask::_, c6};
++        Turn turn = {Color::w, CastlingMask::_, Turn::EnPassantTarget::c6, 0, 1};
+         SearchState state(board, turn);
+         assert(!doesNotCheck(board, state, Move(b5, c6, MoveKind::En_Passant)));
+     }
+diff --git a/src/move/move_test.cpp b/src/move/move_test.cpp
+index 94cb396..7b8e0c7 100644
+--- a/src/move/move_test.cpp
++++ b/src/move/move_test.cpp
+@@ -240,7 +240,7 @@ void testApplyMove() {
+         Position position;
+         position.board[a2] = Piece::P;
+         position.board[b3] = Piece::r;  // White pawn captures black rook
+-        position.turn = {Color::w, CastlingMask::_, noEnPassantTarget, 1, 1};
++        position.turn = {Color::w, CastlingMask::_, Turn::EnPassantTarget::_, 1, 1};
+         position = applyMove(position, Move(a2, b3, MoveKind::Capture));
+         assert(position.board[b3] == Piece::P);
+         assert(position.board[a2] == Piece::_);
+@@ -252,7 +252,7 @@ void testApplyMove() {
+     {
+         Position position;
+         position.board[a2] = Piece::p;
+-        position.turn = Turn(Color::b, CastlingMask::_, noEnPassantTarget, 1, 1);
++        position.turn = Turn(Color::b, CastlingMask::_, Turn::EnPassantTarget::_, 1, 1);
+         position = applyMove(position, Move(a2, a3, MoveKind::Quiet_Move));
+         assert(position.board[a3] == Piece::p);
+         assert(position.board[a2] == Piece::_);
+@@ -266,7 +266,7 @@ void testApplyMove() {
+         Position position;
+         position.board[a2] = Piece::P;
+         position.board[b3] = Piece::r;  // White pawn captures black rook
+-        position.turn = Turn(Color::w, CastlingMask::_, noEnPassantTarget, 1, 1);
++        position.turn = Turn(Color::w, CastlingMask::_, Turn::EnPassantTarget::_, 1, 1);
+         position = applyMove(position, Move(a2, b3, MoveKind::Capture));
+         assert(position.board[b3] == Piece::P);
+         assert(position.board[a2] == Piece::_);
+@@ -279,7 +279,7 @@ void testApplyMove() {
+     {
+         Position position;
+         position.board[b1] = Piece::N;
+-        position.turn = {Color::w, CastlingMask::_, noEnPassantTarget, 1, 1};
++        position.turn = {Color::w, CastlingMask::_, Turn::EnPassantTarget::_, 1, 1};
+ 
+         position = applyMove(position, Move(b1, c3, MoveKind::Quiet_Move));
+         assert(position.board[c3] == Piece::N);
+@@ -293,7 +293,7 @@ void testApplyMove() {
+         Position position;
+         position.board[a5] = Piece::P;
+         position.board[b5] = Piece::p;
+-        position.turn = {Color::w, CastlingMask::_, b6, 1, 1};
++        position.turn = {Color::w, CastlingMask::_, Turn::EnPassantTarget::b6, 1, 1};
+ 
+         position = applyMove(position, Move(a5, b6, MoveKind::En_Passant));
+         assert(position.board[b6] == Piece::P);
+diff --git a/src/search/pv.h b/src/search/pv.h
+index 58c7c5f..92eabe6 100644
+--- a/src/search/pv.h
++++ b/src/search/pv.h
+@@ -43,7 +43,6 @@ struct PrincipalVariation {
+ 
+     operator bool() { return !moves.empty(); }
+ 
+-private:
+     PrincipalVariation(Score score, MoveVector moves) : score(score), moves(moves) {}
+ };
+ 
+diff --git a/src/search/search.cpp b/src/search/search.cpp
+index aa35874..149cd6c 100644
+--- a/src/search/search.cpp
++++ b/src/search/search.cpp
+@@ -132,7 +132,8 @@ public:
+      */
+     bool drawn(int halfmove) const {
+         // Need at least 4 half moves since the last irreversible move, to get to draw by
+-        // repetition.
++        // repetition. Account for the move we're about to make, which is not yet in the table.
++        ++halfmove;
+         if (halfmove < 4) return false;
+         if (halfmove >= 100) return true;  // Fifty-move rule
+ 
+@@ -1043,6 +1044,23 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
+     auto pv = options::iterativeDeepening ? iterativeDeepening(position, maxdepth, info)
+                                           : toplevelAlphaBeta(position, maxdepth, info);
+ 
++    // Sanity check for repetitions: if the PV includes a repetition, it should be a draw
++    MoveVector checkedMoves;
++    for (auto move : pv.moves) {
++        position = moves::applyMove(position, move);
++        repetitions.enter(drawState, Hash(position));
++        checkedMoves.push_back(move);
++        if (repetitions.drawn(position.turn.halfmove() + 1) &&
++            checkedMoves.size() < pv.moves.size()) {
++            auto scoreStr = std::string(pv.score);
++            std::stringstream ss;
++            ss << "string pv continues after repetition with move "
++               << to_string(pv.moves[checkedMoves.size()]) << " score " << scoreStr;
++            info(ss.str());
++            abort();
++        }
++    }
++
+     // Adjust mate scores to reflect the number of moves to mate
+     return pv;
+ }
