@@ -1,13 +1,42 @@
-commit 86f412a28cddb446b1098faed86fb76f4dd61e75
-Author: Geert Bosch <grbnyc@gmail.com>
-Date:   Fri Mar 6 12:25:32 2026 -0500
-
-    WIP - broken
-
+diff --git a/.vscode/launch.json b/.vscode/launch.json
+index c887a97..d44427d 100644
+--- a/.vscode/launch.json
++++ b/.vscode/launch.json
+@@ -84,14 +84,14 @@
+             ],
+         },
+         {
+-            "name": "moves-debug",
++            "name": "move-debug",
+             "type": "lldb-dap",
+             "request": "launch",
+-            "preLaunchTask": "build: moves-debug",
++            "preLaunchTask": "build: move-debug",
+             "initCommands": [
+                 "command source ${workspaceRoot}/chess.lldbinit"
+             ],
+-            "program": "${workspaceFolder}/build/moves-debug",
++            "program": "${workspaceFolder}/build/move-debug",
+             "args": [],
+         },
+         {
 diff --git a/.vscode/tasks.json b/.vscode/tasks.json
-index a7c8aff..00134d5 100644
+index a7c8aff..6aa35be 100644
 --- a/.vscode/tasks.json
 +++ b/.vscode/tasks.json
+@@ -15,10 +15,10 @@
+       },
+       {
+          "type": "shell",
+-         "label": "build: moves-debug",
++         "label": "build: move-debug",
+          "command": "make",
+          "args": [
+-            "build/moves-debug"
++            "build/move-debug"
+          ],
+          "group": "build",
+          "problemMatcher": [
 @@ -166,6 +166,42 @@
              "panel": "dedicated"
           },
@@ -138,7 +167,7 @@ index 97e7f77..a9e603d 100644
      CheckKind check = NONE;
      NotationKind kind = NOTATION_ERROR;
 diff --git a/src/core/core.h b/src/core/core.h
-index e66fc79..e93eea0 100644
+index e66fc79..66fd04e 100644
 --- a/src/core/core.h
 +++ b/src/core/core.h
 @@ -66,6 +66,7 @@ enum Square : uint16_t {  // uint16_t to allow better packing
@@ -196,7 +225,7 @@ index e66fc79..e93eea0 100644
      enum class EnPassantTarget : uint16_t {  // 16 bits to allow better packing
          _ = 0,
          // clang-format off
-@@ -331,84 +336,99 @@ class alignas(4) Turn {
+@@ -331,84 +336,100 @@ class alignas(4) Turn {
          a6 = 24, b6 = 25, c6 = 26, d6 = 27, e6 = 28, f6 = 29, g6 = 30, h6 = 31,
          // clang-format on
      };
@@ -328,13 +357,14 @@ index e66fc79..e93eea0 100644
 -        enPassantTarget = noEnPassantTarget;  // Reset en passant target
 -        ++halfmoveClock;
 -        fullmoveNumber += active == Color::w;
-+        /*
++        Turn alt = *this;
 +        fields.active = !fields.active;
 +        fields.halfmoveClock++;
 +        if (fields.active == Color::w) fields.fullmoveNumber++;
-+        fields.enPassantTarget = noEnPassantTarget;
-+        */
-+        tick();
++        alt.tick();
++        assert(packed == alt.packed);
++        // fields.enPassantTarget = noEnPassantTarget;
++        // tick();
 +        constexpr auto enPassantMask = Mask(EnPassantTarget::_, CastlingMask::_, false)();
 +        packed &= ~enPassantMask;  // Reset en passant target
      }
@@ -350,7 +380,7 @@ index e66fc79..e93eea0 100644
  };
  static_assert(sizeof(Turn) == 4);
  
-@@ -437,7 +457,7 @@ struct alignas(8) Position {
+@@ -437,7 +458,7 @@ struct alignas(8) Position {
          pos.board[f8] = Piece::b;
          pos.board[g8] = Piece::n;
          pos.board[h8] = Piece::r;
@@ -495,7 +525,7 @@ index 72e9661..e9c0ec2 100644
 +    error(e.what());
  }
 diff --git a/src/move/move.cpp b/src/move/move.cpp
-index 5495842..edb89c0 100644
+index 5495842..1f8b5e2 100644
 --- a/src/move/move.cpp
 +++ b/src/move/move.cpp
 @@ -1,7 +1,6 @@
@@ -517,7 +547,7 @@ index 5495842..edb89c0 100644
  BoardChange prepareMove(Board& board, Move move) {
      // Lookup the compound move for the given move kind and target square. This breaks moves like
      // castling, en passant and promotion into a simple capture/move and a second move that can be a
-@@ -108,28 +103,13 @@ void unmakeMove(Position& position, UndoPosition undo) {
+@@ -108,27 +103,10 @@ void unmakeMove(Position& position, UndoPosition undo) {
      position.turn = undo.turn;
  }
  
@@ -540,22 +570,18 @@ index 5495842..edb89c0 100644
 -}
 -
  Turn applyMove(Turn turn, MoveWithPieces mwp) {
-+    // Increment halfmoveClock, reset en passant, update fulland switch the active side.
-+    turn.makeNullMove();
-+
      // Update enPassantTarget
      // Set the en passant target if a pawn moves two squares forward, otherwise reset it.
--    turn.setEnPassant(noEnPassantTarget);
-+
++    turn.makeNullMove();
+     turn.setEnPassant(noEnPassantTarget);
      auto move = mwp.move;
      if (move.kind == MoveKind::Double_Push)
-         turn.setEnPassant(makeSquare(file(move.from), (rank(move.from) + rank(move.to)) / 2));
-@@ -137,8 +117,6 @@ Turn applyMove(Turn turn, MoveWithPieces mwp) {
-     // Update castlingAvailability
+@@ -138,7 +116,7 @@ Turn applyMove(Turn turn, MoveWithPieces mwp) {
      turn.setCastling(turn.castling() & ~castlingMask(move.from, move.to));
  
--    // Update halfmoveClock and halfmoveNumber, and switch the active side.
+     // Update halfmoveClock and halfmoveNumber, and switch the active side.
 -    turn.tick();
++    // turn.tick();
      // Reset halfmove clock on pawn advance or capture
      if (type(mwp.piece) == PieceType::PAWN || isCapture(move.kind)) turn.resetHalfmove();
  
