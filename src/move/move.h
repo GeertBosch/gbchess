@@ -89,21 +89,5 @@ Turn applyMove(Turn turn, MoveWithPieces mwp);
 /**
  *  Returns the castling mask for the castling rights cancelled by the given move.
  */
-constexpr CastlingMask castlingMask(Square from, Square to) {
-    constexpr struct MaskTable {
-        using CM = CastlingMask;
-        std::array<CM, kNumSquares> mask;
-        constexpr MaskTable() : mask{} {
-            mask[castlingInfo[0].kingSide[0].from] = CM::KQ;  // White King
-            mask[castlingInfo[0].kingSide[1].from] = CM::K;   // White King Side Rook
-            mask[castlingInfo[0].queenSide[1].from] = CM::Q;  // White Queen Side Rook
-            mask[castlingInfo[1].kingSide[0].from] = CM::kq;  // Black King
-            mask[castlingInfo[1].kingSide[1].from] = CM::k;   // Black King Side Rook
-            mask[castlingInfo[1].queenSide[1].from] = CM::q;  // Black Queen Side Rook
-        }
-        CM operator[](Square sq) const { return mask[sq]; }
-    } maskTable;
-
-    return maskTable[from] | maskTable[to];
-}
+CastlingMask castlingMask(Square from, Square to);
 }  // namespace moves
