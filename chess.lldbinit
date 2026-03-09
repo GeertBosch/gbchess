@@ -19,6 +19,7 @@ type sum add -s "${var._squares}" SquareSet
 type sum add -x "ECORange" -s "${var.min}-${var.max}"
 type sum add -x "Opening" -c
 type sum add -c Hash
+type sum add -s "${var.kind} ${var.piece} to ${var.to}" pgn::SAN
 type format add -f hex HashValue
 type summary add --summary-string "<${var.first}, ${var.second}>" std::pair<std::string,std::string>
 type summary add --summary-string "<${var.first}, ${var.second}>" -x "^std::(__[0-9]+::)?pair<.*>$"

@@ -1,7 +1,6 @@
 #include <cassert>
 #include <cstring>
 
-#include "core/castling_info.h"
 #include "core/core.h"
 #include "core/piece_set.h"
 #include "magic/magic.h"
@@ -47,10 +46,6 @@ SquareSet pinnedPieces(const Board& board, Occupancy occupancy, Square kingSquar
     for (const auto& data : pinData) pinned |= pinnedPieces(board, occupancy, kingSquare, data);
 
     return pinned;
-}
-
-void addMove(MoveVector& moves, Move move) {
-    moves.emplace_back(move);
 }
 
 BoardChange prepareMove(Board& board, Move move) {
@@ -108,28 +103,10 @@ void unmakeMove(Position& position, UndoPosition undo) {
     position.turn = undo.turn;
 }
 
-CastlingMask castlingMask(Square from, Square to) {
-    static struct MaskTable {
-        using CM = CastlingMask;
-        std::array<CM, kNumSquares> mask;
-        MaskTable() : mask{} {
-            mask[castlingInfo[0].kingSide[0].from] = CM::KQ;  // White King
-            mask[castlingInfo[0].kingSide[1].from] = CM::K;   // White King Side Rook
-            mask[castlingInfo[0].queenSide[1].from] = CM::Q;  // White Queen Side Rook
-            mask[castlingInfo[1].kingSide[0].from] = CM::kq;  // Black King
-            mask[castlingInfo[1].kingSide[1].from] = CM::k;   // Black King Side Rook
-            mask[castlingInfo[1].queenSide[1].from] = CM::q;  // Black Queen Side Rook
-        }
-        CM operator[](Square sq) const { return mask[sq]; }
-    } maskTable;
-
-    return maskTable[from] | maskTable[to];
-}
-
 Turn applyMove(Turn turn, MoveWithPieces mwp) {
     // Update enPassantTarget
     // Set the en passant target if a pawn moves two squares forward, otherwise reset it.
-    turn.setEnPassant(noEnPassantTarget);
+    turn.makeNullMove();
     auto move = mwp.move;
     if (move.kind == MoveKind::Double_Push)
         turn.setEnPassant(makeSquare(file(move.from), (rank(move.from) + rank(move.to)) / 2));
@@ -138,7 +115,7 @@ Turn applyMove(Turn turn, MoveWithPieces mwp) {
     turn.setCastling(turn.castling() & ~castlingMask(move.from, move.to));
 
     // Update halfmoveClock and halfmoveNumber, and switch the active side.
-    turn.tick();
+    // turn.tick();
     // Reset halfmove clock on pawn advance or capture
     if (type(mwp.piece) == PieceType::PAWN || isCapture(move.kind)) turn.resetHalfmove();
 

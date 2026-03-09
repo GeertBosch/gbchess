@@ -132,7 +132,8 @@ public:
      */
     bool drawn(int halfmove) const {
         // Need at least 4 half moves since the last irreversible move, to get to draw by
-        // repetition.
+        // repetition. Account for the move we're about to make, which is not yet in the table.
+        ++halfmove;
         if (halfmove < 4) return false;
         if (halfmove >= 100) return true;  // Fifty-move rule
 
@@ -1042,6 +1043,23 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
 
     auto pv = options::iterativeDeepening ? iterativeDeepening(position, maxdepth, info)
                                           : toplevelAlphaBeta(position, maxdepth, info);
+
+    // Sanity check for repetitions: if the PV includes a repetition, it should be a draw
+    MoveVector checkedMoves;
+    for (auto move : pv.moves) {
+        position = moves::applyMove(position, move);
+        repetitions.enter(drawState, Hash(position));
+        checkedMoves.push_back(move);
+        if (repetitions.drawn(position.turn.halfmove() + 1) &&
+            checkedMoves.size() < pv.moves.size()) {
+            auto scoreStr = std::string(pv.score);
+            std::stringstream ss;
+            ss << "string pv continues after repetition with move "
+               << to_string(pv.moves[checkedMoves.size()]) << " score " << scoreStr;
+            info(ss.str());
+            abort();
+        }
+    }
 
     // Adjust mate scores to reflect the number of moves to mate
     return pv;

@@ -339,6 +339,7 @@ build/test-cpp.out: ${CPP_TESTS} book.csv ${NNUE_FILE}
 		fi); \
 	} $(REDIR)
 
+test-cpp: build/test-cpp.out
 test: build/test-cpp.out build/fixed-puzzles.out build/searches.out build/evals.out build/uci.out build/magic.out
 
 ci: build perft-test build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate123.out build/mate45.out build/puzzles.out

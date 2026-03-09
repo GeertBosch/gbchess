@@ -116,10 +116,8 @@ const char* skipVariations(const char* it) {
     int depth = 1;
     ++it;
     while (*it && depth > 0) {
-        if (*it == '(')
-            ++depth;
-        else if (*it == ')')
-            --depth;
+        if (*it == '(') ++depth;
+        if (*it == ')') --depth;
         ++it;
     }
     return it;

@@ -84,14 +84,14 @@
             ],
         },
         {
-            "name": "moves-debug",
+            "name": "move-debug",
             "type": "lldb-dap",
             "request": "launch",
-            "preLaunchTask": "build: moves-debug",
+            "preLaunchTask": "build: move-debug",
             "initCommands": [
                 "command source ${workspaceRoot}/chess.lldbinit"
             ],
-            "program": "${workspaceFolder}/build/moves-debug",
+            "program": "${workspaceFolder}/build/move-debug",
             "args": [],
         },
         {

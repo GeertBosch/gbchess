@@ -240,7 +240,7 @@ void testApplyMove() {
         Position position;
         position.board[a2] = Piece::P;
         position.board[b3] = Piece::r;  // White pawn captures black rook
-        position.turn = {Color::w, CastlingMask::_, noEnPassantTarget, 1, 1};
+        position.turn = {Color::w, CastlingMask::_, Turn::EnPassantTarget::_, 1, 1};
         position = applyMove(position, Move(a2, b3, MoveKind::Capture));
         assert(position.board[b3] == Piece::P);
         assert(position.board[a2] == Piece::_);
@@ -252,7 +252,7 @@ void testApplyMove() {
     {
         Position position;
         position.board[a2] = Piece::p;
-        position.turn = Turn(Color::b, CastlingMask::_, noEnPassantTarget, 1, 1);
+        position.turn = Turn(Color::b, CastlingMask::_, Turn::EnPassantTarget::_, 1, 1);
         position = applyMove(position, Move(a2, a3, MoveKind::Quiet_Move));
         assert(position.board[a3] == Piece::p);
         assert(position.board[a2] == Piece::_);
@@ -266,7 +266,7 @@ void testApplyMove() {
         Position position;
         position.board[a2] = Piece::P;
         position.board[b3] = Piece::r;  // White pawn captures black rook
-        position.turn = Turn(Color::w, CastlingMask::_, noEnPassantTarget, 1, 1);
+        position.turn = Turn(Color::w, CastlingMask::_, Turn::EnPassantTarget::_, 1, 1);
         position = applyMove(position, Move(a2, b3, MoveKind::Capture));
         assert(position.board[b3] == Piece::P);
         assert(position.board[a2] == Piece::_);
@@ -279,7 +279,7 @@ void testApplyMove() {
     {
         Position position;
         position.board[b1] = Piece::N;
-        position.turn = {Color::w, CastlingMask::_, noEnPassantTarget, 1, 1};
+        position.turn = {Color::w, CastlingMask::_, Turn::EnPassantTarget::_, 1, 1};
 
         position = applyMove(position, Move(b1, c3, MoveKind::Quiet_Move));
         assert(position.board[c3] == Piece::N);
@@ -293,7 +293,7 @@ void testApplyMove() {
         Position position;
         position.board[a5] = Piece::P;
         position.board[b5] = Piece::p;
-        position.turn = {Color::w, CastlingMask::_, b6, 1, 1};
+        position.turn = {Color::w, CastlingMask::_, Turn::EnPassantTarget::b6, 1, 1};
 
         position = applyMove(position, Move(a5, b6, MoveKind::En_Passant));
         assert(position.board[b6] == Piece::P);

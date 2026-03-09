@@ -66,6 +66,7 @@ enum Square : uint16_t {  // uint16_t to allow better packing
     a6, b6, c6, d6, e6, f6, g6, h6,
     a7, b7, c7, d7, e7, f7, g7, h7,
     a8, b8, c8, d8, e8, f8, g8, h8,
+    _,
     // clang-format on
 };
 
@@ -232,10 +233,11 @@ inline std::string to_string(Move move) {
 using MoveVector = std::vector<Move>;
 
 inline std::string to_string(MoveVector moves) {
-    std::string str = "";
-    for (auto&& move : moves) str += to_string(move) + " ";
-    if (!str.empty()) str.pop_back();
-    return str;
+    if (moves.empty()) return "";
+    std::string result = "";
+    for (auto&& move : moves) result += to_string(move) + " ";
+    result.pop_back();
+    return result;
 }
 
 class Board {
@@ -262,16 +264,16 @@ public:
     const_iterator end() const { return _squares.end(); }
 };
 
-enum class CastlingMask : uint8_t {
-    _ = 0,
-    K = 1,
-    Q = 2,
-    k = 4,
-    q = 8,
+enum class CastlingMask : uint16_t {
+    _ = 0,            // 0
+    K = 1,            // 1
+    Q = 2,            // 2
     KQ = K | Q,       // 3
+    k = 4,            // 4
     Kk = K | k,       // 5
     Qk = Q | k,       // 6
     KQk = K | Q | k,  // 7
+    q = 8,            // 8
     Kq = K | q,       // 9
     Qq = Q | q,       // 10
     KQq = K | Q | q,  // 11
@@ -281,19 +283,19 @@ enum class CastlingMask : uint8_t {
     KQkq = KQ | kq,   // 15
 };
 inline CastlingMask operator&(CastlingMask lhs, CastlingMask rhs) {
-    return CastlingMask(uint8_t(lhs) & uint8_t(rhs));
+    return CastlingMask(uint16_t(lhs) & uint16_t(rhs));
 }
 inline CastlingMask operator|(CastlingMask lhs, CastlingMask rhs) {
-    return CastlingMask(uint8_t(lhs) | uint8_t(rhs));
+    return CastlingMask(uint16_t(lhs) | uint16_t(rhs));
 }
 inline CastlingMask operator&=(CastlingMask& lhs, CastlingMask rhs) {
-    return lhs = CastlingMask(uint8_t(lhs) & uint8_t(rhs));
+    return lhs = CastlingMask(uint16_t(lhs) & uint16_t(rhs));
 }
 inline CastlingMask operator|=(CastlingMask& lhs, CastlingMask rhs) {
-    return lhs = CastlingMask(uint8_t(lhs) | uint8_t(rhs));
+    return lhs = CastlingMask(uint16_t(lhs) | uint16_t(rhs));
 }
 inline CastlingMask operator~(CastlingMask lhs) {
-    return static_cast<CastlingMask>(~static_cast<uint8_t>(lhs));
+    return static_cast<CastlingMask>(~static_cast<uint16_t>(lhs));
 }
 
 // Square to indicate no enpassant target
@@ -324,6 +326,9 @@ struct BoardChange {
 };
 
 class alignas(4) Turn {
+    static_assert(kNumFiles == 8 && kNumRanks == 8, "Turn assumes a standard 8x8 chess board");
+
+public:
     enum class EnPassantTarget : uint16_t {  // 16 bits to allow better packing
         _ = 0,
         // clang-format off
@@ -331,84 +336,93 @@ class alignas(4) Turn {
         a6 = 24, b6 = 25, c6 = 26, d6 = 27, e6 = 28, f6 = 29, g6 = 30, h6 = 31,
         // clang-format on
     };
-    static constexpr auto noEnPassantTarget = EnPassantTarget::_;
-    static constexpr Square toSquare(EnPassantTarget target) {
-        uint16_t value = static_cast<uint16_t>(target);
-        value += (value & 8) * 2;  // Shift rank 4 to rank 6, not affecting rank 3 or value 0.
-        return Square(value);
-    }
+
     static constexpr EnPassantTarget toEnPassantTarget(Square square) {
         uint16_t value = square;
         value -= (value & 32) / 2;  // Shift rank 6 to rank 4, not affecting rank 3 or value 0.
         return EnPassantTarget(value);
     }
 
-    // EnPassant target square (5 bits)
-    EnPassantTarget enPassantTarget : 5;
-    // Halfmove clock (7 bits)
-    uint16_t halfmoveClock : 7;
-    // Castling availability (4 bits)
-    CastlingMask castlingAvailability : 4;
+    /**
+     * This mask allows efficiently updating the en passant target, as well as resetting castling
+     * rights and the half move clock as needed.
+     */
+    class Mask {
+        const uint16_t mask;  // bits to be masked out of the Turn's packed representation
 
-    // Rather than using a separate full move number and active color bit, we can just use the
-    // number of half moves to both determine the active side (white on even, black on odd) and
-    // the full move number (half moves / 2 + 1).
-    uint16_t fullmoveNumber : 15;
-    Color active : 1;
+    public:
+        constexpr static uint16_t epm = 31 - uint16_t(EnPassantTarget::_);
+        constexpr Mask(EnPassantTarget ep, CastlingMask castling, bool resetHalfmoveClock)
+            : mask((31 - uint16_t(ep)) | uint16_t(castling) << 5 |
+                   (resetHalfmoveClock ? 127 : 0) << 9) {}
+        constexpr uint32_t operator()() const { return uint32_t(mask) << 16; };
+    };
+
+private:
+    static constexpr auto noEnPassantTarget = EnPassantTarget::_;
+    static constexpr Square toSquare(EnPassantTarget target) {
+        uint16_t value = static_cast<uint16_t>(target);
+        value += (value & 8) * 2;  // Shift rank 4 to rank 6, not affecting rank 3 or value 0.
+        return Square(value);
+    }
+
+    struct Fields {
+        Color active : 1;
+        uint16_t fullmoveNumber : 15;
+        EnPassantTarget enPassantTarget : 5;
+        CastlingMask castlingAvailability : 4;
+        uint16_t halfmoveClock : 7;
+    };
+    union {
+        Fields fields;
+        uint32_t packed;
+    };
 
 public:
     constexpr Turn(Color active,
                    CastlingMask castlingAvailability,
-                   Square enPassantTarget,
-                   int halfmoveClock = 0,
-                   int fullmoveNumber = 1)
-        : enPassantTarget(toEnPassantTarget(enPassantTarget)),
-          halfmoveClock(halfmoveClock),
-          castlingAvailability(castlingAvailability),
-          fullmoveNumber(fullmoveNumber),
-          active(static_cast<Color>(active)) {
-        // This code path is suprisingly hot, so only assert in debug mode
-        dassert(halfmoveClock >= 0 && halfmoveClock < 128);
-        dassert(fullmoveNumber > 0 && fullmoveNumber < 32768);
+                   EnPassantTarget enPassantTarget,
+                   uint8_t halfmoveClock,
+                   uint16_t fullmoveNumber)
+        : fields{active, fullmoveNumber, enPassantTarget, castlingAvailability, halfmoveClock} {}
+
+    constexpr Turn(Color color) : Turn(color, CastlingMask::KQkq, EnPassantTarget::_, 0, 1) {}
+
+    CastlingMask castling() const { return fields.castlingAvailability; }
+    void setCastling(CastlingMask castling) { fields.castlingAvailability = castling; }
+
+    Square enPassant() const { return toSquare(fields.enPassantTarget); }
+    void setEnPassant(Square enPassant) { fields.enPassantTarget = toEnPassantTarget(enPassant); }
+
+    uint8_t halfmove() const { return fields.halfmoveClock; }
+    void resetHalfmove() { fields.halfmoveClock = 0; }
+
+    uint16_t fullmove() const { return fields.fullmoveNumber; }
+
+    /** Increment the turn, updating the active color, halfmove clock, and fullmove number. */
+    void tick() {
+        // Incrementing the color bit increments the full move number on transition from
+        // black to white. Increment the halfmove clock as well.
+        constexpr uint32_t tickIncrement = 1 | 1 << 25;
+        packed += tickIncrement;
     }
 
-    constexpr Turn(Color color)
-        : Turn(color, CastlingMask::KQkq, Square(noEnPassantTarget), 0, 1) {}
-
-    Color activeColor() const { return active; };
-    void setActive(Color color) { active = color; };
-
-    CastlingMask castling() const { return castlingAvailability; }
-    void setCastling(CastlingMask castling) { castlingAvailability = castling; }
-
-    Square enPassant() const { return toSquare(enPassantTarget); }
-    void setEnPassant(Square enPassant) { enPassantTarget = toEnPassantTarget(enPassant); }
-
-    uint8_t halfmove() const { return halfmoveClock; }
-    void resetHalfmove() { halfmoveClock = 0; }
-
-    uint16_t fullmove() const { return fullmoveNumber; }
-
-    void tick() {
-        ++halfmoveClock;
-        // Flip active color and increment fullmove number if active color was black
-        active = !active;
-        fullmoveNumber += active == Color::w;
+    void applyMask(Mask mask) {
+        // Apply the mask to update the en passant target, castling rights, and halfmove clock as
+        // needed.
+        packed &= mask();
     }
 
     /** Make a null move (switch sides without actually moving a piece) */
     void makeNullMove() {
-        active = !active;
-        enPassantTarget = noEnPassantTarget;  // Reset en passant target
-        ++halfmoveClock;
-        fullmoveNumber += active == Color::w;
+        tick();
+        constexpr auto enPassantMask = Mask(EnPassantTarget::_, CastlingMask::_, false)();
+        packed &= ~enPassantMask;  // Reset en passant target
     }
 
-    bool operator==(const Turn& other) const {
-        return enPassantTarget == other.enPassantTarget && halfmoveClock == other.halfmoveClock &&
-            castlingAvailability == other.castlingAvailability &&
-            fullmoveNumber == other.fullmoveNumber && active == other.active;
-    }
+    Color activeColor() const { return fields.active; }
+
+    bool operator==(const Turn& other) const { return packed == other.packed; }
 };
 static_assert(sizeof(Turn) == 4);
 
@@ -437,7 +451,7 @@ struct alignas(8) Position {
         pos.board[f8] = Piece::b;
         pos.board[g8] = Piece::n;
         pos.board[h8] = Piece::r;
-        pos.turn = Turn(Color::w, CastlingMask::KQkq, noEnPassantTarget, 0, 1);
+        pos.turn = Turn(Color::w, CastlingMask::KQkq, Turn::EnPassantTarget::_, 0, 1);
         return pos;
     }
     Color active() const { return turn.activeColor(); }

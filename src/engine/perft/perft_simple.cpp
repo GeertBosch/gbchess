@@ -1,5 +1,5 @@
 /**
- * Simplified perft implementation for chess position analysis.
+ * Simplified perft implementation for move generation testing.
  *
  * This is a streamlined version of perft.cpp that:
  * - Uses 64-bit node counts instead of 128-bit
@@ -12,13 +12,14 @@
  * Example: perft_simple startpos 3
  */
 
+#include <cstdlib>
+#include <iostream>
+#include <string>
+
 #include "core/core.h"
 #include "engine/fen/fen.h"
 #include "move/move.h"
 #include "move/move_gen.h"
-#include <cstdlib>
-#include <iostream>
-#include <string>
 
 // As there is no caching, each increment will require multiple nanoseconds of work, so the counter
 // will not overflow for thousands of years, no need to check for overflow in processing.
@@ -78,14 +79,12 @@ void usage() {
     std::exit(1);
 }
 
-void run(const std::string& fen, int depth) try {
+void run(const std::string& fen, int depth) {
     Position position = fen::parsePosition(fen);
     perftWithDivide(position, depth);
-} catch (const std::exception& e) {
-    error(e.what());
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv) try {
     if (argc != 3) usage();
 
     std::string fen = argv[1];
@@ -95,4 +94,6 @@ int main(int argc, char** argv) {
 
     run(fen, depth);
     return 0;
+} catch (const std::exception& e) {
+    error(e.what());
 }

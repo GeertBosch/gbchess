@@ -43,7 +43,6 @@ struct PrincipalVariation {
 
     operator bool() { return !moves.empty(); }
 
-private:
     PrincipalVariation(Score score, MoveVector moves) : score(score), moves(moves) {}
 };
 

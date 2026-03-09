@@ -44,20 +44,20 @@ graph TD
 The file organization represents the module structure.
 ```
 src/
-├── book/
-│   └── pgn/
+├── book/                   - Opening book reading and book move selection
+│   └── pgn/                - PGN and SAN format parsing
 ├── core/                   - Core chess types and utilities
 │   ├── hash/               - Zobrist Hashing
 │   └── square_set/         - Bitboard operations
 ├── engine/                 - UCI Chess Engine
 │   ├── fen/                - FEN position parsing
-│   └── perft/              - Performance testing
+│   └── perft/              - Move Generation Correctness and Performance
 ├── eval/                   - Position evaluation
 │   └── nnue/               - Neural network evaluation
 ├── move/                   - Move generation and representation
 │   └── magic/              - Magic bitboard generation
 ├── search/                 - Search algorithms
-└── time/
+└── time/                   - Time Control
 ```
 
 ## Include Dependencies
