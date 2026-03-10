@@ -199,7 +199,7 @@ void findCaptures(const Board& board, SearchState& state, const F& fun) {
 template <typename F>
 void findEnPassant(const Board& board, Turn turn, const F& fun) {
     auto enPassantTarget = turn.enPassant();
-    if (turn.enPassant() == noEnPassantTarget) return;
+    if (enPassantTarget == noEnPassantTarget) return;
 
     // For a given en passant target, there are two potential from squares. If either or
     // both have a pawn of the active color, then capture is possible.
@@ -228,7 +228,8 @@ bool doesNotCheck(Board& board, const SearchState& state, Move move) {
     if (from == state.kingSquare)
         checkSquares = isCastles(kind) ? ipath(from, to) : to;
     else if (!state.pinned.contains(from) && !state.inCheck && kind != MoveKind::En_Passant)
-        return true;
+        return true;  // En passant can result in check without moving the king or a pinned piece
+
     auto delta = MovesTable::occupancyDelta(move);
     auto check = isAttacked(board, checkSquares, state.occupancy ^ delta);
     return !check;
