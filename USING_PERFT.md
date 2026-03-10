@@ -121,6 +121,31 @@ make perft-test        # Run comprehensive test suite
 ./build/perft "fen" depth  # Manual testing
 ```
 
+### Fast Divergence Isolation Script
+
+Use the helper script to automatically bisect a failing perft divide against
+Stockfish and find the first concrete position where legal move sets differ:
+
+```bash
+cd /Users/bosch/gbchess
+python3 test/perft_diverge.py "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1" 5
+```
+
+What it prints:
+- `PATH`: sequence of moves chosen while descending the first mismatch branch
+- `FINAL_FEN`: FEN where mismatch is isolated
+- `EXTRA` / `MISSING`: legal moves your engine has in addition to / missing from Stockfish at depth 1
+
+Useful options:
+
+```bash
+# Pick lexicographically first mismatch branch instead of largest absolute count difference
+python3 test/perft_diverge.py "<fen>" <depth> --pick first
+
+# Use a custom engine or stockfish binary path
+python3 test/perft_diverge.py "<fen>" <depth> --engine ./build/perft-debug --stockfish /usr/local/bin/stockfish
+```
+
 ### Well-Known Test Positions
 
 From [https://www.chessprogramming.org/Perft_Results](https://www.chessprogramming.org/Perft_Results):
