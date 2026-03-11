@@ -14,21 +14,21 @@ class SquareSet {
     static_assert(kNumSquares <= sizeof(T) * CHAR_BIT);
 
 public:
-    SquareSet(uint64_t squares) : _squares(squares) {}
-    SquareSet(Square square) : _squares(1ull << square) {}
+    constexpr SquareSet(uint64_t squares) : _squares(squares) {}
+    constexpr SquareSet(Square square) : _squares(1ull << square) {}
     class iterator;
 
-    SquareSet() = default;
+    constexpr SquareSet() = default;
 
-    static SquareSet rank(int rank) {
+    static constexpr SquareSet rank(int rank) {
         int shift = rank * kNumFiles;
         uint64_t ret = (1ull << kNumFiles) - 1;
         ret <<= shift;
         return SquareSet(ret);
     }
-    static SquareSet file(int file) { return SquareSet(0x0101010101010101ull << file); }
+    static constexpr SquareSet file(int file) { return SquareSet(0x0101010101010101ull << file); }
 
-    static SquareSet valid(int rank, int file) {
+    static constexpr SquareSet valid(int rank, int file) {
         return rank >= 0 && rank < kNumRanks && file >= 0 && file < kNumFiles
             ? SquareSet(makeSquare(file, rank))
             : SquareSet();
@@ -66,23 +66,23 @@ public:
     size_t size() const { return std::distance(begin(), end()); }
     bool contains(Square square) const { return bool(*this & SquareSet(square)); }
 
-    SquareSet operator&(SquareSet other) const { return _squares & other._squares; }
-    SquareSet operator|(SquareSet other) const { return _squares | other._squares; }
-    SquareSet operator^(SquareSet other) const { return _squares ^ other._squares; }
-    SquareSet operator~(void) const { return ~_squares; }
-    SquareSet operator>>(int shift) const { return _squares >> shift; }
-    SquareSet operator<<(int shift) const { return _squares << shift; }
-    SquareSet operator-(SquareSet other) const { return _squares & ~other._squares; }
+    constexpr SquareSet operator&(SquareSet other) const { return _squares & other._squares; }
+    constexpr SquareSet operator|(SquareSet other) const { return _squares | other._squares; }
+    constexpr SquareSet operator^(SquareSet other) const { return _squares ^ other._squares; }
+    constexpr SquareSet operator~(void) const { return ~_squares; }
+    constexpr SquareSet operator>>(int shift) const { return _squares >> shift; }
+    constexpr SquareSet operator<<(int shift) const { return _squares << shift; }
+    constexpr SquareSet operator-(SquareSet other) const { return _squares & ~other._squares; }
 
-    SquareSet operator|=(SquareSet other) { return _squares |= other._squares; }
-    SquareSet operator&=(SquareSet other) { return _squares &= other._squares; }
-    SquareSet operator^=(SquareSet other) { return _squares ^= other._squares; }
-    SquareSet operator-=(SquareSet other) { return _squares &= ~other._squares; }
-    SquareSet operator>>=(int shift) { return _squares >>= shift; }
-    SquareSet operator<<=(int shift) { return _squares <<= shift; }
+    constexpr SquareSet operator|=(SquareSet other) { return _squares |= other._squares; }
+    constexpr SquareSet operator&=(SquareSet other) { return _squares &= other._squares; }
+    constexpr SquareSet operator^=(SquareSet other) { return _squares ^= other._squares; }
+    constexpr SquareSet operator-=(SquareSet other) { return _squares &= ~other._squares; }
+    constexpr SquareSet operator>>=(int shift) { return _squares >>= shift; }
+    constexpr SquareSet operator<<=(int shift) { return _squares <<= shift; }
 
-    bool operator==(SquareSet other) const { return _squares == other._squares; }
-    bool operator!=(SquareSet other) const { return _squares != other._squares; }
+    constexpr bool operator==(SquareSet other) const { return _squares == other._squares; }
+    constexpr bool operator!=(SquareSet other) const { return _squares != other._squares; }
 
     class iterator {
         friend class SquareSet;
