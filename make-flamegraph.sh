@@ -51,7 +51,7 @@ Options:
   --depth N         perft depth (default: 8)
   --duration T      xctrace time limit, e.g. 10s, 2m (default: 15s)
   --title TEXT      flame graph title
-  --open            open resulting SVG in VS Code
+    --open            open resulting SVG (Safari on macOS, browser on Linux)
   -h, --help        show this help
 
 Outputs:
@@ -76,9 +76,8 @@ if [[ ! -d /tmp/FlameGraph ]]; then
     git clone --depth 1 https://github.com/brendangregg/FlameGraph.git /tmp/FlameGraph
 fi
 
-if [[ -f "${TRACE_PATH}" ]]; then
-    rm -rf "${TRACE_PATH}"
-fi
+rm -rf "${TRACE_PATH}"
+rm -f "${TIME_PROFILE_XML}" "${FOLDED_PATH}" "${SVG_PATH}" "${TARGET_STDOUT}"
 
 echo "Recording Time Profiler trace for build/perft ${DEPTH} (${DURATION})..."
 xctrace record \
@@ -112,9 +111,24 @@ echo "  Folded: ${FOLDED_PATH}"
 echo "  SVG:    ${SVG_PATH}"
 
 if [[ "${OPEN_RESULT}" == "1" ]]; then
-    if command -v code >/dev/null 2>&1; then
-        code -r "${SVG_PATH}"
+    OS_NAME="$(uname -s)"
+    if [[ "${OS_NAME}" == "Darwin" ]]; then
+        if ! open -a Safari "${SVG_PATH}"; then
+            open "${SVG_PATH}"
+        fi
+    elif [[ "${OS_NAME}" == "Linux" ]]; then
+        if command -v xdg-open >/dev/null 2>&1; then
+            xdg-open "${SVG_PATH}" >/dev/null 2>&1 &
+        else
+            echo "--open requested, but xdg-open is not available on this Linux system."
+        fi
     else
-        open "${SVG_PATH}"
+        if command -v xdg-open >/dev/null 2>&1; then
+            xdg-open "${SVG_PATH}" >/dev/null 2>&1 &
+        elif command -v open >/dev/null 2>&1; then
+            open "${SVG_PATH}"
+        else
+            echo "--open requested, but no supported opener was found (tried xdg-open/open)."
+        fi
     fi
 fi
