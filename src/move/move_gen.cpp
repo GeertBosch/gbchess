@@ -20,7 +20,7 @@ void expandPromos(const F& fun, Piece piece, Move move) {
         fun(piece, Move{move.from, move.to, MoveKind(index(move.kind) - i)});
 }
 
-template <typename F>
+template <Color active, typename F>
 void findPawnPushes(SearchState& state, const F& fun) {
     bool white = state.active() == Color::w;
     const auto doublePushRank = white ? SquareSet::rank(3) : SquareSet::rank(kNumRanks - 1 - 3);
@@ -47,10 +47,10 @@ void findPawnPushes(SearchState& state, const F& fun) {
                  MoveKind::Double_Push});
 }
 
-template <typename F>
+template <Color active, typename F>
 void findPawnCaptures(SearchState& state, const F& fun) {
-    bool white = state.active() == Color::w;
-    const auto promo = white ? SquareSet::rank(kNumRanks - 1) : SquareSet::rank(0);
+    constexpr bool white = active == Color::w;
+    constexpr auto promo = white ? SquareSet::rank(kNumRanks - 1) : SquareSet::rank(0);
     auto leftPawns = state.pawns - SquareSet::file(0);
     auto rightPawns = state.pawns - SquareSet::file(7);
     auto left = (white ? leftPawns << 7 : leftPawns >> 9) & state.occupancy.theirs();
@@ -112,7 +112,10 @@ void findNonPawnMoves(const Board& board, SearchState& state, const F& fun) {
 
 template <typename F>
 void findMoves(const Board& board, SearchState& state, const F& fun) {
-    findPawnPushes(state, fun);
+    if (state.active() == Color::w)
+        findPawnPushes<Color::w>(state, fun);
+    else
+        findPawnPushes<Color::b>(state, fun);
     findNonPawnMoves(board, state, fun);
 }
 
@@ -124,20 +127,23 @@ void findChecks(const Board& board, SearchState& state, const F& fun) {
     auto doIfCheck = [&](Piece piece, Move move) {
         if (attacks(piece, move.to, otherKingSquare)) fun(piece, move);
     };
-    findPawnPushes(state, doIfCheck);
+    if (state.active() == Color::w)
+        findPawnPushes<Color::w>(state, doIfCheck);
+    else
+        findPawnPushes<Color::b>(state, doIfCheck);
     findNonPawnMoves(board, state, doIfCheck);
-    // TODO: Consider caslting that gives check
+    // TODO: Consider castling that gives check
 }
 
 /** For use in quiescent search: allow pawn moves that promote or near promotion */
-template <typename F>
+template <Color active, typename F>
 void findPromotionMoves(SearchState& state, const F& fun) {
-    bool white = state.active() == Color::w;
-    auto masked = white ? SquareSet::rank(kNumRanks - 2) | SquareSet::rank(kNumRanks - 3)
-                        : SquareSet::rank(1) | SquareSet::rank(2);
+    constexpr bool white = active == Color::w;
+    constexpr auto masked = white ? SquareSet::rank(kNumRanks - 2) | SquareSet::rank(kNumRanks - 3)
+                                  : SquareSet::rank(1) | SquareSet::rank(2);
     auto pawns = state.pawns;
     state.pawns &= masked;
-    findPawnPushes(state, fun);
+    findPawnPushes<active>(state, fun);
     state.pawns = pawns;
 }
 
@@ -192,19 +198,21 @@ void findNonPawnCaptures(const Board& board, SearchState& state, const F& fun) {
 
 template <typename F>
 void findCaptures(const Board& board, SearchState& state, const F& fun) {
-    findPawnCaptures(state, fun);
+    if (state.active() == Color::w)
+        findPawnCaptures<Color::w>(state, fun);
+    else
+        findPawnCaptures<Color::b>(state, fun);
     findNonPawnCaptures(board, state, fun);
 }
 
-template <typename F>
+template <Color active, typename F>
 void findEnPassant(const Board& board, Turn turn, const F& fun) {
     auto enPassantTarget = turn.enPassant();
     if (enPassantTarget == noEnPassantTarget) return;
 
     // For a given en passant target, there are two potential from squares. If either or
     // both have a pawn of the active color, then capture is possible.
-    auto active = turn.activeColor();
-    auto pawn = addColor(PieceType::PAWN, active);
+    constexpr auto pawn = addColor(PieceType::PAWN, active);
 
     for (auto from : MovesTable::enPassantFrom(active, enPassantTarget))
         if (board[from] == pawn) fun(pawn, {from, enPassantTarget, MoveKind::En_Passant});
@@ -266,9 +274,17 @@ void forAllLegalQuiescentMoves(Turn turn,
         findChecks(board, state, doMove);
 
     // Avoid horizon effect: don't promote in the last plies
-    if (depthleft >= options::promotionMinDepthLeft) findPromotionMoves(state, doMove);
+    if (depthleft >= options::promotionMinDepthLeft) {
+        if (state.active() == Color::w)
+            findPromotionMoves<Color::w>(state, doMove);
+        else
+            findPromotionMoves<Color::b>(state, doMove);
+    }
+    if (state.active() == Color::w)
+        findEnPassant<Color::w>(board, turn, doMove);
+    else
+        findEnPassant<Color::b>(board, turn, doMove);
 
-    findEnPassant(board, turn, doMove);
     if (state.inCheck || otherMayPromote) findMoves(board, state, doMove);
 }
 
@@ -288,12 +304,15 @@ void forAllLegalMovesAndCaptures(Board& board, SearchState& state, MoveFun actio
         unmakeMove(board, change);
     };
     findCaptures(board, state, doMove);
-    findEnPassant(board, state.turn, doMove);
+    if (state.active() == Color::w)
+        findEnPassant<Color::w>(board, state.turn, doMove);
+    else
+        findEnPassant<Color::b>(board, state.turn, doMove);
     findMoves(board, state, doMove);
     findCastles(state, doMove);
 }
 
-size_t countLegalMovesAndCaptures(Board& board, SearchState& state) {
+size_t countLegalMovesAndCapturesCheckedOrPinned(Board& board, SearchState& state) {
     size_t count = 0;
     auto countMove = [&count, &board, &state](Piece, Move move) {
         count += doesNotCheck(board, state, move);
@@ -301,11 +320,43 @@ size_t countLegalMovesAndCaptures(Board& board, SearchState& state) {
     findNonPawnCaptures(board, state, countMove);
     findNonPawnMoves(board, state, countMove);
 
-    findPawnCaptures(state, countMove);
-    findEnPassant(board, state.turn, countMove);
-    findPawnPushes(state, countMove);
+    if (state.active() == Color::w) {
+        findPawnCaptures<Color::w>(state, countMove);
+        findEnPassant<Color::w>(board, state.turn, countMove);
+        findPawnPushes<Color::w>(state, countMove);
+    } else {
+        findPawnCaptures<Color::b>(state, countMove);
+        findEnPassant<Color::b>(board, state.turn, countMove);
+        findPawnPushes<Color::b>(state, countMove);
+    }
 
     findCastles(state, countMove);
+
+    return count;
+}
+
+size_t countLegalMovesAndCaptures(Board& board, SearchState& state) {
+    if (state.inCheck || !state.pinned.empty())
+        return countLegalMovesAndCapturesCheckedOrPinned(board, state);
+
+    size_t count = 0;
+    auto countNonPawnMove = [&count, &board, &state](Piece piece, Move move) {
+        count += piece != Piece::K && piece != Piece::k ? 1 : doesNotCheck(board, state, move);
+    };
+    findNonPawnCaptures(board, state, countNonPawnMove);
+    findNonPawnMoves(board, state, countNonPawnMove);
+
+    auto countPawnMove = [&count](Piece, Move) { ++count; };
+    if (state.active() == Color::w) {
+        findPawnCaptures<Color::w>(state, countPawnMove);
+        findEnPassant<Color::w>(board, state.turn, countPawnMove);
+        findPawnPushes<Color::w>(state, countPawnMove);
+    } else {
+        findPawnCaptures<Color::b>(state, countPawnMove);
+        findEnPassant<Color::b>(board, state.turn, countPawnMove);
+        findPawnPushes<Color::b>(state, countPawnMove);
+    }
+    findCastles(state, countNonPawnMove);
 
     return count;
 }
