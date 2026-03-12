@@ -8,6 +8,7 @@ EVALS=$(foreach phase,${PHASES},lichess/lichess_${phase}_evals.csv)
 CCFLAGS=-std=c++17 -Werror -Wall -Wextra
 CLANGPP=clang++
 GPP=g++
+LLVM_PROFDATA=llvm-profdata
 DEBUGFLAGS=-DDEBUG -O0 -g
 OPTOBJ=build/opt
 DBGOBJ=build/dbg
@@ -33,6 +34,9 @@ UNAME_S := $(shell uname -s)
 
 ifeq ($(UNAME_S),Linux)
 	LIBS:=${LIBS} -latomic
+endif
+ifeq ($(UNAME_S),Darwin)
+    LLVM_PROFDATA:=xcrun llvm-profdata
 endif
 
 # MacOS specific stuff - why can't thinks just work  by default?
@@ -185,8 +189,9 @@ realclean: clean
 
 PERFT_SRCS=$(call prefix_src,engine/perft/perft.cpp engine/perft/perft_core.cpp ${MOVES_SRCS} engine/fen/fen.cpp core/hash/hash.cpp)
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
-build/perft: $(call calc_objs,${OPTOBJ},${PERFT_SRCS})
-	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
+build/perft: ${PERFT_SRCS} ${PERFT_CLANG_HDRS} build/perft.profdata
+	$(Q)mkdir -p build
+	$(call RUNCMD,${CLANGPP} -O3 -flto=thin -fprofile-instr-use=build/perft.profdata ${CCFLAGS} -Isrc -o $@ $(filter-out %.h %.profdata,$^) ${LIBS})
 
 PERFT_TEST_SRCS=$(call prefix_src,engine/perft/perft_test.cpp engine/perft/perft_core.cpp ${MOVES_SRCS} engine/fen/fen.cpp core/hash/hash.cpp)
 build/perft-test: $(call calc_objs,${OPTOBJ},${PERFT_TEST_SRCS})
@@ -201,19 +206,51 @@ PERFT_SIMPLE_SRCS=$(call prefix_src,engine/perft/perft_simple.cpp ${MOVES_SRCS} 
 build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
 	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
 
+PERFT_CLANG_HDRS=src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
+
 # Build the perft tool with some different compilation options for speed comparison
-build/perft-clang-sse2: ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
+build/perft-clang-sse2: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
 	$(Q)mkdir -p build
-	$(call RUNCMD,${CLANGPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
-build/perft-clang-emul:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
+	$(call RUNCMD,${CLANGPP} -O3 -flto=thin ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
+build/perft-clang-emul: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
 	$(Q)mkdir -p build
-	$(call RUNCMD,${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
-build/perft-gcc-sse2:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
+	$(call RUNCMD,${CLANGPP} -O3 -flto=thin -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
+build/perft-gcc-sse2: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
 	$(Q)mkdir -p build
 	$(call RUNCMD,${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
-build/perft-gcc-emul:  ${PERFT_SRCS} src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
+build/perft-gcc-emul: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
 	$(Q)mkdir -p build
 	$(call RUNCMD,${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
+
+# PGO: instrumented builds for profile collection
+build/perft-instr: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
+	$(Q)mkdir -p build
+	$(call RUNCMD,${CLANGPP} -O3 ${CCFLAGS} -Isrc -fprofile-instr-generate -o $@ $(filter-out %.h,$^) ${LIBS})
+build/perft-clang-sse2-instr: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
+	$(Q)mkdir -p build
+	$(call RUNCMD,${CLANGPP} -O3 ${CCFLAGS} -Isrc -fprofile-instr-generate -o $@ $(filter-out %.h,$^))
+build/perft-clang-emul-instr: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
+	$(Q)mkdir -p build
+	$(call RUNCMD,${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -fprofile-instr-generate -o $@ $(filter-out %.h,$^))
+
+# PGO: run instrumented binary to collect profile data
+build/perft.profdata: build/perft-instr
+	$(Q)LLVM_PROFILE_FILE=build/perft.profraw ./$< -q "$(KIWIPETE)" 5 > /dev/null
+	$(call RUNCMD,${LLVM_PROFDATA} merge -output=$@ build/perft.profraw)
+build/perft-clang-sse2.profdata: build/perft-clang-sse2-instr
+	$(Q)LLVM_PROFILE_FILE=build/perft-clang-sse2.profraw ./$< -q "$(KIWIPETE)" 5 > /dev/null
+	$(call RUNCMD,${LLVM_PROFDATA} merge -output=$@ build/perft-clang-sse2.profraw)
+build/perft-clang-emul.profdata: build/perft-clang-emul-instr
+	$(Q)LLVM_PROFILE_FILE=build/perft-clang-emul.profraw ./$< -q "$(KIWIPETE)" 5 > /dev/null
+	$(call RUNCMD,${LLVM_PROFDATA} merge -output=$@ build/perft-clang-emul.profraw)
+
+# PGO: final optimized builds using collected profile
+build/perft-clang-sse2-pgo: ${PERFT_SRCS} ${PERFT_CLANG_HDRS} build/perft-clang-sse2.profdata
+	$(Q)mkdir -p build
+	$(call RUNCMD,${CLANGPP} -O3 -flto=thin -fprofile-instr-use=build/perft-clang-sse2.profdata ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h %.profdata,$^))
+build/perft-clang-emul-pgo: ${PERFT_SRCS} ${PERFT_CLANG_HDRS} build/perft-clang-emul.profdata
+	$(Q)mkdir -p build
+	$(call RUNCMD,${CLANGPP} -O3 -flto=thin -DSSE2EMUL -fprofile-instr-use=build/perft-clang-emul.profdata ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h %.profdata,$^))
 
 # Test the Kiwipete position at depth 4 as it exercises captures, en passant, castling,
 # promotions, checks, discovered checks, double checks, checkmates, etc at low depth.
@@ -228,7 +265,7 @@ build/perft.out: build/perft
 	$(Q)./build/perft -q "$(KIWIPETE)" 5 | grep -q "Nodes searched: 193690690" $(REDIR)
 
 # Aliases for perft test targets
-perft-bench: build/perft-clang-emul.out build/perft-gcc-emul.out build/perft-clang-sse2.out build/perft-gcc-sse2.out
+perft-bench: build/perft-clang-emul.out build/perft-gcc-emul.out build/perft-clang-sse2.out build/perft-gcc-sse2.out build/perft-clang-sse2-pgo.out build/perft-clang-emul-pgo.out
 
 perft-test: build/perft.out build/perft-test.out build/perft-debug.out build/perft-simple.out
 
