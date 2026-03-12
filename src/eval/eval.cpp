@@ -191,13 +191,13 @@ SquareSet discoverXRayAttackers(const Board& board, Square to, SquareSet occ, Co
     SquareSet xrayAttackers;
 
     // Diagonal directions (bishop, queen)
-    SquareSet bishopAttackers = targets(to, /*bishop=*/true, occ) & occ;
+    SquareSet bishopAttackers = bishopTargets(to, occ) & occ;
     PieceSet bishopPieces = {addColor(PieceType::BISHOP, side), addColor(PieceType::QUEEN, side)};
     for (auto from : bishopAttackers)
         if (bishopPieces.contains(board[from])) xrayAttackers.insert(from);
 
     // Orthogonal directions (rook, queen)
-    SquareSet rookAttackers = targets(to, /*bishop=*/false, occ) & occ;
+    SquareSet rookAttackers = rookTargets(to, occ) & occ;
     PieceSet rookPieces = {addColor(PieceType::ROOK, side), addColor(PieceType::QUEEN, side)};
     for (auto from : rookAttackers)
         if (rookPieces.contains(board[from])) xrayAttackers.insert(from);
