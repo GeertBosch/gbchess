@@ -9,11 +9,31 @@
  */
 uint64_t parallelDeposit(uint64_t value, uint64_t mask);
 
-/**
- * Returns a set of pseudo-legal target squares for the given piece on the given square, assuming
- * the provided occupancy.
- */
-SquareSet targets(Square square, bool bishop, SquareSet occupancy);
+/** Compact table entry for fast magic bitboard sliding piece attack lookups. */
+struct alignas(32) MagicEntry {
+    uint64_t magic;
+    uint64_t mask;
+    int shift;
+    const SquareSet* table;
+
+    SquareSet targets(SquareSet occupancy) const {
+        auto blockers = occupancy & mask;
+        return table[(blockers.bits() * magic) >> shift];
+    }
+};
+
+extern MagicEntry rookEntries[kNumSquares];
+extern MagicEntry bishopEntries[kNumSquares];
+
+/** Returns squares attacked by a rook on `square` given board `occupancy`. */
+inline SquareSet rookTargets(Square square, SquareSet occupancy) {
+    return rookEntries[square].targets(occupancy);
+}
+
+/** Returns squares attacked by a bishop on `square` given board `occupancy`. */
+inline SquareSet bishopTargets(Square square, SquareSet occupancy) {
+    return bishopEntries[square].targets(occupancy);
+}
 
 /**
  * Returns the set of squares where a piece can restrict the movement of the sliding piece. Note

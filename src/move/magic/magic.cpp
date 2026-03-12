@@ -15,46 +15,38 @@ uint64_t parallelDeposit(uint64_t value, uint64_t mask) {
     return result;
 }
 
+MagicEntry rookEntries[64];
+MagicEntry bishopEntries[64];
+
 namespace {
 
-struct Magic {
-    uint64_t magic;                // Magic number for the piece type
-    SquareSet mask;                // Bitmask for the piece type
-    std::vector<SquareSet> table;  // Precomputed target tables for the piece type
-    int shift;                     // Number of bits used for indexing into the table
-    Magic(Square square, bool bishop, uint64_t magic)
-        : magic(magic),
-          mask(computeSliderBlockers(square, bishop).bits()),
-          shift(64 - mask.size()) {
-        int bits = 64 - shift;
-        table.resize(1ull << bits, 0ull);
-        for (int i = 0; i < (1 << bits); i++) {
-            auto targets = computeSliderTargets(square, bishop, parallelDeposit(i, mask.bits()));
-            auto blockers = parallelDeposit(i, mask.bits());
-            if (auto& entry = table[(blockers * magic) >> shift])
-                assert(entry == targets);
-            else
-                entry = targets;
-        }
-    }
+// Tables are stored here to keep them alive for the lifetime of the program.
+std::vector<SquareSet> rookTables[64];
+std::vector<SquareSet> bishopTables[64];
 
-    // Computes the target square for this square and piece type, given the board occupancy.
-    SquareSet targets(SquareSet occupancy) const {
-        auto blockers = occupancy & mask;
-        size_t index = (blockers.bits() * magic) >> shift;
-        return table[index];
+void buildEntry(Square square, bool bishop, uint64_t magic, std::vector<SquareSet>& table,
+                MagicEntry& entry) {
+    SquareSet mask = computeSliderBlockers(square, bishop).bits();
+    int shift = 64 - mask.size();
+    int bits = 64 - shift;
+    table.resize(1ull << bits, 0ull);
+    for (int i = 0; i < (1 << bits); i++) {
+        auto blockers = parallelDeposit(i, mask.bits());
+        auto targets = computeSliderTargets(square, bishop, blockers);
+        if (auto& e = table[(blockers * magic) >> shift])
+            assert(e == targets);
+        else
+            e = targets;
     }
-};
+    entry = {magic, mask.bits(), shift, table.data()};
+}
 
-auto rookMagics = []() {
-    std::vector<Magic> magics;
-    for (auto square : SquareSet::all()) magics.emplace_back(square, false, rookMagic[square]);
-    return magics;
-}();
-auto bishopMagics = []() {
-    std::vector<Magic> magics;
-    for (auto square : SquareSet::all()) magics.emplace_back(square, true, bishopMagic[square]);
-    return magics;
+auto initEntries = []() {
+    for (auto square : SquareSet::all()) {
+        buildEntry(square, false, rookMagic[square], rookTables[square], rookEntries[square]);
+        buildEntry(square, true, bishopMagic[square], bishopTables[square], bishopEntries[square]);
+    }
+    return 0;
 }();
 
 const int kMaxRank = kNumRanks - 1;
@@ -135,9 +127,4 @@ SquareSet computeBishopTargets(Square sq, SquareSet blockers) {
 SquareSet computeSliderTargets(Square square, bool bishop, SquareSet blockers) {
     return bishop ? computeBishopTargets(square, blockers).bits()
                   : computeRookTargets(square, blockers).bits();
-}
-
-SquareSet targets(Square square, bool bishop, SquareSet occupancy) {
-    const auto& magics = bishop ? bishopMagics : rookMagics;
-    return magics[square].targets(occupancy.bits());
 }

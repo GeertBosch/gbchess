@@ -205,12 +205,12 @@ SquareSet attackers(const Board& board, Square target, SquareSet occupancy) {
     for (auto from : knightAttackers)
         if (type(board[from]) == PieceType::KNIGHT) result |= from;
 
-    auto rookAttackers = targets(target, false, occupancy);
+    auto rookAttackers = rookTargets(target, occupancy);
     auto rookPieces = PieceSet{PieceType::ROOK, PieceType::QUEEN};
     for (auto from : rookAttackers)
         if (rookPieces.contains(board[from])) result |= from;
 
-    auto bishopAttackers = targets(target, true, occupancy);
+    auto bishopAttackers = bishopTargets(target, occupancy);
     auto bishopPieces = PieceSet{PieceType::BISHOP, PieceType::QUEEN};
     for (auto from : bishopAttackers)
         if (bishopPieces.contains(board[from])) result |= from;
