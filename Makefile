@@ -34,6 +34,7 @@ UNAME_S := $(shell uname -s)
 
 ifeq ($(UNAME_S),Linux)
 	LIBS:=${LIBS} -latomic
+	LLVM_PROFDATA:=$(or $(shell command -v llvm-profdata 2>/dev/null),$(lastword $(sort $(wildcard /usr/bin/llvm-profdata-*))))
 endif
 ifeq ($(UNAME_S),Darwin)
     LLVM_PROFDATA:=xcrun llvm-profdata
