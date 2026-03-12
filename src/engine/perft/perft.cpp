@@ -15,6 +15,7 @@
 #include "perft_core.h"
 
 bool quiet = false;
+bool threads = true;
 
 void error(const std::string& message) {
     std::cerr << "Error: " << message << std::endl;
@@ -76,14 +77,17 @@ bool maybeMove(const std::string& str) {
 
 void usage(std::string message) {
     std::cerr << "Error: " << message << "\n";
-    std::cerr << "Usage: perft [-q] <depth> [expected-count]" << "\n";
-    std::cerr << "Usage: perft [-q] [fen] <depth> [expected-count]" << "\n";
+    std::cerr << "Usage: perft [-q|--quiet] [-n|--no-threads] <depth> [expected-count]" << "\n";
+    std::cerr << "Usage: perft [-q|--quiet] [-n|--no-threads] [fen] <depth> [expected-count]"
+              << "\n";
     std::exit(1);
 }
 
 void option(const std::string& arg) {
     if (arg == "-q" || arg == "--quiet")
         quiet = true;
+    else if (arg == "-n" || arg == "--no-threads")
+        threads = false;
     else
         error("Unknown option: " + arg);
 }

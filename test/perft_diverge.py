@@ -30,8 +30,9 @@ def parse_divide(output):
     return counts
 
 
-def engine_divide(engine_bin, fen, depth, cwd):
-    return parse_divide(run_cmd([engine_bin, fen, str(depth)], cwd=cwd))
+def engine_divide(engine_bin, fen, depth, cwd, extra_args=None):
+    cmd = [engine_bin] + (extra_args or []) + [fen, str(depth)]
+    return parse_divide(run_cmd(cmd, cwd=cwd))
 
 
 def stockfish_divide(stockfish_bin, fen, depth, cwd):
@@ -78,6 +79,12 @@ def main():
         default="maxabs",
         help="Branch selection strategy per ply (default: maxabs)",
     )
+    parser.add_argument(
+        "--engine-args",
+        nargs=argparse.REMAINDER,
+        default=[],
+        help="Extra arguments to pass to the engine binary (e.g. -n)",
+    )
     args = parser.parse_args()
 
     if args.depth < 1:
@@ -90,7 +97,7 @@ def main():
     path = []
 
     for ply in range(args.depth):
-        ours = engine_divide(args.engine, fen, depth, args.cwd)
+        ours = engine_divide(args.engine, fen, depth, args.cwd, args.engine_args)
         sf = stockfish_divide(args.stockfish, fen, depth, args.cwd)
 
         diffs = []
@@ -117,7 +124,7 @@ def main():
     print(f"PATH {' '.join(path)}")
     print(f"FINAL_FEN {fen}")
 
-    ours_d1 = engine_divide(args.engine, fen, 1, args.cwd)
+    ours_d1 = engine_divide(args.engine, fen, 1, args.cwd, args.engine_args)
     sf_d1 = stockfish_divide(args.stockfish, fen, 1, args.cwd)
 
     extra = sorted(set(ours_d1) - set(sf_d1))

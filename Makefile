@@ -193,6 +193,8 @@ build/perft-test: $(call calc_objs,${OPTOBJ},${PERFT_TEST_SRCS})
 	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
 build/perft-debug: $(call calc_objs,${DBGOBJ},${PERFT_TEST_SRCS})
 	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
+build/perft-tool-debug: $(call calc_objs,${DBGOBJ},${PERFT_SRCS})
+	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
 
 PERFT_SIMPLE_SRCS=$(call prefix_src,engine/perft/perft_simple.cpp ${MOVES_SRCS} engine/fen/fen.cpp)
 # perft_simple is a simplified version without caching or 128-bit ints

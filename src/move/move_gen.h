@@ -29,6 +29,7 @@ MoveVector allLegalMovesAndCaptures(Turn turn, Board& board);
 MoveVector allLegalQuiescentMoves(Turn turn, Board& board, int depthleft);
 
 size_t countLegalMovesAndCaptures(Board& board, SearchState& state);
+size_t countWhitePawnMovesAndCaptures(const Board& board, SearchState& state);
 
 using MoveFun = std::function<void(Board&, MoveWithPieces)>;
 void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun action);
@@ -42,5 +43,5 @@ inline void forAllLegalMovesAndCaptures(Turn turn, Board& board, MoveFun action)
 /**
  * Returns true if the given move does not leave the king in check.
  */
-bool doesNotCheck(Board& board, const SearchState& state, Move move);
+bool doesNotCheck(const Board& board, const SearchState& state, Move move);
 }  // namespace moves
