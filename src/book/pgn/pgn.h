@@ -29,7 +29,7 @@ struct SAN {
     };
     char disambiguationFile = 0;
     char disambiguationRank = 0;
-    Square to = _;  // Not set for castles as side to play is unknown here
+    Square to = {};  // Not set for castles as side to play is unknown here
     PieceType piece = PieceType::EMPTY;
     PieceType promotion = PieceType::EMPTY;
     CheckKind check = NONE;
