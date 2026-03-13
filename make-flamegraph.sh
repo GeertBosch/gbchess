@@ -6,8 +6,9 @@ if ! command -v xctrace >/dev/null 2>&1; then
     exit 1
 fi
 
-if ! command -v perl >/dev/null 2>&1; then
-    echo "perl not found on PATH."
+if ! command -v flamelens >/dev/null 2>&1; then
+    echo -"flamelens not found on PATH."
+    echo "Install it with: cargo install flamelens --locked"
     exit 1
 fi
 
@@ -22,7 +23,7 @@ TARGET_STDOUT="${PROFILE_DIR}/perft8.xctrace.stdout.txt"
 DURATION="15s"
 DEPTH="8"
 TITLE="gbchess build/perft 8 CPU Flame Graph (xctrace)"
-OPEN_RESULT=0
+GEN_SVG=0
 
 while (($#)); do
     case "$1" in
@@ -39,8 +40,8 @@ while (($#)); do
             TITLE="$2"
             shift 2
             ;;
-        --open)
-            OPEN_RESULT=1
+        --svg)
+            GEN_SVG=1
             shift
             ;;
         -h|--help)
@@ -51,14 +52,14 @@ Options:
   --depth N         perft depth (default: 8)
   --duration T      xctrace time limit, e.g. 10s, 2m (default: 15s)
   --title TEXT      flame graph title
-    --open            open resulting SVG (Safari on macOS, browser on Linux)
+  --svg             generate SVG file instead of opening flamelens
   -h, --help        show this help
 
 Outputs:
   ${TRACE_PATH}
   ${TIME_PROFILE_XML}
   ${FOLDED_PATH}
-  ${SVG_PATH}
+  (with --svg) ${SVG_PATH}
 EOF
             exit 0
             ;;
@@ -72,7 +73,7 @@ done
 
 mkdir -p "${PROFILE_DIR}"
 
-if [[ ! -d /tmp/FlameGraph ]]; then
+if [[ "${GEN_SVG}" == "1" ]] && [[ ! -d /tmp/FlameGraph ]]; then
     git clone --depth 1 https://github.com/brendangregg/FlameGraph.git /tmp/FlameGraph
 fi
 
@@ -99,36 +100,17 @@ python3 "${ROOT_DIR}/xctrace_to_folded.py" \
     --input "${TIME_PROFILE_XML}" \
     --output "${FOLDED_PATH}"
 
-echo "Rendering flame graph SVG..."
-perl /tmp/FlameGraph/flamegraph.pl \
-    --title "${TITLE}" \
-    --countname samples \
-    --minwidth 0.1 \
-    "${FOLDED_PATH}" > "${SVG_PATH}"
-
 echo "Done"
 echo "  Folded: ${FOLDED_PATH}"
-echo "  SVG:    ${SVG_PATH}"
 
-if [[ "${OPEN_RESULT}" == "1" ]]; then
-    OS_NAME="$(uname -s)"
-    if [[ "${OS_NAME}" == "Darwin" ]]; then
-        if ! open -a Safari "${SVG_PATH}"; then
-            open "${SVG_PATH}"
-        fi
-    elif [[ "${OS_NAME}" == "Linux" ]]; then
-        if command -v xdg-open >/dev/null 2>&1; then
-            xdg-open "${SVG_PATH}" >/dev/null 2>&1 &
-        else
-            echo "--open requested, but xdg-open is not available on this Linux system."
-        fi
-    else
-        if command -v xdg-open >/dev/null 2>&1; then
-            xdg-open "${SVG_PATH}" >/dev/null 2>&1 &
-        elif command -v open >/dev/null 2>&1; then
-            open "${SVG_PATH}"
-        else
-            echo "--open requested, but no supported opener was found (tried xdg-open/open)."
-        fi
-    fi
+if [[ "${GEN_SVG}" == "1" ]]; then
+    echo "Rendering flame graph SVG..."
+    perl /tmp/FlameGraph/flamegraph.pl \
+        --title "${TITLE}" \
+        --countname samples \
+        --minwidth 0.1 \
+        "${FOLDED_PATH}" > "${SVG_PATH}"
+    echo "  SVG:    ${SVG_PATH}"
+else
+    flamelens "${FOLDED_PATH}"
 fi
