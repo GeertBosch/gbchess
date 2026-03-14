@@ -11,7 +11,10 @@ using ProgressCallback = std::function<void(NodeCount)>;
  * leaf nodes of a certain depth, which can be compared to predetermined values and used to isolate
  * bugs. (See https://www.chessprogramming.org/Perft)
  */
-NodeCount perft(Position position, int depth, const ProgressCallback& callback = nullptr);
+NodeCount perft(Position position,
+                int depth,
+                const ProgressCallback& callback = nullptr,
+                bool useThreads = true);
 
 /**
  * Access to cached node count for performance reporting

@@ -299,7 +299,7 @@ NodeCount threadedPerft(Position position, int depth, const ProgressCallback& ca
     return nodes;
 }
 
-NodeCount perft(Position position, int depth, const ProgressCallback& callback) {
+NodeCount perft(Position position, int depth, const ProgressCallback& callback, bool useThreads) {
     auto state = moves::SearchState(position.board, position.turn);
     if (depth <= 1) {
         NodeCount result = depth ? moves::countLegalMovesAndCaptures(position.board, state) : 1;
@@ -307,7 +307,8 @@ NodeCount perft(Position position, int depth, const ProgressCallback& callback) 
         return result;
     }
 
-    if (depth <= 5) return perft(position.board, Hash{position}, state, depth, callback);
+    if (depth <= 5 || !useThreads)
+        return perft(position.board, Hash{position}, state, depth, callback);
 
     // For deeper perfts, see if the first few plies have sufficient cardinality to merit threading.
     // For that we take the perft at depth 4 and estimate the apparent depth assuming an average of

@@ -15,6 +15,7 @@
 #include "perft_core.h"
 
 bool quiet = false;
+bool threads = true;
 
 void error(const std::string& message) {
     std::cerr << "Error: " << message << std::endl;
@@ -40,10 +41,14 @@ void perftWithDivide(Position position, int depth, NodeCount expectedCount) {
     auto startTime = std::chrono::high_resolution_clock::now();
     NodeCount count = 0;
     for (auto move : moves::allLegalMovesAndCaptures(position.turn, position.board)) {
-        auto newCount = perft(moves::applyMove(position, move), depth - 1, [move](NodeCount count) {
-            if (!quiet)
-                std::cerr << "\r" << to_string(move) << ": " << to_string(count) << std::flush;
-        });
+        auto newCount = perft(
+            moves::applyMove(position, move),
+            depth - 1,
+            [move](NodeCount count) {
+                if (!quiet)
+                    std::cerr << "\r" << to_string(move) << ": " << to_string(count) << std::flush;
+            },
+            threads);
         if (!quiet) std::cerr << "\r" << std::string(20, ' ') << "\r";
         if (!quiet) std::cout << to_string(move) << ": " << to_string(newCount) << "\n";
         divisions.push_back({move, newCount});
@@ -76,14 +81,17 @@ bool maybeMove(const std::string& str) {
 
 void usage(std::string message) {
     std::cerr << "Error: " << message << "\n";
-    std::cerr << "Usage: perft [-q] <depth> [expected-count]" << "\n";
-    std::cerr << "Usage: perft [-q] [fen] <depth> [expected-count]" << "\n";
+    std::cerr << "Usage: perft [-q|--quiet] [-n|--no-threads] <depth> [expected-count]" << "\n";
+    std::cerr << "Usage: perft [-q|--quiet] [-n|--no-threads] [fen] <depth> [expected-count]"
+              << "\n";
     std::exit(1);
 }
 
 void option(const std::string& arg) {
     if (arg == "-q" || arg == "--quiet")
         quiet = true;
+    else if (arg == "-n" || arg == "--no-threads")
+        threads = false;
     else
         error("Unknown option: " + arg);
 }
