@@ -25,85 +25,90 @@ struct HashTable {
         return static_cast<Key>(hash ^ (mixer * level));
     }
 
+    // Bits [127:8] of _key_and_lock store the key (low 8 bits are implied by the slot index).
+    // Bits [7:0] of _key_and_lock serve as a per-entry spinlock (0 = unlocked, 1 = locked).
     class Entry {
+        constexpr static int kLockBits = 8;
+        constexpr static Key kLockMask = (1 << kLockBits) - 1;
+
     public:
         Entry() = default;
-        constexpr Entry(Key key, Value value) : _key(key), _value(value) {}
-        HashValue key() const { return _key; }
-        HashValue value() const { return _value; }
+
+        Value load(Key key) const {
+            lock();
+            Key current = _keyAndLock.load(std::memory_order_relaxed);
+            Value val = (current ^ key) & ~kLockMask ? Value{} : _value;
+            unlock(current);  // restores key bits, clears lock byte
+            return val;
+        }
+
+        void store(Key key, Value value) {
+            lock();
+            _value = value;
+            unlock(key);
+        }
 
     private:
-        Key _key = 0;
-        Value _value = 0;
+        mutable std::atomic<Key> _keyAndLock{0};
+        Value _value{0};
+
+        bool tryLock() const {
+            Key current = _keyAndLock.load();
+            return (current & kLockMask) == 0 &&
+                _keyAndLock.compare_exchange_weak(current, current | Key{1});
+        }
+
+        void lock() const {
+            while (!tryLock());  // busy wait
+        };
+
+        void unlock(Key key) const { _keyAndLock.store(key & ~kLockMask); }
     };
 
     static constexpr size_t kHashTableSize =
         options::cachePerft ? options::cachePerftMB * MB / 2 / sizeof(Entry) : 1;
 
-    // This becomes super hot with very deep perfts with close to 100% cache hits
-    static constexpr size_t kNumMutexShards = 2048;  // Reduce contention
-    mutable std::atomic_flag tableMutexes[kNumMutexShards] = {};
+    HashTable() : table(kHashTableSize) {}
 
-    HashTable() {
-        table.clear();
-        table.resize(kHashTableSize, Entry{});
-    }
-
-    const Entry* lookup(HashValue hash, int level) const {
+    Value lookup(HashValue hash, int level) const {
         Key key = makeKey(hash, level);
         size_t idx = static_cast<size_t>(key % kHashTableSize);
-
-        while (tableMutexes[idx % kNumMutexShards].test_and_set(std::memory_order_acquire)) {
-            // Spin until lock is available
-        }
-
-        auto& entry = table[idx];
-        bool found = entry.key() == key;
-        const Entry* result = found ? &entry : nullptr;
-
-        // Release the spinlock
-        tableMutexes[idx % kNumMutexShards].clear(std::memory_order_release);
-
-        return result;
+        return table[idx].load(key);
     }
 
     void enter(HashValue hash, int level, Value value) {
         Key key = makeKey(hash, level);
         size_t idx = static_cast<size_t>(key % kHashTableSize);
-
-        while (tableMutexes[idx % kNumMutexShards].test_and_set(std::memory_order_acquire)) {
-            // Spin until lock is available
-        }
-
-        auto& entry = table[idx];
-        dassert(entry.key() != key || entry.value() == value);
-        entry = {key, value};
-
-        tableMutexes[idx % kNumMutexShards].clear(std::memory_order_release);
+        table[idx].store(key, value);
     }
 
     std::vector<Entry> table;
 };
 
 static HashTable perftHashTable;
+static std::atomic<NodeCount> perftCached{0};
 static std::atomic<NodeCount> perftInProgress{0};
 
 // For perft depth 2 caching, we don't need many bits for the counts, as there can at most be
 // about 218 * 218 = 47,524 moves. If the table is at least 64K entries, we only need
 // 128 - 16 = 112 bits for the key and 16 bits for the counts.
+static constexpr size_t kPerft2CacheBitsForCount = 16;
+static constexpr uint128_t kPerft2CacheCountMask = (uint128_t{1} << kPerft2CacheBitsForCount) - 1;
 static constexpr size_t kPerft2CacheSize = options::cachePerftMB * MB / 2 / sizeof(uint128_t);
 static std::vector<std::atomic<uint128_t>> perft2cache(kPerft2CacheSize);
 
 uint32_t lookup2(HashValue hash) {
     size_t idx = static_cast<size_t>(hash % kPerft2CacheSize);
-    uint128_t key = hash >> 16;
+    uint128_t key = hash & ~kPerft2CacheCountMask;
     uint128_t entry = perft2cache[idx].load(std::memory_order_relaxed);
-    return static_cast<HashValue>(entry >> 16) == key ? static_cast<uint32_t>(entry & 0xffff) : 0;
+    return static_cast<HashValue>(entry & ~kPerft2CacheCountMask) == key
+        ? static_cast<uint32_t>(entry & kPerft2CacheCountMask)
+        : 0;
 }
 
 void enter2(HashValue hash, uint32_t count) {
     size_t idx = static_cast<size_t>(hash % kPerft2CacheSize);
-    uint128_t entry = ((hash >> 16) << 16) | count;
+    uint128_t entry = (hash & ~kPerft2CacheCountMask) | count;
     perft2cache[idx].store(entry, std::memory_order_relaxed);
 }
 
@@ -114,7 +119,8 @@ NodeCount perft2(Board& board, Hash hash, moves::SearchState state) {
     dassert(!options::cachePerft || hash == Hash(Position{board, state.turn}));
 
     if constexpr (options::cachePerft)
-        if (auto count = lookup2(hash())) return count;
+        if (auto count = lookup2(hash()))
+            return perftCached.fetch_add(count, std::memory_order_relaxed), count;
     NodeCount nodes = 0;
     auto newState = state;
     auto pawn = addColor(PieceType::PAWN, !state.active());
@@ -136,13 +142,12 @@ NodeCount perft2(Board& board, Hash hash, moves::SearchState state) {
         auto moveNodes = countLegalMovesAndCaptures(board, newState);
         nodes += moveNodes;
     });
-    if (options::cachePerft && nodes > 100) enter2(hash(), nodes);
+    if (options::cachePerft && nodes > options::cachePerftMinNodes) enter2(hash(), nodes);
 
     return nodes;
 }
 
 NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
-    assert(depth > 1);
     if (depth == 2) return perft2(board, hash, state);
 
     dassert(!options::cachePerft || hash == Hash(Position{board, state.turn}));
@@ -150,7 +155,8 @@ NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
     // Unlike normal Zobrist hashing, we need to include the level.
 
     if constexpr (options::cachePerft)
-        if (auto entry = perftHashTable.lookup(hash(), depth)) return entry->value();
+        if (auto val = perftHashTable.lookup(hash(), depth))
+            return perftCached.fetch_add(val, std::memory_order_relaxed), val;
 
     NodeCount nodes = 0;
     auto newState = state;
@@ -171,7 +177,8 @@ NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
         assert(newNodes >= nodes);  // Check for node count overflow
         nodes = newNodes;
     });
-    if (options::cachePerft) perftHashTable.enter(hash(), depth, nodes);
+    if (options::cachePerft && nodes > options::cachePerftMinNodes)
+        perftHashTable.enter(hash(), depth, nodes);
     if (depth == 4) perftInProgress.fetch_add(nodes, std::memory_order_relaxed);
     return nodes;
 }
@@ -232,10 +239,7 @@ NodeCount threadedPerft(Position position, int depth, const ProgressCallback& ca
     std::atomic<size_t> taskIndex{0};
 
     auto addNodes = [](std::atomic<NodeCount>& total, NodeCount delta) {
-        auto expected = total.load(std::memory_order_relaxed);
-        while (!total.compare_exchange_weak(
-            expected, expected + delta, std::memory_order_relaxed, std::memory_order_relaxed)) {
-        }
+        total.fetch_add(delta, std::memory_order_relaxed);
     };
 
     // Create a bounded number of threads to process the tasks
@@ -309,5 +313,5 @@ NodeCount perft(Position position, int depth, const ProgressCallback& callback, 
 }
 
 NodeCount getPerftCached() {
-    return 0;  // not currently tracking
+    return perftCached.load();
 }
