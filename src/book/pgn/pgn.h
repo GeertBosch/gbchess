@@ -10,13 +10,14 @@
 
 namespace pgn {
 
-/** Represents a SAN move parsed from PGN, or a termination marker. While that marker is not
+/**
+ *  Represents a SAN move parsed from PGN, or a termination marker. While that marker is not
  *  strictly a SAN move, using the same type helps with iterating over the movetext.
  */
 struct SAN {
     enum CheckKind : uint8_t { NONE, CHECK, CHECKMATE };
     enum NotationKind : uint8_t {
-        NOTATION_ERROR,
+        NOTATION_ERROR,  // For syntactically invalid SAN
         MOVE,
         CAPTURE,
         O_O,
@@ -29,7 +30,7 @@ struct SAN {
     char disambiguationFile = 0;
     char disambiguationRank = 0;
     Square to = {};  // Not set for castles as side to play is unknown here
-    PieceType piece = PieceType::PAWN;
+    PieceType piece = PieceType::EMPTY;
     PieceType promotion = PieceType::EMPTY;
     CheckKind check = NONE;
     NotationKind kind = NOTATION_ERROR;
@@ -128,5 +129,6 @@ using VerifiedGame = std::pair<MoveVector, Termination>;  // For now assume init
 /** Verifies validity of the moves in the PGN. Returns an ERROR termination for invalid games. */
 VerifiedGame verify(PGN const& pgn);
 
+/** Reads a PGN game from the input stream. */
 PGN readPGN(std::istream& in);
 }  // namespace pgn

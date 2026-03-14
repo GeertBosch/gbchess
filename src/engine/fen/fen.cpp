@@ -113,7 +113,6 @@ Turn parseTurn(std::stringstream ss) {
     std::string halfmoveClockStr;
     std::string fullmoveNumberStr;
 
-
     // Read other components of the FEN string
     ss >> activeColorStr >> castlingAvailabilityStr >> enPassantTargetStr >> halfmoveClockStr >>
         fullmoveNumberStr;
@@ -158,7 +157,6 @@ Position parsePosition(std::stringstream ss) {
 Position parsePosition(const std::string& fen) try {
     return parsePosition(std::stringstream(fen));
 } catch (std::exception&) {
-    std::cerr << "Error parsing FEN string: " << fen << "\n";
     throw ParseError("Invalid FEN format: " + fen);
 }
 
@@ -197,10 +195,10 @@ std::string to_string(const Board& board) {
 
 std::string to_string(CastlingMask mask) {
     std::string str = "";
-    if ((mask & CastlingMask::K) != CastlingMask::_) str += "K";
-    if ((mask & CastlingMask::Q) != CastlingMask::_) str += "Q";
-    if ((mask & CastlingMask::k) != CastlingMask::_) str += "k";
-    if ((mask & CastlingMask::q) != CastlingMask::_) str += "q";
+    if ((mask & CastlingMask::K) != CastlingMask::_) str += 'K';
+    if ((mask & CastlingMask::Q) != CastlingMask::_) str += 'Q';
+    if ((mask & CastlingMask::k) != CastlingMask::_) str += 'k';
+    if ((mask & CastlingMask::q) != CastlingMask::_) str += 'q';
     if (str == "") str = "-";
     return str;
 }

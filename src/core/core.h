@@ -232,10 +232,11 @@ inline std::string to_string(Move move) {
 using MoveVector = std::vector<Move>;
 
 inline std::string to_string(MoveVector moves) {
-    std::string str = "";
-    for (auto&& move : moves) str += to_string(move) + " ";
-    if (!str.empty()) str.pop_back();
-    return str;
+    if (moves.empty()) return "";
+    std::string result = "";
+    for (auto&& move : moves) result += to_string(move) + " ";
+    result.pop_back();
+    return result;
 }
 
 class Board {
@@ -262,16 +263,16 @@ public:
     const_iterator end() const { return _squares.end(); }
 };
 
-enum class CastlingMask : uint8_t {
-    _ = 0,
-    K = 1,
-    Q = 2,
-    k = 4,
-    q = 8,
+enum class CastlingMask : uint16_t {
+    _ = 0,            // 0
+    K = 1,            // 1
+    Q = 2,            // 2
     KQ = K | Q,       // 3
+    k = 4,            // 4
     Kk = K | k,       // 5
     Qk = Q | k,       // 6
     KQk = K | Q | k,  // 7
+    q = 8,            // 8
     Kq = K | q,       // 9
     Qq = Q | q,       // 10
     KQq = K | Q | q,  // 11
@@ -281,19 +282,19 @@ enum class CastlingMask : uint8_t {
     KQkq = KQ | kq,   // 15
 };
 inline CastlingMask operator&(CastlingMask lhs, CastlingMask rhs) {
-    return CastlingMask(uint8_t(lhs) & uint8_t(rhs));
+    return CastlingMask(uint16_t(lhs) & uint16_t(rhs));
 }
 inline CastlingMask operator|(CastlingMask lhs, CastlingMask rhs) {
-    return CastlingMask(uint8_t(lhs) | uint8_t(rhs));
+    return CastlingMask(uint16_t(lhs) | uint16_t(rhs));
 }
 inline CastlingMask operator&=(CastlingMask& lhs, CastlingMask rhs) {
-    return lhs = CastlingMask(uint8_t(lhs) & uint8_t(rhs));
+    return lhs = CastlingMask(uint16_t(lhs) & uint16_t(rhs));
 }
 inline CastlingMask operator|=(CastlingMask& lhs, CastlingMask rhs) {
-    return lhs = CastlingMask(uint8_t(lhs) | uint8_t(rhs));
+    return lhs = CastlingMask(uint16_t(lhs) | uint16_t(rhs));
 }
 inline CastlingMask operator~(CastlingMask lhs) {
-    return static_cast<CastlingMask>(~static_cast<uint8_t>(lhs));
+    return static_cast<CastlingMask>(~static_cast<uint16_t>(lhs));
 }
 
 // Square to indicate no enpassant target
@@ -324,6 +325,9 @@ struct BoardChange {
 };
 
 class alignas(4) Turn {
+    static_assert(kNumFiles == 8 && kNumRanks == 8, "Turn assumes a standard 8x8 chess board");
+
+public:
     enum class EnPassantTarget : uint16_t {  // 16 bits to allow better packing
         _ = 0,
         // clang-format off

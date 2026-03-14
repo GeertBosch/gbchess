@@ -49,10 +49,6 @@ SquareSet pinnedPieces(const Board& board, Occupancy occupancy, Square kingSquar
     return pinned;
 }
 
-void addMove(MoveVector& moves, Move move) {
-    moves.emplace_back(move);
-}
-
 BoardChange prepareMove(Board& board, Move move) {
     // Lookup the compound move for the given move kind and target square. This breaks moves like
     // castling, en passant and promotion into a simple capture/move and a second move that can be a

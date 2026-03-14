@@ -63,7 +63,7 @@ Move parseUCIMove(const Board& board, const std::string& move);
 
 /**
  * Parses a FEN string and returns the corresponding Position object. The input string must follow
- * the FEN format.
+ * the FEN format or be the word "startpos". Throws ParseError if the FEN string cannot be parsed.
  */
 Position parsePosition(const std::string& fen);
 
