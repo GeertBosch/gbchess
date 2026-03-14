@@ -127,17 +127,20 @@ Turn parseTurn(std::stringstream ss) {
         case 'q': castling |= CastlingMask::q; break;
         }
     }
-    Turn turn(active,
-              castling,
-              noEnPassantTarget,
-              std::stoi(halfmoveClockStr),
-              std::stoi(fullmoveNumberStr));
+
+    Turn::EnPassantTarget enPassantTarget = Turn::EnPassantTarget::_;
 
     if (enPassantTargetStr != "-") {
         int file = enPassantTargetStr[0] - 'a';
         int rank = enPassantTargetStr[1] - '1';
-        turn.setEnPassant(makeSquare(file, rank));
+        enPassantTarget = Turn::toEnPassantTarget(makeSquare(file, rank));
     }
+
+    Turn turn(active,
+              castling,
+              enPassantTarget,
+              std::stoi(halfmoveClockStr),
+              std::stoi(fullmoveNumberStr));
 
     return turn;
 }

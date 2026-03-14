@@ -15,9 +15,37 @@ struct PinData {
     SquareSet captures;
     PieceSet pinningPieces;
 };
+
+constexpr std::array<Square, kNumSquares> makeDoublePushEnPassantTarget() {
+    std::array<Square, kNumSquares> targets{};
+    for (int f = 0; f < kNumFiles; ++f) {
+        targets[makeSquare(f, 1)] = makeSquare(f, 2);
+        targets[makeSquare(f, 6)] = makeSquare(f, 5);
+    }
+    return targets;
+}
+
+constexpr auto kDoublePushEnPassantTarget = makeDoublePushEnPassantTarget();
+
+constexpr std::array<CastlingMask, kNumSquares> makeCastlingMaskBySquare() {
+    std::array<CastlingMask, kNumSquares> mask{};
+    mask[castlingInfo[0].kingSide[0].from] = CastlingMask::KQ;  // White King
+    mask[castlingInfo[0].kingSide[1].from] = CastlingMask::K;   // White King Side Rook
+    mask[castlingInfo[0].queenSide[1].from] = CastlingMask::Q;  // White Queen Side Rook
+    mask[castlingInfo[1].kingSide[0].from] = CastlingMask::kq;  // Black King
+    mask[castlingInfo[1].kingSide[1].from] = CastlingMask::k;   // Black King Side Rook
+    mask[castlingInfo[1].queenSide[1].from] = CastlingMask::q;  // Black Queen Side Rook
+    return mask;
+}
+
+constexpr auto kCastlingMaskBySquare = makeCastlingMaskBySquare();
 }  // namespace
 
 namespace moves {
+CastlingMask castlingMask(Square from, Square to) {
+    return kCastlingMaskBySquare[from] | kCastlingMaskBySquare[to];
+}
+
 SquareSet pinnedPieces(const Board& board,
                        Occupancy occupancy,
                        Square kingSquare,
@@ -104,39 +132,20 @@ void unmakeMove(Position& position, UndoPosition undo) {
     position.turn = undo.turn;
 }
 
-CastlingMask castlingMask(Square from, Square to) {
-    static struct MaskTable {
-        using CM = CastlingMask;
-        std::array<CM, kNumSquares> mask;
-        MaskTable() : mask{} {
-            mask[castlingInfo[0].kingSide[0].from] = CM::KQ;  // White King
-            mask[castlingInfo[0].kingSide[1].from] = CM::K;   // White King Side Rook
-            mask[castlingInfo[0].queenSide[1].from] = CM::Q;  // White Queen Side Rook
-            mask[castlingInfo[1].kingSide[0].from] = CM::kq;  // Black King
-            mask[castlingInfo[1].kingSide[1].from] = CM::k;   // Black King Side Rook
-            mask[castlingInfo[1].queenSide[1].from] = CM::q;  // Black Queen Side Rook
-        }
-        CM operator[](Square sq) const { return mask[sq]; }
-    } maskTable;
-
-    return maskTable[from] | maskTable[to];
-}
-
 Turn applyMove(Turn turn, MoveWithPieces mwp) {
     // Update enPassantTarget
     // Set the en passant target if a pawn moves two squares forward, otherwise reset it.
-    turn.setEnPassant(noEnPassantTarget);
+    turn.makeNullMove();
     auto move = mwp.move;
     if (move.kind == MoveKind::Double_Push)
-        turn.setEnPassant(makeSquare(file(move.from), (rank(move.from) + rank(move.to)) / 2));
+        turn.setEnPassant(kDoublePushEnPassantTarget[move.from]);
 
     // Update castlingAvailability
     turn.setCastling(turn.castling() & ~castlingMask(move.from, move.to));
 
-    // Update halfmoveClock and halfmoveNumber, and switch the active side.
-    turn.tick();
     // Reset halfmove clock on pawn advance or capture
-    if (type(mwp.piece) == PieceType::PAWN || isCapture(move.kind)) turn.resetHalfmove();
+    if (mwp.piece == Piece::P || mwp.piece == Piece::p || isCapture(move.kind))
+        turn.resetHalfmove();
 
     return turn;
 }

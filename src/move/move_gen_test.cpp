@@ -17,7 +17,7 @@ void testLegalPawnMoves() {
     Board board;
     board[a2] = Piece::P;
     board[a4] = Piece::P;  // Block the pawn, so there's no two-square move
-    Turn turn(Color::w, CastlingMask::_, noEnPassantTarget);
+    Turn turn(Color::w, CastlingMask::_, Turn::EnPassantTarget::_, 0, 1);
     MoveVector moves = allLegalMovesAndCaptures(turn, board);
     assert(moves.size() == 2);
     assert(has(moves, Move(a2, a3, MoveKind::Quiet_Move)));
@@ -54,11 +54,10 @@ void testDoublePawnPushes() {
     std::cout << "Double pawn pushes test passed!" << std::endl;
 }
 
-
 void testLegalCaptures() {
     // Test case with a regular captures and one promoting a pawn while capturing
     Board board = fen::parsePiecePlacement("r3kbnr/pP1qpppp/3p4/4N3/4P3/8/PPP2PPP/RNB1K2R");
-    Turn turn(Color::w);
+    Turn turn(Color::w, CastlingMask::_, Turn::EnPassantTarget::_, 0, 1);
     MoveVector captures = allLegalCaptures(turn, board);
     // We expect 6 captures: 2 from the knight, and 4 from the pawn promotion
     assert(captures.size() == 6);
@@ -72,7 +71,7 @@ void testLegalCaptures() {
 
 void testLegalEnPassant() {
     Board board = fen::parsePiecePlacement("rnbqkbnr/1ppppppp/8/8/pP6/P1P5/3PPPPP/RNBQKBNR");
-    Turn turn(Color::b, CastlingMask::_, b3);
+    Turn turn(Color::b, CastlingMask::_, Turn::EnPassantTarget::b3, 0, 1);
     MoveVector moves;
 
     for (auto move : allLegalMovesAndCaptures(turn, board))
@@ -141,7 +140,7 @@ void testDoesNotCheck() {
         // We may indicate en passent capture is available, even if it results in check.
         // So test that we reject the move in this case.
         Board board = fen::parsePiecePlacement("8/8/3p4/KPp4r/5R2/4P1k1/6P1/8");
-        Turn turn = {Color::w, CastlingMask::_, c6};
+        Turn turn = {Color::w, CastlingMask::_, Turn::EnPassantTarget::c6, 0, 1};
         SearchState state(board, turn);
         assert(!doesNotCheck(board, state, Move(b5, c6, MoveKind::En_Passant)));
     }
