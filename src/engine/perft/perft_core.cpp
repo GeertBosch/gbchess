@@ -86,7 +86,7 @@ struct HashTable {
 };
 
 static HashTable perftHashTable;
-static std::atomic<NodeCount> perftCached{0};
+static std::atomic<NodeCount> perftInProgress{0};
 
 // For perft depth 2 caching, we don't need many bits for the counts, as there can at most be
 // about 218 * 218 = 47,524 moves. If the table is at least 64K entries, we only need
@@ -172,6 +172,7 @@ NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
         nodes = newNodes;
     });
     if (options::cachePerft) perftHashTable.enter(hash(), depth, nodes);
+    if (depth == 4) perftInProgress.fetch_add(nodes, std::memory_order_relaxed);
     return nodes;
 }
 
@@ -222,6 +223,7 @@ TaskList expandTasks(TaskList tasks, size_t number) {
 }
 
 NodeCount threadedPerft(Position position, int depth, const ProgressCallback& callback) {
+    perftInProgress.store(0, std::memory_order_relaxed);
     std::atomic<NodeCount> nodes{0};
     TaskList tasks;
     tasks.emplace_back(PerftTask{position, depth});
@@ -245,27 +247,13 @@ NodeCount threadedPerft(Position position, int depth, const ProgressCallback& ca
     std::atomic<size_t> completedTasks{0};
 
     std::thread progressThread([&]() {
-        struct Progress {
-            uint128_t nodes;
-            uint128_t cached;
-        };
-        Progress last = {nodes.load(), perftCached.load()};
-        // Remember the time of the last update
         auto lastUpdate = std::chrono::high_resolution_clock::now();
         auto interval = std::chrono::milliseconds(options::perftProgressMillis);
 
         while (completedTasks.load() < tasks.size() && callback) {
             std::unique_lock<std::mutex> lock(progressMutex);
-            Progress current = {nodes.load(), perftCached.load()};
-            auto reportNodes = current.nodes;
-
-            if (current.nodes == last.nodes)
-                reportNodes += current.cached - last.cached;
-            else
-                last = current;
-
-            reportNodes = std::max(reportNodes, last.nodes);  // Ensure monotonic increase
-
+            // Use in-progress counter for sub-task granularity, fall back to completed nodes
+            auto reportNodes = std::max(nodes.load(), perftInProgress.load());
             callback(reportNodes);
             std::chrono::time_point currentTime = lastUpdate;
             do {
@@ -321,5 +309,5 @@ NodeCount perft(Position position, int depth, const ProgressCallback& callback, 
 }
 
 NodeCount getPerftCached() {
-    return perftCached;
+    return 0;  // not currently tracking
 }
