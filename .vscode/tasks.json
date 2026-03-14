@@ -87,6 +87,18 @@
       },
       {
          "type": "shell",
+         "label": "build: perft-tool-debug",
+         "command": "make",
+         "args": [
+            "build/perft-tool-debug"
+         ],
+         "group": "build",
+         "problemMatcher": [
+            "$gcc"
+         ]
+      },
+      {
+         "type": "shell",
          "label": "build: nnue-debug",
          "command": "make",
          "args": [
