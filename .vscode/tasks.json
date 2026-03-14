@@ -15,10 +15,10 @@
       },
       {
          "type": "shell",
-         "label": "build: moves-debug",
+         "label": "build: move-debug",
          "command": "make",
          "args": [
-            "build/moves-debug"
+            "build/move-debug"
          ],
          "group": "build",
          "problemMatcher": [
@@ -153,6 +153,42 @@
             "<",
             "${file}"
          ],
+         "options": {
+            "shell": {
+               "executable": "/bin/bash",
+               "args": [
+                  "-c"
+               ]
+            }
+         },
+         "presentation": {
+            "reveal": "always",
+            "panel": "dedicated"
+         },
+         "problemMatcher": []
+      },
+      {
+         "type": "shell",
+         "label": "asm: current cpp (opt object)",
+         "command": "set -euo pipefail; src='${file}'; rel=\"${src#${workspaceFolder}/}\"; if [[ \"$rel\" == src/* ]]; then rel=\"${rel#src/}\"; fi; if [[ \"$rel\" != *.cpp ]]; then echo 'Current file must be a .cpp file'; exit 1; fi; obj=\"build/opt/${rel%.cpp}.o\"; make -j \"$obj\"; out=\"/tmp/gbchess-asm-${rel%.cpp}.s\"; mkdir -p \"$(dirname \"$out\")\"; xcrun llvm-objdump --demangle --source --disassemble \"$obj\" > \"$out\"; code -r \"$out\"; echo \"Wrote $out\"",
+         "options": {
+            "shell": {
+               "executable": "/bin/bash",
+               "args": [
+                  "-c"
+               ]
+            }
+         },
+         "presentation": {
+            "reveal": "always",
+            "panel": "dedicated"
+         },
+         "problemMatcher": []
+      },
+      {
+         "type": "shell",
+         "label": "asm: selected symbol in current cpp",
+         "command": "set -euo pipefail; src='${file}'; rel=\"${src#${workspaceFolder}/}\"; if [[ \"$rel\" == src/* ]]; then rel=\"${rel#src/}\"; fi; if [[ \"$rel\" != *.cpp ]]; then echo 'Current file must be a .cpp file'; exit 1; fi; sym=\"${selectedText}\"; sym=\"$(printf '%s' \"$sym\" | tr -s '[:space:]' ' ' | sed 's/^ //; s/ $//')\"; if [[ -z \"$sym\" ]]; then echo 'Select the function/method name/signature text first (for example: applyMove or applyMove(Turn, MoveWithPieces))'; exit 1; fi; key=\"$sym\"; key=\"${key%%(*}\"; key=\"${key##* }\"; key=\"${key##*::}\"; if [[ -z \"$key\" ]]; then key=\"$sym\"; fi; obj=\"build/opt/${rel%.cpp}.o\"; make -j \"$obj\"; out=\"/tmp/gbchess-asm-${rel%.cpp}-symbol.s\"; full=\"/tmp/gbchess-asm-${rel%.cpp}-full.s\"; mkdir -p \"$(dirname \"$out\")\"; xcrun llvm-objdump --demangle --source --disassemble \"$obj\" > \"$full\"; awk -v key=\"$key\" 'BEGIN{keep=0} /^[[:space:]]*[0-9a-fA-F]+[[:space:]]+<.*>:/ {keep=(index($0,key)>0)} {if(keep) print}' \"$full\" > \"$out\"; if [[ ! -s \"$out\" ]]; then echo \"No matching symbol block found for selection: $sym\"; echo \"Parsed key: $key\"; echo \"Try selecting just the function name (for example: applyMove)\"; exit 1; fi; code -r \"$out\"; echo \"Wrote $out\"",
          "options": {
             "shell": {
                "executable": "/bin/bash",
