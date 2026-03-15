@@ -172,10 +172,9 @@ NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
         newState.inCheck = moves::isAttacked(board, newState.kingSquare, newState.occupancy);
         newState.pinned = moves::pinnedPieces(board, newState.occupancy, newState.kingSquare);
 
-        auto moveNodes = perft(board, newHash, newState, depth - 1);
-        auto newNodes = nodes + moveNodes;
-        assert(newNodes >= nodes);  // Check for node count overflow
-        nodes = newNodes;
+        auto newNodes = perft(board, newHash, newState, depth - 1);
+        nodes += newNodes;
+        assert(newNodes <= nodes);  // Check for node count overflow
     });
     if (options::cachePerft && nodes > options::cachePerftMinNodes)
         perftHashTable.enter(hash(), depth, nodes);
