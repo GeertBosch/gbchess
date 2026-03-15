@@ -6,13 +6,16 @@
 
 namespace moves {
 struct SearchState {
+    SearchState() = default;
     SearchState(const Board& board, Turn turn);
     Color active() const { return turn.activeColor(); }
 
     Occupancy occupancy;
-    SquareSet pawns;
+    SquareSet ourPawns;
+    SquareSet theirPawns;
     Turn turn;
-    Square kingSquare;
+    Square ourKing : 8;
+    Square theirKing : 8;
     bool inCheck;
     SquareSet pinned;
 };

@@ -123,21 +123,20 @@ NodeCount perft2(Board& board, Hash hash, moves::SearchState state) {
             return perftCached.fetch_add(count, std::memory_order_relaxed), count;
     NodeCount nodes = 0;
     auto newState = state;
-    auto pawn = addColor(PieceType::PAWN, !state.active());
-    auto king = addColor(PieceType::KING, !state.active());
-    auto initialPawns = find(board, pawn);
-    newState.kingSquare = *find(board, king).begin();
+    auto theirPawn = addColor(PieceType::PAWN, !state.active());
+    auto initialPawns = find(board, theirPawn);
+    newState.ourKing = state.theirKing;
 
     forAllLegalMovesAndCaptures(board, state, [&](Board& board, MoveWithPieces mwp) {
         auto delta = MovesTable::occupancyDelta(mwp.move);
         newState.occupancy = !(state.occupancy ^ delta);
         newState.turn = moves::applyMove(state.turn, mwp);
 
-        newState.pawns = initialPawns - SquareSet{mwp.move.to};
-        if (mwp.move.kind == MoveKind::En_Passant) newState.pawns = find(board, pawn);
+        newState.ourPawns = initialPawns - SquareSet{mwp.move.to};
+        if (mwp.move.kind == MoveKind::En_Passant) newState.ourPawns = find(board, theirPawn);
 
-        newState.inCheck = moves::isAttacked(board, newState.kingSquare, newState.occupancy);
-        newState.pinned = moves::pinnedPieces(board, newState.occupancy, newState.kingSquare);
+        newState.inCheck = moves::isAttacked(board, newState.ourKing, newState.occupancy);
+        newState.pinned = moves::pinnedPieces(board, newState.occupancy, newState.ourKing);
 
         auto moveNodes = countLegalMovesAndCaptures(board, newState);
         nodes += moveNodes;
@@ -149,6 +148,9 @@ NodeCount perft2(Board& board, Hash hash, moves::SearchState state) {
 
 NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
     if (depth == 2) return perft2(board, hash, state);
+    // if (depth == 1) return countLegalMovesAndCaptures(board, state);
+
+    assert(depth > 1);
 
     dassert(!options::cachePerft || hash == Hash(Position{board, state.turn}));
 
@@ -159,18 +161,26 @@ NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
             return perftCached.fetch_add(val, std::memory_order_relaxed), val;
 
     NodeCount nodes = 0;
-    auto newState = state;
+    [[maybe_unused]] auto ourKing = addColor(PieceType::KING, state.active());
+    [[maybe_unused]] auto ourPawn = addColor(PieceType::PAWN, state.active());
     forAllLegalMovesAndCaptures(board, state, [&](Board& board, MoveWithPieces mwp) {
         auto delta = MovesTable::occupancyDelta(mwp.move);
         auto mask = moves::castlingMask(mwp.move.from, mwp.move.to);
 
         auto newHash = options::cachePerft ? applyMove(hash, state.turn, mwp, mask) : Hash();
+        moves::SearchState newState;  // = state;
         newState.occupancy = !(state.occupancy ^ delta);
-        newState.pawns = find(board, addColor(PieceType::PAWN, !state.active()));
+        newState.ourPawns = state.theirPawns;
+        newState.theirPawns = state.ourPawns;
+        if (mwp.piece == ourPawn) newState.theirPawns = find(board, ourPawn);
         newState.turn = moves::applyMove(state.turn, mwp);
-        newState.kingSquare = *find(board, addColor(PieceType::KING, !state.active())).begin();
-        newState.inCheck = moves::isAttacked(board, newState.kingSquare, newState.occupancy);
-        newState.pinned = moves::pinnedPieces(board, newState.occupancy, newState.kingSquare);
+        newState.ourKing = state.theirKing;
+        newState.theirKing = state.ourKing;
+
+        if (mwp.piece == ourKing) newState.theirKing = mwp.move.to;
+
+        newState.inCheck = moves::isAttacked(board, newState.ourKing, newState.occupancy);
+        newState.pinned = moves::pinnedPieces(board, newState.occupancy, newState.ourKing);
 
         auto newNodes = perft(board, newHash, newState, depth - 1);
         nodes += newNodes;
@@ -206,12 +216,12 @@ struct PerftTask {
 using TaskList = std::vector<PerftTask>;
 
 void expandTask(TaskList& expanded, PerftTask task, MoveVector moves) {
-    if (moves.size() < 2 || task.depth < 5)
-        expanded.push_back(task);
-    else
-        for (auto move : moves)
-            expanded.emplace_back(moves::applyMove(task.position, move), task.depth - 1);
+    if (moves.size() < 2 || task.depth < 5) return expanded.push_back(task);
+
+    for (auto move : moves)
+        expanded.emplace_back(moves::applyMove(task.position, move), task.depth - 1);
 }
+
 TaskList expandTasks(TaskList tasks, size_t number) {
     while (tasks.size() < number) {
         TaskList expanded;
@@ -220,7 +230,6 @@ TaskList expandTasks(TaskList tasks, size_t number) {
             expandTask(expanded,
                        task,
                        moves::allLegalMovesAndCaptures(task.position.turn, task.position.board));
-
 
         if (expanded.size() == tasks.size()) break;  // No further expansion possible
         tasks = expanded;

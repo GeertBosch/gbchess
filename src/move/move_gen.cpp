@@ -27,7 +27,7 @@ void findPawnPushes(SearchState& state, const F& fun) {
     constexpr auto promo = SquareSet::rank(white ? kNumRanks - 1 : 0);
     constexpr auto piece = white ? Piece::P : Piece::p;
     auto free = ~state.occupancy();
-    auto singles = (white ? state.pawns << kNumRanks : state.pawns >> kNumRanks) & free;
+    auto singles = (white ? state.ourPawns << kNumRanks : state.ourPawns >> kNumRanks) & free;
     auto doubles = (white ? singles << kNumRanks : singles >> kNumRanks) & free & doublePushRank;
     for (auto to : singles - promo)
         fun(piece,
@@ -51,8 +51,8 @@ template <Color active, typename F>
 void findPawnCaptures(SearchState& state, const F& fun) {
     constexpr bool white = active == Color::w;
     constexpr auto promo = SquareSet::rank(white ? kNumRanks - 1 : 0);
-    auto leftPawns = state.pawns - SquareSet::file(0);
-    auto rightPawns = state.pawns - SquareSet::file(7);
+    auto leftPawns = state.ourPawns - SquareSet::file(0);
+    auto rightPawns = state.ourPawns - SquareSet::file(7);
     auto left = (white ? leftPawns << 7 : leftPawns >> 9) & state.occupancy.theirs();
     auto right = (white ? rightPawns << 9 : rightPawns >> 7) & state.occupancy.theirs();
     auto piece = white ? Piece::P : Piece::p;
@@ -88,7 +88,7 @@ void findPawnPushesAndCaptures(SearchState& state, const F& fun) {
 
 template <typename F>
 void findNonPawnMoves(const Board& board, SearchState& state, const F& fun) {
-    for (auto from : state.occupancy.ours() - state.pawns) {
+    for (auto from : state.occupancy.ours() - state.ourPawns) {
         auto piece = board[from];
 
         if (!state.pinned.contains(from) && !state.inCheck) {
@@ -149,7 +149,7 @@ void findCastles(SearchState& state, const F& fun) {
 
 template <typename F>
 void findNonPawnCaptures(const Board& board, SearchState& state, const F& fun) {
-    for (auto from : state.occupancy.ours() - state.pawns) {
+    for (auto from : state.occupancy.ours() - state.ourPawns) {
         auto piece = board[from];
         if (sliders.contains(piece) && !state.pinned.contains(from) && !state.inCheck) {
             // If the piece is a sliding piece, and not pinned, we can move it freely to all target
@@ -225,10 +225,10 @@ void findPromotionMoves(SearchState& state, const F& fun) {
     constexpr bool white = active == Color::w;
     constexpr auto masked = white ? SquareSet::rank(kNumRanks - 2) | SquareSet::rank(kNumRanks - 3)
                                   : SquareSet::rank(1) | SquareSet::rank(2);
-    auto pawns = state.pawns;
-    state.pawns &= masked;
+    auto pawns = state.ourPawns;
+    state.ourPawns &= masked;
     findPawnPushes<active>(state, fun);
-    state.pawns = pawns;
+    state.ourPawns = pawns;
 }
 
 /** For use in perft: no need to actually generate moves at depth 1, just count them */
@@ -254,12 +254,12 @@ size_t countPawnMovesAndCaptures(const Board& board, SearchState& state) {
     constexpr auto doublePushRank = white ? SquareSet::rank(3) : SquareSet::rank(kNumRanks - 1 - 3);
 
     auto free = ~state.occupancy();
-    auto singles = (white ? state.pawns << kNumRanks : state.pawns >> kNumRanks) & free;
+    auto singles = (white ? state.ourPawns << kNumRanks : state.ourPawns >> kNumRanks) & free;
     auto doubles = (white ? singles << kNumRanks : singles >> kNumRanks) & free & doublePushRank;
     count += singles.size() + 3 * (singles & promo).size() + doubles.size();
 
-    auto leftPawns = state.pawns - SquareSet::file(0);
-    auto rightPawns = state.pawns - SquareSet::file(7);
+    auto leftPawns = state.ourPawns - SquareSet::file(0);
+    auto rightPawns = state.ourPawns - SquareSet::file(7);
     auto left = (white ? leftPawns << 7 : leftPawns >> 9) & state.occupancy.theirs();
     auto right = (white ? rightPawns << 9 : rightPawns >> 7) & state.occupancy.theirs();
     count += left.size() + 3 * (left & promo).size();
@@ -273,18 +273,20 @@ size_t countPawnMovesAndCaptures(const Board& board, SearchState& state) {
 namespace moves {
 SearchState::SearchState(const Board& board, Turn turn)
     : occupancy(Occupancy(board, turn.activeColor())),
-      pawns(find(board, addColor(PieceType::PAWN, turn.activeColor()))),
+      ourPawns(find(board, addColor(PieceType::PAWN, turn.activeColor()))),
+      theirPawns(find(board, addColor(PieceType::PAWN, !turn.activeColor()))),
       turn(turn),
-      kingSquare(*find(board, addColor(PieceType::KING, turn.activeColor())).begin()),
-      inCheck(isAttacked(board, kingSquare, occupancy)),
-      pinned(pinnedPieces(board, occupancy, kingSquare)) {}
+      ourKing(*find(board, addColor(PieceType::KING, turn.activeColor())).begin()),
+      theirKing(*find(board, addColor(PieceType::KING, !turn.activeColor())).begin()),
+      inCheck(isAttacked(board, ourKing, occupancy)),
+      pinned(pinnedPieces(board, occupancy, ourKing)) {}
 
 
 bool doesNotCheck(const Board& board, const SearchState& state, Move move) {
     auto [from, to, kind] = move;
 
-    SquareSet checkSquares = state.kingSquare;
-    if (from == state.kingSquare)
+    SquareSet checkSquares = state.ourKing;
+    if (from == state.ourKing)
         checkSquares = isCastles(kind) ? ipath(from, to) : to;
     else if (!state.pinned.contains(from) && !state.inCheck && kind != MoveKind::En_Passant)
         return true;  // En passant can result in check without moving the king or a pinned piece

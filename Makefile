@@ -269,6 +269,7 @@ build/perft.out: build/perft
 perft-bench: build/perft-clang-emul.out build/perft-gcc-emul.out build/perft-clang-sse2.out build/perft-gcc-sse2.out build/perft-clang-sse2-pgo.out build/perft-clang-emul-pgo.out
 
 perft-test: build/perft.out build/perft-test.out build/perft-debug.out build/perft-simple.out
+perft-debug: build/perft-debug.out
 
 # Download the lichess puzzles database if not already present. As the puzzles change over time, and
 # the file is large, we don't normally clean and refetch it.

@@ -386,6 +386,7 @@ public:
         : fields{active, fullmoveNumber, enPassantTarget, castlingAvailability, halfmoveClock} {}
 
     constexpr Turn(Color color) : Turn(color, CastlingMask::KQkq, EnPassantTarget::_, 0, 1) {}
+    constexpr Turn() : Turn(Color::w) {}
 
     CastlingMask castling() const { return fields.castlingAvailability; }
     void setCastling(CastlingMask castling) { fields.castlingAvailability = castling; }
