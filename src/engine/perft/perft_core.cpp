@@ -115,31 +115,31 @@ void enter2(HashValue hash, uint32_t count) {
 /**
  * Specialize perft with 2 levels left. The bulk of the work is done here, so optimize this.
  */
-NodeCount perft2(Board& board, Hash hash, moves::SearchState state) {
+NodeCount perft2(Board& board, Hash hash, const moves::SearchState& state) {
     dassert(!options::cachePerft || hash == Hash(Position{board, state.turn}));
 
     if constexpr (options::cachePerft)
         if (auto count = lookup2(hash()))
             return perftCached.fetch_add(count, std::memory_order_relaxed), count;
     NodeCount nodes = 0;
-    auto newState = state;
-    auto pawn = addColor(PieceType::PAWN, !state.active());
-    auto king = addColor(PieceType::KING, !state.active());
-    auto initialPawns = find(board, pawn);
-    newState.kingSquare = *find(board, king).begin();
+    auto theirState = state;
+    auto theirPawn = addColor(PieceType::PAWN, !state.active());
+    auto theirKing = addColor(PieceType::KING, !state.active());
+    auto initialPawns = find(board, theirPawn);
+    theirState.kingSquare = *find(board, theirKing).begin();
 
     forAllLegalMovesAndCaptures(board, state, [&](Board& board, MoveWithPieces mwp) {
         auto delta = MovesTable::occupancyDelta(mwp.move);
-        newState.occupancy = !(state.occupancy ^ delta);
-        newState.turn = moves::applyMove(state.turn, mwp);
+        theirState.occupancy = !(state.occupancy ^ delta);
+        theirState.turn = moves::applyMove(state.turn, mwp);
 
-        newState.pawns = initialPawns - SquareSet{mwp.move.to};
-        if (mwp.move.kind == MoveKind::En_Passant) newState.pawns = find(board, pawn);
+        theirState.pawns = initialPawns - SquareSet{mwp.move.to};
+        if (mwp.move.kind == MoveKind::En_Passant) theirState.pawns = find(board, theirPawn);
 
-        newState.inCheck = moves::isAttacked(board, newState.kingSquare, newState.occupancy);
-        newState.pinned = moves::pinnedPieces(board, newState.occupancy, newState.kingSquare);
+        theirState.inCheck = moves::isAttacked(board, theirState.kingSquare, theirState.occupancy);
+        theirState.pinned = moves::pinnedPieces(board, theirState.occupancy, theirState.kingSquare);
 
-        auto moveNodes = countLegalMovesAndCaptures(board, newState);
+        auto moveNodes = countLegalMovesAndCaptures(board, theirState);
         nodes += moveNodes;
     });
     if (options::cachePerft && nodes > options::cachePerftMinNodes) enter2(hash(), nodes);
@@ -150,6 +150,7 @@ NodeCount perft2(Board& board, Hash hash, moves::SearchState state) {
 NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
     if (depth == 2) return perft2(board, hash, state);
 
+    assert(depth > 1);
     dassert(!options::cachePerft || hash == Hash(Position{board, state.turn}));
 
     // Unlike normal Zobrist hashing, we need to include the level.
@@ -159,20 +160,21 @@ NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
             return perftCached.fetch_add(val, std::memory_order_relaxed), val;
 
     NodeCount nodes = 0;
-    auto newState = state;
     forAllLegalMovesAndCaptures(board, state, [&](Board& board, MoveWithPieces mwp) {
         auto delta = MovesTable::occupancyDelta(mwp.move);
         auto mask = moves::castlingMask(mwp.move.from, mwp.move.to);
 
-        auto newHash = options::cachePerft ? applyMove(hash, state.turn, mwp, mask) : Hash();
-        newState.occupancy = !(state.occupancy ^ delta);
-        newState.pawns = find(board, addColor(PieceType::PAWN, !state.active()));
-        newState.turn = moves::applyMove(state.turn, mwp);
-        newState.kingSquare = *find(board, addColor(PieceType::KING, !state.active())).begin();
-        newState.inCheck = moves::isAttacked(board, newState.kingSquare, newState.occupancy);
-        newState.pinned = moves::pinnedPieces(board, newState.occupancy, newState.kingSquare);
+        auto theirHash =
+            options::cachePerft ? applyMove(hash, state.turn, mwp, mask) : Hash();
+        moves::SearchState theirState;
+        theirState.occupancy = !(state.occupancy ^ delta);
+        theirState.pawns = find(board, addColor(PieceType::PAWN, !state.active()));
+        theirState.turn = moves::applyMove(state.turn, mwp);
+        theirState.kingSquare = *find(board, addColor(PieceType::KING, !state.active())).begin();
+        theirState.inCheck = moves::isAttacked(board, theirState.kingSquare, theirState.occupancy);
+        theirState.pinned = moves::pinnedPieces(board, theirState.occupancy, theirState.kingSquare);
 
-        auto moveNodes = perft(board, newHash, newState, depth - 1);
+        auto moveNodes = perft(board, theirHash, theirState, depth - 1);
         auto newNodes = nodes + moveNodes;
         assert(newNodes >= nodes);  // Check for node count overflow
         nodes = newNodes;
@@ -187,11 +189,10 @@ NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
  * Perft with progress callback at the end of the computation
  */
 NodeCount perft(Board& board,
-                Hash hash,
                 moves::SearchState state,
                 int depth,
                 const ProgressCallback& callback) {
-    auto nodes = perft(board, hash, state, depth);
+    auto nodes = perft(board, Hash(board, state.turn), state, depth);
     if (callback) callback(nodes);
     return nodes;
 }
@@ -221,7 +222,6 @@ TaskList expandTasks(TaskList tasks, size_t number) {
             expandTask(expanded,
                        task,
                        moves::allLegalMovesAndCaptures(task.position.turn, task.position.board));
-
 
         if (expanded.size() == tasks.size()) break;  // No further expansion possible
         tasks = expanded;
@@ -278,7 +278,8 @@ NodeCount threadedPerft(Position position, int depth, const ProgressCallback& ca
                 if (idx >= tasks.size()) break;
                 PerftTask task = tasks[idx];
                 auto state = moves::SearchState(task.position.board, task.position.turn);
-                addNodes(nodes, perft(task.position.board, Hash(task.position), state, task.depth));
+                auto hash = Hash(task.position.board, task.position.turn);
+                addNodes(nodes, perft(task.position.board, hash, state, task.depth));
                 completedTasks.fetch_add(1);
                 progressCondition.notify_one();
             }
@@ -299,16 +300,15 @@ NodeCount perft(Position position, int depth, const ProgressCallback& callback, 
         return result;
     }
 
-    if (depth <= 5 || !useThreads)
-        return perft(position.board, Hash{position}, state, depth, callback);
+    if (depth <= 5 || !useThreads) return perft(position.board, state, depth, callback);
 
     // For deeper perfts, see if the first few plies have sufficient cardinality to merit threading.
     // For that we take the perft at depth 4 and estimate the apparent depth assuming an average of
     // 20 moves per ply.
-    auto perft4 = std::max<NodeCount>(perft(position.board, Hash{position}, state, 4), 1);
+    auto perft4 = std::max<NodeCount>(perft(position.board, Hash(position), state, 4), 1);
     int apparentDepth =
         depth - 4 + static_cast<int>(std::log(static_cast<double>(perft4)) / std::log(20.0));
-    if (apparentDepth <= 5) return perft(position.board, Hash{position}, state, depth, callback);
+    if (apparentDepth <= 5) return perft(position.board, state, depth, callback);
     return threadedPerft(position, depth, callback);
 }
 

@@ -2,8 +2,9 @@
 
 #include "core/castling_info.h"
 #include "core/core.h"
-#include "hash.h"
 #include "core/random.h"
+
+#include "hash.h"
 
 std::array<HashValue, kNumHashVectors> hashVectors = []() {
     std::array<HashValue, kNumHashVectors> vectors;
@@ -15,13 +16,12 @@ std::array<HashValue, kNumHashVectors> hashVectors = []() {
     return vectors;
 }();
 
-Hash::Hash(const Position& position) {
+Hash::Hash(const Board& board, Turn turn) {
     for (auto square : squares)
-        if (position.board[square] != Piece::_) toggle(position.board[square], square);
-    if (position.active() == Color::b) toggle(BLACK_TO_MOVE);
-    if (position.turn.castling() != CastlingMask::_) toggle(position.turn.castling());
-    if (position.turn.enPassant())
-        toggle(ExtraVectors(file(position.turn.enPassant()) + EN_PASSANT_A));
+        if (board[square] != Piece::_) toggle(board[square], square);
+    if (turn.activeColor() == Color::b) toggle(BLACK_TO_MOVE);
+    if (turn.castling() != CastlingMask::_) toggle(turn.castling());
+    if (turn.enPassant()) toggle(ExtraVectors(file(turn.enPassant()) + EN_PASSANT_A));
 }
 
 void Hash::applyMove(Turn turn, MoveWithPieces mwp, CastlingMask mask) {

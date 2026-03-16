@@ -5,8 +5,15 @@
 #include "core/square_set/occupancy.h"
 
 namespace moves {
+/**
+ * Data structure with some derived state to avoid recomputing it too often. An experiment
+ * to add state for "their pawns" and "their king square" was not succesful, as there was no
+ * net improvement in performance even though the number of find calls was reduced.
+ */
 struct SearchState {
+    constexpr SearchState() : turn(), kingSquare(), inCheck(false) {};
     SearchState(const Board& board, Turn turn);
+
     Color active() const { return turn.activeColor(); }
 
     Occupancy occupancy;
@@ -28,11 +35,11 @@ MoveVector allLegalMovesAndCaptures(Turn turn, Board& board);
 
 MoveVector allLegalQuiescentMoves(Turn turn, Board& board, int depthleft);
 
-size_t countLegalMovesAndCaptures(Board& board, SearchState& state);
+size_t countLegalMovesAndCaptures(Board& board, const SearchState& state);
 
 using MoveFun = std::function<void(Board&, MoveWithPieces)>;
 void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun action);
-void forAllLegalMovesAndCaptures(Board& board, SearchState& state, MoveFun action);
+void forAllLegalMovesAndCaptures(Board& board, const SearchState& state, MoveFun action);
 
 inline void forAllLegalMovesAndCaptures(Turn turn, Board& board, MoveFun action) {
     auto state = SearchState(board, turn);

@@ -45,7 +45,8 @@ public:
     };
 
     Hash() = default;
-    Hash(const Position& position);
+    Hash(const Board& board, Turn turn);
+    Hash(const Position& position) : Hash(position.board, position.turn) {};
 
     HashValue operator()() const { return hash; }
     bool operator==(const Hash& other) const { return hash == other.hash; }
