@@ -46,7 +46,8 @@ std::ostream& operator<<(std::ostream& os, const PrincipalVariation& pv) {
 std::string cmdName = "search-test";
 
 void usage() {
-    std::cerr << "Usage: " << cmdName << " <FEN-string> moves [move...] <search-depth>\n";
+    std::cerr << "Usage: " << cmdName << " <FEN-string> moves [uci-move...] <search-depth>\n";
+    std::cerr << "       " << cmdName << " <FEN-string> movetext [san-move...] <search-depth>\n";
     std::cerr << "       " << cmdName << " <FEN-string>\n";
     std::cerr << "       " << cmdName << " <search-depth> [puzzle-file.csv]\n";
     std::cerr << "The first form searches from the given position after applying the given moves\n";

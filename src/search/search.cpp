@@ -357,7 +357,7 @@ struct TranspositionTable {
             std::cout << "Cleared transposition table\n";
         }
         stats = {};
-        if (!++numGenerations) entries.clear();  // Only actually clear on wraparound
+        if (!++numGenerations) std::fill(entries.begin(), entries.end(), Entry{});
     };
 
     void printStats() {
