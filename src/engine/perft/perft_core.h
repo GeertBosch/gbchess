@@ -14,7 +14,7 @@ using ProgressCallback = std::function<void(NodeCount)>;
 NodeCount perft(Position position,
                 int depth,
                 const ProgressCallback& callback = nullptr,
-                bool useThreads = true);
+                int numThreads = 0);
 
 /**
  * Access to cached node count for performance reporting

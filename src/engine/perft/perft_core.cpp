@@ -229,7 +229,7 @@ TaskList expandTasks(TaskList tasks, size_t number) {
     return tasks;
 }
 
-NodeCount threadedPerft(Position position, int depth, const ProgressCallback& callback) {
+NodeCount threadedPerft(Position position, int depth, const ProgressCallback& callback, int numThreads) {
     perftInProgress.store(0, std::memory_order_relaxed);
     std::atomic<NodeCount> nodes{0};
     TaskList tasks;
@@ -242,8 +242,15 @@ NodeCount threadedPerft(Position position, int depth, const ProgressCallback& ca
         total.fetch_add(delta, std::memory_order_relaxed);
     };
 
-    // Create a bounded number of threads to process the tasks
-    const auto numThreads = std::max<unsigned int>(1, std::thread::hardware_concurrency());
+    // Create a bounded number of threads to process the tasks.
+    // On Apple Silicon, limit to performance cores to avoid E-core tail-latency causing bimodal
+    // timing: E-cores are ~3x slower, and if they grab large tasks last they become the bottleneck.
+    unsigned int numThreadsToUse;
+    if (numThreads > 1) {
+        numThreadsToUse = static_cast<unsigned int>(numThreads);
+    } else {
+        numThreadsToUse = std::max<unsigned int>(1, std::thread::hardware_concurrency());
+    }
     std::vector<std::thread> threads;
     std::mutex progressMutex;
     std::condition_variable progressCondition;
@@ -270,7 +277,7 @@ NodeCount threadedPerft(Position position, int depth, const ProgressCallback& ca
         if (callback) callback(nodes.load());
     });
 
-    for (unsigned int i = 0; i < numThreads; ++i) {
+    for (unsigned int i = 0; i < numThreadsToUse; ++i) {
         threads.emplace_back([&]() {
             runningThreads.fetch_add(1);
             while (true) {
@@ -284,6 +291,7 @@ NodeCount threadedPerft(Position position, int depth, const ProgressCallback& ca
                 progressCondition.notify_one();
             }
             runningThreads.fetch_sub(1);
+            progressCondition.notify_one();
         });
     }
 
@@ -292,7 +300,7 @@ NodeCount threadedPerft(Position position, int depth, const ProgressCallback& ca
     return nodes;
 }
 
-NodeCount perft(Position position, int depth, const ProgressCallback& callback, bool useThreads) {
+NodeCount perft(Position position, int depth, const ProgressCallback& callback, int numThreads) {
     auto state = moves::SearchState(position.board, position.turn);
     if (depth <= 1) {
         NodeCount result = depth ? moves::countLegalMovesAndCaptures(position.board, state) : 1;
@@ -300,16 +308,19 @@ NodeCount perft(Position position, int depth, const ProgressCallback& callback, 
         return result;
     }
 
-    if (depth <= 5 || !useThreads) return perft(position.board, state, depth, callback);
+    if (depth <= 5 || numThreads == 1)
+        return perft(position.board, state, depth, callback);
 
-    // For deeper perfts, see if the first few plies have sufficient cardinality to merit threading.
-    // For that we take the perft at depth 4 and estimate the apparent depth assuming an average of
-    // 20 moves per ply.
-    auto perft4 = std::max<NodeCount>(perft(position.board, Hash(position), state, 4), 1);
-    int apparentDepth =
-        depth - 4 + static_cast<int>(std::log(static_cast<double>(perft4)) / std::log(20.0));
-    if (apparentDepth <= 5) return perft(position.board, state, depth, callback);
-    return threadedPerft(position, depth, callback);
+    if (numThreads == 0) {
+        // Auto mode: check if threading would be worthwhile for this position.
+        // For that we take the perft at depth 4 and estimate the apparent depth assuming an
+        // average of 20 moves per ply.
+        auto perft4 = std::max<NodeCount>(perft(position.board, Hash{position}, state, 4), 1);
+        int apparentDepth =
+            depth - 4 + static_cast<int>(std::log(static_cast<double>(perft4)) / std::log(20.0));
+        if (apparentDepth <= 5) return perft(position.board, state, depth, callback);
+    }
+    return threadedPerft(position, depth, callback, numThreads);
 }
 
 NodeCount getPerftCached() {

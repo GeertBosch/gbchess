@@ -15,7 +15,7 @@
 #include "perft_core.h"
 
 bool quiet = false;
-bool threads = true;
+int numThreads = 0;  // 0 = auto (use all available cores)
 
 void error(const std::string& message) {
     std::cerr << "Error: " << message << std::endl;
@@ -48,7 +48,7 @@ void perftWithDivide(Position position, int depth, NodeCount expectedCount) {
                 if (!quiet)
                     std::cerr << "\r" << to_string(move) << ": " << to_string(count) << std::flush;
             },
-            threads);
+            numThreads);
         if (!quiet) std::cerr << "\r" << std::string(20, ' ') << "\r";
         if (!quiet) std::cout << to_string(move) << ": " << to_string(newCount) << "\n";
         divisions.push_back({move, newCount});
@@ -81,19 +81,11 @@ bool maybeMove(const std::string& str) {
 
 void usage(std::string message) {
     std::cerr << "Error: " << message << "\n";
-    std::cerr << "Usage: perft [-q|--quiet] [-n|--no-threads] <depth> [expected-count]" << "\n";
-    std::cerr << "Usage: perft [-q|--quiet] [-n|--no-threads] [fen] <depth> [expected-count]"
-              << "\n";
+    std::cerr << "Usage: perft [-q|--quiet] [-j[N]] <depth> [expected-count]" << "\n";
+    std::cerr << "Usage: perft [-q|--quiet] [-j[N]] [fen] <depth> [expected-count]" << "\n";
+    std::cerr << "  -j or -j0: use all available cores (default)" << "\n";
+    std::cerr << "  -jN or -j N: use exactly N threads; -j1 disables threading" << "\n";
     std::exit(1);
-}
-
-void option(const std::string& arg) {
-    if (arg == "-q" || arg == "--quiet")
-        quiet = true;
-    else if (arg == "-n" || arg == "--no-threads")
-        threads = false;
-    else
-        error("Unknown option: " + arg);
 }
 
 int main(int argc, char** argv) {
@@ -102,7 +94,18 @@ int main(int argc, char** argv) {
     auto shift = [&argc, &argv]() -> char* { return --argc, *++argv; };
     auto arg = [&argc, &argv]() -> std::string { return argc < 2 ? "" : std::string(argv[1]); };
 
-    while (arg()[0] == '-') option(shift());
+    while (arg()[0] == '-') {
+        std::string a = shift();
+        if (a == "-q" || a == "--quiet") {
+            quiet = true;
+        } else if (a.size() >= 2 && a[1] == 'j') {
+            std::string val = a.substr(2);
+            if (val.empty() && !arg().empty() && std::isdigit(arg()[0])) val = shift();
+            numThreads = val.empty() ? 0 : std::stoi(val);
+        } else {
+            error("Unknown option: " + a);
+        }
+    }
 
     if (argc < 2) usage("missing depth argument");
 
