@@ -85,8 +85,38 @@ struct HashTable {
     std::vector<Entry> table;
 };
 
+/**
+ * Sharded counter for tracking cache hits across threads without contention.
+ * Each thread writes to its own cache-line-isolated shard; reads sum all shards.
+ */
+class ShardedCounter {
+    static constexpr size_t kShards = 128;
+    static std::atomic<size_t> nextShard;  // Starts at zero
+
+    struct alignas(64) Shard {
+        std::atomic<NodeCount> value{0};
+    };
+
+public:
+    void add(NodeCount delta) {
+        thread_local size_t idx = nextShard.fetch_add(1) % kShards;
+        shards[idx].value.fetch_add(delta, std::memory_order_relaxed);
+    }
+
+    NodeCount load() const {
+        NodeCount total = 0;
+        for (auto& shard : shards) total += shard.value.load(std::memory_order_relaxed);
+        return total;
+    }
+
+private:
+    Shard shards[kShards];
+};
+
+std::atomic<size_t> ShardedCounter::nextShard{0};
+
 static HashTable perftHashTable;
-static std::atomic<NodeCount> perftCached{0};
+static ShardedCounter perftCached;
 static std::atomic<NodeCount> perftInProgress{0};
 
 // For perft depth 2 caching, we don't need many bits for the counts, as there can at most be
@@ -119,8 +149,7 @@ NodeCount perft2(Board& board, Hash hash, const moves::SearchState& state) {
     dassert(!options::cachePerft || hash == Hash(Position{board, state.turn}));
 
     if constexpr (options::cachePerft)
-        if (auto count = lookup2(hash()))
-            return perftCached.fetch_add(count, std::memory_order_relaxed), count;
+        if (auto count = lookup2(hash())) return perftCached.add(count), count;
     NodeCount nodes = 0;
     auto theirState = state;
     auto theirPawn = addColor(PieceType::PAWN, !state.active());
@@ -156,8 +185,7 @@ NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
     // Unlike normal Zobrist hashing, we need to include the level.
 
     if constexpr (options::cachePerft)
-        if (auto val = perftHashTable.lookup(hash(), depth))
-            return perftCached.fetch_add(val, std::memory_order_relaxed), val;
+        if (auto val = perftHashTable.lookup(hash(), depth)) return perftCached.add(val), val;
 
     NodeCount nodes = 0;
     forAllLegalMovesAndCaptures(board, state, [&](Board& board, MoveWithPieces mwp) {
