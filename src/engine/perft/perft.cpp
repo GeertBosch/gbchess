@@ -81,10 +81,9 @@ bool maybeMove(const std::string& str) {
 
 void usage(std::string message) {
     std::cerr << "Error: " << message << "\n";
-    std::cerr << "Usage: perft [-q|--quiet] [-j[N]] <depth> [expected-count]" << "\n";
     std::cerr << "Usage: perft [-q|--quiet] [-j[N]] [fen] <depth> [expected-count]" << "\n";
     std::cerr << "  -j or -j0: use all available cores (default)" << "\n";
-    std::cerr << "  -jN or -j N: use exactly N threads; -j1 disables threading" << "\n";
+    std::cerr << "  -jN: use N threads; -j0 or -j uses all cores, -j1 disables threading" << "\n";
     std::exit(1);
 }
 
@@ -100,10 +99,9 @@ int main(int argc, char** argv) {
             quiet = true;
         } else if (a.size() >= 2 && a[1] == 'j') {
             std::string val = a.substr(2);
-            if (val.empty() && !arg().empty() && std::isdigit(arg()[0])) val = shift();
             numThreads = val.empty() ? 0 : std::stoi(val);
         } else {
-            error("Unknown option: " + a);
+            usage("Unknown option: " + a);
         }
     }
 
