@@ -5,6 +5,8 @@ FILE="${1:-src/README.md}"
 ROOT="${2:-src}"
 MAX_DEPTH="${3:-2}"
 SECTION="${4:-## File Organization}"
+VERBOSE=
+for arg in "$@"; do [[ "$arg" == "-v" ]] && VERBOSE=1; done
 
 if [[ ! -f "$FILE" ]]; then
     echo "error: markdown file not found: $FILE" >&2
@@ -21,7 +23,7 @@ if ! [[ "$MAX_DEPTH" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
-python3 - "$FILE" "$ROOT" "$MAX_DEPTH" "$SECTION" <<'PY'
+python3 - "$FILE" "$ROOT" "$MAX_DEPTH" "$SECTION" "${VERBOSE:+verbose}" <<'PY'
 from __future__ import annotations
 
 import re
@@ -115,6 +117,7 @@ def main() -> int:
     root = Path(sys.argv[2])
     max_depth = int(sys.argv[3])
     section = sys.argv[4]
+    verbose = len(sys.argv) > 5 and sys.argv[5] == "verbose"
 
     content = markdown_path.read_text(encoding="utf-8")
     lines = content.splitlines()
@@ -127,11 +130,13 @@ def main() -> int:
     updated = lines[: block_open + 1] + new_block_lines + lines[block_close:]
     updated_content = "\n".join(updated) + "\n"
     if updated_content == content:
-        print(f"unchanged {markdown_path}")
+        if verbose:
+            print(f"unchanged {markdown_path}")
         return 0
 
     markdown_path.write_text(updated_content, encoding="utf-8")
-    print(f"updated {markdown_path}")
+    if verbose:
+        print(f"updated {markdown_path}")
     return 0
 
 
@@ -139,4 +144,4 @@ if __name__ == "__main__":
     raise SystemExit(main())
 PY
 
-echo "processed $FILE from directory tree rooted at $ROOT (depth=$MAX_DEPTH)"
+if [[ -n "$VERBOSE" ]]; then echo "processed $FILE from directory tree rooted at $ROOT (depth=$MAX_DEPTH)"; fi

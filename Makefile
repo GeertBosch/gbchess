@@ -125,14 +125,18 @@ endef
 
 build/engine: $(call calc_objs,${OPTOBJ},$(call prefix_src,${ENGINE_SRCS}))
 	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
+	@echo "  ✅ $@ built"
 build/engine-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,${ENGINE_SRCS}))
 	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
+	@echo "  ✅ $@ built"
 
 BOOK_GEN_SRCS=book/book_gen.cpp book/pgn/pgn.cpp engine/fen/fen.cpp core/hash/hash.cpp ${MOVES_SRCS}
 build/book-gen: $(call calc_objs,${OPTOBJ},$(call prefix_src,${BOOK_GEN_SRCS}))
 	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
+	@echo "  ✅ $@ built"
 build/book-gen-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,${BOOK_GEN_SRCS}))
 	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
+	@echo "  ✅ $@ built"
 
 LAST_24_MONTHS := $(shell for i in $$(seq 1 24); do date -d "$$i month ago" +%Y-%m 2>/dev/null || date -v-$$im +%Y-%m 2>/dev/null; done | xargs)
 BROADCAST_FILES := $(addprefix lichess/lichess_db_broadcast_,$(addsuffix .pgn,$(LAST_24_MONTHS)))
@@ -172,7 +176,7 @@ $(eval $(call test_rules,book/pgn/pgn,${MOVES_SRCS} book/pgn/pgn.cpp engine/fen/
 $(eval $(call test_rules,book/book,${BOOK_SRCS} ${MOVES_SRCS} core/hash/hash.cpp))
 
 .deps: $(call calc_deps,${OPTOBJ},${ALLSRCS}) $(call calc_deps,${DBGOBJ},${ALLSRCS})
-	$(Q)./check-arch.sh
+	$(Q)./check-arch.sh $(VOPT)
 	@echo  "\n✅ All dependencies up to date"
 
 .SUFFIXES: # Delete the default suffix rules
@@ -229,12 +233,15 @@ build/perft-gcc-emul: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
 build/perft-instr: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
 	$(Q)mkdir -p build
 	$(call RUNCMD,${CLANGPP} -O3 ${CCFLAGS} -Isrc -fprofile-instr-generate -o $@ $(filter-out %.h,$^) ${LIBS})
+	@echo "  ✅ $@ built"
 build/perft-clang-sse2-instr: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
 	$(Q)mkdir -p build
 	$(call RUNCMD,${CLANGPP} -O3 ${CCFLAGS} -Isrc -fprofile-instr-generate -o $@ $(filter-out %.h,$^))
+	@echo "  ✅ $@ built"
 build/perft-clang-emul-instr: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
 	$(Q)mkdir -p build
 	$(call RUNCMD,${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -fprofile-instr-generate -o $@ $(filter-out %.h,$^))
+	@echo "  ✅ $@ built"
 
 # PGO: run instrumented binary to collect profile data
 build/perft.profdata: build/perft-instr

@@ -4,8 +4,11 @@
 
 set -euo pipefail
 
+VERBOSE=
+for arg in "$@"; do [[ "$arg" == "-v" ]] && VERBOSE=1; done
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-"$SCRIPT_DIR/update-file-organization.sh" src/README.md src 2 "## File Organization"
+"$SCRIPT_DIR/update-file-organization.sh" src/README.md src 2 "## File Organization" $@
 
 find src \( -name \*.cpp -o -name \*.h \) -exec grep -H '#include "' {} \; |
 awk '
@@ -86,4 +89,4 @@ END {
     }
 }
 ' src/README.md -
-echo "✅ src/README.md checked"
+if [[ -n "$VERBOSE" ]]; then echo "✅ src/README.md checked"; fi
