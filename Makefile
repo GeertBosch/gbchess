@@ -383,13 +383,22 @@ build/test-cpp.out: ${CPP_TESTS} book.csv ${NNUE_FILE}
 test-cpp: build/test-cpp.out
 test: build/test-cpp.out build/fixed-puzzles.out build/searches.out build/evals.out build/uci.out build/magic.out
 
-ci: build perft-test build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate123.out build/mate45.out build/puzzles.out
+ci: build perft-test build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate123.out build/mate45.out build/puzzles.out iwyu
 	@echo "\n✅ CI checks passed\n"
 
 install-hooks:
 	$(Q)git config core.hooksPath .githooks
 	$(Q)chmod +x .githooks/pre-push
 	@echo "✅ Installed git hooks from .githooks"
+
+iwyu: $(COMPILE_COMMANDS)
+	$(Q)iwyu-tool -p $(COMPILE_COMMANDS) -- -Xiwyu --no_fwd_decls 2>&1 | tee /tmp/iwyu.out; \
+	if grep -q "should add these lines:" /tmp/iwyu.out; then \
+		echo "  ❌ IWYU: missing includes detected:"; \
+		grep -B 1 -A 10 "should add these lines:" /tmp/iwyu.out; \
+		false; \
+	fi
+	@echo "  ✅ IWYU: no missing includes detected"
 
 # Generate compile_commands.json for clangd
 $(COMPILE_COMMANDS):
@@ -407,7 +416,7 @@ $(COMPILE_COMMANDS):
 	$(Q)echo >> $@
 	$(Q)echo ']' >> $@
 
-.PHONY: ${COMPILE_COMMANDS} ci install-hooks
+.PHONY: ${COMPILE_COMMANDS} ci install-hooks iwyu
 
 SPRT_NEW ?= build/engine
 SPRT_BASE ?= build/engine-base
