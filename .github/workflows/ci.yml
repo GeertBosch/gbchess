@@ -18,7 +18,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential clang llvm wget zstd iwyu
+          sudo apt-get install -y build-essential clang llvm wget zstd iwyu libc++-dev libc++abi-dev
 
       - name: Run CI checks
         run: make -j"$(nproc)" ci
