@@ -10,16 +10,6 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     timeout-minutes: 75
-    strategy:
-      fail-fast: false
-      matrix:
-        compiler:
-          - cc: gcc
-            cxx: g++
-            name: GCC
-          - cc: clang
-            cxx: clang++
-            name: Clang
 
     steps:
       - name: Checkout
@@ -30,10 +20,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential clang llvm wget zstd
 
-      - name: Run CI checks (${{ matrix.compiler.name }})
-        env:
-          CC: ${{ matrix.compiler.cc }}
-          CXX: ${{ matrix.compiler.cxx }}
+      - name: Run CI checks
         run: make -j"$(nproc)" ci
 
       - name: Verify architecture docs are up to date
