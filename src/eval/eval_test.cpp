@@ -234,7 +234,7 @@ std::string computeStatistics(const std::vector<float>& diffs) {
     double variance = sum2 / diffs.size() - mean * mean;
     double stddev = std::sqrt(variance);
     assert(stddev < 0.1 && "Standard deviation is too high, check your data");
-    assert(abs(mean) < 0.1 && "Mean is too far off, check your data");
+    assert(std::abs(mean) < 0.1 && "Mean is too far off, check your data");
     return "Mean: " + std::to_string(mean) + ", Standard Deviation: " + std::to_string(stddev);
 }
 
