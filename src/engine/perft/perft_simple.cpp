@@ -13,8 +13,8 @@
  */
 
 #include <cstdlib>
+#include <exception>
 #include <iostream>
-#include <string>
 
 #include "core/core.h"
 #include "engine/fen/fen.h"

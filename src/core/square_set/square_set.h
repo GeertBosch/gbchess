@@ -1,6 +1,7 @@
 #pragma once
 
 #include <climits>
+#include <iterator>
 
 #include "core/core.h"
 

@@ -2,12 +2,15 @@
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
+#include <exception>
 #include <fstream>
+#include <functional>
+#include <initializer_list>
 #include <iostream>
 #include <iterator>
 #include <sstream>
 #include <thread>
-
+#include <utility>
 
 #include "book/book.h"
 #include "core/core.h"
@@ -16,6 +19,7 @@
 #include "engine/fen/fen.h"
 #include "engine/perft/perft_core.h"
 #include "move/move.h"
+#include "search/pv.h"
 #include "search/search.h"
 #include "time/time.h"
 

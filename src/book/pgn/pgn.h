@@ -1,10 +1,9 @@
 #pragma once
 
-#include <cstdint>
-#include <string>
+#include <iosfwd>
+#include <iterator>
 #include <string_view>
-#include <sys/types.h>
-#include <vector>
+#include <utility>
 
 #include "core/core.h"
 

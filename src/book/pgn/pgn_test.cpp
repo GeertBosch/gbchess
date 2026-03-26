@@ -1,10 +1,12 @@
-#include <cassert>
+#include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <sstream>
-#include <string>
 #include <string_view>
+#include <type_traits>
 
 #include "book/pgn/pgn.h"
 

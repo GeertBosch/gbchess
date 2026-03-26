@@ -2,6 +2,7 @@
 
 #include "core/core.h"
 #include "core/square_set/occupancy.h"
+#include "core/square_set/square_set.h"
 
 struct CompoundMove {
     Square to : 8;  // TODO C++20: Can use default initialization for bit-fields

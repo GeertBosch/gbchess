@@ -1,7 +1,6 @@
 #pragma once
 
 #include <stdexcept>
-#include <string>
 
 #include "core/core.h"
 
@@ -9,7 +8,7 @@
  * User-defined literal for uint128_t from an unsigned long long literal.
  * Usage: auto x = 12345678901234567890_u128;
  */
-constexpr uint128_t operator"" _u128(unsigned long long value) {
+constexpr uint128_t operator""_u128(unsigned long long value) {
     return static_cast<uint128_t>(value);
 }
 constexpr uint128_t strtou128(const char* str, size_t len) {
@@ -31,7 +30,7 @@ constexpr uint128_t strtou128(std::string_view str) {
  * Usage: auto x = "12345678901234567890123456789012345678"_u128;
  * Supports embedded apostrophes for digit grouping.
  */
-constexpr uint128_t operator"" _u128(const char* str, size_t len) {
+constexpr uint128_t operator""_u128(const char* str, size_t len) {
     return strtou128(str, len);
 }
 

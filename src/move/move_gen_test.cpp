@@ -1,7 +1,7 @@
 #include <algorithm>
-#include <cassert>
 #include <iostream>
 
+#include "core/core.h"
 #include "core/options.h"
 #include "engine/fen/fen.h"
 #include "move.h"

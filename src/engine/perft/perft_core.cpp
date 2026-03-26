@@ -1,15 +1,19 @@
-#include "perft_core.h"
-#include "core/hash/hash.h"
-#include "core/options.h"
-#include "move/move.h"
-#include "move/move_gen.h"
-#include "move/move_table.h"
+#include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
-#include <vector>
+
+#include "core/hash/hash.h"
+#include "core/options.h"
+#include "core/square_set/occupancy.h"
+#include "core/square_set/square_set.h"
+#include "move/move.h"
+#include "move/move_gen.h"
+#include "move/move_table.h"
+#include "perft_core.h"
 
 static constexpr size_t MB = 1ull << 20;
 

@@ -1,7 +1,7 @@
-#include <cassert>
-#include <cstring>
+#include <algorithm>
 
 #include "core/castling_info.h"
+#include "core/core.h"
 #include "move_table.h"
 
 namespace init {

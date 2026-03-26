@@ -1,6 +1,6 @@
 #include <iomanip>
 #include <iostream>
-#include <ostream>
+#include <iterator>
 #include <sstream>
 
 #include "core/core.h"

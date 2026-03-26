@@ -2,11 +2,13 @@
 #include <cstdlib>
 #include <map>
 #include <stdexcept>
-#include <string>
+#include <utility>
 
 #include "core/core.h"
 #include "core/options.h"
 #include "core/piece_set.h"
+#include "core/square_set/occupancy.h"
+#include "core/square_set/square_set.h"
 #include "eval_tables.h"
 #include "move/magic/magic.h"
 #include "move/move.h"

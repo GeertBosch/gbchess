@@ -1,12 +1,13 @@
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>  // For std::exit
-#include <cstring>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <numeric>
 #include <ostream>
 #include <sstream>
-#include <string>
+#include <utility>
 
 #include "book/pgn/pgn.h"
 #include "core/core.h"

@@ -1,9 +1,10 @@
-#include "eval/nnue/nnue_stats.h"
-#include "eval/nnue/nnue.h"
 #include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+
+#include "eval/nnue/nnue.h"
+#include "eval/nnue/nnue_stats.h"
 
 namespace nnue {
 

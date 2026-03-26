@@ -5,6 +5,7 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <utility>
 
 #include "core/core.h"
 #include "core/square_set/square_set.h"

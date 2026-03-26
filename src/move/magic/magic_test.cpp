@@ -1,13 +1,9 @@
-#include <cstdint>
-#include <cstring>
 #include <iomanip>
 #include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
 
 #include "core/core.h"
-#include "magic.h"
 #include "core/random.h"
+#include "magic.h"
 
 namespace {
 xorshift gen;

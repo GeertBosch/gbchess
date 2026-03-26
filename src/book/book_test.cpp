@@ -1,13 +1,12 @@
-#include "book.h"
 
 #include <algorithm>
-#include <cassert>
 #include <iomanip>
 #include <iostream>
 #include <map>
 #include <set>
-#include <vector>
+#include <utility>
 
+#include "book.h"
 #include "core/core.h"
 #include "core/hash/hash.h"
 #include "engine/fen/fen.h"

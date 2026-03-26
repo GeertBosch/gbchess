@@ -1,13 +1,11 @@
-#include <cassert>
-#include <cstring>
+#include <utility>
 
 #include "core/castling_info.h"
 #include "core/core.h"
 #include "core/piece_set.h"
 #include "magic/magic.h"
-#include "move_table.h"
-
 #include "move.h"
+#include "move_table.h"
 
 namespace {
 

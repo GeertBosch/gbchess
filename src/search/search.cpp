@@ -1,15 +1,15 @@
 #include <algorithm>
 #include <chrono>
-#include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <optional>
 #include <sstream>
-#include <sys/types.h>
-#include <vector>
+#include <utility>
 
 #include "core/core.h"
 #include "core/hash/hash.h"
 #include "core/options.h"
+#include "core/square_set/occupancy.h"
 #include "core/uint128_str.h"
 #include "engine/fen/fen.h"
 #include "eval/eval.h"

@@ -1,3 +1,12 @@
+#include <algorithm>
+#include <cmath>
+#include <fstream>
+#include <iostream>
+#include <limits>
+#include <random>
+#include <tuple>
+#include <utility>
+
 #include "book/book.h"
 #include "core/core.h"
 #include "core/hash/hash.h"
@@ -6,14 +15,6 @@
 #include "engine/fen/fen.h"
 #include "move/move.h"
 #include "move/move_gen.h"
-
-#include <algorithm>
-#include <cmath>
-#include <fstream>
-#include <iostream>
-#include <limits>
-#include <random>
-#include <sys/types.h>
 
 namespace book {
 using Term = pgn::Termination;

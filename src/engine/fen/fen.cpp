@@ -1,6 +1,6 @@
-#include <iostream>
+#include <cctype>
 #include <sstream>
-#include <string>
+#include <utility>
 
 #include "core/core.h"
 #include "fen.h"

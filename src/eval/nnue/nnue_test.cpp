@@ -1,8 +1,7 @@
-#include <cassert>
-#include <cstdint>
+#include <exception>
 #include <iostream>
-#include <string>
 
+#include "core/core.h"
 #include "engine/fen/fen.h"
 #include "eval/nnue/nnue.h"
 

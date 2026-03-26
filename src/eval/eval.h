@@ -1,7 +1,6 @@
 #pragma once
 
 #include <limits>
-#include <string>
 
 #include "core/core.h"
 
@@ -31,7 +30,7 @@ private:
     }
 
 public:
-    friend constexpr Score operator"" _cp(unsigned long long value);
+    friend constexpr Score operator""_cp(unsigned long long value);
     Score() = default;
     constexpr Score operator-() const { return check(-value); }
     Score operator+(Score rhs) const { return check(value + rhs.value); }
@@ -81,7 +80,7 @@ public:
 };
 
 // literal constructor for _cp (centipawn) suffix
-constexpr Score operator"" _cp(unsigned long long value) {
+constexpr Score operator""_cp(unsigned long long value) {
     return Score(value);
 }
 

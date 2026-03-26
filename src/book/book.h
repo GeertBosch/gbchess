@@ -2,11 +2,10 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <string>
-#include <sys/types.h>
 #include <unordered_map>
 
 #include "book/pgn/pgn.h"
+#include "core/core.h"
 
 namespace book {
 // Opening book using Bayesian statistics with Thompson sampling to balance exploration and

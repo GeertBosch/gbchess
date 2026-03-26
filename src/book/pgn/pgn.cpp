@@ -1,7 +1,6 @@
 #include <algorithm>
-#include <cassert>
+#include <cctype>
 #include <istream>
-#include <string>
 #include <string_view>
 
 #include "pgn.h"

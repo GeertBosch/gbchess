@@ -1,23 +1,28 @@
+#include <algorithm>
+#include <atomic>
+#include <cstdio>
+#include <cstdlib>
+#include <fcntl.h>
+#include <fstream>
+#include <functional>
+#include <iomanip>
+#include <iostream>
+#include <iterator>
+#include <mutex>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <thread>
+#include <unistd.h>
+#include <unordered_map>
+#include <utility>
+
 #include "book/book.h"
 #include "book/pgn/pgn.h"
 #include "core/core.h"
 #include "core/hash/hash.h"
 #include "engine/fen/fen.h"
 #include "move/move.h"
-
-#include <fcntl.h>
-#include <string_view>
-#include <unistd.h>
-
-#include <atomic>
-#include <fstream>
-#include <iomanip>
-#include <iostream>
-#include <mutex>
-#include <sstream>
-#include <string>
-#include <thread>
-#include <unordered_map>
 
 using namespace book;
 namespace {

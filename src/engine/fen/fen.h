@@ -1,4 +1,6 @@
 #pragma once
+#include <exception>
+
 #include "core/core.h"
 
 namespace fen {
