@@ -72,7 +72,7 @@ test_objs=$(call calc_objs,$(call test_dir,$(1)),$(call prefix_src,$(call test_s
 
 ALLSRCS=$(wildcard src/*.cpp src/*/*.cpp src/*/*/*.cpp)
 
-all: .deps build debug test perft-bench perft-test build/mate123.out build/mate45.out build/puzzles.out
+all: build debug test perft-bench perft-test build/mate123.out build/mate45.out build/puzzles.out
 	@echo "✅ All tests passed!"
 
 -include $(call calc_deps,${OPTOBJ},${ALLSRCS})
@@ -234,33 +234,11 @@ build/perft-instr: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
 	$(Q)mkdir -p build
 	$(call RUNCMD,${CLANGPP} -O3 ${CCFLAGS} -Isrc -fprofile-instr-generate -o $@ $(filter-out %.h,$^) ${LIBS})
 	@echo "  ✅ $@ built"
-build/perft-clang-sse2-instr: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
-	$(Q)mkdir -p build
-	$(call RUNCMD,${CLANGPP} -O3 ${CCFLAGS} -Isrc -fprofile-instr-generate -o $@ $(filter-out %.h,$^))
-	@echo "  ✅ $@ built"
-build/perft-clang-emul-instr: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
-	$(Q)mkdir -p build
-	$(call RUNCMD,${CLANGPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -fprofile-instr-generate -o $@ $(filter-out %.h,$^))
-	@echo "  ✅ $@ built"
 
 # PGO: run instrumented binary to collect profile data
 build/perft.profdata: build/perft-instr
 	$(Q)LLVM_PROFILE_FILE=build/perft.profraw ./$< -q "$(KIWIPETE)" 5 > /dev/null
 	$(call RUNCMD,${LLVM_PROFDATA} merge -output=$@ build/perft.profraw)
-build/perft-clang-sse2.profdata: build/perft-clang-sse2-instr
-	$(Q)LLVM_PROFILE_FILE=build/perft-clang-sse2.profraw ./$< -q "$(KIWIPETE)" 5 > /dev/null
-	$(call RUNCMD,${LLVM_PROFDATA} merge -output=$@ build/perft-clang-sse2.profraw)
-build/perft-clang-emul.profdata: build/perft-clang-emul-instr
-	$(Q)LLVM_PROFILE_FILE=build/perft-clang-emul.profraw ./$< -q "$(KIWIPETE)" 5 > /dev/null
-	$(call RUNCMD,${LLVM_PROFDATA} merge -output=$@ build/perft-clang-emul.profraw)
-
-# PGO: final optimized builds using collected profile
-build/perft-clang-sse2-pgo: ${PERFT_SRCS} ${PERFT_CLANG_HDRS} build/perft-clang-sse2.profdata
-	$(Q)mkdir -p build
-	$(call RUNCMD,${CLANGPP} -O3 -flto=thin -fprofile-instr-use=build/perft-clang-sse2.profdata ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h %.profdata,$^))
-build/perft-clang-emul-pgo: ${PERFT_SRCS} ${PERFT_CLANG_HDRS} build/perft-clang-emul.profdata
-	$(Q)mkdir -p build
-	$(call RUNCMD,${CLANGPP} -O3 -flto=thin -DSSE2EMUL -fprofile-instr-use=build/perft-clang-emul.profdata ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h %.profdata,$^))
 
 # Test the Kiwipete position at depth 4 as it exercises captures, en passant, castling,
 # promotions, checks, discovered checks, double checks, checkmates, etc at low depth.
@@ -275,7 +253,7 @@ build/perft.out: build/perft
 	$(Q)./build/perft -q "$(KIWIPETE)" 5 | grep -q "Nodes searched: 193690690" $(REDIR)
 
 # Aliases for perft test targets
-perft-bench: build/perft-clang-emul.out build/perft-gcc-emul.out build/perft-clang-sse2.out build/perft-gcc-sse2.out build/perft-clang-sse2-pgo.out build/perft-clang-emul-pgo.out
+perft-bench: build/perft-clang-emul.out build/perft-gcc-emul.out build/perft-clang-sse2.out build/perft-gcc-sse2.out
 
 perft-test: build/perft.out build/perft-test.out build/perft-debug.out build/perft-simple.out
 
@@ -398,8 +376,6 @@ install-hooks:
 	$(Q)git config core.hooksPath .githooks
 	$(Q)chmod +x .githooks/pre-push
 	@echo "✅ Installed git hooks from .githooks"
-
-
 
 # Generate compile_commands.json for clangd
 $(COMPILE_COMMANDS):
