@@ -29,6 +29,7 @@ else
 endif
 
 RUNCMD = $(Q)$(1) || { echo "  ❌ error making $@"; false; }
+BUILDCMD= $(Q)$(1) && echo "  ✅ $@ built" || { echo "  ❌ error building $@"; false; }
 LIBS :=
 UNAME_S := $(shell uname -s)
 
@@ -124,19 +125,15 @@ build/$(notdir $1)-debug: ${DBGOBJ}/$(1)-debug
 endef
 
 build/engine: $(call calc_objs,${OPTOBJ},$(call prefix_src,${ENGINE_SRCS}))
-	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
-	@echo "  ✅ $@ built"
+	$(call BUILDCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
 build/engine-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,${ENGINE_SRCS}))
-	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
-	@echo "  ✅ $@ built"
+	$(call BUILDCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
 
 BOOK_GEN_SRCS=book/book_gen.cpp book/pgn/pgn.cpp engine/fen/fen.cpp core/hash/hash.cpp ${MOVES_SRCS}
 build/book-gen: $(call calc_objs,${OPTOBJ},$(call prefix_src,${BOOK_GEN_SRCS}))
-	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
-	@echo "  ✅ $@ built"
+	$(call BUILDCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
 build/book-gen-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,${BOOK_GEN_SRCS}))
-	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
-	@echo "  ✅ $@ built"
+	$(call BUILDCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
 
 LAST_24_MONTHS := $(shell for i in $$(seq 1 24); do date -d "$$i month ago" +%Y-%m 2>/dev/null || date -v-$$im +%Y-%m 2>/dev/null; done | xargs)
 BROADCAST_FILES := $(addprefix lichess/lichess_db_broadcast_,$(addsuffix .pgn,$(LAST_24_MONTHS)))
@@ -198,42 +195,41 @@ PERFT_SRCS=$(call prefix_src,engine/perft/perft.cpp engine/perft/perft_core.cpp 
 # perft counts the total leaf nodes in the search tree for a position, see the perft-test target
 build/perft: ${PERFT_SRCS} ${PERFT_CLANG_HDRS} build/perft.profdata
 	$(Q)mkdir -p build
-	$(call RUNCMD,${CLANGPP} -O3 -flto=thin -fprofile-instr-use=build/perft.profdata ${CCFLAGS} -Isrc -o $@ $(filter-out %.h %.profdata,$^) ${LIBS})
+	$(call BUILDCMD,${CLANGPP} -O3 -flto=thin -fprofile-instr-use=build/perft.profdata ${CCFLAGS} -Isrc -o $@ $(filter-out %.h %.profdata,$^) ${LIBS})
 
 PERFT_TEST_SRCS=$(call prefix_src,engine/perft/perft_test.cpp engine/perft/perft_core.cpp ${MOVES_SRCS} engine/fen/fen.cpp core/hash/hash.cpp)
 build/perft-test: $(call calc_objs,${OPTOBJ},${PERFT_TEST_SRCS})
-	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
+	$(call BUILDCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
 build/perft-debug: $(call calc_objs,${DBGOBJ},${PERFT_TEST_SRCS})
-	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
+	$(call BUILDCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
 build/perft-tool-debug: $(call calc_objs,${DBGOBJ},${PERFT_SRCS})
-	$(call RUNCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
+	$(call BUILDCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
 
 PERFT_SIMPLE_SRCS=$(call prefix_src,engine/perft/perft_simple.cpp ${MOVES_SRCS} engine/fen/fen.cpp)
 # perft_simple is a simplified version without caching or 128-bit ints
 build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
-	$(call RUNCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
+	$(call BUILDCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
 
 PERFT_CLANG_HDRS=src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
 
 # Build the perft tool with some different compilation options for speed comparison
 build/perft-clang-sse2: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
 	$(Q)mkdir -p build
-	$(call RUNCMD,${CLANGPP} -O3 -flto=thin ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
+	$(call BUILDCMD,${CLANGPP} -O3 -flto=thin ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
 build/perft-clang-emul: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
 	$(Q)mkdir -p build
-	$(call RUNCMD,${CLANGPP} -O3 -flto=thin -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
+	$(call BUILDCMD,${CLANGPP} -O3 -flto=thin -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
 build/perft-gcc-sse2: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
 	$(Q)mkdir -p build
-	$(call RUNCMD,${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
+	$(call BUILDCMD,${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
 build/perft-gcc-emul: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
 	$(Q)mkdir -p build
-	$(call RUNCMD,${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
+	$(call BUILDCMD,${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
 
 # PGO: instrumented builds for profile collection
 build/perft-instr: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
 	$(Q)mkdir -p build
-	$(call RUNCMD,${CLANGPP} -O3 ${CCFLAGS} -Isrc -fprofile-instr-generate -o $@ $(filter-out %.h,$^) ${LIBS})
-	@echo "  ✅ $@ built"
+	$(call BUILDCMD,${CLANGPP} -O3 ${CCFLAGS} -Isrc -fprofile-instr-generate -o $@ $(filter-out %.h,$^) ${LIBS})
 
 # PGO: run instrumented binary to collect profile data
 build/perft.profdata: build/perft-instr
@@ -304,7 +300,8 @@ build/perft-debug.out: build/perft-debug
 	$(Q)./build/perft-debug $(REDIR)
 
 debug: $(patsubst %-test,%-debug,$(CPP_TESTS)) build/perft-debug build/engine-debug build/book-gen-debug
-build: .deps $(CPP_TESTS) $(COMPILE_COMMANDS) build/perft build/engine build/perft-simple build/book-gen
+build-ci: .deps $(CPP_TESTS) $(COMPILE_COMMANDS) build/engine build/perft-simple build/book-gen
+build:  build/perft build-ci
 	$(Q)echo "\n✅ Build complete\n"
 
 build/fixed-puzzles.out: build/search-test $(FIXED_PUZZLES) ${NNUE_FILE}
@@ -369,7 +366,7 @@ build/test-cpp.out: ${CPP_TESTS} book.csv ${NNUE_FILE}
 test-cpp: build/test-cpp.out
 test: build/test-cpp.out build/fixed-puzzles.out build/searches.out build/evals.out build/uci.out build/magic.out
 
-ci: build perft-test build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate123.out build/mate45.out build/puzzles.out
+ci: build-ci build/test-cpp.out build/perft-test.out build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate123.out build/mate45.out build/puzzles.out
 	@echo "\n✅ CI checks passed\n"
 
 install-hooks:
