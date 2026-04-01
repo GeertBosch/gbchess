@@ -18,6 +18,7 @@ def convert(input_path: str, output_path: str) -> tuple[int, int]:
     frame_name_by_id = {}
     thread_state_fmt_by_id = {}
     backtrace_frame_ids_by_id = {}
+    tagged_backtrace_to_backtrace_id = {}  # tagged-backtrace id -> backtrace id
 
     for elem in root.iter():
         if elem.tag == "frame":
@@ -30,6 +31,14 @@ def convert(input_path: str, output_path: str) -> tuple[int, int]:
             state_fmt = elem.attrib.get("fmt")
             if state_id and state_fmt:
                 thread_state_fmt_by_id[state_id] = state_fmt
+        elif elem.tag == "tagged-backtrace":
+            ta_id = elem.attrib.get("id")
+            if ta_id:
+                inner = elem.find("backtrace")
+                if inner is not None:
+                    bt_id = inner.attrib.get("id") or inner.attrib.get("ref")
+                    if bt_id:
+                        tagged_backtrace_to_backtrace_id[ta_id] = bt_id
 
     for backtrace in root.iter("backtrace"):
         backtrace_id = backtrace.attrib.get("id")
@@ -60,9 +69,20 @@ def convert(input_path: str, output_path: str) -> tuple[int, int]:
 
         backtrace = row.find("backtrace")
         if backtrace is not None:
-            backtrace_id = backtrace.attrib.get("id")
-            if backtrace_id is None:
-                backtrace_id = backtrace.attrib.get("ref")
+            # Old xctrace format: backtrace is a direct child of row
+            backtrace_id = backtrace.attrib.get("id") or backtrace.attrib.get("ref")
+        else:
+            # New xctrace format: backtrace is nested inside tagged-backtrace
+            tagged_bt = row.find("tagged-backtrace")
+            if tagged_bt is not None:
+                ta_id = tagged_bt.attrib.get("id")
+                ta_ref = tagged_bt.attrib.get("ref")
+                if ta_id:
+                    inner = tagged_bt.find("backtrace")
+                    if inner is not None:
+                        backtrace_id = inner.attrib.get("id") or inner.attrib.get("ref")
+                elif ta_ref:
+                    backtrace_id = tagged_backtrace_to_backtrace_id.get(ta_ref)
 
         if state != "Running" or not backtrace_id:
             continue
