@@ -377,7 +377,7 @@ void forAllLegalMovesAndCaptures(Board& board, const SearchState& state, MoveFun
     findCastles(state, doMove);
 }
 
-size_t countLegalMovesAndCaptures(Board& board, const SearchState& state) {
+size_t countLegalMovesAndCaptures(const Board& board, const SearchState& state) {
     size_t count = 0;
     auto king = state.active() == Color::w ? Piece::K : Piece::k;
 
@@ -391,6 +391,10 @@ size_t countLegalMovesAndCaptures(Board& board, const SearchState& state) {
     return state.inCheck || state.pinned
         ? (findNonPawnMovesAndCaptures(board, state, completeCount), count)
         : (findNonPawnMovesAndCaptures(board, state, optimizedCount), count);
+}
+
+size_t countLegalMovesAndCaptures(const Position& position) {
+    return countLegalMovesAndCaptures(position.board, {position.board, position.turn});
 }
 
 Move checkMove(Position position, Move move) {

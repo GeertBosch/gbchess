@@ -172,9 +172,7 @@ bool isInCheck(const Position& position) {
 }
 
 bool isMate(const Position& position) {
-    auto board = position.board;
-    auto state = moves::SearchState(board, position.turn);
-    return countLegalMovesAndCaptures(board, state) == 0;
+    return !moves::countLegalMovesAndCaptures(position);
 }
 
 bool isCheckmate(const Position& position) {

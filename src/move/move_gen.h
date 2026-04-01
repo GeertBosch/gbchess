@@ -36,7 +36,8 @@ MoveVector allLegalMovesAndCaptures(Turn turn, Board& board);
 
 MoveVector allLegalQuiescentMoves(Turn turn, Board& board, int depthleft);
 
-size_t countLegalMovesAndCaptures(Board& board, const SearchState& state);
+size_t countLegalMovesAndCaptures(const Board& board, const SearchState& state);
+size_t countLegalMovesAndCaptures(const Position& position);
 
 using MoveFun = std::function<void(Board&, MoveWithPieces)>;
 void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun action);

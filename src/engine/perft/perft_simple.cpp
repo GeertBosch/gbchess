@@ -31,6 +31,7 @@ using NodeCount = uint64_t;
  */
 NodeCount perft(Position& position, int depth) {
     if (depth == 0) return 1;
+    if (depth == 1) return moves::countLegalMovesAndCaptures(position);  // Optional optimization
 
     NodeCount nodes = 0;
     auto moveList = moves::allLegalMovesAndCaptures(position.turn, position.board);

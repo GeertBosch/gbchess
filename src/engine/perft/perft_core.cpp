@@ -261,8 +261,11 @@ TaskList expandTasks(TaskList tasks, size_t number) {
     return tasks;
 }
 
-NodeCount threadedPerft(Position position, int depth, const ProgressCallback& callback, int numThreads) {
-    perftInProgress.store(0, std::memory_order_relaxed);
+NodeCount threadedPerft(Position position,
+                        int depth,
+                        const ProgressCallback& callback,
+                        unsigned int numThreads) {
+    perftInProgress.store(0);
     std::atomic<NodeCount> nodes{0};
     TaskList tasks;
     tasks.emplace_back(PerftTask{position, depth});
@@ -275,14 +278,7 @@ NodeCount threadedPerft(Position position, int depth, const ProgressCallback& ca
     };
 
     // Create a bounded number of threads to process the tasks.
-    // On Apple Silicon, limit to performance cores to avoid E-core tail-latency causing bimodal
-    // timing: E-cores are ~3x slower, and if they grab large tasks last they become the bottleneck.
-    unsigned int numThreadsToUse;
-    if (numThreads > 1) {
-        numThreadsToUse = static_cast<unsigned int>(numThreads);
-    } else {
-        numThreadsToUse = std::max<unsigned int>(1, std::thread::hardware_concurrency());
-    }
+    numThreads = std::max(1u, numThreads ? numThreads : std::thread::hardware_concurrency());
     std::vector<std::thread> threads;
     std::mutex progressMutex;
     std::condition_variable progressCondition;
@@ -309,7 +305,7 @@ NodeCount threadedPerft(Position position, int depth, const ProgressCallback& ca
         if (callback) callback(nodes.load());
     });
 
-    for (unsigned int i = 0; i < numThreadsToUse; ++i) {
+    for (unsigned int i = 0; i < numThreads; ++i) {
         threads.emplace_back([&]() {
             runningThreads.fetch_add(1);
             while (true) {
