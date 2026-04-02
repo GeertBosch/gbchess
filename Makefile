@@ -150,7 +150,7 @@ lichess/lichess_db_broadcast_%.pgn: lichess/lichess_db_broadcast_%.pgn.zst
 lichess/lichess_db_broadcast_%.pgn.zst:
 	$(Q)
 	mkdir -p lichess
-	cd lichess && wget -q https://database.lichess.org/broadcast/$(notdir $@)
+	cd lichess && curl -fsSL -O https://database.lichess.org/broadcast/$(notdir $@)
 
 book.csv book.epd build/book.out: build/book-gen ${LICHESS_PGNS}
 	$(Q)echo "Generating book.csv and book.epd from $(words ${LICHESS_PGNS}) PGN files..." > build/book.out
@@ -287,7 +287,7 @@ ${PUZZLES}: ${PUZZLES}.zst
 
 ${PUZZLES}.zst:
 	$(Q)mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) \
-		&& wget -q https://database.lichess.org/$(notdir ${PUZZLES}).zst
+		&& curl -fsSL -O https://database.lichess.org/$(notdir ${PUZZLES}).zst
 
 # Solve some known mate-in-n puzzles, for correctness of the search methods
 build/mate123.out: build/search-test ${CI_MATE123_PUZZLES} ${NNUE_FILE}
@@ -304,7 +304,7 @@ puzzles: build/search-test ${CI_NONMATE_PUZZLES} ${NNUE_FILE}
 	$(Q)./build/search-test $(VOPT) 7 ${CI_NONMATE_PUZZLES}
 
 ${NNUE_FILE}:
-	$(Q)wget -q ${NNUE_URL}
+	$(Q)curl -fsSL -O ${NNUE_URL}
 
 lichess/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
 	mkdir -p $(dir $@) && ./$< $(@:lichess/lichess_%_evals.csv=%) > $@
