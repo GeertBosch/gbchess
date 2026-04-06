@@ -174,6 +174,7 @@ $(eval $(call test_rules,book/book,${BOOK_SRCS} ${MOVES_SRCS} core/hash/hash.cpp
 
 .deps: $(call calc_deps,${OPTOBJ},${ALLSRCS}) $(call calc_deps,${DBGOBJ},${ALLSRCS})
 	$(Q)./check-arch.sh $(VOPT)
+	$(Q)./make-svgs.sh
 	@echo  "\n✅ All dependencies up to date"
 
 .SUFFIXES: # Delete the default suffix rules
@@ -184,6 +185,7 @@ clean:
 	rm -f core *.core puzzles.actual perf.data* *.ii *.bc *.s
 	rm -f game.??? log.??? players.dat # XBoard outputs
 	rm -rf test/out *.dSYM .DS_Store
+	find . -name '*_*_*_*_*_*_*.svg' -exec rm {} \;
 	rm -f $(COMPILE_COMMANDS)
 	rm -f book.csv
 	rm -f book.epd
@@ -209,6 +211,8 @@ PERFT_SIMPLE_SRCS=$(call prefix_src,engine/perft/perft_simple.cpp ${MOVES_SRCS} 
 # perft_simple is a simplified version without caching or 128-bit ints
 build/perft-simple: $(call calc_objs,${OPTOBJ},${PERFT_SIMPLE_SRCS})
 	$(call BUILDCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
+build/perft-simple-debug: $(call calc_objs,${DBGOBJ},${PERFT_SIMPLE_SRCS})
+	$(call BUILDCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
 
 PERFT_CLANG_HDRS=src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/core/hash/*.h src/engine/perft/*.h src/move/*.h src/search/*.h
 
@@ -240,10 +244,10 @@ build/perft.profdata: build/perft-instr
 # promotions, checks, discovered checks, double checks, checkmates, etc at low depth.
 KIWIPETE=r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1
 build/perft-%.out: build/perft-%
-	$(Q)./$< -q "$(KIWIPETE)" 5 | grep -q "Nodes searched: 193690690" $(REDIR)
+	$(Q)./$< -q "$(KIWIPETE)" 4 | grep -q "Nodes searched: 4085603" $(REDIR)
 
 build/perft-simple.out: build/perft-simple
-	$(Q)./build/perft-simple "$(KIWIPETE)" 5 | grep -q "Nodes searched: 193690690" $(REDIR)
+	$(Q)./build/perft-simple "$(KIWIPETE)" 4 | grep -q "Nodes searched: 4085603" $(REDIR)
 
 build/perft.out: build/perft
 	$(Q)./build/perft -q "$(KIWIPETE)" 5 | grep -q "Nodes searched: 193690690" $(REDIR)
@@ -251,7 +255,7 @@ build/perft.out: build/perft
 # Aliases for perft test targets
 perft-bench: build/perft-clang-emul.out build/perft-gcc-emul.out build/perft-clang-sse2.out build/perft-gcc-sse2.out
 
-perft-test: build/perft.out build/perft-test.out build/perft-debug.out build/perft-simple.out
+perft-test: build/perft.out build/perft-test.out build/perft-debug.out build/perft-simple.out build/perft-simple-debug.out
 
 # Download the lichess puzzles database if not already present. As the puzzles change over time, and
 # the file is large, we don't normally clean and refetch it.

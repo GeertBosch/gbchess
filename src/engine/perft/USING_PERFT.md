@@ -1,12 +1,21 @@
 # Using Perft for Move Generation Debugging
 
-Perft (performance test) is a crucial tool for debugging chess move generation. It counts the number of positions reachable at a given depth and provides a deterministic way to verify that your move generator produces exactly the correct set of legal moves.
+Perft is a crucial tool for debugging chess move generation. It counts the number of positions
+reachable at a given depth and provides a deterministic way to verify that your move generator
+produces exactly the correct set of legal moves. While its name hints at the purpose of performance
+testing, and it _can_ be used for benchmarking move generation, in practice the search algorithm and
+evaluation functions are orders of magnitude more important for creating a strong engine: it's
+better to avoid exploring branches than to explore them faster.
 
 ## What is Perft?
 
-Perft recursively generates all legal moves from a position to a specified depth and counts the total number of leaf nodes (positions). It's deterministic - the same position and depth will always produce the same count if the move generation is correct.
+Perft recursively generates all legal moves to a given depth and counts the leaf nodes at that
+depth. Counts are deterministic, making them reliable reference values for verifying move
+generation. Legal moves include castling and en passant, but exclude the 50-move rule and threefold
+repetition.
 
-**Perft Divide** shows the breakdown by root moves, displaying each first move and how many positions it leads to at the given depth.
+**Perft Divide** shows the breakdown by root moves, displaying each first move and how many
+positions it leads to at the given depth.
 
 ## Prerequisites
 
@@ -75,13 +84,13 @@ Create new test case: take the move with largest difference, use resulting posit
 Begin with basic positions and shallow depths:
 
 ```bash
-# Depth 1: Should be exactly 20 moves
+# Depth 1: Should be exactly 20 nodes searched
 echo -e "position startpos\ngo perft 1" | stockfish
 
-# Depth 2: Should be exactly 400 positions
+# Depth 2: Should be exactly 400 nodes searched
 echo -e "position startpos\ngo perft 2" | stockfish
 
-# Depth 3: Should be exactly 8902 positions
+# Depth 3: Should be exactly 8902 nodes searched
 echo -e "position startpos\ngo perft 3" | stockfish
 ```
 
@@ -90,16 +99,22 @@ echo -e "position startpos\ngo perft 3" | stockfish
 Once basic moves work, test positions that exercise specific rules:
 
 **Kiwipete (castling, en passant):**
+
+![Kiwipete](r3k2r_p1ppqpb1_bn2pnp1_3PN3_1p2P3_2N2Q1p_PPPBBPPP_R3K2R.svg)
 ```bash
 echo -e 'position fen "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1"\ngo perft 4' | stockfish
 ```
 
 **Position 3 (pawn promotion):**
+
+![Position 3](8_2p5_3p4_KP5r_1R3p1k_8_4P1P1_8.svg)
 ```bash
 echo -e 'position fen "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1"\ngo perft 5' | stockfish
 ```
 
 **Position 4 (complex promotions):**
+
+![Position 4](r3k2r_Pppp1ppp_1b3nbN_nP6_BBP1P3_q4N2_Pp1P2PP_R2Q1RK1.svg)
 ```bash
 echo -e 'position fen "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1"\ngo perft 4' | stockfish
 ```
@@ -116,9 +131,9 @@ echo -e 'position fen "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w k
 ## Tools and Commands
 
 ```bash
-cd /Users/bosch/gbchess
-make perft-test        # Run comprehensive test suite
-./build/perft "fen" depth  # Manual testing
+cd ~/gbchess
+make perft-test          # Run comprehensive test suite
+build/perft "fen" depth  # Manual testing
 ```
 
 ### Fast Divergence Isolation Script
@@ -127,7 +142,7 @@ Use the helper script to automatically bisect a failing perft divide against
 Stockfish and find the first concrete position where legal move sets differ:
 
 ```bash
-cd /Users/bosch/gbchess
+cd ~/gbchess
 python3 test/perft_diverge.py "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1" 5
 ```
 
@@ -178,4 +193,6 @@ From [https://www.chessprogramming.org/Perft_Results](https://www.chessprogrammi
 - **Position parsing**: Verify FEN parsing handles all cases correctly
 - **Turn management**: Make sure the correct side to move is used
 
-Remember: Perft is deterministic. If your implementation gives different results than a known-good engine, your move generation has bugs. The systematic approach above will help you find and fix them efficiently.
+Remember: Perft is deterministic. If your implementation gives different results than a known-good
+engine, your move generation has bugs. The systematic approach above will help you find and fix them
+efficiently.
