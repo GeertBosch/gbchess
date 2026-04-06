@@ -25,22 +25,19 @@
 // will not overflow for thousands of years, no need to check for overflow in processing.
 using NodeCount = uint64_t;
 
+bool quiet = false;  // suppress divide output if true
+
 /**
  * Simple perft implementation without caching or incremental updates.
  * Uses makeMove/unmakeMove for board state management.
  */
-NodeCount perft(Position& position, int depth) {
+NodeCount perft(Position position, unsigned depth) {
     if (depth == 0) return 1;
-    if (depth == 1) return moves::countLegalMovesAndCaptures(position);  // Optional optimization
+    if (depth == 1) return moves::countLegalMovesAndCaptures(position);
 
-    NodeCount nodes = 0;
-    auto moveList = moves::allLegalMovesAndCaptures(position.turn, position.board);
-
-    for (const auto& move : moveList) {
-        auto undo = moves::makeMove(position, move);
-        nodes += perft(position, depth - 1);
-        moves::unmakeMove(position, undo);
-    }
+    auto nodes = 0;
+    for (auto move : moves::allLegalMovesAndCaptures(position))
+        nodes += perft(moves::applyMove(position, move), depth - 1);
 
     return nodes;
 }
@@ -48,25 +45,20 @@ NodeCount perft(Position& position, int depth) {
 /**
  * Perft with divide - shows node count for each root move.
  */
-void perftWithDivide(Position position, int depth) {
-    if (depth == 0) {
-        std::cout << "Nodes searched: 1" << std::endl;
-        return;
-    }
+NodeCount perftWithDivide(Position position, unsigned depth) {
+    if (depth == 0) return 1;
 
     NodeCount totalNodes = 0;
-    auto moveList = moves::allLegalMovesAndCaptures(position.turn, position.board);
-
-    for (const auto& move : moveList) {
+    for (auto move : moves::allLegalMovesAndCaptures(position)) {
         auto undo = moves::makeMove(position, move);
         NodeCount nodes = perft(position, depth - 1);
+        totalNodes += nodes;
         moves::unmakeMove(position, undo);
 
-        std::cout << to_string(move) << ": " << nodes << std::endl;
-        totalNodes += nodes;
+        if (!quiet) std::cout << to_string(move) << ": " << nodes << "\n";
     }
 
-    std::cout << "Nodes searched: " << totalNodes << std::endl;
+    return totalNodes;
 }
 
 void error(const std::string& message) {
@@ -80,12 +72,14 @@ void usage() {
     std::exit(1);
 }
 
-void run(const std::string& fen, int depth) {
+void run(const std::string& fen, unsigned depth) {
     Position position = fen::parsePosition(fen);
-    perftWithDivide(position, depth);
+    auto nodes = perft(position, depth);
+    std::cout << "Nodes searched: " << nodes << "\n";
 }
 
 int main(int argc, char** argv) try {
+    if (argc > 1 && !std::strcmp(argv[1], "-q")) --argc, ++argv, quiet = true;
     if (argc != 3) usage();
 
     std::string fen = argv[1];

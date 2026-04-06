@@ -172,8 +172,7 @@ NodeCount perft2(Board& board, Hash hash, const moves::SearchState& state) {
         theirState.inCheck = moves::isAttacked(board, theirState.kingSquare, theirState.occupancy);
         theirState.pinned = moves::pinnedPieces(board, theirState.occupancy, theirState.kingSquare);
 
-        auto moveNodes = countLegalMovesAndCaptures(board, theirState);
-        nodes += moveNodes;
+        nodes += countLegalMovesAndCaptures(board, theirState);
     });
     if (options::cachePerft && nodes > options::cachePerftMinNodes) enter2(hash(), nodes);
 
