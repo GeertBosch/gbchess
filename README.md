@@ -25,6 +25,6 @@ relearn the why, or just delight in just the "what if I don't". Here, it's all f
 
 ## Additional docs
 
-- [USING_PERFT.md](USING_PERFT.md)
+- [USING_PERFT.md](src/engine/perft/USING_PERFT.md)
 - [USING_PUZZLES.md](USING_PUZZLES.md)
 - [USING_SPRT.md](USING_SPRT.md)
