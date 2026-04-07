@@ -147,7 +147,19 @@ castling rights.
 |------------------------------------|-----------------------------|
 | ![example](rnbqkbnr_pppp1ppp_8_4p3_4P3_8_PPPP1PPP_RNBQKBNR.svg) |   |
 
+## Multi-Threading: Spinlocks and Counters
 
+In multi-threaded perft the goal is to share the cache among threads, to avoid duplication of work between threads. This of course comes with the challenge of avoiding race conditions when hash table entries are concurrently read and written by different threads.
+
+As the table entries are 32 bytes and too large for compare-and-exchange, we need to use locks. While ordinarily one should not use spinlocks as they become very inefficient when contended, this workload is guaranteed to have low contention as we control the number of threads and use many locks. The random access nature guaranteed by the hashing ensures low conflicts.
+
+However, during benchmarking the performance profile was bimodal on my MacBook Pro M4: either `perft 8` would run in about 2.3 s, or it would take 4.5. As I suspected the spinlocks, I went down the rabbit hole and profiled using performance counters. I found that the number of instructions retired was very similar in the slow and fast cases, indicating that the issue was not in the spin locks spinning but likely just in differing latencies for cache accesses.
+
+I suspected there might be some subtle interaction between performance and efficiency cores, but using fewer threads didn't make the bimodal performance issue go away. I still expected there might be cache coherence traffic due to the sharded spin locks. I then integrated the spinlock in the actual cache entry, which is the cache line that must be accessed anyway.The 2 GB cache size I use consists of 32,768 cache lines of 64 bytes each, so there should be very little contention or false sharing.
+
+The performance issue remained though, and bisecting finally showed that a newly added atomic counter for cached accesses actually caused the performance issue. Sharding that counter reduced the performance impact to become negligible.
+
+In the end, the combination of using 128-bit counters and keys is still the right choice, and doesn't _have_ to result in a significant performance impact, but it does result in extra complexity when combined with multi-threading.
 
 ## Performance Results
 
