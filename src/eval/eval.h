@@ -106,9 +106,6 @@ struct EvalTable {
     const SquareTable& operator[](Piece piece) const { return pieceSquareTable[index(piece)]; }
 };
 
-// Returns the phase (7 for opening, 0 for endgame) based on the material on the board.
-int computePhase(const Board& board);
-
 /**
  * Return the delta in the Score as result of the move from white's perspective: positive scores
  * indicate an advantage for white. The board past reflects the state before the move.

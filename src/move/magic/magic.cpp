@@ -26,11 +26,14 @@ std::vector<SquareSet> bishopTables[64];
 
 void buildEntry(Square square, bool bishop, uint64_t magic, std::vector<SquareSet>& table,
                 MagicEntry& entry) {
+    static constexpr int kMaxBlockerBits = 12;
     SquareSet mask = computeSliderBlockers(square, bishop).bits();
-    int shift = 64 - mask.size();
-    int bits = 64 - shift;
-    table.resize(1ull << bits, 0ull);
-    for (int i = 0; i < (1 << bits); i++) {
+    int blockerBits = mask.size();
+    int shift = 64 - blockerBits;
+    assert(shift > 0);
+    assert(blockerBits > 0 && blockerBits <= kMaxBlockerBits);
+    table.resize(1ull << blockerBits, 0ull);
+    for (uint64_t i = 0; i < (1ull << blockerBits); i++) {
         auto blockers = parallelDeposit(i, mask.bits());
         auto targets = computeSliderTargets(square, bishop, blockers);
         if (auto& e = table[(blockers * magic) >> shift])

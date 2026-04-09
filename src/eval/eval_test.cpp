@@ -259,12 +259,9 @@ void testFromStream(nnue::NNUE& network, std::ifstream& stream) {
         auto position = fen::parsePosition(fen);
         auto score = nnue::evaluate(position, network);
         ++numEvals;
-        auto phase = computePhase(position.board);
         auto diff = expected - score;
         diffs.push_back(diff * 0.01);
-        if (debug)
-            std::cout << expected << "," << score << "," << diff << "," << phase << "," << fen
-                      << "\n";
+        if (debug) std::cout << expected << "," << score << "," << diff << "," << fen << "\n";
     }
     auto endTime = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(endTime - startTime).count();

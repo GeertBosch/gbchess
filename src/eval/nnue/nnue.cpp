@@ -92,6 +92,7 @@ FileHeader readHeader(std::ifstream& file) {
     // Check for errors
     if (!nameOK) throw std::runtime_error("Invalid NNUE name (not printable ASCII)");
     if (!versionOK) throw std::runtime_error("Unsupported NNUE version: " + toHex(version));
+    assert(hashOK);
     checkHash(nnue::FileHeader::kHash, hash, "NNUE file");
 
     return header;
