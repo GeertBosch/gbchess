@@ -72,14 +72,16 @@ enum Square : uint16_t {  // uint16_t to allow better packing
 static constexpr Range squares(Square::a1, Square::h8);
 
 constexpr Square makeSquare(int file, int rank) {
-    return Square(rank * kNumFiles + file);
+    assert(file >= 0 && file < kNumFiles);
+    assert(rank >= 0 && rank < kNumRanks);
+    return Square((rank * kNumFiles + file) % kNumSquares);  // silence clang-tidy
 }
 
 constexpr int rank(Square square) {
     return int(square) / kNumFiles;
 }
 constexpr int file(Square square) {
-    return int(square) % kNumRanks;
+    return int(square) % kNumFiles;
 }
 constexpr Square step(Square square, int fileStep, int rankStep) {
     assert(file(square) + fileStep >= 0 && file(square) + fileStep < kNumFiles);

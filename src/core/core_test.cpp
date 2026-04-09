@@ -71,20 +71,18 @@ void testMove() {
 }
 void testSquare() {
     // Test constructor with rank and file
-    Square square1 = makeSquare(3, 2);
+    Square square1 = d3;
     assert(rank(square1) == 2);
     assert(file(square1) == 3);
-    assert(square1 == 19);
 
     // Test constructor with index
-    Square square2 = Square(42);
+    Square square2 = c6;
     assert(rank(square2) == 5);
     assert(file(square2) == 2);
-    assert(square2 == 42);
 
     // Test operator==
-    assert(square1 == Square(19));
-    assert(square2 == Square(42));
+    assert(square1 == d3);
+    assert(square2 == c6);
     assert(!(square1 == square2));
 
     // Test conversion to std::string

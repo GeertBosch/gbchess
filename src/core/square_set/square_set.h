@@ -16,7 +16,9 @@ class SquareSet {
 
 public:
     constexpr SquareSet(uint64_t squares) : _squares(squares) {}
-    constexpr SquareSet(Square square) : _squares(1ull << square) {}
+    template <typename... Squares>
+    constexpr SquareSet(Square first, Squares... rest)
+        : _squares((1ull << first) | (0ull | ... | (1ull << rest))) {}
     class iterator;
 
     constexpr SquareSet() = default;
