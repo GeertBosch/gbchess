@@ -36,7 +36,7 @@ NodeCount perft(Position position, unsigned depth) {
     if (depth == 1) return moves::countLegalMovesAndCaptures(position);
 
     auto nodes = 0;
-    for (auto move : moves::allLegalMovesAndCaptures(position))
+    for (auto move : moves::allLegalMovesAndCaptures(position.turn, position.board))
         nodes += perft(moves::applyMove(position, move), depth - 1);
 
     return nodes;
@@ -49,7 +49,7 @@ NodeCount perftWithDivide(Position position, unsigned depth) {
     if (depth == 0) return 1;
 
     NodeCount totalNodes = 0;
-    for (auto move : moves::allLegalMovesAndCaptures(position)) {
+    for (auto move : moves::allLegalMovesAndCaptures(position.turn, position.board)) {
         auto undo = moves::makeMove(position, move);
         NodeCount nodes = perft(position, depth - 1);
         totalNodes += nodes;

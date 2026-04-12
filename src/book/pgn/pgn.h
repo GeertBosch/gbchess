@@ -104,13 +104,6 @@ struct PGN {
     std::string error(iterator it) const;
 };
 
-struct MoveText {
-    std::string movetext;
-    operator bool() const { return !movetext.empty(); }
-    PGN::iterator begin() const { return PGN::iterator(movetext); }
-    PGN::iterator end() const { return PGN::iterator(movetext.data() + movetext.size()); }
-};
-
 /** Represents the termination marker of the PGN game, or an ERROR if the game was invalid. */
 enum class Termination : uint8_t {
     NOTATION_ERROR,    // For syntactically invalid SAN or movetext

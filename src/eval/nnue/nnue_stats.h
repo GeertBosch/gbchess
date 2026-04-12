@@ -32,11 +32,6 @@ void resetTimingStats();
 void analyzeComputationalComplexity();
 
 /**
- * Record a move with the number of feature changes for incremental analysis.
- */
-void recordMove(size_t featureChanges);
-
-/**
  * Get average feature changes per move if data is available.
  */
 double getAverageFeatureChanges();

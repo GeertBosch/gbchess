@@ -14,7 +14,6 @@ namespace moves {
 struct SearchState {
     constexpr SearchState() : turn(), kingSquare(), inCheck(false) {};
     SearchState(const Board& board, Turn turn);
-    SearchState(const Position& position) : SearchState(position.board, position.turn) {}
 
     Color active() const { return turn.activeColor(); }
 
@@ -34,9 +33,6 @@ struct SearchState {
 MoveVector allLegalMoves(Turn turn, Board board);
 MoveVector allLegalCaptures(Turn turn, Board board);
 MoveVector allLegalMovesAndCaptures(Turn turn, Board& board);
-inline MoveVector allLegalMovesAndCaptures(Position& position) {
-    return allLegalMovesAndCaptures(position.turn, position.board);
-}
 
 MoveVector allLegalQuiescentMoves(Turn turn, Board& board, int depthleft);
 
@@ -44,7 +40,6 @@ size_t countLegalMovesAndCaptures(const Board& board, const SearchState& state);
 size_t countLegalMovesAndCaptures(const Position& position);
 
 using MoveFun = std::function<void(Board&, MoveWithPieces)>;
-void forAllLegalQuiescentMoves(Turn turn, Board& board, int depthleft, MoveFun action);
 void forAllLegalMovesAndCaptures(Board& board, const SearchState& state, MoveFun action);
 
 inline void forAllLegalMovesAndCaptures(Turn turn, Board& board, MoveFun action) {

@@ -72,6 +72,7 @@ test_dir=$(patsubst %-test,${OPTOBJ},$(patsubst %-debug,${DBGOBJ},$(1)))
 test_objs=$(call calc_objs,$(call test_dir,$(1)),$(call prefix_src,$(call test_src,$(1)) $(2)))
 
 ALLSRCS=$(wildcard src/*.cpp src/*/*.cpp src/*/*/*.cpp)
+ALLHDRS=$(wildcard src/*.h src/*/*.h src/*/*/*.h)
 
 all: build debug test perft-bench perft-test build/mate123.out build/mate45.out build/puzzles.out
 	@echo "✅ All tests passed!"
@@ -290,6 +291,15 @@ lichess/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
 build/evals.out: build/eval-test ${EVALS}
 	$(Q)./build/eval-test ${EVALS} $(REDIR)
 
+# Find unused declarations in header files via clangd references.
+# Requires clangd on PATH; clangd builds a fresh index on cold start (e.g. GitHub CI).
+build/dead-code.out: dead-code.py $(COMPILE_COMMANDS) $(ALLHDRS) $(ALLSRCS)
+	$(Q)python3 dead-code.py $(ALLHDRS) --unused-only --quiet \
+		> $@ && echo "  ✅ $@ passed" | tee -a $@ \
+		|| { cat $@; echo "  ❌ error in $@" | tee -a $@; mv $@ $(basename $@).log; false; }
+
+dead-code: build/dead-code.out
+
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:
 	$(Q)echo "\n*** C++ Source Code ***\n"
@@ -394,7 +404,7 @@ $(COMPILE_COMMANDS):
 	$(Q)echo >> $@
 	$(Q)echo ']' >> $@
 
-.PHONY: ${COMPILE_COMMANDS} ci install-hooks
+.PHONY: ci install-hooks
 
 SPRT_NEW ?= build/engine
 SPRT_BASE ?= build/engine-base

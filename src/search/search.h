@@ -34,8 +34,6 @@ extern uint64_t ttCutoffs;
 extern uint64_t ttRefinements;
 
 constexpr bool transpositionTableDebug = false;
-constexpr bool alphaBetaDebug = false;
-
 
 /** Returns true iff search should be abandoned. String passed is UCI info string. */
 using InfoFn = std::function<bool(std::string info)>;
@@ -108,12 +106,5 @@ void debugPosition(Position position);
  * Search all tactical moves necessary to achieve a quiet position and return the best score
  */
 Score quiesce(Position& position, int depthleft);
-
-/**
- * Calculates MVV-LVA (Most Valuable Victim - Least Valuable Attacker) score for a capture move.
- * Returns the MVV-LVA score component (not including base capture score).
- * Used as a fallback when Static Exchange Evaluation is disabled.
- */
-int scoreMVVLVA(const Board& board, Move move);
 
 }  // namespace search

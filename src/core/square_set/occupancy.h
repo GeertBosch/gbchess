@@ -25,11 +25,6 @@ public:
     Occupancy operator^(Occupancy other) const {
         return {_theirs ^ other._theirs, _ours ^ other._ours};
     }
-    Occupancy operator^=(Occupancy other) {
-        _theirs ^= other._theirs;
-        _ours ^= other._ours;
-        return *this;
-    }
     bool operator==(Occupancy other) const {
         return _theirs == other._theirs && _ours == other._ours;
     }

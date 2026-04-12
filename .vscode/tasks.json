@@ -181,6 +181,64 @@
       },
       {
          "type": "shell",
+         "label": "dead-code: all files",
+         "command": "make",
+         "args": [
+            "dead-code"
+         ],
+         "presentation": {
+            "reveal": "always",
+            "panel": "dedicated",
+            "clear": true
+         },
+         "problemMatcher": {
+            "owner": "dead-code",
+            "fileLocation": [
+               "relative",
+               "${workspaceFolder}"
+            ],
+            "pattern": {
+               "regexp": "^([^:]+):(\\d+):(\\d+): warning: (.+)$",
+               "file": 1,
+               "line": 2,
+               "column": 3,
+               "severity": "warning",
+               "message": 4
+            }
+         }
+      },
+      {
+         "type": "shell",
+         "label": "dead-code: current file",
+         "command": "python3",
+         "args": [
+            "${workspaceFolder}/dead-code.py",
+            "${file}",
+            "--unused-only"
+         ],
+         "presentation": {
+            "reveal": "always",
+            "panel": "dedicated",
+            "clear": true
+         },
+         "problemMatcher": {
+            "owner": "dead-code",
+            "fileLocation": [
+               "relative",
+               "${workspaceFolder}"
+            ],
+            "pattern": {
+               "regexp": "^([^:]+):(\\d+):(\\d+): warning: (.+)$",
+               "file": 1,
+               "line": 2,
+               "column": 3,
+               "severity": "warning",
+               "message": 4
+            }
+         }
+      },
+      {
+         "type": "shell",
          "label": "asm: current cpp (opt object)",
          "command": "set -euo pipefail; src='${file}'; rel=\"${src#${workspaceFolder}/}\"; if [[ \"$rel\" == src/* ]]; then rel=\"${rel#src/}\"; fi; if [[ \"$rel\" != *.cpp ]]; then echo 'Current file must be a .cpp file'; exit 1; fi; obj=\"build/opt/${rel%.cpp}.o\"; make -j \"$obj\"; out=\"/tmp/gbchess-asm-${rel%.cpp}.s\"; mkdir -p \"$(dirname \"$out\")\"; xcrun llvm-objdump --demangle --source --disassemble \"$obj\" > \"$out\"; code -r \"$out\"; echo \"Wrote $out\"",
          "options": {

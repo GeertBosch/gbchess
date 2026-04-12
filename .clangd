@@ -4,3 +4,7 @@ CompileFlags:
     - "-std=c++17"
   Remove:
     - "-W*"  # Remove warning flags that might be noisy in the editor
+
+Index:
+  Background: Build
+  StorageDir: build/.cache/clangd/index

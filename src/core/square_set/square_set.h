@@ -55,7 +55,6 @@ public:
 
     static SquareSet all() { return SquareSet(0xffff'ffff'ffff'ffffull); }
 
-    void erase(Square square) { _squares &= ~(1ull << square); }
     void insert(Square square) { _squares |= (1ull << square); }
     void insert(SquareSet other) { _squares |= other._squares; }
 
@@ -81,11 +80,8 @@ public:
     constexpr SquareSet operator&=(SquareSet other) { return _squares &= other._squares; }
     constexpr SquareSet operator^=(SquareSet other) { return _squares ^= other._squares; }
     constexpr SquareSet operator-=(SquareSet other) { return _squares &= ~other._squares; }
-    constexpr SquareSet operator>>=(int shift) { return _squares >>= shift; }
-    constexpr SquareSet operator<<=(int shift) { return _squares <<= shift; }
 
     constexpr bool operator==(SquareSet other) const { return _squares == other._squares; }
-    constexpr bool operator!=(SquareSet other) const { return _squares != other._squares; }
 
     class iterator {
         friend class SquareSet;

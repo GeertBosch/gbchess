@@ -7,21 +7,22 @@
  * 08. 10.18637/jss.v008.i14. https://www.researchgate.net/publication/5142825_Xorshift_RNGs
  */
 struct xorshift {
+    // UniformRandomBitGenerator requirements; used implicitly via std::generate_canonical
     using result_type = uint64_t;
+    [[maybe_unused]] static constexpr result_type min() { return 0; }
+    [[maybe_unused]] static constexpr result_type max() { return UINT64_MAX; }
 
     /**
      * Initializes the PRNG with a given seed. A zero seed will yield only zeros, other seeds will
      * produce a sequence of all 2**64-1 non-zero uint64_t values.
      */
-    xorshift(uint64_t seed = 0xc1f651c67c62c6e0ull) : state(seed) {}
-    uint64_t operator()() {
+    xorshift(result_type seed = 0xc1f651c67c62c6e0ull) : state(seed) {}
+    result_type operator()() {
         auto result = state * 0xd989bcacc137dcd5ull;
         state ^= state >> 11;
         state ^= state << 31;
         state ^= state >> 18;
         return result;
     }
-    static constexpr uint64_t min() { return 0; }
-    static constexpr uint64_t max() { return UINT64_MAX; }
-    uint64_t state;
+    result_type state;
 };

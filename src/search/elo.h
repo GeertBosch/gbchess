@@ -14,7 +14,6 @@ public:
 
     ELO() = default;
     ELO(const ELO& other) = default;
-    ELO& operator=(const ELO& other) = default;
 
     ELO(int rating) : rating(std::clamp(rating, kMinRating, kMaxRating)) {}
 

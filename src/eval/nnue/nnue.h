@@ -35,11 +35,9 @@ struct InputTransform {
     constexpr static size_t kHalfDimensions = 256;
     constexpr static size_t kOutputDimensions = 2 * kHalfDimensions;
     constexpr static uint32_t kHash = 0x5d69d5b8u ^ kOutputDimensions;  // 0x5d69d7b8u
-    constexpr static size_t kFileSize = sizeof(uint32_t) + sizeof(int16_t) * kHalfDimensions +
-        sizeof(int16_t) * kHalfDimensions * kInputDimensions;
-    std::vector<int16_t> bias;     // [kHalfDimensions]
-    std::vector<int16_t> weights;  // [kHalfDimensions][kInputDimensions]
-    InputTransform() : bias(kHalfDimensions), weights(kHalfDimensions * kInputDimensions) {}
+    std::array<int16_t, kHalfDimensions> bias;
+    std::array<int16_t, kHalfDimensions * kInputDimensions> weights;
+    InputTransform() = default;
 };
 
 /** Accumulator holds the result of affine transformation of input features of InputTransform */
@@ -54,21 +52,19 @@ struct alignas(64) Accumulator {
 /** Affine layer: y = weights * x + bias */
 template <size_t in, size_t out>
 struct AffineLayer {
-    using Weight = int8_t;
-    using Bias = int32_t;
-    using Input = std::array<uint8_t, in>;
-    using Output = std::array<Bias, out>;
-    using Clipped = std::array<uint8_t, out>;
-
-    static constexpr size_t kInputSize = in;
-    static constexpr size_t kOutputSize = out;
-
     static constexpr size_t kInputDimensions = in;
     static constexpr size_t kOutputDimensions = out;
-    static constexpr size_t kWeightDimensions = in * out;
 
-    std::array<std::array<Weight, in>, out> weights;  // [out][in] - row-major
-    std::array<Bias, out> bias;
+    using Weight = int8_t;
+    using Bias = int32_t;
+    using Input = std::array<Weight, kInputDimensions>;
+    using Output = std::array<Bias, kOutputDimensions>;
+
+    // The following members are only used through template instantations that clangd cannot see
+    // through to find the references, so we mark them as NOLINT to avoid dead code warnings.
+    using Clipped = std::array<Weight, kOutputDimensions>;  // NOLINT(dead_code)
+    std::array<Input, kOutputDimensions> weights;           // NOLINT(dead_code)
+    Output bias;                                            // NOLINT(dead_code)
 };
 
 struct alignas(64) Network {

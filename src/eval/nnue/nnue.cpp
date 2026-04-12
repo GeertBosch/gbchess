@@ -108,8 +108,9 @@ template <typename Layer>
 void readAffineTransform(std::ifstream& file, Layer& layer) {
     readBinaryVector(file, layer.bias);
     // Read weights as a flat array and cast to 2D structure
+    auto kWeightDimensions = Layer::kInputDimensions * Layer::kOutputDimensions;
     file.read(reinterpret_cast<char*>(layer.weights.data()),
-              Layer::kWeightDimensions * sizeof(typename Layer::Weight));
+              kWeightDimensions * sizeof(typename Layer::Weight));
     if (!file) throw std::runtime_error("Unexpected EOF");
 }
 
@@ -138,9 +139,6 @@ struct Feature {
     }
     constexpr Feature operator*(const Feature& other) const {  // For deriving king features
         return Feature(whiteIndex * other.whiteIndex, blackIndex * other.blackIndex);
-    }
-    constexpr bool operator==(const Feature& other) const {
-        return whiteIndex == other.whiteIndex && blackIndex == other.blackIndex;
     }
 };
 
@@ -232,7 +230,7 @@ template <typename Layer>
 auto affineForward(const typename Layer::Input& input, const Layer& layer) {
     typename Layer::Output output;
 
-    for (size_t i = 0; i < Layer::kOutputSize; ++i)
+    for (size_t i = 0; i < Layer::kOutputDimensions; ++i)
         output[i] = innerProduct(input, layer.weights[i]) + layer.bias[i];
 
     return output;
@@ -246,7 +244,7 @@ template <typename Layer>
 auto affineForwardAndActivate(const typename Layer::Input& input, const Layer& layer) {
     typename Layer::Clipped output;
 
-    for (size_t i = 0; i < Layer::kOutputSize; ++i)
+    for (size_t i = 0; i < Layer::kOutputDimensions; ++i)
         output[i] = activate(innerProduct(input, layer.weights[i]) + layer.bias[i]);
 
     return output;

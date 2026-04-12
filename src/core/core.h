@@ -104,11 +104,6 @@ constexpr Color operator!(Color color) {
     return color == Color::w ? Color::b : Color::w;
 }
 
-constexpr Color color(char color) {
-    dassert(color == 'w' || color == 'b');
-    return color == 'b' ? Color::b : Color::w;
-}
-
 constexpr int index(Color color) {
     return static_cast<int>(color);
 }
@@ -265,32 +260,29 @@ public:
     const_iterator end() const { return _squares.end(); }
 };
 
-enum class CastlingMask : uint16_t {
-    _ = 0,            // 0
-    K = 1,            // 1
-    Q = 2,            // 2
-    KQ = K | Q,       // 3
-    k = 4,            // 4
-    Kk = K | k,       // 5
-    Qk = Q | k,       // 6
-    KQk = K | Q | k,  // 7
-    q = 8,            // 8
-    Kq = K | q,       // 9
-    Qq = Q | q,       // 10
-    KQq = K | Q | q,  // 11
-    kq = k | q,       // 12
-    Kkq = K | k | q,  // 13
-    Qkq = Q | k | q,  // 14
-    KQkq = KQ | kq,   // 15
+enum class [[maybe_unused]] CastlingMask : uint16_t {  // some  literals are for debug only
+    _ = 0,                                             // 0
+    K = 1,                                             // 1
+    Q = 2,                                             // 2
+    KQ = K | Q,                                        // 3
+    k = 4,                                             // 4
+    Kk = K | k,                                        // 5
+    Qk = Q | k,                                        // 6
+    KQk = K | Q | k,                                   // 7
+    q = 8,                                             // 8
+    Kq = K | q,                                        // 9
+    Qq = Q | q,                                        // 10
+    KQq = K | Q | q,                                   // 11
+    kq = k | q,                                        // 12
+    Kkq = K | k | q,                                   // 13
+    Qkq = Q | k | q,                                   // 14
+    KQkq = KQ | kq,                                    // 15
 };
 inline CastlingMask operator&(CastlingMask lhs, CastlingMask rhs) {
     return CastlingMask(uint16_t(lhs) & uint16_t(rhs));
 }
 inline CastlingMask operator|(CastlingMask lhs, CastlingMask rhs) {
     return CastlingMask(uint16_t(lhs) | uint16_t(rhs));
-}
-inline CastlingMask operator&=(CastlingMask& lhs, CastlingMask rhs) {
-    return lhs = CastlingMask(uint16_t(lhs) & uint16_t(rhs));
 }
 inline CastlingMask operator|=(CastlingMask& lhs, CastlingMask rhs) {
     return lhs = CastlingMask(uint16_t(lhs) | uint16_t(rhs));
@@ -333,8 +325,8 @@ public:
     enum class EnPassantTarget : uint16_t {  // 16 bits to allow better packing
         _ = 0,
         // clang-format off
-        a3 = 16, b3 = 17, c3 = 18, d3 = 19, e3 = 20, f3 = 21, g3 = 22, h3 = 23,
-        a6 = 24, b6 = 25, c6 = 26, d6 = 27, e6 = 28, f6 = 29, g6 = 30, h6 = 31,
+        a3 = 16, b3 = 17, c3 = 18, d3 = 19, e3 = 20, f3 = 21, g3 = 22, h3 = 23, // NOLINT(dead_code)
+        a6 = 24, b6 = 25, c6 = 26, d6 = 27, e6 = 28, f6 = 29, g6 = 30, h6 = 31, // NOLINT(dead_code)
         // clang-format on
     };
 
@@ -352,7 +344,6 @@ public:
         const uint16_t mask;  // bits to be masked out of the Turn's packed representation
 
     public:
-        constexpr static uint16_t epm = 31 - uint16_t(EnPassantTarget::_);
         constexpr Mask(EnPassantTarget ep, CastlingMask castling, bool resetHalfmoveClock)
             : mask((31 - uint16_t(ep)) | uint16_t(castling) << 5 |
                    (resetHalfmoveClock ? 127 : 0) << 9) {}
@@ -360,7 +351,6 @@ public:
     };
 
 private:
-    static constexpr auto noEnPassantTarget = EnPassantTarget::_;
     static constexpr Square toSquare(EnPassantTarget target) {
         uint16_t value = static_cast<uint16_t>(target);
         value += (value & 8) * 2;  // Shift rank 4 to rank 6, not affecting rank 3 or value 0.
@@ -407,12 +397,6 @@ public:
         // black to white. Increment the halfmove clock as well.
         constexpr uint32_t tickIncrement = 1 | 1 << 25;
         packed += tickIncrement;
-    }
-
-    void applyMask(Mask mask) {
-        // Apply the mask to update the en passant target, castling rights, and halfmove clock as
-        // needed.
-        packed &= mask();
     }
 
     /** Make a null move (switch sides without actually moving a piece) */

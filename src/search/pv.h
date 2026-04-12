@@ -34,7 +34,6 @@ struct PrincipalVariation {
         return adjusted;
     }
 
-    explicit operator MoveVector() const { return moves; }
     PrincipalVariation operator-() const { return {-score, moves}; }
     bool operator<(const PrincipalVariation& other) const {
         return score < other.score || (score == other.score && moves.size() > other.moves.size());

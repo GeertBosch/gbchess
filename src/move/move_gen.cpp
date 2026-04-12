@@ -10,6 +10,9 @@
 using namespace moves;
 
 namespace {
+
+static constexpr PieceSet sliders = {Piece::B, Piece::b, Piece::R, Piece::r, Piece::Q, Piece::q};
+
 SquareSet ipath(Square from, Square to) {
     return MovesTable::path(from, to) | SquareSet(from) | SquareSet(to);
 }

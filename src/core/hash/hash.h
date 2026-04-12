@@ -1,5 +1,4 @@
 #pragma once
-#include <functional>
 
 #include "core/core.h"
 
@@ -12,7 +11,7 @@
 // collissions for applications like perft caching. As there is very little cost to using 128-bit
 // hashes instead, that is now the only option.
 
-// 1 for black to move, 1 for each castling right, 8 for en passant file
+// 1 for black to move, 1 for each of the four castling rights, 8 for en passant file
 static constexpr int kNumExtraVectors = 13;
 static constexpr int kNumBoardVectors = kNumPieces * kNumSquares;
 static constexpr int kNumHashVectors = kNumBoardVectors + kNumExtraVectors;
@@ -54,12 +53,6 @@ public:
         toggle(piece, from);
         toggle(piece, to);
     }
-    void capture(Piece piece, Piece target, int from, int to) {
-        toggle(piece, from);
-        toggle(target, to);
-        toggle(piece, to);
-    }
-
     // Assumes that passed in position is the same as the one used to construct this hash.
     // Cancels out castling rights and en passant targets.
     void applyMove(Turn turn, MoveWithPieces mwp, CastlingMask mask);
@@ -93,14 +86,3 @@ private:
 
 // Updates the given hash at the given turn, based on the passed move.
 Hash applyMove(Hash hash, Turn turn, MoveWithPieces mwp, CastlingMask mask);
-
-namespace std {
-template <>
-struct hash<Hash> {
-    std::size_t operator()(const Hash& h) const { return static_cast<std::size_t>(h()); }
-};
-template <>
-struct hash<Position> {
-    std::size_t operator()(const Position& p) const { return static_cast<std::size_t>(Hash(p)()); }
-};
-}  // namespace std

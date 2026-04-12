@@ -103,5 +103,5 @@ private:
 };
 
 inline bool clearPath(SquareSet occupancy, Square from, Square to) {
-    return (occupancy & MovesTable::path(from, to)).empty();
+    return !(occupancy & MovesTable::path(from, to));
 }

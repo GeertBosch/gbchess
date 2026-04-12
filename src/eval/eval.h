@@ -12,15 +12,11 @@
  *  position is even.
  */
 class Score {
-protected:
     using value_type = int16_t;
     constexpr Score(unsigned long long value) : value(value) {
         assert(value <= std::numeric_limits<value_type>::max());
     }
 
-    constexpr value_type operator()() const { return value; }
-
-private:
     value_type value = 0;  // centipawns
     constexpr Score(value_type value) : value(value) { this->value = check(value); }
 
@@ -75,7 +71,6 @@ public:
     }
     static constexpr Score max() { return Score(99'99ull); }
     static constexpr Score min() { return -max(); }
-    static constexpr Score draw() { return Score(0ull); }
     static constexpr Score fromCP(value_type cp) { return Score(cp); }
 };
 

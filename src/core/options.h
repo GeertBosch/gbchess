@@ -33,7 +33,6 @@ constexpr int nullMoveReduction = 3;             // Depth reduction for null mov
 constexpr int nullMoveMinDepth = 2;              // Minimum depth to try null move
 constexpr bool useCountermove = true;            // Use the countermove heuristic
 constexpr bool useQsTT = true;                   // Use transposition table in quiescence search
-constexpr bool verboseSearch = false;            // Print detailed search tree for debugging
 constexpr int fixedNodesSearch = 250'000;        // Fixed nodes per search (0 to disable)
 
 /**

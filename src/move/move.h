@@ -18,7 +18,6 @@ struct MoveError : public std::exception {
  */
 bool isAttacked(const Board& board, Square square, Occupancy occupancy);
 bool isAttacked(const Board& board, SquareSet squares, Occupancy occupancy);
-bool isAttacked(const Board& board, SquareSet squares, Color opponentColor);
 
 /**
  * Returns the set of squares that is attacking the given square, including pieces of both

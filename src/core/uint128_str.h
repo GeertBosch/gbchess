@@ -4,13 +4,6 @@
 
 #include "core/core.h"
 
-/**
- * User-defined literal for uint128_t from an unsigned long long literal.
- * Usage: auto x = 12345678901234567890_u128;
- */
-constexpr uint128_t operator""_u128(unsigned long long value) {
-    return static_cast<uint128_t>(value);
-}
 constexpr uint128_t strtou128(const char* str, size_t len) {
     uint128_t result = 0;
     for (size_t i = 0; i < len; ++i) {
