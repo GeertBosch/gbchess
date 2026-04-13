@@ -2,6 +2,7 @@
 
 #include "core/core.h"
 #include "core/square_set/square_set.h"
+#include <array>
 
 /**
  * Parallel deposit function that deposits bits from `value` into `result` according to the `mask`.
@@ -9,21 +10,25 @@
  */
 uint64_t parallelDeposit(uint64_t value, uint64_t mask);
 
-/** Compact table entry for fast magic bitboard sliding piece attack lookups. */
-struct alignas(32) MagicEntry {
-    uint64_t magic;
-    uint64_t mask;
-    int shift;
-    const SquareSet* table;
+/** Table for fast magic bitboard sliding piece attack lookups. */
+class MagicEntry {
+public:
+    MagicEntry(bool bishop, Square square);
 
     SquareSet targets(SquareSet occupancy) const {
         auto blockers = occupancy & mask;
         return table[(blockers.bits() * magic) >> shift];
     }
+
+private:
+    uint64_t magic;
+    uint64_t mask;
+    int shift;
+    std::vector<SquareSet> table;
 };
 
-extern MagicEntry rookEntries[kNumSquares];
-extern MagicEntry bishopEntries[kNumSquares];
+extern std::array<MagicEntry, kNumSquares> rookEntries;
+extern std::array<MagicEntry, kNumSquares> bishopEntries;
 
 /** Returns squares attacked by a rook on `square` given board `occupancy`. */
 inline SquareSet rookTargets(Square square, SquareSet occupancy) {

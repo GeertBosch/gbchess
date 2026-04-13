@@ -14,48 +14,46 @@ uint64_t parallelDeposit(uint64_t value, uint64_t mask) {
     }
     return result;
 }
-
-MagicEntry rookEntries[64];
-MagicEntry bishopEntries[64];
-
-namespace {
-
-// Tables are stored here to keep them alive for the lifetime of the program.
-std::vector<SquareSet> rookTables[64];
-std::vector<SquareSet> bishopTables[64];
-
-void buildEntry(Square square, bool bishop, uint64_t magic, std::vector<SquareSet>& table,
-                MagicEntry& entry) {
+MagicEntry::MagicEntry(bool bishop, Square square) {
     static constexpr int kMaxBlockerBits = 12;
-    SquareSet mask = computeSliderBlockers(square, bishop).bits();
-    int blockerBits = mask.size();
-    int shift = 64 - blockerBits;
-    assert(shift > 0);
+
+    auto blockers = computeSliderBlockers(square, bishop);
+    int blockerBits = blockers.size();
     assert(blockerBits > 0 && blockerBits <= kMaxBlockerBits);
+
+    mask = blockers.bits();
+    shift = 64 - blockerBits;
+    magic = bishop ? bishopMagic[square] : rookMagic[square];
+
     table.resize(1ull << blockerBits, 0ull);
     for (uint64_t i = 0; i < (1ull << blockerBits); i++) {
-        auto blockers = parallelDeposit(i, mask.bits());
+        auto blockers = parallelDeposit(i, mask);
         auto targets = computeSliderTargets(square, bishop, blockers);
         if (auto& e = table[(blockers * magic) >> shift])
             assert(e == targets);
         else
             e = targets;
     }
-    entry = {magic, mask.bits(), shift, table.data()};
+}
+namespace {
+
+template <size_t... Is>
+auto buildEntries(bool bishop, std::index_sequence<Is...>) {
+    return std::array<MagicEntry, kNumSquares>{MagicEntry(bishop, Square(Is))...};
 }
 
-auto initEntries = []() {
-    for (auto square : SquareSet::all()) {
-        buildEntry(square, false, rookMagic[square], rookTables[square], rookEntries[square]);
-        buildEntry(square, true, bishopMagic[square], bishopTables[square], bishopEntries[square]);
-    }
-    return 0;
-}();
+auto buildEntries(bool bishop) {
+    return buildEntries(bishop, std::make_index_sequence<kNumSquares>{});
+}
 
 const int kMaxRank = kNumRanks - 1;
 const int kMaxFile = kNumFiles - 1;
 
 }  // namespace
+
+// Initialized directly from the build functions; using these entries implies the tables are built.
+std::array<MagicEntry, kNumSquares> rookEntries = buildEntries(false);
+std::array<MagicEntry, kNumSquares> bishopEntries = buildEntries(true);
 
 SquareSet rookBlockers(Square sq) {
     SquareSet result;
