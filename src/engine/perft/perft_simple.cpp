@@ -74,7 +74,7 @@ void usage() {
 
 void run(const std::string& fen, unsigned depth) {
     Position position = fen::parsePosition(fen);
-    auto nodes = perft(position, depth);
+    auto nodes = perftWithDivide(position, depth);
     std::cout << "Nodes searched: " << nodes << "\n";
 }
 

@@ -3,7 +3,6 @@
 #include <cstdlib>  // For std::exit
 #include <fstream>
 #include <iostream>
-#include <optional>
 
 #include "core/core.h"
 #include "core/options.h"

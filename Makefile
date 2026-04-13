@@ -183,7 +183,7 @@ $(eval $(call test_rules,book/book,${BOOK_SRCS} ${MOVES_SRCS} core/hash/hash.cpp
 clean:
 	rm -fr build
 	rm -f *.log
-	rm -f core *.core puzzles.actual perf.data* *.ii *.bc *.s
+	rm -f core *.core puzzles.actual perf.data* *.ii *.bc *.s __pycache__
 	rm -f game.??? log.??? players.dat # XBoard outputs
 	rm -rf test/out *.dSYM .DS_Store
 	find . -name '*_*_*_*_*_*_*.svg' -exec rm {} \;
@@ -294,7 +294,7 @@ build/evals.out: build/eval-test ${EVALS}
 # Find unused declarations in header files via clangd references.
 # Requires clangd on PATH; clangd builds a fresh index on cold start (e.g. GitHub CI).
 build/dead-code.out: dead-code.py $(COMPILE_COMMANDS) $(ALLHDRS) $(ALLSRCS)
-	$(Q)python3 dead-code.py $(ALLHDRS) --unused-only --quiet \
+	$(Q)python3 dead-code.py $(ALLHDRS) $(ALLSRCS) --unused-only --quiet \
 		> $@ && echo "  ✅ $@ passed" | tee -a $@ \
 		|| { cat $@; echo "  ❌ error in $@" | tee -a $@; mv $@ $(basename $@).log; false; }
 

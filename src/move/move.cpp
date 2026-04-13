@@ -184,11 +184,6 @@ bool isAttacked(const Board& board, SquareSet squares, Occupancy occupancy) {
     return false;
 }
 
-bool isAttacked(const Board& board, SquareSet squares, Color opponentColor) {
-    auto occupancy = Occupancy(board, opponentColor);
-    return isAttacked(board, squares, occupancy);
-}
-
 bool attacks(Piece piece, Square from, Square to) {
     return MovesTable::possibleCaptures(piece, from).contains(to);
 }

@@ -18,16 +18,6 @@ std::string toString(SquareSet squares) {
     return str;
 }
 
-// Output stream operator for std::vector<std::string>
-std::ostream& operator<<(std::ostream& os, const MoveVector& moves) {
-    os << "[";
-    for (const auto& move : moves) {
-        if (move) os << to_string(move) << ", ";
-    }
-    os << "]";
-    return os;
-}
-
 void printBoard(std::ostream& os, const Board& board) {
     for (int rank = 7; rank >= 0; --rank) {
         os << rank + 1 << "  ";

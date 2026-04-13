@@ -400,16 +400,6 @@ size_t countLegalMovesAndCaptures(const Position& position) {
     return countLegalMovesAndCaptures(position.board, {position.board, position.turn});
 }
 
-Move checkMove(Position position, Move move) {
-    auto moves = allLegalMovesAndCaptures(position.turn, position.board);
-
-    // Try to find a legal move or capture corresponding to the given move string.
-    for (auto m : moves)
-        if (m == move) return m;
-
-    throw MoveError("Invalid move: " + to_string(move));
-}
-
 MoveVector allLegalCaptures(Turn turn, Board board) {
     MoveVector captures;
     for (auto move : allLegalMovesAndCaptures(turn, board))

@@ -1,6 +1,5 @@
 #pragma once
 
-
 #include "core/core.h"
 
 namespace nnue {
@@ -36,8 +35,8 @@ struct InputTransform {
     constexpr static size_t kOutputDimensions = 2 * kHalfDimensions;
     constexpr static uint32_t kHash = 0x5d69d5b8u ^ kOutputDimensions;  // 0x5d69d7b8u
     std::array<int16_t, kHalfDimensions> bias;
-    std::array<int16_t, kHalfDimensions * kInputDimensions> weights;
-    InputTransform() = default;
+    std::vector<int16_t> weights;
+    InputTransform() : weights(kHalfDimensions * kInputDimensions) {}
 };
 
 /** Accumulator holds the result of affine transformation of input features of InputTransform */

@@ -34,9 +34,9 @@ from urllib.parse import urlparse, unquote
 _SKIP_KINDS = {1, 2, 3}  # File, Module, Namespace
 
 # Method/class names that are implicitly invoked by range-based for loops and the iterator
-# protocol, or as default constructors. clangd does not emit explicit reference sites for
-# these, so we propagate the containing class's external references to them rather than
-# reporting them as unused.
+# protocol. clangd does not emit explicit reference sites for these, so we propagate the
+# containing class's external references to them rather than reporting them as unused.
+# No-arg constructors are handled separately via is_no_arg_ctor().
 _IMPLICIT_USE_NAMES = {
     'begin', 'end',
     'operator++', 'operator--', 'operator*', 'operator->',
@@ -187,14 +187,18 @@ class ClangdClient:
 
 # ── symbol utilities ───────────────────────────────────────────────────────────
 
-def flatten(syms: list, _parent: dict | None = None) -> list:
+def flatten(syms: list, _parent: dict | None = None, source_lines: list[str] | None = None) -> list:
     """Recursively flatten a DocumentSymbol tree, skipping containers."""
     result = []
     for sym in syms:
         sym['_parent'] = _parent
-        if sym['kind'] not in _SKIP_KINDS and not sym['name'].startswith('(anonymous'):
+        line = sym['selectionRange']['start']['line']
+        src_line = source_lines[line] if source_lines else ''
+        if (sym['kind'] not in _SKIP_KINDS
+                and not sym['name'].startswith('(anonymous')
+                and not src_line.lstrip().startswith('using namespace')):
             result.append(sym)
-        result.extend(flatten(sym.get('children', []), _parent=sym))
+        result.extend(flatten(sym.get('children', []), _parent=sym, source_lines=source_lines))
     return result
 
 
@@ -263,10 +267,12 @@ def analyse(client: 'ClangdClient', source: pathlib.Path, root: pathlib.Path,
     log(f'source: {source}')
     uri = client.open(str(source))
 
-    log('Fetching symbols...')
+    # Read source lines once for default-constructor detection below.
+    source_lines = source.read_text(errors='replace').splitlines()
+
     raw  = client.request('textDocument/documentSymbol',
                            {'textDocument': {'uri': uri}}) or []
-    flat = flatten(raw)
+    flat = flatten(raw, source_lines=source_lines)
 
     if not flat:
         log(f'Warning: no symbols returned for {source} — skipping')
@@ -302,17 +308,14 @@ def analyse(client: 'ClangdClient', source: pathlib.Path, root: pathlib.Path,
 
     log()
 
-    # Read source lines once for default-constructor detection below.
-    source_lines = source.read_text(errors='replace').splitlines()
-
-    def is_default_ctor(sym: dict) -> bool:
-        """True if sym is a defaulted constructor (i.e. its text contains '() = default')."""
+    def is_no_arg_ctor(sym: dict) -> bool:
+        """True if sym is a constructor with no arguments."""
         if sym['kind'] != 9:  # 9 = Constructor
             return False
         line = sym['selectionRange']['start']['line']
         # Check the line itself and the next line in case of formatting across lines.
         text = ' '.join(source_lines[line:line + 2])
-        return '() = default' in text
+        return bool(re.search(r'\b' + re.escape(sym['name']) + r'\s*\(\s*\)', text))
 
     def is_maybe_unused(sym: dict) -> bool:
         """True if the symbol's declaration line contains [[maybe_unused]] or NOLINT(dead_code)."""
@@ -320,22 +323,11 @@ def analyse(client: 'ClangdClient', source: pathlib.Path, root: pathlib.Path,
         text = source_lines[line]
         return '[[maybe_unused]]' in text or 'NOLINT(dead_code)' in text
 
-    # Propagate external references from parent class to iterator-protocol members.
-    # Range-based for loops call begin()/end()/operator++ etc. implicitly and clangd
-    # does not emit explicit reference sites for them. Similarly, defaulted constructors
-    # (`= default`) are called implicitly on value-initialization with no visible call site.
-    for sym in flat:
-        sid = sym_id(sym)
-        if direct_ext[sid]:
-            continue
-        if sym['name'] not in _IMPLICIT_USE_NAMES and not is_default_ctor(sym):
-            continue
-        parent = sym.get('_parent')
-        if parent is None:
-            continue
-        pid = sym_id(parent)
-        if pid in direct_ext:
-            direct_ext[sid] |= direct_ext[pid]
+    def is_implicit_root(sym: dict) -> bool:
+        """True for symbols that are implicitly externally referenced without visible call sites.
+        `main` is the entry point of .cpp executables; destructors are always implicitly called
+        when their class is used, and `using namespace` is already skipped in flatten."""
+        return (sym['name'] == 'main' and sym['kind'] == 12) or sym['name'].startswith('~')
 
     # [[maybe_unused]] symbols are explicitly acknowledged as used despite clangd not seeing
     # call sites (e.g. fields accessed via template instantiation). Treat them and any
@@ -358,7 +350,33 @@ def analyse(client: 'ClangdClient', source: pathlib.Path, root: pathlib.Path,
                 result.extend(s for s in syms if sym_id(s) != sym_id(sym))
         return result
 
-    synth_worklist = [sym for sym in flat if is_maybe_unused(sym)]
+    synth_worklist = [sym for sym in flat if is_maybe_unused(sym) or is_implicit_root(sym)]
+
+    # Propagate external references from parent class to iterator-protocol members and no-arg
+    # constructors. Range-based for loops call begin()/end()/operator++ etc. implicitly and
+    # clangd does not emit explicit reference sites for them. Similarly, no-arg constructors
+    # are called implicitly on value-initialization with no visible call site.
+    # For in-class definitions (unqualified name): add a used_by edge so the transitive closure
+    # picks up the parent class's refs even when the parent is itself only transitively used.
+    # For out-of-class definitions (qualified name, e.g. Foo::operator++): clangd sets _parent
+    # to the enclosing namespace rather than the containing class, so a used_by edge cannot
+    # establish the right connection. Conservatively add to synth_worklist instead.
+    for sym in flat:
+        sid = sym_id(sym)
+        simple_name = sym['name'].rsplit('::', 1)[-1]
+        if simple_name not in _IMPLICIT_USE_NAMES and not is_no_arg_ctor(sym):
+            continue
+        if '::' in sym['name']:
+            # Out-of-class definition: parent is a namespace, not the containing class.
+            # clangd cannot see implicit call sites, so treat as used to avoid false positives.
+            synth_worklist.append(sym)
+        else:
+            parent = sym.get('_parent')
+            if parent is not None:
+                pid = sym_id(parent)
+                if pid in used_by:
+                    used_by[sid].add(pid)
+
     synth_visited: set = set()
     while synth_worklist:
         sym = synth_worklist.pop()

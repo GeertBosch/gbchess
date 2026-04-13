@@ -7,6 +7,7 @@
 log.*
 *.log
 *.out
+*.pyc
 book.epd
 build
 dairy.md

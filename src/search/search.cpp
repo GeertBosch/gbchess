@@ -594,7 +594,6 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
 struct Depth {
     int current;
     int left;
-    Depth operator+(int i) const { return {current + i, left - i}; }
 };
 
 Score quiesce(Position& position, int depthleft) {

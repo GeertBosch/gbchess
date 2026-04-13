@@ -122,48 +122,6 @@ void printBlackReplies(Book& book, const std::vector<MoveInfo>& whiteMoves, cons
     }
 }
 
-void printOpeningDistribution(Book& book, const DirichletPrior& prior, const Position& pos) {
-    std::cout << "\n=== Opening Move Distribution (100 games) ===\n\n";
-
-    std::map<std::string, int> moveCount;
-    std::map<std::string, BookEntry> moveEntries;
-
-    for (int seed = 1; seed <= 100; ++seed) {
-        book.reseed(seed);
-        Move move = book.choose(pos, {});
-        if (move) {
-            std::string moveStr = to_string(move);
-            moveCount[moveStr]++;
-
-            if (moveEntries.find(moveStr) == moveEntries.end()) {
-                Position afterMove = moves::applyMove(pos, move);
-                uint64_t key = Hash(afterMove)();
-                if (book.entries.count(key)) moveEntries[moveStr] = book.entries[key];
-            }
-        }
-    }
-
-    std::vector<std::pair<std::string, int>> sortedMoves(moveCount.begin(), moveCount.end());
-    std::sort(sortedMoves.begin(), sortedMoves.end(), [](const auto& a, const auto& b) {
-        return a.second > b.second;
-    });
-
-    std::cout << std::setw(6) << "Move" << " | " << std::setw(9) << "Selected" << " | "
-              << std::setw(12) << "W/D/L" << " | " << std::setw(9) << "Post.Rate" << "\n";
-    std::cout << std::string(60, '-') << "\n";
-
-    for (const auto& [moveStr, count] : sortedMoves) {
-        if (moveEntries.count(moveStr)) {
-            const auto& entry = moveEntries[moveStr];
-            double postMean = entry.posteriorMean(pos.active(), prior);
-            std::cout << std::setw(6) << moveStr << " | " << std::setw(9) << count << " | "
-                      << std::setw(4) << entry.white << "/" << std::setw(3) << entry.draw << "/"
-                      << std::setw(3) << entry.black << " | " << std::setw(7) << std::fixed
-                      << std::setprecision(1) << (postMean * 100.0) << "%" << "\n";
-        }
-    }
-}
-
 void testBasicBookOperations() {
     Book book;
 

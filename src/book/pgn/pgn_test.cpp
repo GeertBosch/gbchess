@@ -32,7 +32,6 @@ public:
     constexpr size_t size() const { return N; }
 
     reference operator[](E e) { return data[static_cast<size_t>(e)]; }
-    const_reference operator[](E e) const { return data[static_cast<size_t>(e)]; }
 
     iterator begin() { return data.begin(); }
     iterator end() { return data.end(); }

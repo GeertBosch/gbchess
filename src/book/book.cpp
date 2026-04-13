@@ -78,7 +78,6 @@ double samplePosteriorScore(uint64_t w, uint64_t d, uint64_t l, const DirichletP
 struct MoveStat {
     Move move;
     double posteriorMean;
-    uint64_t games;
 };
 
 std::vector<MoveStat> collectMoveStats(const Position& position,
@@ -98,7 +97,7 @@ std::vector<MoveStat> collectMoveStats(const Position& position,
         if (entry.total() < kMinGames) continue;  // Require minimum sample size
 
         // Use Bayesian posterior mean instead of raw winrate
-        moveStats.push_back({move, entry.posteriorMean(position.active(), prior), entry.total()});
+        moveStats.push_back({move, entry.posteriorMean(position.active(), prior)});
     }
 
     // Sort by posterior mean descending (for debugging/display)

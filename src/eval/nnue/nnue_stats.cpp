@@ -252,11 +252,6 @@ void analyzeComputationalComplexity() {
               << (totalOps / (double)totalIncrementalOps) << "x (modest improvement)" << std::endl;
 }
 
-void recordMove(size_t featureChanges) {
-    ++g_totalMoves;
-    g_totalFeatureChanges += featureChanges;
-}
-
 double getAverageFeatureChanges() {
     return g_totalMoves ? (double)g_totalFeatureChanges / g_totalMoves : 4.0;  // Typical estimate
 }
