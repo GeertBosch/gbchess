@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """
 dead_code.py - Find declarations in a C++ file ranked by external reference count.
 
