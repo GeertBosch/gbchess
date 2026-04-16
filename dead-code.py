@@ -464,7 +464,9 @@ def _sock_path(build_dir: str) -> pathlib.Path:
 
 def _run_server(sock_path: pathlib.Path, build_dir: str, root: pathlib.Path, quiet: bool):
     """Persistent server: start clangd once, handle per-file analysis requests."""
-    def log(*args): print(*args, file=sys.stderr)
+    def log(*args):
+        if not quiet:
+            print(*args, file=sys.stderr)
 
     srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
@@ -486,6 +488,7 @@ def _run_server(sock_path: pathlib.Path, build_dir: str, root: pathlib.Path, qui
 
     active_count = 0
     active_lock  = threading.Lock()
+    shutdown_requested = threading.Event()
 
     def handle(conn):
         nonlocal active_count
@@ -500,6 +503,14 @@ def _run_server(sock_path: pathlib.Path, build_dir: str, root: pathlib.Path, qui
             if b'\n' not in data:
                 return
             req = json.loads(data.split(b'\n')[0])
+            if req.get('shutdown'):
+                with active_lock:
+                    if active_count == 1:  # only this handler is active
+                        conn.sendall((json.dumps({'ok': True}) + '\n').encode())
+                        shutdown_requested.set()
+                    else:
+                        conn.sendall((json.dumps({'ok': False}) + '\n').encode())
+                return
             buf = io.StringIO()
             try:
                 unused = analyse(client, pathlib.Path(req['file']), root,
@@ -517,16 +528,26 @@ def _run_server(sock_path: pathlib.Path, build_dir: str, root: pathlib.Path, qui
             with active_lock:
                 active_count -= 1
 
+    srv.settimeout(1.0)  # short poll so shutdown_requested is noticed promptly
+    idle_secs = 0
     try:
-        while True:
+        while not shutdown_requested.is_set():
             try:
                 conn, _ = srv.accept()
             except socket.timeout:
+                if shutdown_requested.is_set():
+                    break
                 with active_lock:
-                    if active_count == 0:
+                    busy = active_count > 0
+                if busy:
+                    idle_secs = 0
+                else:
+                    idle_secs += 1
+                    if idle_secs >= _IDLE_TIMEOUT:
                         log('Idle timeout; shutting down.')
                         break
                 continue
+            idle_secs = 0
             with active_lock:
                 active_count += 1
             threading.Thread(target=handle, args=(conn,), daemon=True).start()
@@ -537,7 +558,30 @@ def _run_server(sock_path: pathlib.Path, build_dir: str, root: pathlib.Path, qui
         except FileNotFoundError:
             pass
         client.shutdown()
+        if shutdown_requested.is_set():
+            return  # silent on explicit shutdown
         log('dead-code server stopped')
+
+
+def _shutdown_server(sock_path: pathlib.Path) -> bool:
+    """Ask the server to shut down immediately if idle. Returns True if accepted."""
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        s.connect(str(sock_path))
+        s.sendall((json.dumps({'shutdown': True}) + '\n').encode())
+        s.settimeout(10)
+        data = b''
+        while b'\n' not in data:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+        resp = json.loads(data.split(b'\n')[0])
+        return bool(resp.get('ok'))
+    except (FileNotFoundError, ConnectionRefusedError, OSError, json.JSONDecodeError):
+        return False
+    finally:
+        s.close()
 
 
 def _client_request(sock_path: pathlib.Path, source: pathlib.Path,
@@ -560,10 +604,11 @@ def _client_request(sock_path: pathlib.Path, source: pathlib.Path,
                 except FileNotFoundError:
                     pass
             if not server_started:
+                extra = ['--quiet'] if quiet else []
                 subprocess.Popen(
                     [sys.executable, str(pathlib.Path(__file__).resolve()),
                      '--serve', f'--socket={sock_path}',
-                     f'--build-dir={build_dir}', f'--root={root}'],
+                     f'--build-dir={build_dir}', f'--root={root}'] + extra,
                     start_new_session=True, close_fds=True,
                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=sys.stderr,
                 )
@@ -604,21 +649,25 @@ def main():
         _run_server(sock_path, build_dir or str(root), root, '--quiet' in flags)
         return
 
-    if not sources:
-        sys.exit(f'Usage: {sys.argv[0]} <source_file>... [--build-dir=<path>] [--unused-only] [--max-use=N] [--quiet]')
+    if not sources and '--shutdown' not in flags:
+        sys.exit(f'Usage: {sys.argv[0]} <source_file>... [--build-dir=<path>] [--unused-only] [--max-use=N] [--quiet] [--shutdown]')
 
     unused_only = '--unused-only' in flags
     quiet       = '--quiet' in flags
     max_use_flag = next((f for f in flags if f.startswith('--max-use=')), None)
     max_use = int(max_use_flag.split('=', 1)[1]) if max_use_flag else None
-    first = pathlib.Path(sources[0]).resolve()
+    first = pathlib.Path(sources[0]).resolve() if sources else None
     build_dir = next(
         (f.split('=', 1)[1] for f in flags if f.startswith('--build-dir=')),
-        find_build_dir(first),
+        find_build_dir(first) if first else str(pathlib.Path.cwd() / 'build'),
     )
-    root = find_root(first)
+    root = find_root(first) if first else pathlib.Path.cwd()
     sock_flag = next((f for f in flags if f.startswith('--socket=')), None)
     sock_path = pathlib.Path(sock_flag.split('=', 1)[1]) if sock_flag else _sock_path(build_dir)
+
+    if '--shutdown' in flags:
+        _shutdown_server(sock_path)
+        return
 
     if '--no-server' not in flags:
         total_rc = sum(_client_request(sock_path, pathlib.Path(p).resolve(),

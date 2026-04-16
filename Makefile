@@ -74,7 +74,7 @@ test_objs=$(call calc_objs,$(call test_dir,$(1)),$(call prefix_src,$(call test_s
 ALLSRCS=$(wildcard src/*.cpp src/*/*.cpp src/*/*/*.cpp)
 ALLHDRS=$(wildcard src/*.h src/*/*.h src/*/*/*.h)
 
-all: build debug test perft-bench perft-test build/mate123.out build/mate45.out build/puzzles.out
+all: build debug dead-code test perft-bench perft-test build/mate123.out build/mate45.out build/puzzles.out
 	@echo "✅ All tests passed!"
 
 -include $(call calc_deps,${OPTOBJ},${ALLSRCS})
@@ -299,10 +299,12 @@ DEAD_CODE_OUTS=$(patsubst src/%,build/dead-code/%.out,$(ALLHDRS) $(ALLSRCS))
 build/dead-code/%.out: src/% dead-code.py $(COMPILE_COMMANDS)
 	$(Q)mkdir -p $(dir $@)
 	$(Q)python3 dead-code.py $< --unused-only --quiet \
-		> $@ && echo "  ✅ $@ passed" | tee -a $@ \
-		|| { cat $@; echo "  ❌ error in $@" | tee -a $@; mv $@ $(basename $@).log; false; }
+		> $@ && echo "  ✅ $* has no dead code" | tee -a $@ \
+		|| { cat $@; echo "  ❌ dead code in $*" | tee -a $@; mv $@ $(basename $@).log; false; }
 
 dead-code: $(DEAD_CODE_OUTS)
+	$(Q)python3 dead-code.py --shutdown
+	@echo "✅ No dead code found"
 
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:
@@ -407,6 +409,7 @@ $(COMPILE_COMMANDS):
 	done
 	$(Q)echo >> $@
 	$(Q)echo ']' >> $@
+	$(call BUILDCMD, true)
 
 .PHONY: ci install-hooks
 
