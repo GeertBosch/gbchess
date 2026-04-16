@@ -183,9 +183,9 @@ $(eval $(call test_rules,book/book,${BOOK_SRCS} ${MOVES_SRCS} core/hash/hash.cpp
 clean:
 	rm -fr build
 	rm -f *.log
-	rm -f core *.core puzzles.actual perf.data* *.ii *.bc *.s __pycache__
+	rm -f core *.core puzzles.actual perf.data* *.ii *.bc *.s
 	rm -f game.??? log.??? players.dat # XBoard outputs
-	rm -rf test/out *.dSYM .DS_Store
+	rm -rf test/out *.dSYM .DS_Store __pycache__
 	find . -name '*_*_*_*_*_*_*.svg' -exec rm {} \;
 	rm -f $(COMPILE_COMMANDS)
 	rm -f book.csv
@@ -291,14 +291,18 @@ lichess/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
 build/evals.out: build/eval-test ${EVALS}
 	$(Q)./build/eval-test ${EVALS} $(REDIR)
 
-# Find unused declarations in header files via clangd references.
+# Find unused declarations per file via clangd references.
+# Each source/header gets its own artifact for incremental and parallel builds.
 # Requires clangd on PATH; clangd builds a fresh index on cold start (e.g. GitHub CI).
-build/dead-code.out: dead-code.py $(COMPILE_COMMANDS) $(ALLHDRS) $(ALLSRCS)
-	$(Q)python3 dead-code.py $(ALLHDRS) $(ALLSRCS) --unused-only --quiet \
+DEAD_CODE_OUTS=$(patsubst src/%,build/dead-code/%.out,$(ALLHDRS) $(ALLSRCS))
+
+build/dead-code/%.out: src/% dead-code.py $(COMPILE_COMMANDS)
+	$(Q)mkdir -p $(dir $@)
+	$(Q)python3 dead-code.py $< --unused-only --quiet \
 		> $@ && echo "  ✅ $@ passed" | tee -a $@ \
 		|| { cat $@; echo "  ❌ error in $@" | tee -a $@; mv $@ $(basename $@).log; false; }
 
-dead-code: build/dead-code.out
+dead-code: $(DEAD_CODE_OUTS)
 
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:

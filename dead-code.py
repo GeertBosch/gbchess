@@ -27,7 +27,7 @@ Requirements:
     - A compile_commands.json reachable from the source file (searched upward).
 """
 
-import json, os, pathlib, queue, re, subprocess, sys, threading
+import hashlib, io, json, os, pathlib, queue, re, socket, subprocess, sys, threading, time
 from urllib.parse import urlparse, unquote
 
 
@@ -257,9 +257,11 @@ def find_root(source: pathlib.Path) -> pathlib.Path:
 
 def analyse(client: 'ClangdClient', source: pathlib.Path, root: pathlib.Path,
             unused_only: bool, max_use: int | None = None,
-            quiet: bool = False) -> int:
+            quiet: bool = False, out=None) -> int:
     """Analyse one source file using an already-connected clangd client.
     Returns the number of unused declarations."""
+    if out is None:
+        out = sys.stdout
 
     def log(*args, **kwargs):
         if not quiet:
@@ -425,7 +427,7 @@ def analyse(client: 'ClangdClient', source: pathlib.Path, root: pathlib.Path,
         for n, _line, _col, loc, name, kind, files, sym in rows:
             real_files = files - _SYNTHETIC_REF
             if len(real_files) <= threshold and '[[maybe_unused]]' not in files:
-                print(f'{loc}: warning: {name} ({kind}) [UNUSED]')
+                print(f'{loc}: warning: {name} ({kind}) [UNUSED]', file=out)
     else:
         for n, _line, _col, loc, name, kind, files, sym in rows:
             real_files = files - _SYNTHETIC_REF
@@ -441,12 +443,148 @@ def analyse(client: 'ClangdClient', source: pathlib.Path, root: pathlib.Path,
                     refs = f'{sorted_files[0]}, {sorted_files[1]}, and {len(sorted_files)-2} more'
                 else:
                     refs = ', '.join(sorted_files)
-            print(f'{loc}  {name}  ({kind})  {refs}')
+            print(f'{loc}  {name}  ({kind})  {refs}', file=out)
 
-        print()
-        print(f'{len(rows)} declarations, {unused} unused')
+        print(file=out)
+        print(f'{len(rows)} declarations, {unused} unused', file=out)
 
     return unused
+
+
+# ── server / client ───────────────────────────────────────────────────────────
+
+_IDLE_TIMEOUT = 60  # seconds of no activity before server exits
+
+
+def _sock_path(build_dir: str) -> pathlib.Path:
+    """Derive a per-build-directory Unix socket path in /tmp."""
+    h = hashlib.md5(build_dir.encode()).hexdigest()[:8]
+    return pathlib.Path(f'/tmp/dead-code-{h}.sock')
+
+
+def _run_server(sock_path: pathlib.Path, build_dir: str, root: pathlib.Path, quiet: bool):
+    """Persistent server: start clangd once, handle per-file analysis requests."""
+    def log(*args): print(*args, file=sys.stderr)
+
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        srv.bind(str(sock_path))
+    except OSError:
+        return  # Lost bind race; another server won; exit quietly
+    srv.listen(256)
+    srv.settimeout(_IDLE_TIMEOUT)
+    log(f'dead-code server pid={os.getpid()} socket={sock_path}')
+
+    client = ClangdClient(build_dir, root.as_uri(), quiet=True)
+    # Trigger background indexing early with any source file.
+    first = next(iter(sorted(root.glob('**/*.cpp'))), None)
+    if first:
+        client.open(str(first))
+    log('Waiting for background index...')
+    client.wait_for_index(timeout=120)
+    log(f'Index ready.')
+
+    active_count = 0
+    active_lock  = threading.Lock()
+
+    def handle(conn):
+        nonlocal active_count
+        try:
+            conn.settimeout(30)
+            data = b''
+            while b'\n' not in data:
+                chunk = conn.recv(65536)
+                if not chunk:
+                    return
+                data += chunk
+            if b'\n' not in data:
+                return
+            req = json.loads(data.split(b'\n')[0])
+            buf = io.StringIO()
+            try:
+                unused = analyse(client, pathlib.Path(req['file']), root,
+                                 req.get('unused_only', False),
+                                 req.get('max_use'), quiet=True, out=buf)
+                rc = 1 if req.get('unused_only') and unused else 0
+            except Exception as e:
+                buf.write(f'error: {e}\n')
+                rc = 1
+            conn.sendall((json.dumps({'out': buf.getvalue(), 'rc': rc}) + '\n').encode())
+        except Exception:
+            pass
+        finally:
+            conn.close()
+            with active_lock:
+                active_count -= 1
+
+    try:
+        while True:
+            try:
+                conn, _ = srv.accept()
+            except socket.timeout:
+                with active_lock:
+                    if active_count == 0:
+                        log('Idle timeout; shutting down.')
+                        break
+                continue
+            with active_lock:
+                active_count += 1
+            threading.Thread(target=handle, args=(conn,), daemon=True).start()
+    finally:
+        srv.close()
+        try:
+            sock_path.unlink()
+        except FileNotFoundError:
+            pass
+        client.shutdown()
+        log('dead-code server stopped')
+
+
+def _client_request(sock_path: pathlib.Path, source: pathlib.Path,
+                    unused_only: bool, quiet: bool, max_use: int | None,
+                    build_dir: str, root: pathlib.Path) -> int:
+    """Send an analysis request to the server, starting it if needed. Returns exit code."""
+    req = (json.dumps({'file': str(source), 'unused_only': unused_only,
+                       'quiet': quiet, 'max_use': max_use}) + '\n').encode()
+    deadline = time.monotonic() + 60
+    server_started = False
+    while time.monotonic() < deadline:
+        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            s.connect(str(sock_path))
+        except (FileNotFoundError, ConnectionRefusedError, OSError):
+            s.close()
+            if sock_path.exists() and not server_started:
+                try:
+                    sock_path.unlink()  # Remove stale socket from a prior crashed server
+                except FileNotFoundError:
+                    pass
+            if not server_started:
+                subprocess.Popen(
+                    [sys.executable, str(pathlib.Path(__file__).resolve()),
+                     '--serve', f'--socket={sock_path}',
+                     f'--build-dir={build_dir}', f'--root={root}'],
+                    start_new_session=True, close_fds=True,
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=sys.stderr,
+                )
+                server_started = True
+            time.sleep(0.1)
+            continue
+        try:
+            s.sendall(req)
+            data = b''
+            s.settimeout(600)
+            while b'\n' not in data:
+                chunk = s.recv(65536)
+                if not chunk:
+                    break
+                data += chunk
+        finally:
+            s.close()
+        resp = json.loads(data.split(b'\n')[0])
+        print(resp.get('out', ''), end='')
+        return resp.get('rc', 0)
+    raise RuntimeError(f'Timed out waiting for dead-code server at {sock_path}')
 
 
 # ── main ───────────────────────────────────────────────────────────────────────
@@ -455,6 +593,17 @@ def main():
     flags   = [a for a in sys.argv[1:] if a.startswith('--')]
     sources = [a for a in sys.argv[1:] if not a.startswith('--')]
 
+    # Server mode: started automatically as a background daemon.
+    if '--serve' in flags:
+        sock_path = pathlib.Path(next(f.split('=', 1)[1] for f in flags
+                                      if f.startswith('--socket=')))
+        build_dir = next((f.split('=', 1)[1] for f in flags
+                          if f.startswith('--build-dir=')), None)
+        root = pathlib.Path(next((f.split('=', 1)[1] for f in flags
+                                   if f.startswith('--root=')), '.'))
+        _run_server(sock_path, build_dir or str(root), root, '--quiet' in flags)
+        return
+
     if not sources:
         sys.exit(f'Usage: {sys.argv[0]} <source_file>... [--build-dir=<path>] [--unused-only] [--max-use=N] [--quiet]')
 
@@ -462,14 +611,24 @@ def main():
     quiet       = '--quiet' in flags
     max_use_flag = next((f for f in flags if f.startswith('--max-use=')), None)
     max_use = int(max_use_flag.split('=', 1)[1]) if max_use_flag else None
-    # Use the first source file to locate build dir and repo root.
-    first  = pathlib.Path(sources[0]).resolve()
+    first = pathlib.Path(sources[0]).resolve()
     build_dir = next(
         (f.split('=', 1)[1] for f in flags if f.startswith('--build-dir=')),
         find_build_dir(first),
     )
     root = find_root(first)
+    sock_flag = next((f for f in flags if f.startswith('--socket=')), None)
+    sock_path = pathlib.Path(sock_flag.split('=', 1)[1]) if sock_flag else _sock_path(build_dir)
 
+    if '--no-server' not in flags:
+        total_rc = sum(_client_request(sock_path, pathlib.Path(p).resolve(),
+                                       unused_only, quiet, max_use, build_dir, root)
+                       for p in sources)
+        if unused_only and total_rc:
+            sys.exit(1)
+        return
+
+    # --no-server: direct mode (one clangd per invocation, original behaviour).
     def log(*args, **kwargs):
         if not quiet:
             print(*args, file=sys.stderr, **kwargs)
@@ -479,7 +638,6 @@ def main():
 
     client = ClangdClient(build_dir, root.as_uri(), quiet=quiet)
     try:
-        # Open the first file to trigger clangd background indexing before waiting.
         client.open(str(first))
         log('Waiting for background index...')
         client.wait_for_index(timeout=120)
