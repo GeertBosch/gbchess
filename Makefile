@@ -386,7 +386,7 @@ build/test-cpp.out: ${CPP_TESTS} book.csv ${NNUE_FILE}
 test-cpp: build/test-cpp.out
 test: build/test-cpp.out build/fixed-puzzles.out build/searches.out build/evals.out build/uci.out build/magic.out
 
-ci: build-ci build/test-cpp.out build/perft-test.out build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate123.out build/mate45.out build/puzzles.out
+ci: build-ci build/test-cpp.out build/perft-test.out build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate123.out build/mate45.out build/puzzles.out dead-code
 	@echo "\n✅ CI checks passed\n"
 
 install-hooks:
