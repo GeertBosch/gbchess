@@ -198,12 +198,12 @@
                "${workspaceFolder}"
             ],
             "pattern": {
-               "regexp": "^([^:]+):(\\d+):(\\d+): warning: (.+)$",
+               "regexp": "^([^:]+):(\\d+):(\\d+): (warning): (.+)$",
                "file": 1,
                "line": 2,
                "column": 3,
-               "severity": "warning",
-               "message": 4
+               "severity": 4,
+               "message": 5
             }
          }
       },
@@ -228,12 +228,12 @@
                "${workspaceFolder}"
             ],
             "pattern": {
-               "regexp": "^([^:]+):(\\d+):(\\d+): warning: (.+)$",
+               "regexp": "^([^:]+):(\\d+):(\\d+): (warning): (.+)$",
                "file": 1,
                "line": 2,
                "column": 3,
-               "severity": "warning",
-               "message": 4
+               "severity": 4,
+               "message": 5
             }
          }
       },
