@@ -1,3 +1,4 @@
+#include "book/pgn/pgn.h"
 #include <algorithm>
 #include <cmath>
 #include <fstream>
@@ -17,7 +18,6 @@
 #include "move/move_gen.h"
 
 namespace book {
-using Term = pgn::Termination;
 
 namespace {
 static constexpr double 𝜋 = M_PI;
@@ -155,12 +155,11 @@ Move selectMove(const Position& position,
 }
 }  // namespace
 
-uint64_t BookEntry::add(Term term) {
-    return full()                 ? 0  // Avoid overflow
-        : term == Term::WHITE_WIN ? ++white + black + draw
-        : term == Term::BLACK_WIN ? ++black + white + draw
-        : term == Term::DRAW      ? ++draw + white + black
-                                  : 0;
+uint64_t BookEntry::add(pgn::Termination term) {
+    return term == pgn::Termination::WHITE_WIN ? ++white + black + draw
+        : term == pgn::Termination::BLACK_WIN  ? ++black + white + draw
+        : term == pgn::Termination::DRAW       ? ++draw + white + black
+                                               : 0;
 }
 
 double BookEntry::posteriorMean(Color active, const DirichletPrior& prior) const {
@@ -220,6 +219,8 @@ Book loadBook(std::string csvfile) {
     // Read header line to fine column positions
     std::getline(in, line);
     auto header = split(line, ',');
+    auto ecoCol = find(header, "eco");
+    auto nameCol = find(header, "name");
     auto fenCol = find(header, "fen");
     auto whiteCol = find(header, "white");
     auto drawCol = find(header, "draw");
@@ -239,7 +240,10 @@ Book loadBook(std::string csvfile) {
 
         uint64_t key = Hash(pos)();
 
-        book.entries[key] = {white, draw, black};
+        auto eco = columns[ecoCol];
+        auto name = columns[nameCol];
+
+        book.entries[key] = {ECO(eco), name, white, draw, black};
 
         totalW += white;
         totalD += draw;

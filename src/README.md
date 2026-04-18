@@ -102,6 +102,8 @@ graph TD
 
     Time[time.h]
 
+    ECO[eco.h]
+
     %% The following are include dependencies between the above modules.
     %% The order is chosen to be able to render a planar graph, without crossing edges.
     %% Transitive dependencies are generally omitted for the graph.
@@ -123,6 +125,7 @@ graph TD
     PGN ----> Core
     Move --> Occupancy
     Book --> PGN
+    Book --> ECO
     Occupancy --> SquareSet
     Move --> MoveMagic
     SquareSet --> Core
@@ -148,7 +151,7 @@ graph TD
     classDef core fill:#cef,stroke:#333,stroke-width:2px,font-family:monospace
 
     class FEN,Engine,PerftCore,Time engine
-    class Book,PGN book
+    class Book,PGN,ECO book
     class MoveMagic,Occupancy,Move move
     class Search,PV search
     class Eval,NNUE eval

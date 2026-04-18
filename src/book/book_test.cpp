@@ -44,13 +44,7 @@ DirichletPrior computePrior(const Book& book) {
     }
     return DirichletPrior::fromGlobalStats(totalW, totalD, totalL);
 }
-
-struct MoveInfo {
-    Move move;
-    uint32_t games;
-    double winRate;
-};
-
+using MoveInfo = std::pair<Move, BookEntry>;
 std::vector<MoveInfo> collectOpeningMoves(const Book& book, const Position& pos) {
     std::vector<MoveInfo> moves;
     Board board = pos.board;
@@ -59,15 +53,11 @@ std::vector<MoveInfo> collectOpeningMoves(const Book& book, const Position& pos)
     for (Move move : legalMoves) {
         Position afterMove = moves::applyMove(pos, move);
         uint64_t key = Hash(afterMove)();
-        if (book.entries.count(key)) {
-            const auto& entry = book.entries.at(key);
-            moves.push_back(
-                {move, static_cast<uint32_t>(entry.total()), winRate(entry, pos.active())});
-        }
+        if (book.entries.count(key)) moves.push_back({move, book.entries.at(key)});
     }
 
     std::sort(moves.begin(), moves.end(), [](const MoveInfo& a, const MoveInfo& b) {
-        return a.games > b.games;
+        return a.second.total() > b.second.total();
     });
     return moves;
 }
@@ -76,19 +66,23 @@ void printOpeningMoveTable(const std::vector<MoveInfo>& moves,
                            const Book& book,
                            const DirichletPrior& prior,
                            const Position& pos) {
-    std::cout << "White's opening moves:\n";
+    std::cout << (pos.active() == Color::w ? "White" : "Black") << "'s opening moves:\n";
     std::cout << std::setw(6) << "Move" << " | " << std::setw(8) << "Games" << " | " << std::setw(8)
-              << "Win Rate" << " (posterior)" << "\n";
-    std::cout << std::string(50, '-') << "\n";
+              << "Win Rate" << " (posterior)" << " | Opening" << "\n";
+    std::cout << std::string(70, '-') << "\n";
 
     for (const auto& info : moves) {
-        Position afterMove = moves::applyMove(pos, info.move);
+        Position afterMove = moves::applyMove(pos, info.first);
         uint64_t key = Hash(afterMove)();
         const auto& entry = book.entries.at(key);
         double postMean = entry.posteriorMean(pos.active(), prior);
-        std::cout << std::setw(6) << to_string(info.move) << " | " << std::setw(8) << info.games
-                  << " | " << std::setw(7) << std::fixed << std::setprecision(1)
-                  << (info.winRate * 100.0) << "% (" << (postMean * 100.0) << "%)" << "\n";
+        std::string eco = to_string(entry.eco);
+        std::string opening =
+            eco.empty() ? entry.name : eco + (entry.name.empty() ? "" : " " + entry.name);
+        std::cout << std::setw(6) << to_string(info.first) << " | " << std::setw(8)
+                  << info.second.total() << " | " << std::setw(7) << std::fixed
+                  << std::setprecision(1) << (winRate(info.second, pos.active()) * 100.0) << "% ("
+                  << (postMean * 100.0) << "%) | " << opening << "\n";
     }
 }
 
@@ -97,13 +91,13 @@ void printBlackReplies(Book& book, const std::vector<MoveInfo>& whiteMoves, cons
     book.reseed(0);
 
     for (const auto& whiteMove : whiteMoves) {
-        if (whiteMove.games < 10) continue;
+        if (whiteMove.second.total() < 10) continue;
 
-        Move blackReply = book.choose(pos, {whiteMove.move});
-        std::cout << "After " << to_string(whiteMove.move);
+        Move blackReply = book.choose(pos, {whiteMove.first});
+        std::cout << "After " << to_string(whiteMove.first);
 
         if (blackReply) {
-            Position afterWhite = moves::applyMove(pos, whiteMove.move);
+            Position afterWhite = moves::applyMove(pos, whiteMove.first);
             Position afterBlack = moves::applyMove(afterWhite, blackReply);
             uint64_t blackKey = Hash(afterBlack)();
 
@@ -331,19 +325,28 @@ void testOpeningDistribution(Book& book, const Position& initialPos, const Diric
         return a.second > b.second;
     });
 
+    // Pre-format W/D/L strings to compute column width
+    std::map<std::string, std::string> wdlStrings;
+    int wdlWidth = 5;  // minimum width for header "W/D/L"
+    for (const auto& [moveStr, entry] : moveEntries) {
+        std::string wdl = std::to_string(entry.white) + "/" + std::to_string(entry.draw) + "/" +
+            std::to_string(entry.black);
+        wdlStrings[moveStr] = wdl;
+        wdlWidth = std::max(wdlWidth, static_cast<int>(wdl.size()));
+    }
+
     std::cout << "\nOpening move distribution over 100 selections:\n";
     std::cout << std::setw(6) << "Move" << " | " << std::setw(9) << "Selected" << " | "
-              << std::setw(12) << "W/D/L" << " | " << std::setw(9) << "Post.Rate" << "\n";
-    std::cout << std::string(60, '-') << "\n";
+              << std::setw(wdlWidth) << "W/D/L" << " | " << std::setw(9) << "Post.Rate" << "\n";
+    std::cout << std::string(6 + 3 + 9 + 3 + wdlWidth + 3 + 9, '-') << "\n";
 
     for (const auto& [moveStr, count] : sortedMoves) {
         if (moveEntries.count(moveStr)) {
             const auto& entry = moveEntries[moveStr];
             double postMean = entry.posteriorMean(Color::w, prior);
             std::cout << std::setw(6) << moveStr << " | " << std::setw(9) << count << " | "
-                      << std::setw(4) << entry.white << "/" << std::setw(3) << entry.draw << "/"
-                      << std::setw(3) << entry.black << " | " << std::setw(7) << std::fixed
-                      << std::setprecision(1) << (postMean * 100.0) << "%" << "\n";
+                      << std::setw(wdlWidth) << wdlStrings[moveStr] << " | " << std::setw(7)
+                      << std::fixed << std::setprecision(1) << (postMean * 100.0) << "%" << "\n";
         } else {
             std::cout << std::setw(6) << moveStr << " | " << std::setw(9) << count
                       << " | (no entry)\n";
@@ -395,14 +398,16 @@ void testTemperature() {
     std::cout << "\nTemperature test passed\n";
 }
 
-void analyzeOpeningBook(const char* filename) {
+int error(std::string message) {
+    std::cerr << "Error: " << message << "\n";
+    return 1;
+}
+
+int analyzeOpeningBook(std::string filename) {
     std::cout << "\n=== Analyzing Opening Book: " << filename << " ===\n\n";
 
     Book book = loadBook(filename);
-    if (!book) {
-        std::cout << "Could not load book from: " << filename << "\n";
-        return;
-    }
+    if (!book) return error("Could not load book from: " + filename);
 
     Position initialPos = Position::initial();
     DirichletPrior prior = computePrior(book);
@@ -413,14 +418,34 @@ void analyzeOpeningBook(const char* filename) {
     testOpeningDistribution(book, initialPos, prior);
 
     std::cout << "\n";
+    return 0;
+}
+
+bool endsWith(const std::string& str, const std::string& suffix) {
+    return str.size() >= suffix.size() &&
+        !str.compare(str.size() - suffix.size(), suffix.size(), suffix);
+}
+
+int showOpeningForFEN(const std::string& fen) {
+    Position pos = fen::parsePosition(fen);
+
+    Book book = loadBook("book.csv");
+    if (!book) return error("Could not load book from: book.csv");
+
+    DirichletPrior prior = computePrior(book);
+
+    std::vector<MoveInfo> nextMoves = collectOpeningMoves(book, pos);
+    printOpeningMoveTable(nextMoves, book, prior, pos);
+    testOpeningDistribution(book, pos, prior);
+
+    std::cout << "\n";
+    return 0;
 }
 
 int main(int argc, char** argv) {
     // If a filename is provided, analyze that book
-    if (argc > 1) {
-        analyzeOpeningBook(argv[1]);
-        return 0;
-    }
+    if (argc > 1 && endsWith(argv[1], ".csv")) return analyzeOpeningBook(argv[1]);
+    if (argc > 1 && fen::maybeFEN(argv[1])) return showOpeningForFEN(argv[1]);
 
     // Otherwise run the standard tests
     testBasicBookOperations();

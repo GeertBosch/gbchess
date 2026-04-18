@@ -1,9 +1,9 @@
 #pragma once
 
-#include <algorithm>
 #include <cstdint>
 #include <unordered_map>
 
+#include "book/eco.h"
 #include "book/pgn/pgn.h"
 #include "core/core.h"
 
@@ -39,16 +39,14 @@ struct DirichletPrior {
 };
 
 struct BookEntry {
-    static constexpr size_t kCountBits = 20;
-    static constexpr uint64_t kMaxResultCount = (1ull << kCountBits) - 1;
-    uint64_t white : kCountBits;  // White wins
-    uint64_t draw : kCountBits;   // Draws
-    uint64_t black : kCountBits;  // Black wins
+    ECO eco;
+    std::string name;
 
-    uint64_t add(pgn::Termination term);  // Accepts: WHITE_WIN, DRAW, BLACK_WIN
-    bool full() const {
-        return std::max({uint64_t(white), uint64_t(draw), uint64_t(black)}) == kMaxResultCount;
-    }
+    uint64_t white = 0;  // White wins
+    uint64_t draw = 0;   // Draws
+    uint64_t black = 0;  // Black wins
+
+    uint64_t add(pgn::Termination term);                     // Accepts: WHITE_WIN, DRAW, BLACK_WIN
     uint64_t total() const { return white + draw + black; }  // May be up to 3 * kMaxResultCount
 
     /** Compute posterior mean score using Bayesian shrinkage with given prior */
@@ -79,6 +77,6 @@ struct Book {
     Move choose(Position position, const MoveVector& moves);
 };
 
-/** Loads a book from a CSV file with format: fen,white,draw,black */
+/** Loads a book from a CSV file with columns: eco, name, fen, white, draw, and black */
 Book loadBook(std::string csvfile);
 }  // namespace book
