@@ -49,6 +49,8 @@ struct BookEntry {
     uint64_t add(pgn::Termination term);                     // Accepts: WHITE_WIN, DRAW, BLACK_WIN
     uint64_t total() const { return white + draw + black; }  // May be up to 3 * kMaxResultCount
 
+    operator bool() const { return total(); }
+
     /** Compute posterior mean score using Bayesian shrinkage with given prior */
     double posteriorMean(Color active, const DirichletPrior& prior) const;
 };
@@ -60,6 +62,7 @@ struct Book {
     DirichletPrior prior = {kPriorStrength / 3.0, kPriorStrength / 3.0, kPriorStrength / 3.0};
 
     operator bool() const { return !entries.empty(); }
+    BookEntry operator[](Position position) const;
 
     /** Set temperature for move selection (higher = more variety, lower = more greedy) */
     void setTemperature(double t) { temperature = t; }

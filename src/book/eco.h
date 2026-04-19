@@ -1,3 +1,4 @@
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -70,6 +71,11 @@ enum ECOCode : uint16_t {  // NOLINT(dead_code)
     // clang-format on
 };
 
+inline std::string to_string(ECOCode code) {
+    return std::string{
+        char('A' + (code) / 100), char('0' + ((code) % 100) / 10), char('0' + (code) % 10)};
+}
+
 // optional-like wrapper for ECOCode
 class ECO {
 public:
@@ -82,6 +88,7 @@ public:
     }
     operator bool() const { return code.has_value(); }
     ECOCode operator*() const { return *code; }
+    operator std::string() const { return code ? to_string(*code) : ""; }
 
     bool operator<(ECO const& other) const { return code < other.code; }  // NOLINT(dead_code)
 
@@ -89,12 +96,17 @@ private:
     std::optional<ECOCode> code;
 };
 
-inline std::string to_string(ECO eco) {
-    if (!eco) return "";
+struct ECOEntry {
+    constexpr ECOEntry(ECOCode e, const char* mv, const char* n) : eco(e), movetext(mv), name(n) {}
+    ECOCode eco;
+    const char* movetext;
+    const char* name;
+};
 
-    ECOCode code = *eco;
-    char volume = 'A' + code / 100;
-    char digit1 = '0' + (code % 100) / 10;
-    char digit2 = '0' + code % 10;
-    return std::string{volume, digit1, digit2};
-}
+constexpr std::array<ECOEntry, 5> baseOpenings [[maybe_unused]] = {
+    ECOEntry{A01, "1.b3", "Larsen's Opening"},
+    ECOEntry{A02, "1.f4", "Bird's Opening"},
+    ECOEntry{A04, "1.Nf3", "Zukertort Opening"},
+    ECOEntry{A05, "1.Nf3 Nf6", "Zukertort Opening"},
+    ECOEntry{A06, "1.Nf3 d5", "Zukertort Opening"},
+};

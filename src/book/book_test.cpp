@@ -76,7 +76,7 @@ void printOpeningMoveTable(const std::vector<MoveInfo>& moves,
         uint64_t key = Hash(afterMove)();
         const auto& entry = book.entries.at(key);
         double postMean = entry.posteriorMean(pos.active(), prior);
-        std::string eco = to_string(entry.eco);
+        std::string eco = std::string(entry.eco);
         std::string opening =
             eco.empty() ? entry.name : eco + (entry.name.empty() ? "" : " " + entry.name);
         std::cout << std::setw(6) << to_string(info.first) << " | " << std::setw(8)
@@ -300,20 +300,20 @@ void testNoBookMoves() {
     std::cout << "No book moves test passed\n";
 }
 
-void testOpeningDistribution(Book& book, const Position& initialPos, const DirichletPrior& prior) {
+void testOpeningDistribution(Book& book, const Position& position, const DirichletPrior& prior) {
 
     std::map<std::string, int> moveCount;
     std::map<std::string, BookEntry> moveEntries;
 
     for (int seed = 1; seed <= 100; ++seed) {
         book.reseed(seed);
-        Move move = book.choose(initialPos, {});
+        Move move = book.choose(position, {});
         if (move) {
             std::string moveStr = to_string(move);
             moveCount[moveStr]++;
 
             if (moveEntries.find(moveStr) == moveEntries.end()) {
-                Position afterMove = moves::applyMove(initialPos, move);
+                Position afterMove = moves::applyMove(position, move);
                 uint64_t key = Hash(afterMove)();
                 if (book.entries.count(key)) moveEntries[moveStr] = book.entries[key];
             }
@@ -329,8 +329,11 @@ void testOpeningDistribution(Book& book, const Position& initialPos, const Diric
     std::map<std::string, std::string> wdlStrings;
     int wdlWidth = 5;  // minimum width for header "W/D/L"
     for (const auto& [moveStr, entry] : moveEntries) {
-        std::string wdl = std::to_string(entry.white) + "/" + std::to_string(entry.draw) + "/" +
-            std::to_string(entry.black);
+        auto win = position.active() == Color::w ? entry.white : entry.black;
+        auto loss = position.active() == Color::w ? entry.black : entry.white;
+
+        std::string wdl =
+            std::to_string(win) + "/" + std::to_string(entry.draw) + "/" + std::to_string(loss);
         wdlStrings[moveStr] = wdl;
         wdlWidth = std::max(wdlWidth, static_cast<int>(wdl.size()));
     }
@@ -343,7 +346,7 @@ void testOpeningDistribution(Book& book, const Position& initialPos, const Diric
     for (const auto& [moveStr, count] : sortedMoves) {
         if (moveEntries.count(moveStr)) {
             const auto& entry = moveEntries[moveStr];
-            double postMean = entry.posteriorMean(Color::w, prior);
+            double postMean = entry.posteriorMean(position.active(), prior);
             std::cout << std::setw(6) << moveStr << " | " << std::setw(9) << count << " | "
                       << std::setw(wdlWidth) << wdlStrings[moveStr] << " | " << std::setw(7)
                       << std::fixed << std::setprecision(1) << (postMean * 100.0) << "%" << "\n";
@@ -426,15 +429,22 @@ bool endsWith(const std::string& str, const std::string& suffix) {
         !str.compare(str.size() - suffix.size(), suffix.size(), suffix);
 }
 
-int showOpeningForFEN(const std::string& fen) {
-    Position pos = fen::parsePosition(fen);
-
+int showOpeningForPosition(const Position& pos) {
     Book book = loadBook("book.csv");
     if (!book) return error("Could not load book from: book.csv");
 
-    DirichletPrior prior = computePrior(book);
+    std::cout << "Position: " << fen::to_string(pos) << "\n";
+    auto entry = book[pos];
+    if (!entry) return error("No book entry for the given position");
+
+    std::cout << "  Book: " << to_string(*entry.eco) << " " << entry.name;
+    auto win = pos.active() == Color::w ? entry.white : entry.black;
+    auto loss = pos.active() == Color::w ? entry.black : entry.white;
+    std::cout << " (W/D/L: " << win << "/" << entry.draw << "/" << loss << ")\n\n";
 
     std::vector<MoveInfo> nextMoves = collectOpeningMoves(book, pos);
+
+    DirichletPrior prior = computePrior(book);
     printOpeningMoveTable(nextMoves, book, prior, pos);
     testOpeningDistribution(book, pos, prior);
 
@@ -442,10 +452,35 @@ int showOpeningForFEN(const std::string& fen) {
     return 0;
 }
 
+int showOpeningForMovetext(const std::string& movetext) {
+    // Create position from movetext
+    pgn::PGN game;
+    game.movetext = movetext;
+    Position pos = Position::initial();
+
+    for (auto&& san : game)
+        if (auto move = pgn::move(pos, san))
+            pos = moves::applyMove(pos, move);
+        else
+            return error("Invalid move in movetext: " + std::string(san));
+
+    return showOpeningForPosition(pos);
+}
+
+std::string argsToString(int argc, char** argv) {
+    std::string result;
+    for (int i = 1; i < argc; ++i) result += argv[i] + std::string(" ");
+    result.pop_back();
+    return result;
+}
+
 int main(int argc, char** argv) {
     // If a filename is provided, analyze that book
     if (argc > 1 && endsWith(argv[1], ".csv")) return analyzeOpeningBook(argv[1]);
-    if (argc > 1 && fen::maybeFEN(argv[1])) return showOpeningForFEN(argv[1]);
+    if (argc > 1 && fen::maybeFEN(argv[1]))
+        return showOpeningForPosition(fen::parsePosition(argv[1]));
+    else if (argc > 1)
+        return showOpeningForMovetext(argsToString(argc, argv));
 
     // Otherwise run the standard tests
     testBasicBookOperations();

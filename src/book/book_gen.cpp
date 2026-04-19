@@ -607,7 +607,7 @@ size_t writeBookCSV(const std::string& csvFile,
             if (it != allFENs.end()) {
                 // Quote the name field to handle commas in opening names
                 std::string quotedName = "\"" + pos.opening.name + "\"";
-                out << to_string(pos.opening.eco) << "," << quotedName << "," << it->second << ","
+                out << std::string(pos.opening.eco) << "," << quotedName << "," << it->second << ","
                     << entry.white << "," << entry.draw << "," << entry.black << "\n";
                 ++writtenCount;
             }
@@ -642,7 +642,7 @@ size_t writeBookEPD(const std::string& epdFile,
         if (epdPosition.empty()) continue;
 
         out << epdPosition << " id \"" << escapeEPDString(pos.opening.name) << "\";"
-            << " eco \"" << to_string(pos.opening.eco) << "\";"
+            << " eco \"" << std::string(pos.opening.eco) << "\";"
             << " c0 \"" << entry.white << "," << entry.draw << "," << entry.black << "\";"
             << "\n";
         ++writtenCount;

@@ -129,7 +129,11 @@ Move selectMove(const Position& position,
         uint64_t d = entry.draw;
         uint64_t l = position.active() == Color::w ? entry.black : entry.white;
 
-        double sampledScore = samplePosteriorScore(w, d, l, prior);
+        // Swap ɑW/ɑL so the prior reflects the active player's expected win rate
+        DirichletPrior activePrior = position.active() == Color::w
+            ? prior
+            : DirichletPrior{prior.ɑL, prior.ɑD, prior.ɑW};
+        double sampledScore = samplePosteriorScore(w, d, l, activePrior);
 
         // Apply temperature to the sampled score (the stochastic component)
         // Lower temperature = more exploitation (amplify differences from 0.5)
@@ -166,8 +170,10 @@ double BookEntry::posteriorMean(Color active, const DirichletPrior& prior) const
     uint64_t w = active == Color::w ? white : black;
     uint64_t d = draw;
     uint64_t l = active == Color::w ? black : white;
-    double totalPosterior = w + prior.ɑW + d + prior.ɑD + l + prior.ɑL;
-    return ((w + prior.ɑW) + 0.5 * (d + prior.ɑD)) / totalPosterior;
+    double αWin = active == Color::w ? prior.ɑW : prior.ɑL;
+    double αLoss = active == Color::w ? prior.ɑL : prior.ɑW;
+    double totalPosterior = w + αWin + d + prior.ɑD + l + αLoss;
+    return ((w + αWin) + 0.5 * (d + prior.ɑD)) / totalPosterior;
 }
 
 DirichletPrior DirichletPrior::fromGlobalStats(uint64_t totalW,
@@ -181,6 +187,12 @@ DirichletPrior DirichletPrior::fromGlobalStats(uint64_t totalW,
 
 void Book::reseed(uint64_t seed) {
     rng = xorshift(seed);
+}
+
+BookEntry Book::operator[](Position position) const {
+    uint64_t key = Hash(position)();
+    auto it = entries.find(key);
+    return it != entries.end() ? it->second : BookEntry{};
 }
 
 void Book::insert(pgn::VerifiedGame game) {
