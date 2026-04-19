@@ -692,6 +692,33 @@ bool tryNullMovePruning(Position& position, Hash hash, Score alpha, Score beta, 
 }
 
 /**
+ * Checks the transposition table and returns a cutoff PV if the TT bounds exclude the current
+ * window. Validates that the TT best move doesn't walk into a draw-by-repetition that wasn't
+ * present when the entry was stored (stale entry guard). Returns empty optional on miss.
+ */
+PrincipalVariation tryTTCutoff(
+    const Position& position, Hash hash, int depthleft, Score& alpha, Score& beta) {
+    auto origAlpha = alpha, origBeta = beta;
+    transpositionTable.refineAlphaBeta(hash, position.turn, depthleft, alpha, beta);
+    if (alpha < beta) return {};
+
+    auto pv = transpositionTable.pv(position, depthleft);
+    if (!pv) return {};
+
+    // Guard against stale TT entries from previous turns: the TT best move may now step
+    // into a position that is drawn by repetition given the current game history, even
+    // though it wasn't when the entry was stored. Check one ply ahead.
+    auto nextPos = moves::applyMove(position, pv.front());
+    auto nextState = repetitions.enter(Hash(nextPos));
+    if (!repetitions.drawn(nextPos.turn.halfmove())) return ++ttCutoffs, pv;
+
+    // Stale entry: restore the original window and fall through to a fresh search.
+    alpha = origAlpha;
+    beta = origBeta;
+    return {};
+}
+
+/**
  * The alpha-beta search algorithm with fail-soft negamax search.
  * The alpha represents the best score that the maximizing player can guarantee at the current
  * level, and beta the best score that the minimizing player can guarantee. The function returns
@@ -711,12 +738,7 @@ PrincipalVariation alphaBeta(
     if (depth.left <= 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
 
     // Check the transposition table, which may tighten one or both search bounds
-    transpositionTable.refineAlphaBeta(hash, position.turn, depth.left, alpha, beta);
-
-    // Early cutoff: if the position is already outside the search window, we can return
-    // immediately with a transition table based PV if we have one.
-    if (alpha >= beta)
-        if (auto pv = transpositionTable.pv(position, depth.left)) return ++ttCutoffs, pv;
+    if (auto pv = tryTTCutoff(position, hash, depth.left, alpha, beta)) return pv;
 
     // Try null move pruning (only in non-PV nodes)
     if (tryNullMovePruning(position, hash, alpha, beta, depth)) return {{}, beta};
