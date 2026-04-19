@@ -135,7 +135,7 @@ private:
         respond(log, response);
     }
 
-    void performSearch(int depth, Position position, MoveVector moves) {
+    void performSearch(int depth, Position position, MoveVector moves) try {
         auto color = position.turn.activeColor();
         if (moves.size() % 2 == 1) color = !color;
         auto timeMillis =
@@ -163,6 +163,9 @@ private:
         ss << "bestmove " << pv.front();
         if (Move ponder = pv[1]) ss << " ponder " << ponder;
         respond(ss.str());
+    } catch (const std::exception& e) {
+        respond("info string error in search: " + std::string(e.what()));
+        throw;
     }
 
     UCIArguments getUCIArguments(std::istream& in) {
@@ -487,6 +490,9 @@ int main(int argc, char** argv) {
         fromStream(std::cin);
     else if (std::string(argv[1]) == "--cmd")
         fromArgs(argc, argv);
+    else if (argv[1][0] == '-')
+        usage();
+
     else
         for (int i = 1; i < argc; i++) fromFile(argv[i]);
 
