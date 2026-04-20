@@ -366,7 +366,7 @@ build/test-cpp.out: ${CPP_TESTS} ${NNUE_FILE}
 		[ -f book.csv ] && (cd build && echo Symlinking book files && ln -fs ../book.csv .) || true; \
 		echo "Checking that all C++ unit tests have been built"; \
 		find src -name "*_test.cpp" -exec basename {} _test.cpp \; | sort > .test_sources.tmp; \
-		find build -depth 1 -a -name "*-test" -exec basename {} -test \; | sort > .test_executables.tmp; \
+		find build -maxdepth 1 -name "*-test" -exec basename {} -test \; | sort > .test_executables.tmp; \
 		diff -u .test_sources.tmp .test_executables.tmp \
 			&& (echo "All C++ unit tests have been built" \
 				&& rm -f .test_sources.tmp .test_executables.tmp) \

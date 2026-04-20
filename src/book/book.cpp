@@ -220,10 +220,7 @@ Move Book::choose(Position position, const MoveVector& moves) {
 
 Book loadBook(std::string csvfile) {
     std::ifstream in(csvfile);
-    if (!in || !in.is_open()) {
-        std::cerr << "Could not open book file: " << csvfile << "\n";
-        return Book();
-    }
+    if (!in || !in.is_open()) return Book();
 
     Book book;
     std::string line;
