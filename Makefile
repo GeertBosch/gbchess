@@ -150,7 +150,13 @@ lichess/lichess_db_broadcast_%.pgn.zst:
 	mkdir -p lichess
 	cd lichess && curl -fsSL -O https://database.lichess.org/broadcast/$(notdir $@)
 
-book.csv book.epd build/book.out: build/book-gen ${LICHESS_PGNS}
+# book.csv is committed to the repository. Use 'make generate-book' to regenerate it from PGN data.
+book.csv book.epd:
+	@echo "book.csv not found; run 'make generate-book' to regenerate from lichess PGN data"
+	@false
+
+# Explicit target to regenerate book.csv and book.epd from lichess PGN files (downloads broadcast data)
+generate-book: build/book-gen ${LICHESS_PGNS}
 	$(Q)echo "Generating book.csv and book.epd from $(words ${LICHESS_PGNS}) PGN files..." > build/book.out
 	$(Q)./build/book-gen ${LICHESS_PGNS} book.csv book.epd >> build/book.out 2>&1 \
 		&& echo "  ✅ build/book.out passed" | tee -a build/book.out \
@@ -354,10 +360,10 @@ build/magic.out: build/magic-test
 	|| (echo "\n*** To accept these changes, pipe this output to the patch command ***" && false) \
 	} $(REDIR)
 
-build/test-cpp.out: ${CPP_TESTS} book.csv ${NNUE_FILE}
+build/test-cpp.out: ${CPP_TESTS} ${NNUE_FILE}
 	$(Q){ \
 		(cd build && echo Symlinking NNUE files && ln -fs ../*.nnue .); \
-		(cd build && echo Symlinking book files && ln -fs ../book.csv .); \
+		[ -f book.csv ] && (cd build && echo Symlinking book files && ln -fs ../book.csv .) || true; \
 		echo "Checking that all C++ unit tests have been built"; \
 		find src -name "*_test.cpp" -exec basename {} _test.cpp \; | sort > .test_sources.tmp; \
 		find build -depth 1 -a -name "*-test" -exec basename {} -test \; | sort > .test_executables.tmp; \
@@ -411,7 +417,7 @@ $(COMPILE_COMMANDS):
 	$(Q)echo ']' >> $@
 	$(call BUILDCMD, true)
 
-.PHONY: ci install-hooks
+.PHONY: ci install-hooks generate-book
 
 SPRT_NEW ?= build/engine
 SPRT_BASE ?= build/engine-base
