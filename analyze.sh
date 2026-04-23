@@ -60,20 +60,40 @@ moves=$(build/pgn-test -v "$pgnfile" | awk '/^Moves: / { sub(/^Moves: /, ""); pr
 # offset = number of plies before the start move (used to align awk move index, color, move number)
 offset=$(( 2 * (start_move - 1) ))
 
-position="startpos moves"
-ply=0
+# Build the position before the first analyzed move (used for the initial evaluation)
+init_position="startpos moves"
+init_ply=0
 for move in $moves ; do
-    position="$position $move"
-    ply=$(( ply + 1 ))
-    num=$(( (ply + 1) / 2 ))
-    if [ $num -lt $start_move ]; then
-        continue
+    init_ply=$(( init_ply + 1 ))
+    init_num=$(( (init_ply + 1) / 2 ))
+    if [ $init_num -lt $start_move ]; then
+        init_position="$init_position $move"
+    else
+        break
     fi
-    if [ -n "$end_move" ] && [ $num -gt $end_move ]; then
-        continue
-    fi
-    echo -e "$new_game\nposition $position\ngo $extraopt\n"
-done | (
+done
+# If no moves were prepended, use plain startpos (avoids trailing "moves" with nothing after it)
+[ "$init_position" = "startpos moves" ] && init_position="startpos"
+
+{
+    # Initial evaluation: position before first analyzed move, provides bestmove/ponder for move 1
+    echo -e "$new_game\nposition $init_position\ngo $extraopt\n"
+
+    position="startpos moves"
+    ply=0
+    for move in $moves ; do
+        position="$position $move"
+        ply=$(( ply + 1 ))
+        num=$(( (ply + 1) / 2 ))
+        if [ $num -lt $start_move ]; then
+            continue
+        fi
+        if [ -n "$end_move" ] && [ $num -gt $end_move ]; then
+            continue
+        fi
+        echo -e "$new_game\nposition $position\ngo $extraopt\n"
+    done
+} | (
     if [ ! -x $(which "$engine") ] ; then
         echo "cannot find engine: $engine" >&2
         exit 2
@@ -89,8 +109,9 @@ awk -v "moves=$moves" -v "offset=$offset" '
 # moves contains the list of UCI moves like "g1f3 d7d6 b1c3 "...
 BEGIN {
     split(moves, move)
-    movenr = 1
-    diff = 0
+    # movenr=0 for the initial pre-start evaluation; incremented to 1 before processing move 1
+    movenr = 0
+    init_done = 0
 }
 /depth .*score / {
     sub(/^.+ score /, "")
@@ -106,11 +127,19 @@ BEGIN {
     }
 }
 /^bestmove / {
-    color=((movenr + offset) % 2 ? "w" : "b")
-    diff = scoreNumeric - lastscore
-    print int((movenr + offset + 1) / 2) " "  color " " move[movenr + offset] " " scoreLabel " diff " diff " " $0
-    lastscore = scoreNumeric
-    ++movenr
-#    print "<" $0
+    if (!init_done) {
+        # Store the initial evaluation result; bestmove/ponder will appear on move 1 line
+        prev_bm_line = $0
+        lastscore = scoreNumeric
+        init_done = 1
+        ++movenr
+    } else {
+        color=((movenr + offset) % 2 ? "w" : "b")
+        diff = scoreNumeric - lastscore
+        print int((movenr + offset + 1) / 2) " " color " " move[movenr + offset] " " scoreLabel " diff " diff " " prev_bm_line
+        lastscore = scoreNumeric
+        prev_bm_line = $0
+        ++movenr
+    }
 }
 '
