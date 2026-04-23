@@ -34,7 +34,7 @@ while getopts "nm:" opt; do
             fi
             ;;
         n)
-            new_game="ucinewgame"
+            new_game="ucinewgame\n"
             ;;
         *)
             usage
@@ -77,7 +77,8 @@ done
 
 {
     # Initial evaluation: position before first analyzed move, provides bestmove/ponder for move 1
-    echo -e "$new_game\nposition $init_position\ngo $extraopt\n"
+    # Unconditional start a new game
+    echo -e "ucinewgame\nposition $init_position\ngo $extraopt"
 
     position="startpos moves"
     ply=0
@@ -91,7 +92,7 @@ done
         if [ -n "$end_move" ] && [ $num -gt $end_move ]; then
             continue
         fi
-        echo -e "$new_game\nposition $position\ngo $extraopt\n"
+        echo -e "${new_game}position $position\ngo $extraopt"
     done
 } | (
     if [ ! -x $(which "$engine") ] ; then
@@ -104,7 +105,6 @@ done
 #    e2e4 cp 20
 #    e7e5 cp 15
 # where the first column is the move and the second one the score from white's perspective.
-tee engine.out |
 awk -v "moves=$moves" -v "offset=$offset" '
 # moves contains the list of UCI moves like "g1f3 d7d6 b1c3 "...
 BEGIN {
