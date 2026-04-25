@@ -2,7 +2,7 @@
 usage() {
     echo -e "usage:  $0 [-m[X][-[Y]]] <engine> pgnfile [goopts]\n" >&2
     echo -e "  -mX-Y: limit analysis to moves X through Y (inclusive)" >&2
-    echo -e "  -n: start a new game before analyzing each move" >&2
+    echo -e "  -n: no new game reset between evaluations (faster, but less consistent)" >&2
 
     echo -e "goopts: additional options to pass to the engine, such as:" >&2
     echo -e "        depth <n>: set the search depth to <n>" >&2
@@ -13,7 +13,7 @@ usage() {
 # Parse options
 start_move=1
 end_move=""
-new_game=""
+new_game=1
 while getopts "nm:" opt; do
     case $opt in
         m)
@@ -34,7 +34,7 @@ while getopts "nm:" opt; do
             fi
             ;;
         n)
-            new_game=1
+            new_game=""
             ;;
         *)
             usage
