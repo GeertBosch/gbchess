@@ -147,15 +147,15 @@ for move in $moves; do
     movenum=$(( (ply + offset + 1) / 2 ))
     best_move=$(awk '{print $2}' <<< "$prev_bm_line")
 
-    # Optional new game before B-query; NOT between B and M, to preserve TT sharing
+    # Optional new game before B-query; also before M-query with -n, for independent evaluations
     [ -n "$new_game" ] && echo "ucinewgame" >&3
 
     # Query position after best move
     query_pos "$(append_move "$position_before" "$best_move")" "$sign"
     eval_B="$_score_numeric"
 
-    # Query position after played move; always a separate query even when move == best_move:
-    # the TT warmed by the B-query may allow searching one ply deeper, changing the evaluation.
+    # Query position after played move; with -n each query is independent (no TT sharing)
+    [ -n "$new_game" ] && echo "ucinewgame" >&3
     query_pos "$(append_move "$position_before" "$move")" "$sign"
     eval_M="$_score_numeric"
     next_bm="$_bm_line"
