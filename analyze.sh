@@ -34,7 +34,7 @@ while getopts "nm:" opt; do
             fi
             ;;
         n)
-            new_game="ucinewgame\n"
+            new_game=1
             ;;
         *)
             usage
@@ -75,71 +75,93 @@ done
 # If no moves were prepended, use plain startpos (avoids trailing "moves" with nothing after it)
 [ "$init_position" = "startpos moves" ] && init_position="startpos"
 
-{
-    # Initial evaluation: position before first analyzed move, provides bestmove/ponder for move 1
-    # Unconditional start a new game
-    echo -e "ucinewgame\nposition $init_position\ngo $extraopt"
+# Validate engine
+if [ ! -x "$(which "$engine")" ]; then
+    echo "cannot find engine: $engine" >&2
+    exit 2
+fi
 
-    position="startpos moves"
-    ply=0
-    for move in $moves ; do
-        position="$position $move"
-        ply=$(( ply + 1 ))
-        num=$(( (ply + 1) / 2 ))
-        if [ $num -lt $start_move ]; then
-            continue
+# Helper: append a UCI move to a position string
+append_move() {
+    local pos="$1" mov="$2"
+    [ "$pos" = "startpos" ] && echo "startpos moves $mov" || echo "$pos $mov"
+}
+
+# Query the engine for a position; sets _score_label, _score_numeric, _bm_line.
+# sign: 1 = keep raw score (white to move), -1 = negate (black to move)
+query_pos() {
+    local pos="$1" sign="$2"
+    local line score_type raw_score score_value
+    echo -e "position $pos\ngo $extraopt" >&3
+    while IFS= read -r line <&4; do
+        if [[ "$line" =~ score\ (cp|mate)\ (-?[0-9]+) ]]; then
+            score_type="${BASH_REMATCH[1]}"
+            raw_score="${BASH_REMATCH[2]}"
+            score_value=$(( sign * raw_score ))
+            if [ "$score_type" = "mate" ]; then
+                _score_label="mate $score_value"
+                _score_numeric=$(( score_value > 0 ? 10000 - score_value : -10000 - score_value ))
+            else
+                _score_label="cp $score_value"
+                _score_numeric=$score_value
+            fi
         fi
-        if [ -n "$end_move" ] && [ $num -gt $end_move ]; then
-            continue
+        if [[ "$line" =~ ^bestmove ]]; then
+            _bm_line="$line"
+            break
         fi
-        echo -e "${new_game}position $position\ngo $extraopt"
     done
-} | (
-    if [ ! -x $(which "$engine") ] ; then
-        echo "cannot find engine: $engine" >&2
-        exit 2
+}
+
+# Start engine using named pipes for bidirectional communication (bash 3.2 compatible)
+_fifo_in=$(mktemp -u /tmp/analyze_in.XXXXXX)
+_fifo_out=$(mktemp -u /tmp/analyze_out.XXXXXX)
+mkfifo "$_fifo_in" "$_fifo_out"
+trap 'rm -f "$_fifo_in" "$_fifo_out"' EXIT
+"$engine" < "$_fifo_in" > "$_fifo_out" &
+_engine_pid=$!
+exec 3>"$_fifo_in" 4<"$_fifo_out"
+
+# Initial evaluation: position before first analyzed move; always from white's perspective (sign=1)
+echo "ucinewgame" >&3
+query_pos "$init_position" 1
+prev_bm_line="$_bm_line"
+
+# Analyze each in-range ply: query position after best move, then after played move.
+# diff = eval(played) - eval(best), both in white's perspective.
+position_before="$init_position"
+ply=0
+for move in $moves; do
+    ply=$(( ply + 1 ))
+    num=$(( (ply + 1) / 2 ))
+    if [ $num -lt $start_move ]; then
+        continue
     fi
-    $engine 2>/dev/null) |
-# The output here is the raw UCI output from the engine, which we will post-process to extract
-# the engines score for each move in the PGN, and output it in a format like:
-#    e2e4 cp 20
-#    e7e5 cp 15
-# where the first column is the move and the second one the score from white's perspective.
-awk -v "moves=$moves" -v "offset=$offset" '
-# moves contains the list of UCI moves like "g1f3 d7d6 b1c3 "...
-BEGIN {
-    split(moves, move)
-    # movenr=0 for the initial pre-start evaluation; incremented to 1 before processing move 1
-    movenr = 0
-    init_done = 0
-}
-/depth .*score / {
-    sub(/^.+ score /, "")
-    scoreType=$1
-    rawScore=$2 + 0
-    scoreValue=((movenr + offset) % 2 ? -rawScore : rawScore)
-    if (scoreType == "mate") {
-        scoreLabel="mate " scoreValue
-        scoreNumeric=(scoreValue > 0 ? 10000 - scoreValue : -10000 - scoreValue)
-    } else {
-        scoreLabel="cp " scoreValue
-        scoreNumeric=scoreValue
-    }
-}
-/^bestmove / {
-    if (!init_done) {
-        # Store the initial evaluation result; bestmove/ponder will appear on move 1 line
-        prev_bm_line = $0
-        lastscore = scoreNumeric
-        init_done = 1
-        ++movenr
-    } else {
-        color=((movenr + offset) % 2 ? "w" : "b")
-        diff = scoreNumeric - lastscore
-        print int((movenr + offset + 1) / 2) " " color " " move[movenr + offset] " " scoreLabel " diff " diff " " prev_bm_line
-        lastscore = scoreNumeric
-        prev_bm_line = $0
-        ++movenr
-    }
-}
-'
+    if [ -n "$end_move" ] && [ $num -gt $end_move ]; then
+        break
+    fi
+
+    # sign: after white plays it is black to move, so engine score is from black's view -> negate
+    sign=$(( (ply + offset) % 2 ? -1 : 1 ))
+    (( (ply + offset) % 2 )) && color="w" || color="b"
+    movenum=$(( (ply + offset + 1) / 2 ))
+    best_move=$(awk '{print $2}' <<< "$prev_bm_line")
+
+    # Optional new game before B-query; NOT between B and M, to preserve TT sharing
+    [ -n "$new_game" ] && echo "ucinewgame" >&3
+
+    # Query position after best move
+    query_pos "$(append_move "$position_before" "$best_move")" "$sign"
+    eval_B="$_score_numeric"
+
+    # Query position after played move; always a separate query even when move == best_move:
+    # the TT warmed by the B-query may allow searching one ply deeper, changing the evaluation.
+    query_pos "$(append_move "$position_before" "$move")" "$sign"
+    eval_M="$_score_numeric"
+    next_bm="$_bm_line"
+
+    diff=$(( eval_M - eval_B ))
+    echo "$movenum $color $move $_score_label diff $diff $prev_bm_line"
+    prev_bm_line="$next_bm"
+    position_before="$(append_move "$position_before" "$move")"
+done
