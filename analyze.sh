@@ -3,6 +3,7 @@ usage() {
     echo -e "usage:  $0 [-m[X][-[Y]]] <engine> pgnfile [goopts]\n" >&2
     echo -e "  -mX-Y: limit analysis to moves X through Y (inclusive)" >&2
     echo -e "  -n: no new game reset between evaluations (faster, but less consistent)" >&2
+    echo -e "  -p: append the position after each played move at the end of the line" >&2
 
     echo -e "goopts: additional options to pass to the engine, such as:" >&2
     echo -e "        depth <n>: set the search depth to <n>" >&2
@@ -14,7 +15,8 @@ usage() {
 start_move=1
 end_move=""
 new_game=1
-while getopts "nm:" opt; do
+show_position=""
+while getopts "npm:" opt; do
     case $opt in
         m)
             if [[ $OPTARG =~ ^([0-9]*)-([0-9]*)$ ]]; then
@@ -35,6 +37,9 @@ while getopts "nm:" opt; do
             ;;
         n)
             new_game=""
+            ;;
+        p)
+            show_position=1
             ;;
         *)
             usage
@@ -156,14 +161,17 @@ for move in $moves; do
 
     # Query position after played move; with -n each query is independent (no TT sharing)
     [ -n "$new_game" ] && echo "ucinewgame" >&3
-    query_pos "$(append_move "$position_before" "$move")" "$sign"
+    position_after="$(append_move "$position_before" "$move")"
+    query_pos "$position_after" "$sign"
     eval_M="$_score_numeric"
     next_bm="$_bm_line"
 
     diff=$(( eval_M - eval_B ))
     # Express diff from the perspective of the player who moved (negative = blunder for that player)
     (( (ply + offset) % 2 == 0 )) && diff=$(( -diff ))
-    echo "$movenum $color $move $_score_label diff $diff $prev_bm_line"
+    pos_suffix=""
+    [ -n "$show_position" ] && pos_suffix=" position $position_after"
+    echo "$movenum $color $move $_score_label diff $diff $prev_bm_line$pos_suffix"
     prev_bm_line="$next_bm"
-    position_before="$(append_move "$position_before" "$move")"
+    position_before="$position_after"
 done
