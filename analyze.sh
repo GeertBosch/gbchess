@@ -144,7 +144,7 @@ for move in $moves; do
     # sign: after white plays it is black to move, so engine score is from black's view -> negate
     sign=$(( (ply + offset) % 2 ? -1 : 1 ))
     (( (ply + offset) % 2 )) && color="w" || color="b"
-    movenum=$(( (ply + offset + 1) / 2 ))
+    movenum=$num
     best_move=$(awk '{print $2}' <<< "$prev_bm_line")
 
     # Optional new game before B-query; also before M-query with -n, for independent evaluations
