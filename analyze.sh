@@ -161,6 +161,8 @@ for move in $moves; do
     next_bm="$_bm_line"
 
     diff=$(( eval_M - eval_B ))
+    # Express diff from the perspective of the player who moved (negative = blunder for that player)
+    (( (ply + offset) % 2 == 0 )) && diff=$(( -diff ))
     echo "$movenum $color $move $_score_label diff $diff $prev_bm_line"
     prev_bm_line="$next_bm"
     position_before="$(append_move "$position_before" "$move")"
