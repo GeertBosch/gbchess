@@ -349,7 +349,7 @@ build/uci-%.out: test/uci-%.in build/engine ${NNUE_FILE}
 	$(Q)./build/engine $< 2>&1 | grep -wv "expect" $(REDIR)
 
 build/uci.out: $(patsubst test/uci-%.in,build/uci-%.out,$(wildcard test/uci-*.in))
-	$(Q)./test/check-uci.sh ${REDIR}
+	$(Q)./test/check-uci.sh
 
 uci: build/uci.out
 

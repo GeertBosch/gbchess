@@ -70,9 +70,6 @@ for infile in test/uci-*.in; do
 
     if [ "$file_failed" -eq 0 ] && [ -s "$matches" ]; then
         printf "  ✅ %s\n" "$outfile"
-        while read match; do
-            printf "     Matched: %s\n" "$match"
-        done < "$matches"
     fi
     rm -f "$matches"
 done

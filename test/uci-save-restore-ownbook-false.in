@@ -6,4 +6,4 @@ ucinewgame
 restore build/uci-save-restore-ownbook-false.bin
 # Note that this also restores the position and moves
 go depth 5
-expect info depth 5 .*nodes ..? .*pv d5e4
+expect info depth 5 .*nodes ...? .*pv d5e4

@@ -895,12 +895,13 @@ PrincipalVariation toplevelAlphaBeta(
 
     Hash hash(position);
 
-    transpositionTable.refineAlphaBeta(hash, position.turn, depth.left, alpha, beta);
-
     auto moveList = moves::allLegalMovesAndCaptures(position.turn, position.board);
 
     // Forced moves don't count towards depth
     if (moveList.size() == 1) ++depth.left;
+
+    // No moves means either checkmate or stalemate
+    if (moveList.empty() && !isInCheck(position)) return {Move(), Score()};
 
     // computeBestMove already entered the current position in the repetition table
     sortMoves(position, hash, moveList.begin(), moveList.end(), Move(), depthleft);
@@ -908,7 +909,7 @@ PrincipalVariation toplevelAlphaBeta(
 
     int currmovenumber = 0;
     for (auto move : moveList) {
-        if (currmoveInfo(info, depthleft, move, ++currmovenumber)) break;
+        if (currmoveInfo(info, depthleft, move, ++currmovenumber)) return pv;
 
         auto newPosition = moves::applyMove(position, move);
         Hash newHash(newPosition);
@@ -928,9 +929,8 @@ PrincipalVariation toplevelAlphaBeta(
                        depth.current,
                        position.board,
                        Move()))
-            break;
+            return pv;
     }
-    if (moveList.empty() && !isInCheck(position)) pv = {Move(), Score()};
     transpositionTable.insert(
         hash, position.turn.fullmove(), {pv.front(), pv.score}, depthleft, alpha, beta);
 
