@@ -112,12 +112,13 @@ public:
 
 private:
     using UCICommandHandler = std::function<void(std::ostream&, UCIArguments args)>;
+    static constexpr auto kDefaultTimeControl = TimeControl::infinite();  // No limits by default
 
     book::Book book;
     uint64_t bookMoveCount = 0;
     bool useOwnBook = true;
     Position position = fen::parsePosition(fen::initialPosition);
-    TimeControl timeControl = TimeControl::infinite();  // No time limits by default
+    TimeControl timeControl = kDefaultTimeControl;
     uint64_t maxNodes = options::fixedNodesSearch;
     MoveVector moves;
     std::atomic_bool stopping = false;
@@ -370,7 +371,7 @@ void UCIRunner::dispatch(const std::string& command,
         uint64_t random = ++seeds;  // Non-zero random seed
         book.reseed(random);        // Use seed 0 for deterministic book moves in new game
         respond("info string book reseeded with " + ::to_string(random));
-        timeControl = TimeControl{180'000};  // Default to 3 minutes per side
+        timeControl = kDefaultTimeControl;
         moves.clear();
         position = fen::parsePosition(fen::initialPosition);
     } else if (command == "position") {
