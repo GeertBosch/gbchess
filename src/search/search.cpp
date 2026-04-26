@@ -228,11 +228,12 @@ struct TranspositionTable {
     }
 
     Eval find(Hash hash) {
-        if constexpr (kNumEntries == 0) return {Move(), Score()};
+        if constexpr (kNumEntries == 0) return {};
 
         auto& entry = entries[indexOf(hash)];
         ++stats.numMisses;
         if (keyOf(hash) != entry.key || entry.generation != numGenerations) return {};
+
         --stats.numMisses;
         ++stats.numHits;
 
@@ -1011,6 +1012,7 @@ bool saveState(std::ostream& out) {
 
 void clearState() {
     transpositionTable.clear();
+    maxSelDepth = 0;
     repetitions.clear();
     std::fill(&history[0][0][0], &history[0][0][0] + sizeof(history) / sizeof(history[0][0][0]), 0);
     std::fill(&killerMoves[0][0],
