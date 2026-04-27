@@ -1,13 +1,40 @@
 #pragma once
 
 #include <array>
-#include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <exception>
+#include <execinfo.h>
 #include <string>
 #include <vector>
 
 using uint128_t = __uint128_t;
+
+/** Exception thrown when an assert() fails. */
+struct AssertionError : std::exception {
+    std::string message;
+
+    AssertionError(const char* message) : message(message) {
+        std::array<void*, 64> frames;
+        int count = backtrace(frames.data(), frames.size());
+        char** symbols = backtrace_symbols(frames.data(), count);
+        for (int i = 0; i < count; ++i) this->message += std::string(symbols[i]) + "\n";
+        std::free(symbols);
+    }
+
+    const char* what() const noexcept override { return message.c_str(); }
+};
+
+#define _ASSERT_STR(x) #x
+#define _ASSERT_TOSTR(x) _ASSERT_STR(x)
+#undef assert
+#define assert(condition)                                                                     \
+    do {                                                                                      \
+        if (__builtin_expect(!(condition), 0))                                                \
+            throw AssertionError(                                                             \
+                __FILE__ ":" _ASSERT_TOSTR(__LINE__) ": assertion failed: " #condition "\n"); \
+    } while (false)
 
 #ifdef DEBUG
 constexpr bool debug = 1;
