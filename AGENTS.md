@@ -158,7 +158,7 @@ Before making ANY optimization changes, record comprehensive baseline metrics:
    ```bash
    make test -j          # All tests must pass
    make mate123 mate45   # Mate-finding ability
-   make puzzles          # maintain 93/100 minimum
+   make puzzles          # maintain 96/100 minimum
    ```
 
 3. **Document Current State**:
@@ -282,8 +282,8 @@ Only after Phase 2 diagnostics, prioritize optimizations. Example priority:
    - ✅ "Baseline is N nodes. After change, it's M nodes. Impact: (M-N)/N%"
 
 5. **Prioritizing Nodes Over Correctness**:
-   - ❌ "We reduced nodes by 50% but puzzles dropped from 93 to 92"
-   - ✅ "Maintain 93/100+ puzzles. Only accept optimizations that preserve quality"
+   - ❌ "We reduced nodes by 50% but puzzles dropped from 96 to 95"
+   - ✅ "Maintain 96/100+ puzzles. Only accept optimizations that preserve quality"
 
 6. **Ignoring Test Failures**:
    - ❌ "These tests fail but the optimization is good overall"
@@ -310,7 +310,7 @@ Only after Phase 2 diagnostics, prioritize optimizations. Example priority:
 ### Example: Good Optimization Process
 
 ```
-1. Baseline: Record depth 8 = 72,603 nodes, puzzles = 93/100
+1. Baseline: Record depth 8 = 72,603 nodes, puzzles = 96/100
 2. Diagnose: Profile shows 60% of time in quiescence search
 3. Analyze: Quiescence tries many losing captures
 4. Hypothesis: "Delta pruning in QS will reduce nodes by 10-15%"
