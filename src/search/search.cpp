@@ -1077,10 +1077,11 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
             checkedMoves.size() < pv.moves.size()) {
             auto scoreStr = std::string(pv.score);
             std::stringstream ss;
-            ss << "string pv continues after repetition with move "
-               << to_string(pv.moves[checkedMoves.size()]) << " score " << scoreStr;
+            pv.moves.resize(checkedMoves.size());  // truncate after last non-repeating move
+            ss << "string pv continues after repetition with move " << to_string(pv) << " score "
+               << scoreStr;
             info(ss.str());
-            abort();
+            break;
         }
     }
 
