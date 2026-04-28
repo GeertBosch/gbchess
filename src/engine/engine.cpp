@@ -466,9 +466,14 @@ void usage() {
 }
 
 void fromStream(std::istream& stream) {
+    // Get the /tmp directory from the environment, or use the current directory if not set
+    const char* tmpDir = std::getenv("TMPDIR");
+    if (!tmpDir) tmpDir = ".";
+
     // Include a PID in the log file name to avoid conflicts between engines
-    std::ofstream log("engine-" + std::to_string(getpid()) + ".log");
+    std::ofstream log(std::string(tmpDir) + "/engine-" + std::to_string(getpid()) + ".log");
     log << "Entering UCI for " << cmdName << " with PID " << getpid() << "\n";
+
     enterUCI(stream, std::cout, log);
     log << "Exiting UCI for " << cmdName << " with PID " << getpid() << "\n";
     std::flush(log);
