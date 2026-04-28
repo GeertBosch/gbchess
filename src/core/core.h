@@ -65,15 +65,14 @@ public:
     public:
         constexpr iterator(T value) : value(value) {}
         T operator*() const { return value; }
-        iterator& operator++() {
+        constexpr iterator& operator++() {
             value = static_cast<T>(static_cast<size_t>(value) + 1);
             return *this;
         }
-        bool operator==(iterator other) const { return value == other.value; }
-        bool operator!=(iterator other) const { return value != other.value; }
+        constexpr bool operator==(iterator other) const { return value == other.value; }
+        constexpr bool operator!=(iterator other) const { return value != other.value; }
     };
-    constexpr Range(T first, T last)
-        : _begin(first), _end(static_cast<T>(static_cast<size_t>(last) + 1)) {}
+    constexpr Range(T first, T last) : _begin(first), _end(++iterator(last)) {}
 
     iterator begin() const { return _begin; }
     iterator end() const { return _end; }
