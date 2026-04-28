@@ -105,6 +105,12 @@ void printStatistics(std::ostream& os) {
        << " miss(key/depth/gen/repetition)=" << search::ttMissKeyMain << "/"
        << search::ttMissDepthMain << "/" << search::ttMissGenerationMain << "/"
        << search::ttMissRepetitionMain << "\n";
+    os << "TT main hit types: exact/lower/upper=" << search::ttHitExactMain << "/"
+       << search::ttHitLowerMain << "/" << search::ttHitUpperMain << "\n";
+    os << "TT main depth-miss gaps: d1/d2/d3+=" << search::ttMissDepthGap1Main << "/"
+       << search::ttMissDepthGap2Main << "/" << search::ttMissDepthGap3PlusMain << "\n";
+    os << "TT main depth-miss d1 potential: would-cut=" << search::ttMissDepthGap1WouldCutMain
+       << " would-tighten=" << search::ttMissDepthGap1WouldTightenMain << "\n";
     os << "TT qs: probes=" << search::ttProbesQs << " hits=" << search::ttHitsQs
        << " cutoffs=" << search::qsTTCutoffs << " no-cut=" << search::ttNoCutQs
        << " miss(key/depth/gen/repetition)=" << search::ttMissKeyQs << "/" << search::ttMissDepthQs
@@ -126,6 +132,7 @@ void printStatistics(std::ostream& os) {
        << ", m2-3=" << search::ply1CutoffMoveLe3 << ", m4+=" << search::ply1CutoffMoveGt3 << ")\n";
      os << "Shallow nodes (depth<=3): main=" << search::shallowMainNodes
          << " leaves->QS=" << search::shallowLeavesToQS << "\n";
+     os << "Forced move extensions: " << search::forcedMoveExtensions << "\n";
      os << "TT refine no-cut: main=" << search::ttRefineNoCut << " (shallow="
          << search::ttRefineNoCutShallow << ") qs=" << search::qsTTRefineNoCut << "\n";
     os << "Beta cutoffs: " << search::betaCutoffs << " ("
