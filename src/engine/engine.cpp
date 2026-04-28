@@ -105,12 +105,18 @@ void printStatistics(std::ostream& os) {
        << " miss(key/depth/gen/repetition)=" << search::ttMissKeyMain << "/"
        << search::ttMissDepthMain << "/" << search::ttMissGenerationMain << "/"
        << search::ttMissRepetitionMain << "\n";
+    os << "TT main key-miss detail: empty/occupied(curr/old)=" << search::ttMissKeyMainEmpty << "/"
+       << search::ttMissKeyMainOccupied << "(" << search::ttMissKeyMainOccupiedCurrentGen << "/"
+       << search::ttMissKeyMainOccupiedOldGen << ")\n";
     os << "TT main hit types: exact/lower/upper=" << search::ttHitExactMain << "/"
        << search::ttHitLowerMain << "/" << search::ttHitUpperMain << "\n";
     os << "TT main depth-miss gaps: d1/d2/d3+=" << search::ttMissDepthGap1Main << "/"
        << search::ttMissDepthGap2Main << "/" << search::ttMissDepthGap3PlusMain << "\n";
     os << "TT main depth-miss d1 potential: would-cut=" << search::ttMissDepthGap1WouldCutMain
        << " would-tighten=" << search::ttMissDepthGap1WouldTightenMain << "\n";
+    os << "TT main depth-miss at requested depth 1/2/3/4+=" << search::ttMissDepthAt1Main << "/"
+       << search::ttMissDepthAt2Main << "/" << search::ttMissDepthAt3Main << "/"
+       << search::ttMissDepthAt4PlusMain << "\n";
     os << "TT qs: probes=" << search::ttProbesQs << " hits=" << search::ttHitsQs
        << " cutoffs=" << search::qsTTCutoffs << " no-cut=" << search::ttNoCutQs
        << " miss(key/depth/gen/repetition)=" << search::ttMissKeyQs << "/" << search::ttMissDepthQs
@@ -132,6 +138,8 @@ void printStatistics(std::ostream& os) {
        << ", m2-3=" << search::ply1CutoffMoveLe3 << ", m4+=" << search::ply1CutoffMoveGt3 << ")\n";
      os << "Shallow nodes (depth<=3): main=" << search::shallowMainNodes
          << " leaves->QS=" << search::shallowLeavesToQS << "\n";
+     os << "Main hash visits: first=" << search::mainHashSeenFirst
+        << " repeat=" << search::mainHashSeenRepeat << "\n";
      os << "Forced move extensions: " << search::forcedMoveExtensions << "\n";
      os << "TT refine no-cut: main=" << search::ttRefineNoCut << " (shallow="
          << search::ttRefineNoCutShallow << ") qs=" << search::qsTTRefineNoCut << "\n";

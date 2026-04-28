@@ -4,6 +4,7 @@
 #include <iostream>
 #include <optional>
 #include <sstream>
+#include <unordered_set>
 #include <utility>
 
 #include "core/core.h"
@@ -73,12 +74,20 @@ uint64_t ttProbesMain = 0;
 uint64_t ttHitsMain = 0;
 uint64_t ttNoCutMain = 0;
 uint64_t ttMissKeyMain = 0;
+uint64_t ttMissKeyMainEmpty = 0;
+uint64_t ttMissKeyMainOccupied = 0;
+uint64_t ttMissKeyMainOccupiedCurrentGen = 0;
+uint64_t ttMissKeyMainOccupiedOldGen = 0;
 uint64_t ttMissDepthMain = 0;
 uint64_t ttMissDepthGap1Main = 0;
 uint64_t ttMissDepthGap2Main = 0;
 uint64_t ttMissDepthGap3PlusMain = 0;
 uint64_t ttMissDepthGap1WouldCutMain = 0;
 uint64_t ttMissDepthGap1WouldTightenMain = 0;
+uint64_t ttMissDepthAt1Main = 0;
+uint64_t ttMissDepthAt2Main = 0;
+uint64_t ttMissDepthAt3Main = 0;
+uint64_t ttMissDepthAt4PlusMain = 0;
 uint64_t ttMissGenerationMain = 0;
 uint64_t ttMissRepetitionMain = 0;
 uint64_t ttHitExactMain = 0;
@@ -104,6 +113,8 @@ uint64_t ttRawHitsQs = 0;
 uint64_t shallowMainNodes = 0;
 uint64_t shallowLeavesToQS = 0;
 uint64_t forcedMoveExtensions = 0;
+uint64_t mainHashSeenFirst = 0;
+uint64_t mainHashSeenRepeat = 0;
 
 namespace {
 using namespace std::chrono;
@@ -118,6 +129,12 @@ uint64_t searchCacheCount = 0;
 timepoint searchStartTime = {};
 
 std::optional<nnue::NNUE> network = nnue::loadNNUE("nn-82215d0fd0df.nnue", nnue::kQuiet);
+std::unordered_set<uint64_t> seenMainHashKeys;
+
+uint64_t mainHashKey(Hash hash) {
+    auto v = hash();
+    return uint64_t(v) ^ uint64_t(v >> 64);
+}
 
 std::string pct(uint64_t some, uint64_t all) {
     return all ? " " + std::to_string((some * 100) / all) + "%" : "";
@@ -218,6 +235,8 @@ public:
  */
 struct TranspositionTable {
 
+    enum class Scope : uint8_t { Main, QsFrontier, QsDeep };
+
     enum class EntryType : uint8_t { EXACT, LOWERBOUND, UPPERBOUND };
     std::string to_string(EntryType type) const {
         switch (type) {
@@ -238,8 +257,8 @@ struct TranspositionTable {
         Eval eval;
         uint8_t depthleft = 0;
         EntryType type = EntryType::EXACT;
-        uint8_t generation;
-        uint8_t fullMoveNumber;  // for informational purposes only, not used in lookups
+        uint8_t generation = 0;
+        Scope scope = Scope::Main;
         Entry() = default;
 
         Entry(Hash hash,
@@ -247,13 +266,15 @@ struct TranspositionTable {
               uint8_t depth,
               EntryType type,
               uint8_t generation,
-              uint8_t fullMoveNumber)
+                            Scope scope)
             : key(keyOf(hash)),
               eval(move),
               depthleft(depth),
               type(type),
               generation(generation),
-              fullMoveNumber(fullMoveNumber) {}
+                            scope(scope) {}
+
+        [[nodiscard]] bool occupied() const { return key; }
     };
 
     struct Stats {
@@ -269,8 +290,14 @@ struct TranspositionTable {
     static constexpr size_t MB = 1024 * 1024;
     static constexpr size_t kNumEntries = options::transpositionTableMB * MB / sizeof(Entry);
 
-    static uint64_t keyOf(Hash hash) { return hash() >> 64; }
-    static uint64_t indexOf(Hash hash) { return hash() % kNumEntries; }
+    static HashValue domainHashValue(Hash hash) {
+        auto value = hash();
+        return value;
+    }
+    static uint64_t keyOf(Hash hash) { return keyOf(hash()); }
+    static uint64_t indexOf(Hash hash) { return indexOf(hash()); }
+    static uint64_t keyOf(HashValue hashValue) { return hashValue >> 64; }
+    static uint64_t indexOf(HashValue hashValue) { return hashValue % kNumEntries; }
 
     std::vector<Entry> entries{kNumEntries};
     uint8_t numGenerations = 0;
@@ -283,9 +310,12 @@ struct TranspositionTable {
     Eval find(Hash hash) {
         if constexpr (kNumEntries == 0) return {};
 
-        auto& entry = entries[indexOf(hash)];
+        auto domainHash = domainHashValue(hash);
+        auto& entry = entries[indexOf(domainHash)];
         ++stats.numMisses;
-        if (keyOf(hash) != entry.key || entry.generation != numGenerations) return {};
+        if (!entry.occupied() || keyOf(domainHash) != entry.key ||
+            entry.generation != numGenerations)
+            return {};
 
         --stats.numMisses;
         ++stats.numHits;
@@ -300,9 +330,21 @@ struct TranspositionTable {
     Eval peek(Hash hash) const {
         if constexpr (kNumEntries == 0) return {};
 
-        const auto& entry = entries[indexOf(hash)];
-        if (keyOf(hash) != entry.key || entry.generation != numGenerations) return {};
+        auto domainHash = domainHashValue(hash);
+        const auto& entry = entries[indexOf(domainHash)];
+        if (!entry.occupied() || keyOf(domainHash) != entry.key ||
+            entry.generation != numGenerations)
+            return {};
         return entry.eval;
+    }
+
+    [[nodiscard]] bool contains(Hash hash) const {
+        if constexpr (kNumEntries == 0) return false;
+
+        auto domainHash = domainHashValue(hash);
+        const auto& entry = entries[indexOf(domainHash)];
+        return entry.occupied() && keyOf(domainHash) == entry.key &&
+            entry.generation == numGenerations;
     }
 
     PrincipalVariation pv(Position pos, int depth) {
@@ -328,15 +370,43 @@ struct TranspositionTable {
         MissRepetition,
     };
 
-    RefineResult refineAlphaBeta(Hash hash, Turn turn, int depthleft, Score& alpha, Score& beta) {
+    RefineResult refineAlphaBeta(Hash hash,
+                                 Turn turn,
+                                 int depthleft,
+                                 Score& alpha,
+                                 Score& beta,
+                                 bool allowQsFrontierInMain = false) {
         if constexpr (kNumEntries == 0) return RefineResult::MissKey;
-        auto idx = indexOf(hash);
+        auto domainHash = domainHashValue(hash);
+        auto idx = indexOf(domainHash);
         auto& entry = entries[idx];
 
         ++stats.numMisses;
-        if (entry.key != keyOf(hash)) return RefineResult::MissKey;
+        if (entry.key != keyOf(domainHash)) {
+            if (depthleft > 0) {
+                if (!entry.occupied())
+                    ++ttMissKeyMainEmpty;
+                else {
+                    ++ttMissKeyMainOccupied;
+                    if (entry.generation == numGenerations)
+                        ++ttMissKeyMainOccupiedCurrentGen;
+                    else
+                        ++ttMissKeyMainOccupiedOldGen;
+                }
+            }
+            return RefineResult::MissKey;
+        }
         if (entry.depthleft < depthleft) {
             if (depthleft > 0) {
+                if (depthleft == 1)
+                    ++ttMissDepthAt1Main;
+                else if (depthleft == 2)
+                    ++ttMissDepthAt2Main;
+                else if (depthleft == 3)
+                    ++ttMissDepthAt3Main;
+                else
+                    ++ttMissDepthAt4PlusMain;
+
                 auto gap = depthleft - int(entry.depthleft);
                 if (gap == 1) {
                     ++ttMissDepthGap1Main;
@@ -363,6 +433,17 @@ struct TranspositionTable {
             return RefineResult::MissDepth;
         }
         if (entry.generation != numGenerations) return RefineResult::MissGeneration;
+        // Main-search TT reuse policy:
+        // - Never consume deep-qsearch entries
+        // - Allow frontier-qsearch entries only under explicit shallow/non-PV gate
+        if (depthleft > 0) {
+            if (entry.scope == Scope::QsDeep) return RefineResult::MissDepth;
+            if (entry.scope == Scope::QsFrontier) {
+                if (!allowQsFrontierInMain) return RefineResult::MissDepth;
+                if (entry.type == EntryType::EXACT || entry.eval.score.mate())
+                    return RefineResult::MissDepth;
+            }
+        }
         if (repetitions.drawn(turn.halfmove())) {
             // Don't refine if this position may be drawn by repetition, to avoid
             // polluting the table with inaccurate evaluations.
@@ -396,7 +477,17 @@ struct TranspositionTable {
      */
     [[nodiscard]] bool shouldReplace(const Entry& oldEntry, const Entry& newEntry) {
         // Empty slot or past generation, always replace
-        if (!oldEntry.eval.move || oldEntry.generation != newEntry.generation) return true;
+        if (!oldEntry.occupied() || oldEntry.generation != newEntry.generation) return true;
+
+        // Prefer preserving higher-coverage entries.
+        if (oldEntry.scope != newEntry.scope) {
+            if (oldEntry.scope == Scope::Main) return false;
+            if (newEntry.scope == Scope::Main) return true;
+            if (oldEntry.scope == Scope::QsFrontier && newEntry.scope == Scope::QsDeep)
+                return false;
+            if (oldEntry.scope == Scope::QsDeep && newEntry.scope == Scope::QsFrontier)
+                return true;
+        }
 
         // Collision: prefer replacing shallower entries
         if (oldEntry.key != newEntry.key) return newEntry.depthleft > oldEntry.depthleft;
@@ -419,14 +510,24 @@ struct TranspositionTable {
             oldEntry.eval.score;  // tighter upper bound or keep lower bound
     }
 
-    void insert(Hash hash, int16_t moveNumber, Eval move, uint8_t depthleft, EntryType type) {
+    void insert(Hash hash,
+                Eval move,
+                uint8_t depthleft,
+                EntryType type,
+                Scope scope = Scope::Main) {
         if constexpr (kNumEntries == 0) return;
-        if (!move || depthleft < 1) return;
+        if (!move.move && move.score.mate()) return;
 
         ++ttInsertAttempts;
 
-        const Entry newEntry = {hash, move, depthleft, type, numGenerations, uint8_t(moveNumber)};
-        auto& oldEntry = entries[indexOf(hash)];
+        auto domainHash = domainHashValue(hash);
+
+        Entry newEntry = {hash, move, depthleft, type, numGenerations, scope};
+        auto& oldEntry = entries[indexOf(domainHash)];
+        newEntry.key = keyOf(domainHash);
+        // Keep the existing move for same-key updates when the new entry has no move.
+        if (!newEntry.eval.move && oldEntry.occupied() && oldEntry.key == newEntry.key)
+            newEntry.eval.move = oldEntry.eval.move;
         if (!shouldReplace(oldEntry, newEntry)) {
             ++stats.numWorse;
             ++ttInsertRejected;
@@ -442,9 +543,9 @@ struct TranspositionTable {
             ++ttInsertUpper;
 
         // 3 cases: improve existing entry, collision with unrelated entry, or occupy an empty slot
-        if (oldEntry.key == keyOf(hash))
+        if (oldEntry.key == keyOf(domainHash))
             ++stats.numImproved;
-        else if (oldEntry.eval.move)
+        else if (oldEntry.occupied())
             ++stats.numCollisions;
         else
             ++stats.numOccupied;  // nothing in this slot yet
@@ -457,16 +558,18 @@ struct TranspositionTable {
         oldEntry = newEntry;
     }
 
-    void insert(
-        Hash hash, int16_t fullMoveNumber, Eval move, uint8_t depthleft, Score alpha, Score beta) {
+    void insert(Hash hash,
+                Eval move,
+                uint8_t depthleft,
+                Score alpha,
+                Score beta,
+                Scope scope = Scope::Main) {
         if (move.score > alpha && move.score < beta)
-            insert(hash, fullMoveNumber, move, depthleft, TranspositionTable::EntryType::EXACT);
+            insert(hash, move, depthleft, TranspositionTable::EntryType::EXACT, scope);
         else if (move.score <= alpha)
-            insert(
-                hash, fullMoveNumber, move, depthleft, TranspositionTable::EntryType::UPPERBOUND);
+            insert(hash, move, depthleft, TranspositionTable::EntryType::UPPERBOUND, scope);
         else if (move.score >= beta)
-            insert(
-                hash, fullMoveNumber, move, depthleft, TranspositionTable::EntryType::LOWERBOUND);
+            insert(hash, move, depthleft, TranspositionTable::EntryType::LOWERBOUND, scope);
     }
 
     void clear() {
@@ -565,7 +668,8 @@ using MoveIt = MoveVector::iterator;
  * capture from the transposition table, if any, comes first. Returns an iterator to the next move.
  */
 MoveIt sortTransposition(Move ttMove, Hash hash, MoveIt begin, MoveIt end) {
-    // Prefer the probed TT move when available, otherwise do a lightweight table peek.
+    // Prefer the probed main-TT move, then a main-domain peek, and finally
+    // a qsearch-domain peek as a move-ordering hint only.
     auto cachedMove = ttMove ? ttMove : transpositionTable.peek(hash).move;
     if (!cachedMove) return begin;
 
@@ -665,14 +769,18 @@ bool isQuiet(Position& position, int depthleft) {
     return true;
 }
 
-Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score standPat) {
+Score quiesce(
+    Position& position, Score alpha, Score beta, int depthleft, Score standPat, int qply = 0) {
     ++nodeCount;
 
     Hash hash(position);
+    const auto originalAlpha = alpha;
+    const auto originalBeta = beta;
+    Move bestMove = Move();
 
     if constexpr (options::useQsTT) {
         ++ttRawProbesQs;
-        if (transpositionTable.peek(hash).move) ++ttRawHitsQs;
+        if (transpositionTable.contains(hash)) ++ttRawHitsQs;
         ++ttProbesQs;
         auto refine = transpositionTable.refineAlphaBeta(hash, position.turn, 0, alpha, beta);
         if (refine == TranspositionTable::RefineResult::Hit)
@@ -696,7 +804,17 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score 
 
     if (!depthleft) return standPat;
 
-    if (standPat >= beta && isQuiet(position, depthleft)) return beta;
+    if (standPat >= beta && isQuiet(position, depthleft)) {
+        if (!beta.mate())
+            transpositionTable.insert(hash,
+                                      {Move(), beta},
+                                      depthleft,
+                                      originalAlpha,
+                                      originalBeta,
+                                      qply == 0 ? TranspositionTable::Scope::QsFrontier
+                                                : TranspositionTable::Scope::QsDeep);
+        return beta;
+    }
 
     if (standPat > alpha && isQuiet(position, depthleft)) alpha = standPat;
 
@@ -704,7 +822,10 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score 
 
     // The moveList includes moves needed to get out of check; an empty list means mate
     auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, depthleft);
-    if (moveList.empty() && isInCheck(position)) return Score::min();
+    if (moveList.empty() && isInCheck(position)) {
+        auto mateScore = Score::min();
+        return mateScore;
+    }
     sortMoves(position, moveList.begin(), moveList.end(), Move());  // No killer moves in quiescence
     for (auto move : moveList) {
         if (options::staticExchangeEvaluation && move.kind == MoveKind::Capture &&
@@ -714,12 +835,35 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score 
 
         // Compute the change to the board and evaluation that results from the move
         auto [undo, newEval] = makeMoveWithEval(position, move, standPat);
-        auto score = -quiesce(position, -beta, -alpha, depthleft - 1, -newEval);
+        auto score = -quiesce(position, -beta, -alpha, depthleft - 1, -newEval, qply + 1);
         unmakeMove(position, undo);
 
-        if (score >= beta) return beta;
-        if (score > alpha) alpha = score;
+        if (score >= beta) {
+            if (!beta.mate())
+                transpositionTable.insert(hash,
+                                          {move, beta},
+                                          depthleft,
+                                          originalAlpha,
+                                          originalBeta,
+                                          qply == 0 ? TranspositionTable::Scope::QsFrontier
+                                                    : TranspositionTable::Scope::QsDeep);
+            return beta;
+        }
+        if (score > alpha) {
+            alpha = score;
+            bestMove = move;
+        }
     }
+
+    if (!alpha.mate())
+        transpositionTable.insert(hash,
+                                  {bestMove, alpha},
+                                  depthleft,
+                                  originalAlpha,
+                                  originalBeta,
+                                  qply == 0 ? TranspositionTable::Scope::QsFrontier
+                                            : TranspositionTable::Scope::QsDeep);
+
     return alpha;
 }
 
@@ -733,7 +877,7 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
         // Use simple piece-square evaluation
         stand_pat = evaluateBoard(position.board);
     if (position.active() == Color::b) stand_pat = -stand_pat;
-    return quiesce(position, alpha, beta, depthleft, stand_pat);
+    return quiesce(position, alpha, beta, depthleft, stand_pat, 0);
 }
 
 struct Depth {
@@ -859,11 +1003,21 @@ bool tryNullMovePruning(Position& position, Hash hash, Score alpha, Score beta, 
 PrincipalVariation tryTTCutoff(
     const Position& position, Hash hash, int depthleft, Score& alpha, Score& beta, Move& ttMove) {
     auto origAlpha = alpha, origBeta = beta;
+    const bool isPVNode = beta.cp() - alpha.cp() > 1;
+    const bool allowQsFrontierInMain = !isPVNode && depthleft == 1;
     ++ttRawProbesMain;
-    if (transpositionTable.peek(hash).move) ++ttRawHitsMain;
+    if (transpositionTable.contains(hash)) ++ttRawHitsMain;
     ++ttProbesMain;
-    auto refine = transpositionTable.refineAlphaBeta(hash, position.turn, depthleft, alpha, beta);
-    ttMove = transpositionTable.peek(hash).move;
+    auto refine = transpositionTable.refineAlphaBeta(
+        hash, position.turn, depthleft, alpha, beta, allowQsFrontierInMain);
+    auto ttEval = transpositionTable.peek(hash);
+    if (!ttEval.move) {
+        // Keep qsearch entries out of main bound refinement, but use their move
+        // as a pure move-ordering hint.
+        auto qsEval = transpositionTable.peek(hash);
+        if (qsEval.move) ttEval.move = qsEval.move;
+    }
+    ttMove = ttEval.move;
     if (refine == TranspositionTable::RefineResult::Hit)
         ++ttHitsMain;
     else if (refine == TranspositionTable::RefineResult::MissKey)
@@ -876,6 +1030,10 @@ PrincipalVariation tryTTCutoff(
         ++ttMissRepetitionMain;
 
     if (alpha < beta) {
+        if (!ttMove) {
+            alpha = origAlpha;
+            beta = origBeta;
+        }
         ++ttRefineNoCut;
         if (depthleft <= 3) ++ttRefineNoCutShallow;
         if (refine == TranspositionTable::RefineResult::Hit) ++ttNoCutMain;
@@ -887,6 +1045,8 @@ PrincipalVariation tryTTCutoff(
     auto pv = transpositionTable.pv(position, depthleft);
     if (!pv) {
         ++ttNoCutMain;
+        alpha = origAlpha;
+        beta = origBeta;
         return {};
     }
 
@@ -915,6 +1075,14 @@ PrincipalVariation alphaBeta(
     Position& position, Hash hash, Score alpha, Score beta, Depth depth, Move lastMove) {
     ++nodeCount;
 
+    if (depth.left > 0) {
+        auto [_, inserted] = seenMainHashKeys.insert(mainHashKey(hash));
+        if (inserted)
+            ++mainHashSeenFirst;
+        else
+            ++mainHashSeenRepeat;
+    }
+
     // Step-3 diagnostics: classify shallow main-search nodes and shallow leaves that enter QS.
     if (depth.current <= 3) {
         if (depth.left <= 0)
@@ -930,7 +1098,13 @@ PrincipalVariation alphaBeta(
     auto drawState = repetitions.enter(hash);
     if (repetitions.drawn(position.turn.halfmove())) return {{}, Score()};
 
-    if (depth.left <= 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
+    if (depth.left <= 0) {
+        auto score = quiesce(position, alpha, beta, options::quiescenceDepth);
+        if (!score.mate())
+            transpositionTable.insert(
+                hash, {Move(), score}, 0, alpha, beta, TranspositionTable::Scope::QsFrontier);
+        return {{}, score};
+    }
 
     const bool inCheck = isInCheck(position);
 
@@ -1055,8 +1229,7 @@ PrincipalVariation alphaBeta(
 
     if (moveList.empty() && !isInCheck(position)) pv.score = Score();  // Stalemate
 
-    transpositionTable.insert(
-        hash, position.turn.fullmove(), {pv.front(), pv.score}, depth.left, alpha, beta);
+    transpositionTable.insert(hash, {pv.front(), pv.score}, depth.left, alpha, beta);
 
     return pv;
 }
@@ -1144,8 +1317,7 @@ PrincipalVariation toplevelAlphaBeta(
                        Move()))
             return pv;
     }
-    transpositionTable.insert(
-        hash, position.turn.fullmove(), {pv.front(), pv.score}, depthleft, alpha, beta);
+    transpositionTable.insert(hash, {pv.front(), pv.score}, depthleft, alpha, beta);
 
     return pv;
 }
@@ -1277,6 +1449,7 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
     searchCacheCount = cacheCount;
 
     searchStartTime = clock::now();
+    seenMainHashKeys.clear();
 
     auto drawState = repetitions.enter(Hash(position));
     for (auto move : moves) {
