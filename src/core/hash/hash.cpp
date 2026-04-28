@@ -3,6 +3,7 @@
 #include "core/castling_info.h"
 #include "core/core.h"
 #include "core/random.h"
+#include "move/move_table.h"
 
 #include "hash.h"
 
@@ -16,19 +17,37 @@ std::array<HashValue, kNumHashVectors> hashVectors = []() {
     return vectors;
 }();
 
+namespace {
+bool hasEnPassantCapture(const Board& board, Turn turn, Square enPassantTarget) {
+    auto pawn = addColor(PieceType::PAWN, turn.activeColor());
+    for (auto from : MovesTable::enPassantFrom(turn.activeColor(), enPassantTarget))
+        if (board[from] == pawn) return true;
+    return false;
+}
+}  // namespace
+
 Hash::Hash(const Board& board, Turn turn) {
     for (auto square : squares)
         if (board[square] != Piece::_) toggle(board[square], square);
     if (turn.activeColor() == Color::b) toggle(BLACK_TO_MOVE);
     if (turn.castling() != CastlingMask::_) toggle(turn.castling());
-    if (turn.enPassant()) toggle(ExtraVectors(file(turn.enPassant()) + EN_PASSANT_A));
+    if (turn.enPassant() != noEnPassantTarget && hasEnPassantCapture(board, turn, turn.enPassant()))
+        toggle(ExtraVectors(file(turn.enPassant()) + EN_PASSANT_A));
 }
 
-void Hash::applyMove(Turn turn, MoveWithPieces mwp, CastlingMask mask) {
-    *this = ::applyMove(*this, turn, mwp, mask);
+void Hash::applyMove(Turn turn, MoveWithPieces mwp, CastlingMask mask, const Board& board) {
+    *this = ::applyMove(*this, turn, mwp, mask, board);
 }
 
-Hash applyMove(Hash hash, Turn turn, MoveWithPieces mwp, CastlingMask mask) {
+Hash Hash::makeNullMove(const Turn& turn, const Board& board) const {
+    Hash result = *this;
+    result.toggle(BLACK_TO_MOVE);
+    if (turn.enPassant() != noEnPassantTarget && hasEnPassantCapture(board, turn, turn.enPassant()))
+        result.toggle(ExtraVectors(file(turn.enPassant()) + EN_PASSANT_A));
+    return result;
+}
+
+Hash applyMove(Hash hash, Turn turn, MoveWithPieces mwp, CastlingMask mask, const Board& board) {
     auto [mv, piece, target] = mwp;
 
     // Always assume we move a piece and switch the player to move.
@@ -44,9 +63,14 @@ Hash applyMove(Hash hash, Turn turn, MoveWithPieces mwp, CastlingMask mask) {
 
     switch (mv.kind) {
     case MoveKind::Quiet_Move: break;
-    case MoveKind::Double_Push:
-        hash.toggle(Hash::ExtraVectors(file(mv.to) + Hash::EN_PASSANT_A));
-        break;
+    case MoveKind::Double_Push: {
+        auto rankStep = color(piece) == Color::w ? -1 : +1;
+        auto enPassantTarget = makeSquare(file(mv.to), rank(mv.to) + rankStep);
+        auto nextTurn = turn;
+        nextTurn.makeNullMove();
+        if (hasEnPassantCapture(board, nextTurn, enPassantTarget))
+            hash.toggle(Hash::ExtraVectors(file(enPassantTarget) + Hash::EN_PASSANT_A));
+    } break;
     case MoveKind::O_O:  // Assume the move has the king move, so adjust the rook here.
     {
         auto& info = castlingInfo[int(color(piece))];

@@ -448,7 +448,7 @@ void testNullMoveHash() {
 
     // Make null move on position and hash
     Turn savedTurn = position.turn;
-    Hash nullHash = originalHash.makeNullMove(position.turn);
+    Hash nullHash = originalHash.makeNullMove(position.turn, position.board);
     position.turn.makeNullMove();
 
     // Hash should match position after null move
@@ -463,7 +463,7 @@ void testNullMoveHash() {
     Hash startHash(position);
 
     savedTurn = position.turn;
-    Hash nullHashNoEP = startHash.makeNullMove(position.turn);
+    Hash nullHashNoEP = startHash.makeNullMove(position.turn, position.board);
     position.turn.makeNullMove();
 
     Hash recomputedHashNoEP(position);

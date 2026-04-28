@@ -164,7 +164,7 @@ NodeCount perft2(Board& board, Hash hash, const moves::SearchState& state) {
     forAllLegalMovesAndCaptures(board, state, [&](Board& board, MoveWithPieces mwp) {
         auto delta = MovesTable::occupancyDelta(mwp.move);
         theirState.occupancy = !(state.occupancy ^ delta);
-        theirState.turn = moves::applyMove(state.turn, mwp);
+        theirState.turn = moves::applyMove(state.turn, mwp, board);
 
         theirState.pawns = initialPawns - SquareSet{mwp.move.to};
         if (mwp.move.kind == MoveKind::En_Passant) theirState.pawns = find(board, theirPawn);
@@ -196,11 +196,11 @@ NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
         auto mask = moves::castlingMask(mwp.move.from, mwp.move.to);
 
         auto theirHash =
-            options::cachePerft ? applyMove(hash, state.turn, mwp, mask) : Hash();
+            options::cachePerft ? applyMove(hash, state.turn, mwp, mask, board) : Hash();
         moves::SearchState theirState;
         theirState.occupancy = !(state.occupancy ^ delta);
         theirState.pawns = find(board, addColor(PieceType::PAWN, !state.active()));
-        theirState.turn = moves::applyMove(state.turn, mwp);
+        theirState.turn = moves::applyMove(state.turn, mwp, board);
         theirState.kingSquare = *find(board, addColor(PieceType::KING, !state.active())).begin();
         theirState.inCheck = moves::isAttacked(board, theirState.kingSquare, theirState.occupancy);
         theirState.pinned = moves::pinnedPieces(board, theirState.occupancy, theirState.kingSquare);

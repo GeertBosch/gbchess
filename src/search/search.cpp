@@ -792,7 +792,7 @@ bool tryNullMovePruning(Position& position, Hash hash, Score alpha, Score beta, 
 
     // Make null move
     Turn savedTurn = position.turn;
-    Hash nullHash = hash.makeNullMove(position.turn);
+    Hash nullHash = hash.makeNullMove(position.turn, position.board);
     position.turn.makeNullMove();
     dassert(nullHash == Hash(position));
 
@@ -948,7 +948,7 @@ PrincipalVariation alphaBeta(
                                          : move.to];
         auto mwp = MoveWithPieces{move, piece, target};
         auto mask = moves::castlingMask(move.from, move.to);
-        newHash.applyMove(position.turn, mwp, mask);
+        newHash.applyMove(position.turn, mwp, mask, position.board);
 
         auto undo = moves::makeMove(position, move);
         dassert(newHash == Hash(position));

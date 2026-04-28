@@ -107,7 +107,7 @@ UndoPosition makeMove(Position& position, BoardChange change, Move move) {
     auto ours = position.board[change.first.from];
     auto undo = UndoPosition{makeMove(position.board, change), position.turn};
     MoveWithPieces mwp = {move, ours, undo.board.captured};
-    position.turn = applyMove(position.turn, mwp);
+    position.turn = applyMove(position.turn, mwp, position.board);
     return undo;
 }
 
@@ -130,13 +130,21 @@ void unmakeMove(Position& position, UndoPosition undo) {
     position.turn = undo.turn;
 }
 
-Turn applyMove(Turn turn, MoveWithPieces mwp) {
+Turn applyMove(Turn turn, MoveWithPieces mwp, const Board& board) {
     // Update enPassantTarget
     // Set the en passant target if a pawn moves two squares forward, otherwise reset it.
     turn.makeNullMove();
     auto move = mwp.move;
-    if (move.kind == MoveKind::Double_Push)
-        turn.setEnPassant(kDoublePushEnPassantTarget[move.from]);
+    if (move.kind == MoveKind::Double_Push) {
+        auto enPassantTarget = kDoublePushEnPassantTarget[move.from];
+        auto pawn = addColor(PieceType::PAWN, turn.activeColor());
+        for (auto from : MovesTable::enPassantFrom(turn.activeColor(), enPassantTarget)) {
+            if (board[from] == pawn) {
+                turn.setEnPassant(enPassantTarget);
+                break;
+            }
+        }
+    }
 
     // Update castlingAvailability
     turn.setCastling(turn.castling() & ~castlingMask(move.from, move.to));
@@ -155,7 +163,7 @@ Position applyMove(Position position, Move move) {
     // Apply the move to the board
     auto undo = makeMove(position.board, move);
     MoveWithPieces mwp = {move, piece, undo.captured};
-    position.turn = applyMove(position.turn, mwp);
+    position.turn = applyMove(position.turn, mwp, position.board);
 
     return position;
 }

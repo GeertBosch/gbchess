@@ -154,7 +154,7 @@ void testEnPassant() {
     auto hash = hash1;
     auto mwp = MoveWithPieces{
         move, pos1.board[move.from], pos1.board[makeSquare(file(move.to), rank(move.from))]};
-    hash.applyMove(pos1.turn, mwp, moves::castlingMask(move.from, move.to));
+    hash.applyMove(pos1.turn, mwp, moves::castlingMask(move.from, move.to), pos1.board);
     assert(checkSameHash(hash, hash2));
 }
 
@@ -169,7 +169,7 @@ void checkApplyMove(std::string position, std::string move) {
     auto mwp = MoveWithPieces{mv, piece, target};
     auto mask = moves::castlingMask(mv.from, mv.to);
 
-    hash.applyMove(pos1.turn, mwp, mask);
+    hash.applyMove(pos1.turn, mwp, mask, pos1.board);
     auto pos2 = moves::applyMove(pos1, mv);
     bool ok = checkSameHash(hash, Hash(pos2));
     if (!ok) std::cout << "Failed to apply move " << move << " on position " << position << "\n";
@@ -196,6 +196,11 @@ void testSameHash() {
     auto hash1 = Hash(pos1);
     auto hash2 = Hash(pos2);
     assert(hash1() == hash2());
+
+    // Impossible en passant square should not affect the hash.
+    auto epSet = fen::parsePosition("8/8/8/4p3/8/8/8/4K2k w - e6 0 1");
+    auto epClear = fen::parsePosition("8/8/8/4p3/8/8/8/4K2k w - - 0 1");
+    assert(Hash(epSet)() == Hash(epClear)());
 }
 
 void testPromotionKind() {

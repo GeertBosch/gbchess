@@ -82,7 +82,7 @@ void unmakeMove(Position& position, UndoPosition undo);
 
 [[nodiscard]] Position applyMoves(Position position, MoveVector moves);
 
-Turn applyMove(Turn turn, MoveWithPieces mwp);
+Turn applyMove(Turn turn, MoveWithPieces mwp, const Board& board);
 
 /**
  *  Returns the castling mask for the castling rights cancelled by the given move.
