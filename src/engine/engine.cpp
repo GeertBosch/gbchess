@@ -100,6 +100,15 @@ void printStatistics(std::ostream& os) {
        << "\n";
     os << "Main SEE pruned: " << search::mainSeePruned << "\n";
     os << "TT cutoffs: " << search::ttCutoffs << " refinements=" << search::ttRefinements << "\n";
+    os << "TT main: probes=" << search::ttProbesMain << " hits=" << search::ttHitsMain
+       << " cutoffs=" << search::ttCutoffs << " no-cut=" << search::ttNoCutMain
+       << " miss(key/depth/gen/repetition)=" << search::ttMissKeyMain << "/"
+       << search::ttMissDepthMain << "/" << search::ttMissGenerationMain << "/"
+       << search::ttMissRepetitionMain << "\n";
+    os << "TT qs: probes=" << search::ttProbesQs << " hits=" << search::ttHitsQs
+       << " cutoffs=" << search::qsTTCutoffs << " no-cut=" << search::ttNoCutQs
+       << " miss(key/depth/gen/repetition)=" << search::ttMissKeyQs << "/" << search::ttMissDepthQs
+       << "/" << search::ttMissGenerationQs << "/" << search::ttMissRepetitionQs << "\n";
     os << "Root cutoffs: total=" << search::rootBetaCutoffs << " (m1=" << search::rootCutoffMove1
        << ", m2-3=" << search::rootCutoffMoveLe3 << ", m4+=" << search::rootCutoffMoveGt3 << ")\n";
     os << "Ply1 cutoffs: total=" << search::ply1BetaCutoffs << " (m1=" << search::ply1CutoffMove1

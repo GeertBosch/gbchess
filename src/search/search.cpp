@@ -69,6 +69,20 @@ uint64_t ttCutoffs = 0;
 uint64_t ttRefinements = 0;
 uint64_t ttRefineNoCut = 0;
 uint64_t ttRefineNoCutShallow = 0;
+uint64_t ttProbesMain = 0;
+uint64_t ttHitsMain = 0;
+uint64_t ttNoCutMain = 0;
+uint64_t ttMissKeyMain = 0;
+uint64_t ttMissDepthMain = 0;
+uint64_t ttMissGenerationMain = 0;
+uint64_t ttMissRepetitionMain = 0;
+uint64_t ttProbesQs = 0;
+uint64_t ttHitsQs = 0;
+uint64_t ttNoCutQs = 0;
+uint64_t ttMissKeyQs = 0;
+uint64_t ttMissDepthQs = 0;
+uint64_t ttMissGenerationQs = 0;
+uint64_t ttMissRepetitionQs = 0;
 uint64_t shallowMainNodes = 0;
 uint64_t shallowLeavesToQS = 0;
 
@@ -279,18 +293,28 @@ struct TranspositionTable {
         return pv;
     }
 
-    void refineAlphaBeta(Hash hash, Turn turn, int depthleft, Score& alpha, Score& beta) {
-        if constexpr (kNumEntries == 0) return;
+    enum class RefineResult : uint8_t {
+        Hit,
+        MissKey,
+        MissDepth,
+        MissGeneration,
+        MissRepetition,
+    };
+
+    RefineResult refineAlphaBeta(Hash hash, Turn turn, int depthleft, Score& alpha, Score& beta) {
+        if constexpr (kNumEntries == 0) return RefineResult::MissKey;
         auto idx = indexOf(hash);
         auto& entry = entries[idx];
 
         ++stats.numMisses;
-        if (entry.key != keyOf(hash) || entry.depthleft < depthleft ||
-            entry.generation != numGenerations)
-            return;
-        if (repetitions.drawn(turn.halfmove()))
-            return;  // Don't refine if this position may be drawn by repetition, to avoid polluting
-                     // the table with inaccurate evaluations
+        if (entry.key != keyOf(hash)) return RefineResult::MissKey;
+        if (entry.depthleft < depthleft) return RefineResult::MissDepth;
+        if (entry.generation != numGenerations) return RefineResult::MissGeneration;
+        if (repetitions.drawn(turn.halfmove())) {
+            // Don't refine if this position may be drawn by repetition, to avoid
+            // polluting the table with inaccurate evaluations.
+            return RefineResult::MissRepetition;
+        }
         --stats.numMisses;
         ++stats.numHits;
 
@@ -305,6 +329,7 @@ struct TranspositionTable {
         case EntryType::LOWERBOUND: alpha = std::max(alpha, entry.eval.score); break;
         case EntryType::UPPERBOUND: beta = std::min(beta, entry.eval.score); break;
         }
+        return RefineResult::Hit;
     }
 
     /**
@@ -563,12 +588,25 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score 
 
     if constexpr (options::useQsTT) {
         Hash hash(position);
-        transpositionTable.refineAlphaBeta(hash, position.turn, 0, alpha, beta);
+        ++ttProbesQs;
+        auto refine = transpositionTable.refineAlphaBeta(hash, position.turn, 0, alpha, beta);
+        if (refine == TranspositionTable::RefineResult::Hit)
+            ++ttHitsQs;
+        else if (refine == TranspositionTable::RefineResult::MissKey)
+            ++ttMissKeyQs;
+        else if (refine == TranspositionTable::RefineResult::MissDepth)
+            ++ttMissDepthQs;
+        else if (refine == TranspositionTable::RefineResult::MissGeneration)
+            ++ttMissGenerationQs;
+        else if (refine == TranspositionTable::RefineResult::MissRepetition)
+            ++ttMissRepetitionQs;
+
         if (alpha >= beta) {
             ++qsTTCutoffs;
             return beta;
         }
         ++qsTTRefineNoCut;
+        if (refine == TranspositionTable::RefineResult::Hit) ++ttNoCutQs;
     }
 
     if (!depthleft) return standPat;
@@ -736,15 +774,33 @@ bool tryNullMovePruning(Position& position, Hash hash, Score alpha, Score beta, 
 PrincipalVariation tryTTCutoff(
     const Position& position, Hash hash, int depthleft, Score& alpha, Score& beta) {
     auto origAlpha = alpha, origBeta = beta;
-    transpositionTable.refineAlphaBeta(hash, position.turn, depthleft, alpha, beta);
+    ++ttProbesMain;
+    auto refine = transpositionTable.refineAlphaBeta(hash, position.turn, depthleft, alpha, beta);
+    if (refine == TranspositionTable::RefineResult::Hit)
+        ++ttHitsMain;
+    else if (refine == TranspositionTable::RefineResult::MissKey)
+        ++ttMissKeyMain;
+    else if (refine == TranspositionTable::RefineResult::MissDepth)
+        ++ttMissDepthMain;
+    else if (refine == TranspositionTable::RefineResult::MissGeneration)
+        ++ttMissGenerationMain;
+    else if (refine == TranspositionTable::RefineResult::MissRepetition)
+        ++ttMissRepetitionMain;
+
     if (alpha < beta) {
         ++ttRefineNoCut;
         if (depthleft <= 3) ++ttRefineNoCutShallow;
+        if (refine == TranspositionTable::RefineResult::Hit) ++ttNoCutMain;
         return {};
     }
 
+    if (refine != TranspositionTable::RefineResult::Hit) return {};
+
     auto pv = transpositionTable.pv(position, depthleft);
-    if (!pv) return {};
+    if (!pv) {
+        ++ttNoCutMain;
+        return {};
+    }
 
     // Guard against stale TT entries from previous turns: the TT best move may now step
     // into a position that is drawn by repetition given the current game history, even
@@ -754,6 +810,7 @@ PrincipalVariation tryTTCutoff(
     if (!repetitions.drawn(nextPos.turn.halfmove())) return ++ttCutoffs, pv;
 
     // Stale entry: restore the original window and fall through to a fresh search.
+    ++ttNoCutMain;
     alpha = origAlpha;
     beta = origBeta;
     return {};
