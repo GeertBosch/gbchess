@@ -302,9 +302,57 @@ Conclusion:
    measurable node reduction.
 - It is accepted as a foundation for future, still-conservative pruning work.
 
+#### Step 6 Execution Result (April 28, 2026)
+
+**Status:** Success (instrumentation complete, validated with tests).
+
+Applied change (instrumentation only):
+- Added TT insert/write counters in gbchess, including bound split (exact/lower/upper), and
+   write-to-hit conversion counters.
+- Added corresponding Stockfish instrumentation based on **actual TT writes** in `TTEntry::save`
+   (not only callsite counts), including a small `other` bucket for non standard bound values.
+
+Validation:
+- `make test -j`: pass
+
+Depth-3 comparison on the same FEN (`uci-comp.in`):
+
+| Metric | Stockfish 12 | gbchess |
+|--------|--------------|---------|
+| Nodes | 185 | 4,897 |
+| TT main probes/hits | 93 / 90 | 164 / 4 |
+| TT qs probes/hits | 104 / 18 | 2,756 / 0 |
+| TT writes | 118 | 166 |
+| TT write split | exact/lower/upper/other = 25/62/28/3 | exact/lower/upper = 10/110/46 |
+| TT hit-per-write | 91% | 27% |
+
+Interpretation:
+- gbchess is **not under-writing** TT entries at depth 3; it writes more entries than Stockfish on
+   this position.
+- The dominant issue is **reuse quality**, not write volume:
+   - very low bounded TT hits in main search (`4/164`),
+   - zero bounded TT hits in quiescence (`0/2756`),
+   - much lower hit-per-write conversion (`27%` vs `91%`).
+
+Conclusion:
+- For depth-3 efficiency, the highest expected return is to improve TT reuse/conversion behavior,
+   not to increase raw TT insert count.
+
 5. **Revisit move ordering once cutoff histograms are available**
    - If cutoffs are frequently late (`moveCount > 3`), prioritize move ordering adjustments.
    - Current histogram shows late cutoffs are uncommon at ply1, so continue with pruning first.
+
+6. **Prioritize TT reuse quality over TT write volume (new priority)**
+    - Stockfish/gbchess comparison shows write volume is already sufficient; conversion is weak.
+    - Next implementation should be one isolated TT reuse change at a time, with full validation:
+       1. Main-search TT: permit safe bound cutoffs without requiring full PV reconstruction.
+       2. Main-search TT: keep TT move first ordering and measure first-move cutoff delta.
+       3. Quiescence TT: evaluate conservative reuse improvements only after main-search TT change.
+    - Acceptance criteria for each isolated change:
+       - `make test -j` passes,
+       - puzzle quality remains >= 96/100,
+       - depth-3 nodes decrease,
+       - TT hit-per-write and/or bounded TT hit rates improve.
 
 ### Step 1: Re-tune NMP Parameters
 
