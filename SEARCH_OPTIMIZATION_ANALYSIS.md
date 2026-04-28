@@ -41,9 +41,9 @@ comparison isolates low-depth efficiency from NMP effects.
 | Engine | Nodes | Beta cutoffs | First-move cutoffs |
 |--------|-------|--------------|--------------------|
 | Stockfish 12 | 185 | 5 (2%) | 5 (100%) |
-| gbchess | 4,938 | 110 (2%) | 79 (71%) |
+| gbchess | 4,897 | 110 (2%) | 79 (71%) |
 
-gbchess uses **27x** more nodes at depth 3 (4,938 vs 185).
+gbchess uses **26x** more nodes at depth 3 (4,897 vs 185).
 
 ### New instrumentation findings (gbchess)
 
@@ -52,7 +52,7 @@ Added counters in `src/search/search.cpp` and printed in `src/engine/engine.cpp`
 - Root search calls: **3**
 - Root move visits: **126** (42 per root pass)
 - Aspiration attempts: **0** (fail-low=0, fail-high=0, fallback=2)
-- PVS attempts: **1,827**, PVS researches: **37**
+- PVS attempts: **1,815**, PVS researches: **37**
 - TT cutoffs: **0**, TT refinements: **4**
 
 Interpretation:
@@ -62,7 +62,7 @@ Interpretation:
 2. Move ordering is likely part of the remaining problem (`first-move cutoff` is 71% vs Stockfish 100%),
    but not the whole story.
 3. The remaining gap is still low cutoff efficiency overall at shallow depth (2% beta-cutoff rate
-   and 4,938 total nodes), indicating missing shallow-depth pruning and weaker root efficiency.
+   and 4,897 total nodes), indicating missing shallow-depth pruning and weaker root efficiency.
 
 Conclusion: the suspicion about move ordering is valid, but depth-3 inefficiency is a combination
 of (a) aspiration re-search overhead and (b) insufficient shallow-depth pruning/cutoffs.
@@ -114,7 +114,8 @@ same guard but with a depth-scaled margin that allows more attempts when near-eq
 
 ### ✅ Already in gbchess
 1. **Iterative Deepening** — Yes
-2. **Aspiration Windows** — Yes (windows: 30cp, 125cp)
+2. **Aspiration Windows** — Implemented, currently disabled in config
+   (`aspirationWindows = {}` in `src/core/options.h`; previously 30cp, 125cp)
 3. **Transposition Table** — Yes (16 MB)
 4. **Null Move Pruning** — Yes (R=3, min_depth=2, PV-check bug fixed)
 5. **Late Move Reductions (LMR)** — Yes
@@ -132,9 +133,12 @@ same guard but with a depth-scaled margin that allows more attempts when near-eq
 #### High Impact
 1. **Move Count Pruning (Late Move Pruning)** — After N moves searched at shallow depth, skip
    remaining quiet moves. Stockfish: `moveCount >= futility_move_count(improving, depth)`.
-2. **SEE Pruning in Main Search** — Skip moves with negative SEE in the main search at shallow
-   depth. Currently SEE is only used in quiescence.
-3. **Futility Pruning (Move Level)** — Skip quiet moves when `staticEval + margin ≤ alpha`.
+2. **SEE Pruning in Main Search (completed, conservative captures-only)** — Implemented at
+   shallow depth for non-PV nodes: skip late capture moves with clearly losing SEE
+   (`SEE < -100cp`). This is now active and validated (97/100 puzzles).
+3. **SEE Pruning Extension (not yet implemented)** — Extend main-search SEE pruning carefully to
+   additional move classes or thresholds only if quality remains stable.
+4. **Futility Pruning (Move Level)** — Skip quiet moves when `staticEval + margin ≤ alpha`.
 
 #### Medium Impact
 4. **Dynamic Null Move Reduction** — Scale R with depth and eval margin.
@@ -246,6 +250,57 @@ Interpretation:
      - Depth-3 nodes decrease materially
      - No regression in puzzle quality (>=96/100)
      - No depth-9 node explosion
+
+#### Step 4 Execution Result (April 28, 2026)
+
+**Status:** Failed (change reverted).
+
+Attempted change:
+- Added shallow non-PV move-count pruning for late quiet moves.
+
+Observed performance impact:
+- Depth-3 nodes: `4938 -> 4425` (improved)
+- Depth-9 nodes: `709677 -> 300823` (large reduction)
+
+Validation failures:
+- `make test -j`: failed (`build/uci-tactical-position.out` wrong best move)
+- `make puzzles`: `97/100 -> 92/100` with 1 search error and 5 eval errors
+
+Conclusion:
+- The implemented move-count pruning gate was too aggressive and removed tactically relevant
+   quiet moves.
+- The code change was reverted; no behavioral change was accepted for Step 4.
+
+Revised next-step options (pick one before implementation):
+1. Retry move-count pruning with much tighter gating (depth<=2 only, much later threshold,
+    and skip pruning when score margin is small).
+2. Switch to SEE pruning in main search first, since it is more tactical-safety aware.
+3. Switch to move-level futility pruning first with conservative margins.
+
+#### Step 5 Execution Result (April 28, 2026)
+
+**Status:** Success (accepted).
+
+Applied change (single isolated behavior change):
+- Added conservative SEE pruning in `alphaBeta()` for shallow non-PV nodes.
+- Gate: `depth.left <= 3`, not in check, move index `> 1`, capture only (`MoveKind::Capture`),
+   prune only when `staticExchangeEvaluation(...) < -100cp`.
+
+Measured impact on the test FEN:
+
+| Metric | Before | After | Delta |
+|--------|--------|-------|-------|
+| Depth 3 nodes | 4,938 | 4,897 | **-0.8%** |
+| Main SEE pruned | 0 | 12 | +12 |
+
+Validation:
+- `make test -j`: pass
+- `make puzzles`: unchanged quality (`97/100`, 2 too deep, 1 eval error, 0 search/mate errors)
+
+Conclusion:
+- This conservative SEE gate is tactically safe under current checks and provides a small but
+   measurable node reduction.
+- It is accepted as a foundation for future, still-conservative pruning work.
 
 5. **Revisit move ordering once cutoff histograms are available**
    - If cutoffs are frequently late (`moveCount > 3`), prioritize move ordering adjustments.

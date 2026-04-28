@@ -36,6 +36,7 @@ uint64_t countermoveAttempts = 0;
 uint64_t countermoveHits = 0;
 uint64_t firstMoveCutoffs = 0;
 uint64_t futilityPruned = 0;
+uint64_t mainSeePruned = 0;
 uint64_t lmrAttempts = 0;
 uint64_t lmrResearches = 0;
 uint64_t nullMoveAttempts = 0;
@@ -786,6 +787,8 @@ PrincipalVariation alphaBeta(
 
     if (depth.left <= 0) return {{}, quiesce(position, alpha, beta, options::quiescenceDepth)};
 
+    const bool inCheck = isInCheck(position);
+
     // Check the transposition table, which may tighten one or both search bounds
     if (auto pv = tryTTCutoff(position, hash, depth.left, alpha, beta)) return pv;
 
@@ -797,7 +800,7 @@ PrincipalVariation alphaBeta(
     const bool isPVNode = beta.cp() - alpha.cp() > 1;
 
     if (options::reverseFutilityPruning && !isPVNode &&
-        depth.left <= options::reverseFutilityMaxDepth && !isInCheck(position) && !beta.mate() &&
+        depth.left <= options::reverseFutilityMaxDepth && !inCheck && !beta.mate() &&
         hasNonPawnMaterial(position)) {
         // Get static evaluation
         Score staticEval = Score::fromCP(nnue::evaluate(position, *network));
@@ -825,6 +828,14 @@ PrincipalVariation alphaBeta(
 
     for (auto move : moveList) {
         ++moveCount;
+
+        if (options::staticExchangeEvaluation && !isPVNode && depth.left <= 3 && !inCheck &&
+            moveCount > 1 && move.kind == MoveKind::Capture &&
+            staticExchangeEvaluation(position.board, move.from, move.to) < -100_cp) {
+            ++mainSeePruned;
+            continue;
+        }
+
         auto newHash = hash;
 
         auto piece = position.board[move.from];

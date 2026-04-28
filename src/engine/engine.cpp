@@ -98,6 +98,7 @@ void printStatistics(std::ostream& os) {
        << "\n";
     os << "LMR: attempts=" << search::lmrAttempts << " researches=" << search::lmrResearches
        << "\n";
+    os << "Main SEE pruned: " << search::mainSeePruned << "\n";
     os << "TT cutoffs: " << search::ttCutoffs << " refinements=" << search::ttRefinements << "\n";
     os << "Root cutoffs: total=" << search::rootBetaCutoffs << " (m1=" << search::rootCutoffMove1
        << ", m2-3=" << search::rootCutoffMoveLe3 << ", m4+=" << search::rootCutoffMoveGt3 << ")\n";
