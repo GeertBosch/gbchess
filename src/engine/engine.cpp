@@ -109,6 +109,17 @@ void printStatistics(std::ostream& os) {
        << " cutoffs=" << search::qsTTCutoffs << " no-cut=" << search::ttNoCutQs
        << " miss(key/depth/gen/repetition)=" << search::ttMissKeyQs << "/" << search::ttMissDepthQs
        << "/" << search::ttMissGenerationQs << "/" << search::ttMissRepetitionQs << "\n";
+    os << "TT inserts: attempts=" << search::ttInsertAttempts
+       << " writes=" << search::ttInsertWrites << " rejected=" << search::ttInsertRejected
+       << " (exact/lower/upper)=" << search::ttInsertExact << "/" << search::ttInsertLower << "/"
+       << search::ttInsertUpper << "\n";
+     os << "TT conversion: raw-probes(main/qs)=" << search::ttRawProbesMain << "/"
+         << search::ttRawProbesQs << " raw-hits(main/qs)=" << search::ttRawHitsMain << "/"
+         << search::ttRawHitsQs << " hit-per-write="
+         << (search::ttInsertWrites ? ((search::ttRawHitsMain + search::ttRawHitsQs) * 100 /
+                                                     search::ttInsertWrites)
+                                             : 0)
+         << "%\n";
     os << "Root cutoffs: total=" << search::rootBetaCutoffs << " (m1=" << search::rootCutoffMove1
        << ", m2-3=" << search::rootCutoffMoveLe3 << ", m4+=" << search::rootCutoffMoveGt3 << ")\n";
     os << "Ply1 cutoffs: total=" << search::ply1BetaCutoffs << " (m1=" << search::ply1CutoffMove1

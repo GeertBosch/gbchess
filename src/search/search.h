@@ -64,6 +64,16 @@ extern uint64_t ttMissKeyQs;
 extern uint64_t ttMissDepthQs;
 extern uint64_t ttMissGenerationQs;
 extern uint64_t ttMissRepetitionQs;
+extern uint64_t ttInsertAttempts;
+extern uint64_t ttInsertWrites;
+extern uint64_t ttInsertRejected;
+extern uint64_t ttInsertExact;
+extern uint64_t ttInsertLower;
+extern uint64_t ttInsertUpper;
+extern uint64_t ttRawProbesMain;
+extern uint64_t ttRawHitsMain;
+extern uint64_t ttRawProbesQs;
+extern uint64_t ttRawHitsQs;
 extern uint64_t shallowMainNodes;
 extern uint64_t shallowLeavesToQS;
 

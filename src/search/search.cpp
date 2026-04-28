@@ -83,6 +83,16 @@ uint64_t ttMissKeyQs = 0;
 uint64_t ttMissDepthQs = 0;
 uint64_t ttMissGenerationQs = 0;
 uint64_t ttMissRepetitionQs = 0;
+uint64_t ttInsertAttempts = 0;
+uint64_t ttInsertWrites = 0;
+uint64_t ttInsertRejected = 0;
+uint64_t ttInsertExact = 0;
+uint64_t ttInsertLower = 0;
+uint64_t ttInsertUpper = 0;
+uint64_t ttRawProbesMain = 0;
+uint64_t ttRawHitsMain = 0;
+uint64_t ttRawProbesQs = 0;
+uint64_t ttRawHitsQs = 0;
 uint64_t shallowMainNodes = 0;
 uint64_t shallowLeavesToQS = 0;
 
@@ -278,6 +288,14 @@ struct TranspositionTable {
         return entry.eval;
     }
 
+    Eval peek(Hash hash) const {
+        if constexpr (kNumEntries == 0) return {};
+
+        const auto& entry = entries[indexOf(hash)];
+        if (keyOf(hash) != entry.key || entry.generation != numGenerations) return {};
+        return entry.eval;
+    }
+
     PrincipalVariation pv(Position pos, int depth) {
         if constexpr (kNumEntries == 0) return {};
         auto hash = Hash(pos);
@@ -364,10 +382,23 @@ struct TranspositionTable {
         if constexpr (kNumEntries == 0) return;
         if (!move || depthleft < 1) return;
 
+        ++ttInsertAttempts;
+
         const Entry newEntry = {hash, move, depthleft, type, numGenerations, uint8_t(moveNumber)};
         auto& oldEntry = entries[indexOf(hash)];
-        if (!shouldReplace(oldEntry, newEntry) && ++stats.numWorse) return;
+        if (!shouldReplace(oldEntry, newEntry)) {
+            ++stats.numWorse;
+            ++ttInsertRejected;
+            return;
+        }
         ++stats.numInserted;
+        ++ttInsertWrites;
+        if (type == EntryType::EXACT)
+            ++ttInsertExact;
+        else if (type == EntryType::LOWERBOUND)
+            ++ttInsertLower;
+        else
+            ++ttInsertUpper;
 
         // 3 cases: improve existing entry, collision with unrelated entry, or occupy an empty slot
         if (oldEntry.key == keyOf(hash))
@@ -492,13 +523,13 @@ using MoveIt = MoveVector::iterator;
  * Sorts the moves (including captures) in the range [begin, end) in place, so that the move or
  * capture from the transposition table, if any, comes first. Returns an iterator to the next move.
  */
-MoveIt sortTransposition(Hash hash, MoveIt begin, MoveIt end) {
-    // See if the current position is a transposition of a previously seen one
-    auto cachedMove = transpositionTable.find(hash);
-    if (!cachedMove.move) return begin;
+MoveIt sortTransposition(Move ttMove, Hash hash, MoveIt begin, MoveIt end) {
+    // Prefer the probed TT move when available, otherwise do a lightweight table peek.
+    auto cachedMove = ttMove ? ttMove : transpositionTable.peek(hash).move;
+    if (!cachedMove) return begin;
 
     // If the move is not part of the current legal moves, nothing to do here.
-    auto it = cachedMove.move ? std::find(begin, end, cachedMove.move) : end;
+    auto it = std::find(begin, end, cachedMove);
 
     // If the move was part of a pv for this position, move it to the beginning of the list
     if (it != end) std::swap(*begin++, *it);
@@ -545,10 +576,20 @@ MoveIt sortMoves(const Position& position, MoveIt begin, MoveIt end, Move lastMo
     return begin;
 }
 
+void sortMoves(const Position& position,
+               Move ttMove,
+               Hash hash,
+               MoveIt begin,
+               MoveIt end,
+               Move lastMove,
+               int depth = 0) {
+    begin = sortTransposition(ttMove, hash, begin, end);
+    begin = sortMoves(position, begin, end, lastMove, depth);
+}
+
 void sortMoves(
     const Position& position, Hash hash, MoveIt begin, MoveIt end, Move lastMove, int depth = 0) {
-    begin = sortTransposition(hash, begin, end);
-    begin = sortMoves(position, begin, end, lastMove, depth);
+    sortMoves(position, Move(), hash, begin, end, lastMove, depth);
 }
 
 std::pair<moves::UndoPosition, Score> makeMoveWithEval(Position& position, Move move, Score eval) {
@@ -588,6 +629,8 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score 
 
     if constexpr (options::useQsTT) {
         Hash hash(position);
+        ++ttRawProbesQs;
+        if (transpositionTable.peek(hash).move) ++ttRawHitsQs;
         ++ttProbesQs;
         auto refine = transpositionTable.refineAlphaBeta(hash, position.turn, 0, alpha, beta);
         if (refine == TranspositionTable::RefineResult::Hit)
@@ -772,10 +815,13 @@ bool tryNullMovePruning(Position& position, Hash hash, Score alpha, Score beta, 
  * present when the entry was stored (stale entry guard). Returns empty optional on miss.
  */
 PrincipalVariation tryTTCutoff(
-    const Position& position, Hash hash, int depthleft, Score& alpha, Score& beta) {
+    const Position& position, Hash hash, int depthleft, Score& alpha, Score& beta, Move& ttMove) {
     auto origAlpha = alpha, origBeta = beta;
+    ++ttRawProbesMain;
+    if (transpositionTable.peek(hash).move) ++ttRawHitsMain;
     ++ttProbesMain;
     auto refine = transpositionTable.refineAlphaBeta(hash, position.turn, depthleft, alpha, beta);
+    ttMove = transpositionTable.peek(hash).move;
     if (refine == TranspositionTable::RefineResult::Hit)
         ++ttHitsMain;
     else if (refine == TranspositionTable::RefineResult::MissKey)
@@ -847,7 +893,8 @@ PrincipalVariation alphaBeta(
     const bool inCheck = isInCheck(position);
 
     // Check the transposition table, which may tighten one or both search bounds
-    if (auto pv = tryTTCutoff(position, hash, depth.left, alpha, beta)) return pv;
+    Move ttMove;
+    if (auto pv = tryTTCutoff(position, hash, depth.left, alpha, beta, ttMove)) return pv;
 
     // Try null move pruning (only in non-PV nodes)
     if (tryNullMovePruning(position, hash, alpha, beta, depth)) return {{}, beta};
@@ -878,7 +925,7 @@ PrincipalVariation alphaBeta(
     // Forced moves don't count towards depth
     if (moveList.size() == 1) ++depth.left;
 
-    sortMoves(position, hash, moveList.begin(), moveList.end(), lastMove, depth.current);
+    sortMoves(position, ttMove, hash, moveList.begin(), moveList.end(), lastMove, depth.current);
 
     PrincipalVariation pv;
     int moveCount = 0;
