@@ -55,8 +55,16 @@ extern uint64_t ttHitsMain;
 extern uint64_t ttNoCutMain;
 extern uint64_t ttMissKeyMain;
 extern uint64_t ttMissDepthMain;
+extern uint64_t ttMissDepthGap1Main;
+extern uint64_t ttMissDepthGap2Main;
+extern uint64_t ttMissDepthGap3PlusMain;
+extern uint64_t ttMissDepthGap1WouldCutMain;
+extern uint64_t ttMissDepthGap1WouldTightenMain;
 extern uint64_t ttMissGenerationMain;
 extern uint64_t ttMissRepetitionMain;
+extern uint64_t ttHitExactMain;
+extern uint64_t ttHitLowerMain;
+extern uint64_t ttHitUpperMain;
 extern uint64_t ttProbesQs;
 extern uint64_t ttHitsQs;
 extern uint64_t ttNoCutQs;
@@ -76,6 +84,7 @@ extern uint64_t ttRawProbesQs;
 extern uint64_t ttRawHitsQs;
 extern uint64_t shallowMainNodes;
 extern uint64_t shallowLeavesToQS;
+extern uint64_t forcedMoveExtensions;
 
 constexpr bool transpositionTableDebug = false;
 

@@ -74,8 +74,16 @@ uint64_t ttHitsMain = 0;
 uint64_t ttNoCutMain = 0;
 uint64_t ttMissKeyMain = 0;
 uint64_t ttMissDepthMain = 0;
+uint64_t ttMissDepthGap1Main = 0;
+uint64_t ttMissDepthGap2Main = 0;
+uint64_t ttMissDepthGap3PlusMain = 0;
+uint64_t ttMissDepthGap1WouldCutMain = 0;
+uint64_t ttMissDepthGap1WouldTightenMain = 0;
 uint64_t ttMissGenerationMain = 0;
 uint64_t ttMissRepetitionMain = 0;
+uint64_t ttHitExactMain = 0;
+uint64_t ttHitLowerMain = 0;
+uint64_t ttHitUpperMain = 0;
 uint64_t ttProbesQs = 0;
 uint64_t ttHitsQs = 0;
 uint64_t ttNoCutQs = 0;
@@ -95,6 +103,7 @@ uint64_t ttRawProbesQs = 0;
 uint64_t ttRawHitsQs = 0;
 uint64_t shallowMainNodes = 0;
 uint64_t shallowLeavesToQS = 0;
+uint64_t forcedMoveExtensions = 0;
 
 namespace {
 using namespace std::chrono;
@@ -326,7 +335,33 @@ struct TranspositionTable {
 
         ++stats.numMisses;
         if (entry.key != keyOf(hash)) return RefineResult::MissKey;
-        if (entry.depthleft < depthleft) return RefineResult::MissDepth;
+        if (entry.depthleft < depthleft) {
+            if (depthleft > 0) {
+                auto gap = depthleft - int(entry.depthleft);
+                if (gap == 1) {
+                    ++ttMissDepthGap1Main;
+                    auto wouldAlpha = alpha;
+                    auto wouldBeta = beta;
+                    switch (entry.type) {
+                    case EntryType::EXACT: wouldAlpha = wouldBeta = entry.eval.score; break;
+                    case EntryType::LOWERBOUND:
+                        wouldAlpha = std::max(wouldAlpha, entry.eval.score);
+                        break;
+                    case EntryType::UPPERBOUND:
+                        wouldBeta = std::min(wouldBeta, entry.eval.score);
+                        break;
+                    }
+                    if (wouldAlpha >= wouldBeta)
+                        ++ttMissDepthGap1WouldCutMain;
+                    else if (wouldAlpha > alpha || wouldBeta < beta)
+                        ++ttMissDepthGap1WouldTightenMain;
+                } else if (gap == 2)
+                    ++ttMissDepthGap2Main;
+                else
+                    ++ttMissDepthGap3PlusMain;
+            }
+            return RefineResult::MissDepth;
+        }
         if (entry.generation != numGenerations) return RefineResult::MissGeneration;
         if (repetitions.drawn(turn.halfmove())) {
             // Don't refine if this position may be drawn by repetition, to avoid
@@ -337,9 +372,15 @@ struct TranspositionTable {
         ++stats.numHits;
 
         ++cacheCount;
-        if (depthleft)
+        if (depthleft) {
             ++ttRefinements;
-        else
+            if (entry.type == EntryType::EXACT)
+                ++ttHitExactMain;
+            else if (entry.type == EntryType::LOWERBOUND)
+                ++ttHitLowerMain;
+            else
+                ++ttHitUpperMain;
+        } else
             ++qsTTRefinements;
 
         switch (entry.type) {
@@ -627,8 +668,9 @@ bool isQuiet(Position& position, int depthleft) {
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score standPat) {
     ++nodeCount;
 
+    Hash hash(position);
+
     if constexpr (options::useQsTT) {
-        Hash hash(position);
         ++ttRawProbesQs;
         if (transpositionTable.peek(hash).move) ++ttRawHitsQs;
         ++ttProbesQs;
@@ -923,7 +965,10 @@ PrincipalVariation alphaBeta(
     auto moveList = moves::allLegalMovesAndCaptures(position.turn, position.board);
 
     // Forced moves don't count towards depth
-    if (moveList.size() == 1) ++depth.left;
+    if (moveList.size() == 1) {
+        ++forcedMoveExtensions;
+        ++depth.left;
+    }
 
     sortMoves(position, ttMove, hash, moveList.begin(), moveList.end(), lastMove, depth.current);
 
@@ -1062,7 +1107,10 @@ PrincipalVariation toplevelAlphaBeta(
     auto moveList = moves::allLegalMovesAndCaptures(position.turn, position.board);
 
     // Forced moves don't count towards depth
-    if (moveList.size() == 1) ++depth.left;
+    if (moveList.size() == 1) {
+        ++forcedMoveExtensions;
+        ++depth.left;
+    }
 
     // No moves means either checkmate or stalemate
     if (moveList.empty() && !isInCheck(position)) return {Move(), Score()};
