@@ -47,6 +47,14 @@ uint64_t nullMoveSkippedPV = 0;
 uint64_t nullMoveSkippedBehind = 0;
 uint64_t pvsAttempts = 0;
 uint64_t pvsResearches = 0;
+uint64_t rootBetaCutoffs = 0;
+uint64_t rootCutoffMove1 = 0;
+uint64_t rootCutoffMoveLe3 = 0;
+uint64_t rootCutoffMoveGt3 = 0;
+uint64_t ply1BetaCutoffs = 0;
+uint64_t ply1CutoffMove1 = 0;
+uint64_t ply1CutoffMoveLe3 = 0;
+uint64_t ply1CutoffMoveGt3 = 0;
 uint64_t rootMoveVisits = 0;
 uint64_t rootSearchCalls = 0;
 uint64_t aspirationAttempts = 0;
@@ -612,18 +620,34 @@ bool betaCutoff(Score score,
                 Move move,
                 int moveCount,
                 Color side,
-                int depthleft,
+                int ply,
                 const Board& board,
                 Move lastMove) {
     if (score < beta) return false;  // No beta cutoff
     ++betaCutoffs;
     if (moveCount == 1) ++firstMoveCutoffs;
 
+    // Cutoff histograms for depth-3 efficiency analysis.
+    auto bucketCutoff = [&](uint64_t& move1, uint64_t& moveLe3, uint64_t& moveGt3) {
+        if (moveCount == 1)
+            ++move1;
+        else if (moveCount <= 3)
+            ++moveLe3;
+        else
+            ++moveGt3;
+    };
+    if (ply == 0) {
+        ++rootBetaCutoffs;
+        bucketCutoff(rootCutoffMove1, rootCutoffMoveLe3, rootCutoffMoveGt3);
+    } else if (ply == 1) {
+        ++ply1BetaCutoffs;
+        bucketCutoff(ply1CutoffMove1, ply1CutoffMoveLe3, ply1CutoffMoveGt3);
+    }
+
     // Only apply heuristics to quiet moves
     if (move.kind == MoveKind::Quiet_Move || move.kind == MoveKind::Double_Push) {
-        if (options::historyHeuristic)
-            history[int(side)][move.from][move.to] += depthleft * depthleft;
-        storeKillerMove(move, depthleft);
+        if (options::historyHeuristic) history[int(side)][move.from][move.to] += ply * ply;
+        storeKillerMove(move, ply);
 
         // Store countermove: this move is a good response to the opponent's last move
         if (options::useCountermove && lastMove) {

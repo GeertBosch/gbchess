@@ -99,6 +99,10 @@ void printStatistics(std::ostream& os) {
     os << "LMR: attempts=" << search::lmrAttempts << " researches=" << search::lmrResearches
        << "\n";
     os << "TT cutoffs: " << search::ttCutoffs << " refinements=" << search::ttRefinements << "\n";
+    os << "Root cutoffs: total=" << search::rootBetaCutoffs << " (m1=" << search::rootCutoffMove1
+       << ", m2-3=" << search::rootCutoffMoveLe3 << ", m4+=" << search::rootCutoffMoveGt3 << ")\n";
+    os << "Ply1 cutoffs: total=" << search::ply1BetaCutoffs << " (m1=" << search::ply1CutoffMove1
+       << ", m2-3=" << search::ply1CutoffMoveLe3 << ", m4+=" << search::ply1CutoffMoveGt3 << ")\n";
     os << "Beta cutoffs: " << search::betaCutoffs << " ("
        << (search::nodeCount ? (search::betaCutoffs * 100 / search::nodeCount) : 0)
        << "% of nodes)\n";

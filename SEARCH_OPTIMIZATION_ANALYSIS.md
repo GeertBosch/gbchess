@@ -185,6 +185,35 @@ Conclusion:
    - Goal: determine whether poor move ordering is delaying cutoffs too often.
    - This provides direct evidence before any move-ordering logic changes.
 
+#### Step 2 Execution Result (April 28, 2026)
+
+**Status:** Success (instrumentation complete, no search behavior change).
+
+Added counters:
+- Root cutoffs: total and buckets (`m1`, `m2-3`, `m4+`)
+- Ply1 cutoffs: total and buckets (`m1`, `m2-3`, `m4+`)
+
+Depth-3 results:
+- Root cutoffs: `0` (expected at root PV)
+- Ply1 cutoffs: `82` total
+   - `m1`: `54`
+   - `m2-3`: `25`
+   - `m4+`: `3`
+
+Depth-9 results:
+- Root cutoffs: `0`
+- Ply1 cutoffs: `328` total
+   - `m1`: `294`
+   - `m2-3`: `26`
+   - `m4+`: `8`
+
+Interpretation:
+- At ply1, most cutoffs already happen very early (move 1 dominates; `m4+` is rare).
+- This weakens the hypothesis that delayed cutoff timing from move ordering is the primary
+   depth-3 bottleneck.
+- Remaining issue is more likely insufficient shallow-depth pruning (too many branches that
+   do not cut at all), so pruning is now the top priority.
+
 3. **Add shallow-node classification counters (depth <= 3)**
    - Count nodes reaching quiescence directly vs nodes expanded in main search.
    - Count how often TT refines bounds but fails to cut.
@@ -199,7 +228,7 @@ Conclusion:
 
 5. **Revisit move ordering once cutoff histograms are available**
    - If cutoffs are frequently late (`moveCount > 3`), prioritize move ordering adjustments.
-   - If cutoffs are already early but rare, prioritize pruning instead.
+   - Current histogram shows late cutoffs are uncommon at ply1, so continue with pruning first.
 
 ### Step 1: Re-tune NMP Parameters
 
