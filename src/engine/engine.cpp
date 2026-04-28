@@ -10,6 +10,7 @@
 #include <iterator>
 #include <sstream>
 #include <thread>
+#include <unistd.h>
 #include <utility>
 
 #include "book/book.h"
@@ -418,6 +419,8 @@ void UCIRunner::dispatch(const std::string& command,
 } catch (const std::exception& e) {
     auto message = "error processing command '" + line + "': " + e.what();
     std::cerr << message << "\n";
+    log << message << "\n";
+    std::flush(log);
     respond("info string " + message);
 }
 
@@ -463,9 +466,12 @@ void usage() {
 }
 
 void fromStream(std::istream& stream) {
-    std::ofstream log("engine.log");
-    log << "Entering UCI\n";
+    // Include a PID in the log file name to avoid conflicts between engines
+    std::ofstream log("engine-" + std::to_string(getpid()) + ".log");
+    log << "Entering UCI for " << cmdName << " with PID " << getpid() << "\n";
     enterUCI(stream, std::cout, log);
+    log << "Exiting UCI for " << cmdName << " with PID " << getpid() << "\n";
+    std::flush(log);
 }
 
 void fromFile(const char* filename) {
