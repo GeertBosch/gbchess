@@ -55,7 +55,7 @@ public:
     }
     // Assumes that passed in position is the same as the one used to construct this hash.
     // Cancels out castling rights and en passant targets.
-    void applyMove(Turn turn, MoveWithPieces mwp, CastlingMask mask);
+    void applyMove(Turn turn, MoveWithPieces mwp, CastlingMask mask, const Board& board);
 
     // Use toggle to add/remove a piece or non piece/location vector.
     void toggle(Piece piece, int location) {
@@ -71,18 +71,11 @@ public:
     }
 
     /** Create a hash for a null move (flip side to move and clear en passant) */
-    Hash makeNullMove(const Turn& turn) const {
-        Hash result = *this;
-        result.toggle(BLACK_TO_MOVE);
-        // Clear en passant hash if it was set (matching Turn::makeNullMove behavior)
-        if (turn.enPassant() != noEnPassantTarget)
-            result.toggle(ExtraVectors(file(turn.enPassant()) + EN_PASSANT_A));
-        return result;
-    }
+    Hash makeNullMove(const Turn& turn, const Board& board) const;
 
 private:
     HashValue hash = 0;
 };
 
 // Updates the given hash at the given turn, based on the passed move.
-Hash applyMove(Hash hash, Turn turn, MoveWithPieces mwp, CastlingMask mask);
+Hash applyMove(Hash hash, Turn turn, MoveWithPieces mwp, CastlingMask mask, const Board& board);

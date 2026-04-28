@@ -292,6 +292,26 @@ void testApplyMove() {
         assert(position.turn.halfmove() == 0);
     }
 
+    // Double push should set en passant target only when opponent can capture en passant
+    {
+        Position position;
+        position.board[e2] = Piece::P;
+        position.turn = {Color::w, CastlingMask::_, Turn::EnPassantTarget::_, 0, 1};
+
+        position = applyMove(position, Move(e2, e4, MoveKind::Double_Push));
+        assert(position.turn.enPassant() == noEnPassantTarget);
+    }
+
+    {
+        Position position;
+        position.board[e2] = Piece::P;
+        position.board[d4] = Piece::p;
+        position.turn = {Color::w, CastlingMask::_, Turn::EnPassantTarget::_, 0, 1};
+
+        position = applyMove(position, Move(e2, e4, MoveKind::Double_Push));
+        assert(position.turn.enPassant() == e3);
+    }
+
     // Test that capture of rook a by a rook removes castling rights on both sides
     {
         Position position;
