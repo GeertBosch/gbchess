@@ -22,6 +22,7 @@ extern uint64_t countermoveAttempts;
 extern uint64_t countermoveHits;
 extern uint64_t firstMoveCutoffs;
 extern uint64_t futilityPruned;
+extern uint64_t mainSeePruned;
 extern uint64_t lmrAttempts;
 extern uint64_t lmrResearches;
 extern uint64_t nullMoveAttempts;
