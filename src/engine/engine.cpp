@@ -103,6 +103,10 @@ void printStatistics(std::ostream& os) {
        << ", m2-3=" << search::rootCutoffMoveLe3 << ", m4+=" << search::rootCutoffMoveGt3 << ")\n";
     os << "Ply1 cutoffs: total=" << search::ply1BetaCutoffs << " (m1=" << search::ply1CutoffMove1
        << ", m2-3=" << search::ply1CutoffMoveLe3 << ", m4+=" << search::ply1CutoffMoveGt3 << ")\n";
+     os << "Shallow nodes (depth<=3): main=" << search::shallowMainNodes
+         << " leaves->QS=" << search::shallowLeavesToQS << "\n";
+     os << "TT refine no-cut: main=" << search::ttRefineNoCut << " (shallow="
+         << search::ttRefineNoCutShallow << ") qs=" << search::qsTTRefineNoCut << "\n";
     os << "Beta cutoffs: " << search::betaCutoffs << " ("
        << (search::nodeCount ? (search::betaCutoffs * 100 / search::nodeCount) : 0)
        << "% of nodes)\n";

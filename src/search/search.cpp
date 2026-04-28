@@ -63,8 +63,13 @@ uint64_t aspirationFailHigh = 0;
 uint64_t aspirationFallbackFullWindow = 0;
 uint64_t qsTTCutoffs = 0;
 uint64_t qsTTRefinements = 0;
+uint64_t qsTTRefineNoCut = 0;
 uint64_t ttCutoffs = 0;
 uint64_t ttRefinements = 0;
+uint64_t ttRefineNoCut = 0;
+uint64_t ttRefineNoCutShallow = 0;
+uint64_t shallowMainNodes = 0;
+uint64_t shallowLeavesToQS = 0;
 
 namespace {
 using namespace std::chrono;
@@ -562,6 +567,7 @@ Score quiesce(Position& position, Score alpha, Score beta, int depthleft, Score 
             ++qsTTCutoffs;
             return beta;
         }
+        ++qsTTRefineNoCut;
     }
 
     if (!depthleft) return standPat;
@@ -730,7 +736,11 @@ PrincipalVariation tryTTCutoff(
     const Position& position, Hash hash, int depthleft, Score& alpha, Score& beta) {
     auto origAlpha = alpha, origBeta = beta;
     transpositionTable.refineAlphaBeta(hash, position.turn, depthleft, alpha, beta);
-    if (alpha < beta) return {};
+    if (alpha < beta) {
+        ++ttRefineNoCut;
+        if (depthleft <= 3) ++ttRefineNoCutShallow;
+        return {};
+    }
 
     auto pv = transpositionTable.pv(position, depthleft);
     if (!pv) return {};
@@ -758,6 +768,15 @@ PrincipalVariation tryTTCutoff(
 PrincipalVariation alphaBeta(
     Position& position, Hash hash, Score alpha, Score beta, Depth depth, Move lastMove) {
     ++nodeCount;
+
+    // Step-3 diagnostics: classify shallow main-search nodes and shallow leaves that enter QS.
+    if (depth.current <= 3) {
+        if (depth.left <= 0)
+            ++shallowLeavesToQS;
+        else
+            ++shallowMainNodes;
+    }
+
     // Track maximum selective depth reached in main search (excludes quiescence)
     if (depth.current > maxSelDepth) maxSelDepth = depth.current;
 

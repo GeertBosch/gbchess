@@ -44,8 +44,13 @@ extern uint64_t aspirationFailHigh;
 extern uint64_t aspirationFallbackFullWindow;
 extern uint64_t qsTTCutoffs;
 extern uint64_t qsTTRefinements;
+extern uint64_t qsTTRefineNoCut;
 extern uint64_t ttCutoffs;
 extern uint64_t ttRefinements;
+extern uint64_t ttRefineNoCut;
+extern uint64_t ttRefineNoCutShallow;
+extern uint64_t shallowMainNodes;
+extern uint64_t shallowLeavesToQS;
 
 constexpr bool transpositionTableDebug = false;
 
