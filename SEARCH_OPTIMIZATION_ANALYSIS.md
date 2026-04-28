@@ -219,8 +219,29 @@ Interpretation:
    - Count how often TT refines bounds but fails to cut.
    - Goal: identify whether missing pruning or TT misses dominate node growth.
 
+#### Step 3 Execution Result (April 28, 2026)
+
+**Status:** Success (instrumentation complete, no search behavior change).
+
+Added counters:
+- Shallow nodes (depth<=3): `main`, `leaves->QS`
+- TT refine no-cut counters: `main`, `main(shallow)`, `qs`
+
+Depth-3 results:
+- Shallow nodes (depth<=3): `main=164`, `leaves->QS=1959`
+- TT refine no-cut: `main=164` (`shallow=164`), `qs=2785`
+
+Interpretation:
+- Most shallow search work rapidly transitions into quiescence (`leaves->QS` is much larger
+   than shallow main-node expansion).
+- TT bound refinement in quiescence frequently fails to cut (`qs` no-cut is high), so TT probes
+   are often not converting into pruning in the current depth-3 workload.
+- Combined with Step 2 (cutoffs usually early when they happen), this confirms the next gains are
+   more likely from **increasing shallow pruning coverage** than from move-ordering retuning.
+
 4. **Implement one shallow-depth optimization at a time (after instrumentation phase)**
    - Candidate order: move-count pruning, SEE pruning in main search, move-level futility pruning.
+   - Immediate next change: **move-count pruning** (Step 4), then remeasure depth 3/9.
    - Acceptance for each change:
      - Depth-3 nodes decrease materially
      - No regression in puzzle quality (>=96/100)
