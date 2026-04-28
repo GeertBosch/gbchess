@@ -6,188 +6,143 @@ FEN: rn3br1/1pk1pNpp/p7/q1pP4/2P2PP1/P4p1N/1PQ4P/4RK2 w - - 3 23
 Depth: 9
 ```
 
+Both engines find `c2h7` as the best move at depth 9.
+
 ## Node Count Comparison
 
-| Engine | Nodes | Seldepth | Time |
-|--------|-------|----------|------|
-| **Stockfish 12** | 7,028 | 12 | 9ms |
-| **gbchess** | 598,390 | 10 | 2,497ms |
-| **Ratio** | **85x** | 0.83x | 277x |
+| Engine | Nodes | Seldepth | Time | Best Move | Score |
+|--------|-------|----------|------|-----------|-------|
+| **Stockfish 12** | 9,503 | 12 | 8ms | c2h7 | +3.76 |
+| **gbchess** | 1,090,423 | 10 | 3,076ms | c2h7 | +1.52 |
+| **Ratio** | **115x** | 0.83x | 385x | — | — |
 
-**Recent Optimizations:**
-- Changed `nullMoveReduction` from 3 to 4 (more aggressive)
-- Changed `nullMoveMinDepth` from 3 to 2 (allows null move at more depths)
-- Removed `max(1, ...)` constraint on null move search depth
-- **Selective quiescence extension** for checking moves (fixes missed checkmates without regression)
-- Result: **22% faster** than previous best (768K nodes, 3.2s) with correct checkmate detection
-
-Note: Both engines report "seldepth" (selective depth = maximum depth in main search including extensions, excluding quiescence).
+Note: Both engines report "seldepth" (maximum depth reached in main search including extensions,
+excluding quiescence).
 
 ## Detailed Statistics Comparison (depth 9)
 
 | Metric | Stockfish 12 | gbchess | Ratio |
 |--------|--------------|---------|-------|
-| **Total Nodes** | 7,028 | 598,390 | **85x** |
-| **Null Move Attempts** | 1,467 (20.87% of nodes) | 21,896 (3.66% of nodes) | **6x fewer attempts** |
-| **Null Move Cutoffs** | 1,075 (73% of attempts) | 17,748 (81% of attempts) | Better effectiveness! |
-| **Beta Cutoffs** | 1,575 (22% of nodes) | 100,009 (16.7% of nodes) | Lower % but 63x more |
-| **First-Move Cutoffs** | 1,373 (87% of beta) | 85,883 (85% of beta) | Similar ordering |
+| **Total Nodes** | 9,503 | 1,090,423 | **115x** |
+| **Null Move Attempts** | 1,467 (15.4% of nodes) | 515 (0.05% of nodes) | **300x fewer** |
+| **Null Move Cutoffs** | 1,075 (73% of attempts) | 315 (61% of attempts) | Similar |
+| **Beta Cutoffs** | 1,575 (16.6% of nodes) | 50,141 (4.6% of nodes) | Lower % |
+| **First-Move Cutoffs** | 1,373 (87% of beta) | 41,287 (82% of beta) | Similar ordering |
 
+Node counts at other depths:
 
-**Current Null Move Statistics:**
-- Stockfish 12: **20.87%** of nodes attempt null move
-- gbchess: **3.66%** of nodes attempt null move
-- Gap: **6x fewer attempts** (improved from previous 24x)
+| Depth | Stockfish 12 | gbchess | Ratio |
+|-------|-------------|---------|-------|
+| 5 | 472 | 13,049 | 28x |
+| 7 | 2,155 | 217,183 | 101x |
+| 9 | 9,503 | 1,090,423 | 115x |
 
-**Success Rates (when attempted):**
-- Stockfish 12: 73% of attempts result in cutoff
-- gbchess: **81%** of attempts result in cutoff (even better!)
+## Root Cause: Null Move Pruning Barely Used
 
-This demonstrates that **our null move implementation is effective when used**, but we're severely underutilizing it by attempting it too rarely.
+The dominant issue is that gbchess attempts null move pruning at **0.05% of nodes** vs
+Stockfish's **15.4%** — a 300x difference. At depth 9, gbchess encounters ~45,000 positions
+eligible for NMP but attempts it at only 515 of them.
 
-### Analysis: Null Move Conditions
+Breaking down why NMP is skipped (depth 9):
 
-**gbchess null move conditions:**
+| Skip Reason | Count | % of all skips |
+|-------------|-------|----------------|
+| Null-window node (`beta == alpha + 1`) | 44,337 | **98.9%** |
+| Position behind (static eval < beta) | 371 | 0.8% |
+| In check | 108 | 0.2% |
+| Mate score in beta | 3 | ~0% |
+| Endgame (no non-pawn material) | 0 | 0% |
+
+The null-window skip condition in `tryNullMovePruning` is:
 ```cpp
-if (options::nullMovePruning && depth.left >= options::nullMoveMinDepth &&  // depth >= 2 ✓
-    !isInCheck(position) && beta > Score::min() + 100_cp &&
-    hasNonPawnMaterial(position))
+// Skip null-move in null-window (PVS probe) nodes.
+if (beta.cp() - 1 <= alpha.cp()) {   // true when beta == alpha + 1
+    ++nullMoveSkippedPV;
+    return false;
+}
 ```
 
-**Stockfish null move conditions:**
-```cpp
-if (   !PvNode
-    && (ss-1)->currentMove != MOVE_NULL  // No consecutive null moves
-    && (ss-1)->statScore < 22977         // History-based condition
-    &&  eval >= beta                     // Only when ahead ✅
-    &&  eval >= ss->staticEval
-    &&  ss->staticEval >= beta - 30*depth - 28*improving + 84*ss->ttPv + 182  // Depth-scaled margin
-    && !excludedMove
-    &&  pos.non_pawn_material(us)
-    && (ss->ply >= thisThread->nmpMinPly || us != thisThread->nmpColor))
-```
-
-**Experimental Findings:**
-- `nullMoveMinDepth = 3`: 1.55M nodes, 6.1s (baseline)
-- `nullMoveMinDepth = 2`: 768K nodes, 3.2s (initial improvement)
-- `nullMoveMinDepth = 2` + selective extension: **598K nodes, 2.5s** (current, best) ✓
-- `nullMoveMinDepth = 1`: More nodes and slower (negative ROI)
-
-**Remaining Gap:**
-- gbchess still attempts null move 6x less often (3.41% vs 20.87%)
-- However, our 79% cutoff rate shows the attempts we make are highly effective
-- The gap is likely due to Stockfish's more sophisticated conditions (history scores, improving positions, etc.)
+This condition fires when `beta == alpha + 1`, which identifies **null-window (non-PV) nodes** —
+but these are precisely the nodes where NMP *should* be applied. Standard practice (and what
+Stockfish does) is to skip NMP in **PV nodes** (full-window, `beta > alpha + 1`) and allow it
+in null-window nodes. The condition is inverted, causing NMP to be suppressed in ~99% of
+eligible positions.
 
 ## Implemented Optimizations
 
-### ✅ Already Implemented in gbchess
-1. **Iterative Deepening** - Yes
-2. **Aspiration Windows** - Yes
-3. **Transposition Table** - Yes (1M entries)
-4. **Null Move Pruning** - Yes (reduction=4, min_depth=2) ✓ Recently optimized
-5. **Late Move Reductions (LMR)** - Yes
-6. **Killer Move Heuristic** - Yes
-7. **History Heuristic** - Yes
-8. **MVV/LVA Move Ordering** - Yes
-9. **Static Exchange Evaluation (SEE)** - Yes
-10. **Quiescence Search** - Yes (depth=5)
+### ✅ Already in gbchess
+1. **Iterative Deepening** — Yes
+2. **Aspiration Windows** — Yes (windows: 30cp, 125cp)
+3. **Transposition Table** — Yes (16 MB)
+4. **Null Move Pruning** — Yes (R=3, min_depth=2) — but effectively disabled by inverted PV check
+5. **Late Move Reductions (LMR)** — Yes
+6. **Killer Move Heuristic** — Yes (2 killers per depth)
+7. **History Heuristic** — Yes
+8. **Countermove Heuristic** — Yes
+9. **MVV/LVA Move Ordering** — Yes
+10. **Static Exchange Evaluation (SEE)** — Yes (in quiescence)
+11. **Quiescence Search** — Yes (depth=5, includes checks)
+12. **Reverse Futility Pruning** — Yes (max depth=3, margin=100cp×depth+100cp)
+13. **Principal Variation Search (PVS)** — Yes
 
-### ❌ Missing Optimizations (Found in Stockfish 12)
+### ❌ Missing Optimizations
 
-#### High Impact (~50+ Elo)
-1. **Futility Pruning (Node Level)** - **~50 Elo**
-   - If eval >> beta at shallow depth, return without searching moves
-   - Stockfish: `if (eval - futility_margin(depth) >= beta) return eval;`
-   - Missing in gbchess
+#### High Impact
+1. **Futility Pruning (Move Level)** — Skip quiet moves when static eval + margin ≤ alpha
+2. **Move Count Pruning** — After N moves searched, skip remaining quiet moves
+3. **SEE Pruning in Main Search** — Skip moves with negative SEE at shallow depth
+   (gbchess uses SEE only in quiescence)
 
-2. **Move Count Pruning** - **~20 Elo**
-   - After searching N moves, skip remaining quiet moves
-   - Stockfish: `moveCount >= futility_move_count(improving, depth)`
-   - Missing in gbchess
+#### Medium Impact
+4. **Dynamic Null Move Reduction** — Stockfish uses `R = f(depth, eval-beta)` rather than fixed R=3
+5. **Razoring** — At depth 1, if eval << alpha, go directly to quiescence
+6. **ProbCut** — Beta cutoff after a shallow reduced-depth search
 
-3. **SEE Pruning for Quiet Moves** - **~20 Elo**
-   - Skip moves with negative SEE at shallow depths
-   - Stockfish: `!pos.see_ge(move, threshold)`
-   - gbchess only uses SEE in quiescence
+### 🔧 Known Bug: NMP Condition Inverted
 
-#### Medium Impact (~5-20 Elo)
-4. **Futility Pruning (Move Level)** - **~5 Elo**
-   - Skip quiet moves that can't improve alpha
-   - Stockfish: `ss->staticEval + margin <= alpha`
-   - Missing in gbchess
+**Current code** (in `tryNullMovePruning`):
+```cpp
+// Skips NMP when beta == alpha + 1 (null-window = non-PV nodes)
+if (beta.cp() - 1 <= alpha.cp()) { ++nullMoveSkippedPV; return false; }
+```
 
-5. **Razoring** - **~1 Elo**
-   - At depth 1, if eval << alpha, go to quiescence
-   - Stockfish: `if (depth == 1 && eval <= alpha - 510) return qsearch()`
-   - Missing in gbchess
+**Should be:**
+```cpp
+// Skip NMP in PV nodes (full-window: beta > alpha + 1)
+if (beta.cp() - alpha.cp() > 1) { ++nullMoveSkippedPV; return false; }
+```
 
-6. **Countermove Pruning** - **~20 Elo**
-   - Skip moves with poor history scores
-   - Uses continuation history tables
-   - Missing in gbchess
-
-7. **More Aggressive Null Move** - **~10 Elo**
-   - Dynamic reduction: `R = f(depth, eval-beta)`
-   - Stockfish: `R = (817 + 71*depth)/213 + min((eval-beta)/192, 3)`
-   - gbchess: Fixed `R = 3`
-
-### 🔧 Tuning Opportunities
-
-1. **Null Move Conditions**
-   - gbchess: `depth >= 5 && !inCheck && beta > -infinity+100 && hasNonPawnMaterial`
-   - Stockfish: Much more complex with eval-based conditions
-
-2. **LMR Conditions**
-   - gbchess: `depth > 2 && moveCount > 2 && isQuiet`
-   - Stockfish: Uses reduction table based on depth and move number
-
-3. **Quiescence Depth**
-   - gbchess: Fixed at 5
-   - Stockfish: Adaptive based on position
+This single fix would bring NMP attempts from 515 to ~32,000 at depth 9 (matching Stockfish's
+~15% rate), and is expected to be the dominant remaining performance issue.
 
 ## Estimated Impact
 
-**Current Status:**
-- After selective extension: 598K nodes, 2.5s (correct and fast)
-- 85x node gap vs Stockfish (down from original 221x)
-- **61% improvement** from baseline (1.55M → 598K nodes)
+**Current state:** 1,090,423 nodes, 3,076ms at depth 9 (115x vs Stockfish)
 
-Adding the missing optimizations would likely improve node count by:
-- **Futility Pruning (Node)**: 2-3x reduction
-- **Move Count Pruning**: 1.5-2x reduction
-- **SEE Pruning**: 1.3-1.5x reduction
-- **Combined**: **4-9x total reduction** (conservative estimate)
+Fixing the NMP condition inversion alone is expected to reduce nodes by ~4-6x based on the
+null move skip breakdown (98.9% of skips are the inverted condition). This would bring gbchess
+to roughly 180K–275K nodes at depth 9 (~20-30x vs Stockfish).
 
-This would bring gbchess from 598K nodes to **66K-150K nodes** at depth 9.
+The remaining ~20-30x gap after fixing NMP would be addressable through:
+- **Move Count Pruning**: 1.5–2x reduction
+- **Futility Pruning (Move Level)**: 1.3–1.5x reduction
+- **SEE Pruning in Main Search**: 1.2–1.4x reduction
+- **Dynamic NMP Reduction**: ~1.2x reduction
 
-To match Stockfish's 7K nodes (~85x remaining gap) would require additional optimizations:
-- More aggressive pruning margins
-- Better move ordering (reducing researches)
-- Singular extensions
-- Check extensions
-- ProbCut
-- Multi-cut
+## Recommended Fix Order
 
-## Recommended Implementation Order
+1. **Fix NMP PV condition** (inverted check, single line) — expected ~4-6x node reduction
+2. **Move Count Pruning** — prune late quiet moves
+3. **SEE Pruning in Main Search** — extend existing SEE to main search
+4. **Futility Pruning (Move Level)** — prune moves that can't improve alpha
+5. **Dynamic Null Move Reduction** — scale R with depth and margin
 
-1. **Futility Pruning (Node Level)** - Easiest, highest impact
-2. **Move Count Pruning** - Simple to add
-3. **SEE Pruning in Main Search** - Extend existing SEE usage
-4. **Dynamic Null Move Reduction** - Tune existing null move
-5. **Futility Pruning (Move Level)** - More complex margin tuning
-6. **Razoring** - Low impact but easy
+## Code Locations
 
-## Code References
+### gbchess `src/search/search.cpp`
+- `tryNullMovePruning()`: null move pruning (includes inverted PV check)
+- `alphaBeta()`: main search loop, LMR, PVS, reverse futility pruning
+- `quiesce()`: quiescence search with SEE
 
-### Stockfish search.cpp
-- Line 819: Futility pruning (node level)
-- Line 807: Razoring
-- Line 1022: Move count pruning
-- Line 1036: Futility pruning (move level)
-- Line 1046: SEE pruning
-- Line 837: Dynamic null move reduction
-
-### gbchess search.cpp
-- Line 480: Null move pruning (fixed R=3)
-- Line 537: LMR (simple conditions)
-- Line 395: Quiescence search (fixed depth=5)
+### `src/core/options.h`
+- All tunable parameters: `nullMoveReduction`, `nullMoveMinDepth`, `reverseFutilityMaxDepth`, etc.
