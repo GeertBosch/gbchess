@@ -645,9 +645,8 @@ bool tryNullMovePruning(Position& position, Hash hash, Score alpha, Score beta, 
         return false;
     }
 
-    // Skip null-move in null-window (PVS probe) nodes.
-    // NMP is noisy there and can destabilize bounds.
-    if (beta.cp() - 1 <= alpha.cp()) {
+    // Skip null-move in PV nodes (full-window search). NMP is for non-PV (cut/all) nodes only.
+    if (beta.cp() - alpha.cp() > 1) {
         ++nullMoveSkippedPV;
         return false;
     }
