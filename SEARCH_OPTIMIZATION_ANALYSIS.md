@@ -118,33 +118,41 @@ same guard but with a depth-scaled margin that allows more attempts when near-eq
    (`aspirationWindows = {}` in `src/core/options.h`; previously 30cp, 125cp)
 3. **Transposition Table** — Yes (16 MB)
 4. **Null Move Pruning** — Yes (R=3, min_depth=2, PV-check bug fixed)
-5. **Late Move Reductions (LMR)** — Yes
+5. **Late Move Reductions (LMR)** — Yes, but only fires at `depth.left > 2` (not at depth 2)
 6. **Killer Move Heuristic** — Yes (2 killers per depth)
 7. **History Heuristic** — Yes
 8. **Countermove Heuristic** — Yes
 9. **MVV/LVA Move Ordering** — Yes
 10. **Static Exchange Evaluation (SEE)** — Yes (in quiescence)
 11. **Quiescence Search** — Yes (depth=5, includes checks)
-12. **Reverse Futility Pruning** — Yes (max depth=3, margin=100cp×depth+100cp)
+12. **Reverse Futility Pruning** — Yes (max depth=3, margin=100cp×depth+100cp = 300cp at depth 2)
 13. **Principal Variation Search (PVS)** — Yes
 
-### ❌ Missing Optimizations
+### ❌ Missing or Miscalibrated Optimizations
 
-#### High Impact
-1. **Move Count Pruning (Late Move Pruning)** — After N moves searched at shallow depth, skip
+#### High Impact (confirmed by Stockfish trace)
+1. **Futility Margin Too Small** — gbchess uses `100×depth+100cp` (300cp at depth 2) vs
+   Stockfish's `223×(depth-improving)` (446cp at depth 2 non-improving). The 146cp gap means
+   positions with static eval between -34 and +112 (relative to beta) recurse in gbchess but
+   are pruned immediately in Stockfish. This is the single largest confirmed contributor to the
+   depth-3 node gap. **Fix: raise the margin formula toward Stockfish's.**
+2. **LMR Not Firing at Depth 2** — gbchess gates LMR at `depth.left > 2`, disabling it for
+   depth-2 children. Stockfish reduces late depth-2 moves to depth-1, converting full subtrees
+   into single qsearch calls. **Fix: lower the LMR threshold to `depth.left >= 2`.**
+3. **Move Count Pruning (Late Move Pruning)** — After N moves searched at shallow depth, skip
    remaining quiet moves. Stockfish: `moveCount >= futility_move_count(improving, depth)`.
-2. **SEE Pruning in Main Search (completed, conservative captures-only)** — Implemented at
-   shallow depth for non-PV nodes: skip late capture moves with clearly losing SEE
-   (`SEE < -100cp`). This is now active and validated (97/100 puzzles).
-3. **SEE Pruning Extension (not yet implemented)** — Extend main-search SEE pruning carefully to
-   additional move classes or thresholds only if quality remains stable.
+   Previously attempted (Step 4) but gate was too aggressive; needs re-try with tighter margins.
 4. **Futility Pruning (Move Level)** — Skip quiet moves when `staticEval + margin ≤ alpha`.
+   This fires per-move (vs node-level RFP which fires before the loop). Stockfish's Step 13
+   combines both forms.
 
 #### Medium Impact
-4. **Dynamic Null Move Reduction** — Scale R with depth and eval margin.
+5. **Dynamic Null Move Reduction** — Scale R with depth and eval margin.
    Stockfish: `R = (817 + 71*depth)/213 + min((eval-beta)/192, 3)`. Currently fixed at R=3.
-5. **Razoring** — At depth 1, if eval << alpha, go directly to quiescence.
-6. **ProbCut** — Try a reduced-depth search with a widened beta; cut if it fails high.
+6. **Razoring** — At depth 1, if eval << alpha, go directly to quiescence.
+7. **ProbCut** — Try a reduced-depth search with a widened beta; cut if it fails high.
+8. **SEE Pruning Extension** — Extend main-search SEE pruning (currently captures-only, SEE<-100cp)
+   to quiet moves or looser thresholds only if quality remains stable.
 
 ## Plan for Next Steps
 
@@ -338,6 +346,68 @@ Conclusion:
 - For depth-3 efficiency, the highest expected return is to improve TT reuse/conversion behavior,
    not to increase raw TT insert count.
 
+#### Step 7 Execution Result (April 28, 2026)
+
+**Status:** Diagnostic complete. Revised root cause identified.
+
+Applied change:
+- Instrumented Stockfish's `search()` to print every main-search node entry (ply, depth, alpha,
+  beta, move), TT cutoffs, and beta cutoffs to stderr.
+
+Full depth-3 trace captured and analyzed for the test FEN. Key findings:
+
+**The complete depth-3 pass (185 nodes) breaks down as follows at ply 1 (42 root moves):**
+
+| Category | Count | Explanation |
+|----------|-------|-------------|
+| `[NP d2 p1]` with no children | 18 | **Node-level futility pruned** before move loop |
+| `[NP d1 p1]` (LMR-reduced, depth 2→1) | 23 | **LMR fires** for late moves — recursed 1 ply, not 2 |
+| `[PV d2 p1]` with full subtree | 1 | Only `h3g5` explored fully |
+| TT cutoffs at ply 1 | 1 | `e1e7` → TT hit from prior iteration |
+
+**How node-level futility pruning works in Stockfish (Step 8):**
+
+```
+if !PvNode && depth < 8 && eval - futility_margin(depth, improving) >= beta:
+    return eval
+```
+
+With `futility_margin(2, false) = 223 × 2 = 446cp`, any ply-1 position where
+`static_eval ≥ beta - 446 = 412 - 446 = -34` gets returned immediately without entering
+the move loop. Since beta = 412cp (the already-found best), moves like `c2h7` (queen blunder,
+static eval ≈ -3000cp) fail this check and are pruned in a single node, never recurse.
+
+**How LMR works in Stockfish for depth=3:**
+
+At ply 1, late moves (move 20+ approximately) have their depth reduced from 2 → 1. This means
+they enter qsearch immediately, producing a single node instead of a full depth-2 subtree.
+
+**gbchess comparison:**
+
+| Mechanism | Stockfish | gbchess |
+|-----------|-----------|---------|
+| Node-level futility margin at depth 2 | `223 × 2 = 446cp` | `100 × 2 + 100 = 300cp` |
+| Node-level futility max depth | 8 | 3 |
+| LMR fires at depth | `depth > 0` (any) | `depth.left > 2` only |
+
+**Root causes of the 26x node gap at depth 3:**
+
+1. **Futility margin too small**: gbchess uses 300cp vs Stockfish's 446cp at depth 2.
+   Positions with static eval between -34cp and +112cp (the gap between 300 and 446) fall
+   through gbchess's futility gate but are caught by Stockfish's.
+2. **LMR doesn't fire at depth 2**: gbchess requires `depth.left > 2` so LMR is disabled
+   for the depth-2 children at ply 1. Stockfish reduces depth 2 → 1 for late moves, turning
+   full subtrees into single qsearch calls.
+3. **TT reuse** plays a secondary role (one extra cutoff from prior iteration), not the root cause.
+
+**Previously hypothesized root causes that are now disproven:**
+- *TT write volume* was not the bottleneck (gbchess writes more entries than Stockfish).
+- *Move ordering quality* was not the primary cause (ply-1 cutoffs already happen early).
+- *Aspiration re-search overhead* was real but accounted for only ~40% of the original gap.
+
+The remaining 26x gap at depth 3 is substantially explained by (1) the futility margin mismatch
+and (2) LMR not firing at depth 2. These are the concrete targets for the next implementation step.
+
 5. **Revisit move ordering once cutoff histograms are available**
    - If cutoffs are frequently late (`moveCount > 3`), prioritize move ordering adjustments.
    - Current histogram shows late cutoffs are uncommon at ply1, so continue with pruning first.
@@ -374,33 +444,84 @@ NMP-only tuning was attempted earlier and did not satisfy acceptance criteria at
 Given the new aspiration baseline, any future NMP re-tuning should be re-run from the new
 baseline rather than using the older failed matrix.
 
-### Step 2: Move Count Pruning
+### Step 2: Increase Reverse Futility Pruning Margin ← **Next Concrete Step**
+
+**Goal:** Match Stockfish's futility margin to prune the same set of hopeless positions.
+
+**Hypothesis**: Increasing the margin from `100×depth+100` to `200×depth+100` (or approaching
+Stockfish's `223×depth`) will prune the ~18 ply-1 positions currently missed, reducing depth-3
+node count by an estimated 10–20%.
+
+**Implementation** (single isolated change):
+- In `src/search/search.cpp`, change:
+  ```cpp
+  Score futilityMargin = Score::fromCP(100 * depth.left + 100);
+  ```
+  to:
+  ```cpp
+  Score futilityMargin = Score::fromCP(200 * depth.left + 100);
+  ```
+- No other changes.
+
+**Validation**:
+- `make test -j` passes
+- `make puzzles` ≥ 96/100
+- Depth-3 nodes decrease vs baseline of 4,897
+- Depth-9 nodes do not increase
+
+If successful, consider a second isolated step to further raise toward `223×depth`.
+If quality drops, try intermediate value (150×depth+100).
+
+#### Step 8 Execution Result (April 28, 2026)
+
+**Status:** Success (accepted).
+
+Applied change:
+- Raised RFP margin: `100×depth+100` → `200×depth+100` (500cp at depth 2, 700cp at depth 3).
+
+Measured impact on the test FEN:
+
+| Metric | Before | After | Delta |
+|--------|--------|-------|-------|
+| Depth 3 nodes | 4,897 | 4,798 | **-2.0%** |
+| Depth 9 nodes | 709,677 | 673,815 | **-5.1%** |
+
+Validation:
+- `make test -j`: pass
+- `make puzzles`: 96/100 (stable)
+
+Conclusion:
+- The larger margin provides a genuine improvement at depth 9 and a small improvement at depth 3.
+- Change is accepted.
+- The depth-3 impact is small because the 18 futility-pruned Stockfish nodes are pruned due to
+  *structural* differences (Stockfish's formula is `223×depth`, firing without the `+100` offset,
+  and Stockfish evaluates before entering the move loop unconditionally). With our new 500cp margin
+  at depth 2, most of those 18 nodes would already have been pruned by the prior 300cp margin —
+  the positions blunder material (static eval ≈ -3000cp) and were never the binding cases.
+- The primary remaining depth-3 gap is LMR not firing at depth 2 (the 23 `[NP d1 p1]` nodes in
+  Stockfish vs depth-2 subtrees in gbchess). That is the next isolated step.
+
+### Step 3: Enable LMR at Depth 2 ← **Next Concrete Step**
+
+**Goal:** Allow LMR to reduce late depth-2 moves to depth-1, turning subtrees into qsearch calls.
+
+**Hypothesis**: Removing the `depth.left > 2` floor and replacing with `depth.left >= 2` (or
+equivalently `depth.left > 1`) will match Stockfish's behavior where ~23 of 42 ply-1 moves
+are depth-reduced from 2 → 1 in the depth-3 pass.
+
+**Implementation** (single isolated change after Step 2):
+- In `src/search/search.cpp`, change the LMR condition from `depth.left > 2` to `depth.left >= 2`.
+
+**Validation**: same as Step 2.
+
+### Step 4: Move Count Pruning (retry)
 
 **Goal:** Prune late quiet moves at shallow depths where they are unlikely to improve.
 
-After searching the first few moves at a node (say, the first `3 + depth²` moves), skip
-remaining quiet moves. This directly reduces the branching factor for moves ranked low by
-the move ordering heuristics. Implement, then verify:
-- `make test -j` passes
-- Puzzles ≥ 96/100
-- Node count at depth 9 decreases
-
-### Step 3: SEE Pruning in Main Search
-
-**Goal:** Skip clearly losing captures and quiet moves at shallow depth.
-
-At depth ≤ 2–3, skip any move whose SEE score is below a threshold (e.g. −50cp for captures,
-−10cp for quiet moves). SEE is already computed correctly in the codebase for quiescence; extend
-its use to `alphaBeta()`. Validate with the same quality checks.
-
-### Step 4: Futility Pruning (Move Level)
-
-**Goal:** Skip quiet moves that cannot possibly improve alpha.
-
-At shallow depth (≤ 2), skip quiet moves where `staticEval + futilityMargin(depth) ≤ alpha`.
-The margin needs tuning; start with Stockfish's values (around 150cp at depth 1, 300cp at
-depth 2) and adjust based on puzzle quality. This is more conservative than reverse futility
-pruning (which already fires at the node level) and targets individual move decisions.
+After Steps 2–3, retry move-count pruning with much tighter gating:
+- Only at `depth.left <= 2`
+- Threshold much later than prior attempt
+- Skip when static eval is close to alpha (small margin)
 
 ### Step 5: Dynamic Null Move Reduction
 

@@ -1128,7 +1128,7 @@ PrincipalVariation alphaBeta(
         ++evalCount;
 
         // Futility margin increases with depth (more conservative at higher depths)
-        Score futilityMargin = Score::fromCP(100 * depth.left + 100);
+        Score futilityMargin = Score::fromCP(200 * depth.left + 100);
 
         if (staticEval - futilityMargin >= beta) {
             ++futilityPruned;
