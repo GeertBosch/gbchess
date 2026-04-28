@@ -16,7 +16,7 @@ constexpr bool staticExchangeEvaluation = true;             // Use static exchan
 constexpr int maxKillerMoves = 2;                           // Max killer moves per depth (0=off)
 constexpr int maxKillerDepth = 256;                         // Max depth for killer moves (0=off)
 constexpr bool historyHeuristic = true;                     // Use beta cutoffs for move ordering
-constexpr std::array<int, 2> aspirationWindows{30, 125};    // Given in centipawns, {} disables
+constexpr std::array<int, 0> aspirationWindows{};           // Given in centipawns, {} disables
 constexpr int aspirationWindowMinDepth = 2;                 // Minimum depth for aspiration windows
 constexpr int promotionMinDepthLeft = 3;                    // Minimum depth left for promos in QS
 constexpr int checksMinDepthLeft = quiescenceDepth;         // Minimum depth left for checks in QS

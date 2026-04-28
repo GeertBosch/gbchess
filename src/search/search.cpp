@@ -47,6 +47,12 @@ uint64_t nullMoveSkippedPV = 0;
 uint64_t nullMoveSkippedBehind = 0;
 uint64_t pvsAttempts = 0;
 uint64_t pvsResearches = 0;
+uint64_t rootMoveVisits = 0;
+uint64_t rootSearchCalls = 0;
+uint64_t aspirationAttempts = 0;
+uint64_t aspirationFailLow = 0;
+uint64_t aspirationFailHigh = 0;
+uint64_t aspirationFallbackFullWindow = 0;
 uint64_t qsTTCutoffs = 0;
 uint64_t qsTTRefinements = 0;
 uint64_t ttCutoffs = 0;
@@ -890,6 +896,7 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
 PrincipalVariation toplevelAlphaBeta(
     Position& position, Score alpha, Score beta, int depthleft, InfoFn info) {
     assert(depthleft > 0);
+    ++rootSearchCalls;
     Depth depth = {0, depthleft};
 
     Hash hash(position);
@@ -908,6 +915,7 @@ PrincipalVariation toplevelAlphaBeta(
 
     int currmovenumber = 0;
     for (auto move : moveList) {
+        ++rootMoveVisits;
         if (currmoveInfo(info, depthleft, move, ++currmovenumber)) return pv;
 
         auto newPosition = moves::applyMove(position, move);
@@ -956,17 +964,24 @@ PrincipalVariation aspirationWindows(Position position,
         auto alpha = expected - Score::fromCP(*alphaIt);
         auto beta = expected + Score::fromCP(*betaIt);
 
+        ++aspirationAttempts;
         newpv = toplevelAlphaBeta(position, alpha, beta, maxdepth, info);
 
-        if (newpv.score <= alpha)
+        if (newpv.score <= alpha) {
+            ++aspirationFailLow;
             ++alphaIt;
-        else if (newpv.score >= beta)
+        } else if (newpv.score >= beta) {
+            ++aspirationFailHigh;
             ++betaIt;
-        else
+        } else {
             break;
+        }
         newpv = {};
     }
-    if (!newpv) newpv = toplevelAlphaBeta(position, maxdepth, info);
+    if (!newpv) {
+        ++aspirationFallbackFullWindow;
+        newpv = toplevelAlphaBeta(position, maxdepth, info);
+    }
 
     return newpv ? newpv : pv;
 }
