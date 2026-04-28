@@ -1,0 +1,4 @@
+position fen "rn3br1/1pk1pNpp/p7/q1pP4/2P2PP1/P4p1N/1PQ4P/4RK2 w - - 3 23"
+go depth 9 nodes 999999999
+quit
+
