@@ -87,6 +87,18 @@ void printStatistics(std::ostream& os) {
        << (search::nullMoveAttempts ? (search::nullMoveCutoffs * 100 / search::nullMoveAttempts)
                                     : 0)
        << "% of attempts)\n";
+    os << "Root search calls: " << search::rootSearchCalls << "\n";
+    os << "Root move visits: " << search::rootMoveVisits << " ("
+       << (search::rootSearchCalls ? (search::rootMoveVisits / search::rootSearchCalls) : 0)
+       << " per root pass)\n";
+    os << "Aspiration attempts: " << search::aspirationAttempts
+       << " (fail-low=" << search::aspirationFailLow << ", fail-high=" << search::aspirationFailHigh
+       << ", fallback=" << search::aspirationFallbackFullWindow << ")\n";
+    os << "PVS: attempts=" << search::pvsAttempts << " researches=" << search::pvsResearches
+       << "\n";
+    os << "LMR: attempts=" << search::lmrAttempts << " researches=" << search::lmrResearches
+       << "\n";
+    os << "TT cutoffs: " << search::ttCutoffs << " refinements=" << search::ttRefinements << "\n";
     os << "Beta cutoffs: " << search::betaCutoffs << " ("
        << (search::nodeCount ? (search::betaCutoffs * 100 / search::nodeCount) : 0)
        << "% of nodes)\n";
