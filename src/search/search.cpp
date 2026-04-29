@@ -1309,6 +1309,14 @@ PrincipalVariation alphaBeta(
         }
     }
 
+    // IID: when there's no TT move and depth is sufficient, run a reduced-depth search to
+    // seed move ordering with a searched best move rather than relying on heuristics alone.
+    if (options::iid && !ttMove && depth.left >= options::iidMinDepthLeft) {
+        auto iidPV = alphaBeta(
+            position, hash, alpha, beta, {depth.current, depth.left - options::iidDepthReduction}, lastMove);
+        ttMove = iidPV.front();
+    }
+
     auto moveList = moves::allLegalMovesAndCaptures(position.turn, position.board);
 
     // Forced moves don't count towards depth
