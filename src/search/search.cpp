@@ -1465,12 +1465,30 @@ PrincipalVariation toplevelAlphaBeta(
         auto newPosition = moves::applyMove(position, move);
         Hash newHash(newPosition);
 
-        auto newVar = -alphaBeta(newPosition,
-                                 newHash,
-                                 -beta,
-                                 -std::max(alpha, pv.score),
-                                 {depth.current + 1, depth.left - 1},
-                                 move);
+        const auto curAlpha = std::max(alpha, pv.score);
+        PrincipalVariation newVar;
+        if (currmovenumber == 1 || !options::principleVariationSearch || !options::rootPVS ||
+            depth.left > options::rootPVSMaxDepth) {
+            newVar = -alphaBeta(
+                newPosition, newHash, -beta, -curAlpha, {depth.current + 1, depth.left - 1}, move);
+        } else {
+            const auto probeBeta = curAlpha + 1_cp;
+            ++pvsAttempts;
+            newVar = -alphaBeta(newPosition,
+                                newHash,
+                                -probeBeta,
+                                -curAlpha,
+                                {depth.current + 1, depth.left - 1},
+                                move);
+
+            if (newVar.score > curAlpha && newVar.score < beta && ++pvsResearches)
+                newVar = -alphaBeta(newPosition,
+                                    newHash,
+                                    -beta,
+                                    -curAlpha,
+                                    {depth.current + 1, depth.left - 1},
+                                    move);
+        }
         if (newVar.score > pv.score || !pv.front()) pv = {move, newVar};
         if (betaCutoff(pv.score,
                        beta,
