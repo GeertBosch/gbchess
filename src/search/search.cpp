@@ -1055,6 +1055,7 @@ bool betaCutoff(Score score,
                 int moveCount,
                 Color side,
                 int ply,
+                int depthleft,
                 const Board& board,
                 Move lastMove) {
     if (score < beta) return false;  // No beta cutoff
@@ -1081,7 +1082,7 @@ bool betaCutoff(Score score,
 
     // Only apply heuristics to quiet moves
     if (move.kind == MoveKind::Quiet_Move || move.kind == MoveKind::Double_Push) {
-        updateQuietOrderingHeuristics(side, board, move, lastMove, ply * ply);
+        updateQuietOrderingHeuristics(side, board, move, lastMove, depthleft * depthleft);
         storeKillerMove(move, ply);
 
         // Store countermove: this move is a good response to the opponent's last move
@@ -1409,6 +1410,7 @@ PrincipalVariation alphaBeta(
                        moveCount,
                        position.active(),
                        depth.current,
+                       depth.left,
                        position.board,
                        lastMove))
             break;
@@ -1519,6 +1521,7 @@ PrincipalVariation toplevelAlphaBeta(
                        currmovenumber,
                        position.active(),
                        depth.current,
+                       depth.left,
                        position.board,
                        Move()))
             return pv;
