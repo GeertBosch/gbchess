@@ -649,6 +649,48 @@ Proposed isolated implementation:
 - Re-attempt depth-2 LMR with conservative guards once continuation history shows improved
   ordering quality.
 
+#### Step 12 Experimental Result (April 28, 2026)
+
+**Status:** Implemented, tested, and reverted (no measurable improvement).
+
+Applied changes:
+1. Added low-ply history table: `lowPlyHistory[4][64][64]` indexed by ply, from, to.
+2. Added low-ply term to quiet move scoring: `score += 1 * lowPlyHistory[ply][from][to]`.
+3. Updated low-ply history on quiet beta cutoffs with conservative deltas: `delta = max(1, (ply*ply)/4)`.
+
+Measured impact on standard test FEN:
+
+| Metric | Baseline (Step 11) | After Step 12 | Delta |
+|--------|-------------------|---|-------|
+| Depth 3 nodes | 4,798 | 4,798 | 0.0% |
+| Depth 9 nodes | 672,996 | 672,996 | 0.0% |
+| Puzzles | 96/100 | 96/100 | 0 |
+
+Conclusion:
+- Low-ply history integration was implemented cleanly with no regressions, but provided **zero measurable benefit** on this workload.
+- Decision: use as temporary scaffolding for depth-2 LMR experiment to see if ordering improvements help LMR safety.
+
+#### Step 12 Follow-up: Depth-2 LMR Experiment (April 28, 2026)
+
+**Status:** Tested and reverted (net regression).
+
+With low-ply history in place, attempted to enable LMR at depth 2 by changing gate from `depth.left > 2` to `depth.left >= 2`.
+
+Measured impact:
+
+| Metric | Before | After | Delta |
+|--------|--------|-------|-------|
+| Depth 3 nodes | 4,798 | 4,042 | **-15.8%** ✓ |
+| Depth 9 nodes | 672,996 | 700,983 | **+4.1%** ✗ |
+| LMR attempts at depth 3 | 0 | 20 | (now active) |
+| Puzzles | 96/100 | 95/100 | -1 (quality drop) |
+
+Conclusion:
+- Shallow-depth LMR reduced depth-3 nodes by ~16%, confirming the optimization's surface benefit.
+- However, **depth-9 regressed by +4.1% and puzzle quality dropped by 1 point**, indicating that late-move rank is not yet a reliable enough signal deeper in the tree.
+- This replicates the prior Step 9 finding: move ordering quality (even with low-ply history) is insufficient to safely enable depth-2 LMR without hurting overall search efficiency.
+- **Decision: Revert both low-ply history and depth-2 LMR changes.** The ordering improvements must come from stronger contextual signals (multi-ply continuation history, capture history, etc.) before LMR depth-2 can be safely enabled.
+
 ### Step 4: Move Count Pruning (retry)
 
 **Goal:** Prune late quiet moves at shallow depths where they are unlikely to improve.
