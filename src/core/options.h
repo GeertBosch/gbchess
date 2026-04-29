@@ -33,6 +33,8 @@ constexpr int nullMoveReduction = 3;             // Depth reduction for null mov
 constexpr int nullMoveMinDepth = 2;              // Minimum depth to try null move
 constexpr bool useCountermove = true;            // Use the countermove heuristic
 constexpr bool useQsTT = true;                   // Use transposition table in quiescence search
+constexpr bool useMoveOracle = true;             // Diagnostic-only exact move ordering at all nodes
+constexpr int oracleMoveDepth = 2;               // Fixed depth used by oracle to score each move
 constexpr int fixedNodesSearch = 250'000;        // Fixed nodes per search (0 to disable)
 
 /**
