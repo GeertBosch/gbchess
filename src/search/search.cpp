@@ -910,8 +910,9 @@ Score oracleAlphaBeta(Position& position, Score alpha, Score beta, int depthleft
     return alpha;
 }
 
-void applyMoveOracle(Position& position, MoveVector& moveList) {
-    if (!options::useMoveOracle) return;
+void applyMoveOracle(Position& position, MoveVector& moveList, int ply) {
+    // Apply oracle ordering only near the root to bound total cost.
+    if (options::useOracleMaxDepth <= 0 || ply >= options::useOracleMaxDepth) return;
 
     std::vector<std::pair<Score, Move>> scoredMoves;
     scoredMoves.reserve(moveList.size());
@@ -1315,7 +1316,7 @@ PrincipalVariation alphaBeta(
     }
 
     sortMoves(position, ttMove, hash, moveList.begin(), moveList.end(), lastMove, depth.current);
-    applyMoveOracle(position, moveList);
+    applyMoveOracle(position, moveList, depth.current);
 
     PrincipalVariation pv;
     int moveCount = 0;
@@ -1475,7 +1476,7 @@ PrincipalVariation toplevelAlphaBeta(
 
     // computeBestMove already entered the current position in the repetition table
     sortMoves(position, hash, moveList.begin(), moveList.end(), Move(), depthleft);
-    applyMoveOracle(position, moveList);
+    applyMoveOracle(position, moveList, depth.current);
     PrincipalVariation pv;
 
     int currmovenumber = 0;
