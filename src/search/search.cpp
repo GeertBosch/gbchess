@@ -1165,7 +1165,8 @@ PrincipalVariation tryTTCutoff(
     const Position& position, Hash hash, int depthleft, Score& alpha, Score& beta, Move& ttMove) {
     auto origAlpha = alpha, origBeta = beta;
     const bool isPVNode = beta.cp() - alpha.cp() > 1;
-    const bool allowQsFrontierInMain = !isPVNode && depthleft <= options::qsFrontierInMainMaxDepth;
+    const bool allowQsFrontierInMain =
+        !isPVNode && depthleft <= options::qsFrontierInMainMaxDepthLeft;
     ++ttRawProbesMain;
     if (transpositionTable.contains(hash)) ++ttRawHitsMain;
     ++ttProbesMain;
@@ -1295,7 +1296,7 @@ PrincipalVariation alphaBeta(
     };
 
     if (options::reverseFutilityPruning && !isPVNode &&
-        depth.left <= options::reverseFutilityMaxDepth && !inCheck && !beta.mate() &&
+        depth.left <= options::reverseFutilityMaxDepthLeft && !inCheck && !beta.mate() &&
         hasNonPawnMaterial(position)) {
         // Futility margin increases with depth (more conservative at higher depths)
         Score futilityMargin = Score::fromCP(200 * depth.left + 100);
@@ -1327,7 +1328,7 @@ PrincipalVariation alphaBeta(
         // Conservative move-level futility pruning for late quiet moves at shallow depth.
         const auto curAlpha = std::max(alpha, pv.score);
         if (options::moveLevelFutilityPruning && !isPVNode && !inCheck &&
-            depth.left <= options::moveFutilityMaxDepth &&
+            depth.left <= options::moveFutilityMaxDepthLeft &&
             moveCount >= options::moveFutilityMinMoveCount && !beta.mate() &&
             (move.kind == MoveKind::Quiet_Move || move.kind == MoveKind::Double_Push)) {
             Score moveFutilityMargin =
@@ -1490,7 +1491,7 @@ PrincipalVariation toplevelAlphaBeta(
         const auto curAlpha = std::max(alpha, pv.score);
         PrincipalVariation newVar;
         if (currmovenumber == 1 || !options::principleVariationSearch || !options::rootPVS ||
-            depth.left > options::rootPVSMaxDepth) {
+            depth.left > options::rootPVSMaxDepthLeft) {
             newVar = -alphaBeta(
                 newPosition, newHash, -beta, -curAlpha, {depth.current + 1, depth.left - 1}, move);
         } else {
