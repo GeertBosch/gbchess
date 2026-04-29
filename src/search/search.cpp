@@ -1435,6 +1435,10 @@ bool saveState(std::ostream& out) {
     // Save history table
     out.write(reinterpret_cast<const char*>(&history[0][0][0]), sizeof(history));
 
+    // Save continuation history table
+    out.write(reinterpret_cast<const char*>(&continuationHistory[0][0][0][0]),
+              sizeof(continuationHistory));
+
     // Save killer moves
     out.write(reinterpret_cast<const char*>(&killerMoves[0][0]), sizeof(killerMoves));
 
@@ -1477,6 +1481,9 @@ bool restoreState(std::istream& in) {
 
     // Restore history table
     in.read(reinterpret_cast<char*>(&history[0][0][0]), sizeof(history));
+
+    // Restore continuation history table
+    in.read(reinterpret_cast<char*>(&continuationHistory[0][0][0][0]), sizeof(continuationHistory));
 
     // Restore killer moves
     in.read(reinterpret_cast<char*>(&killerMoves[0][0]), sizeof(killerMoves));
