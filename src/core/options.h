@@ -37,6 +37,7 @@ constexpr bool useMoveOracle = false;            // Diagnostic-only exact move o
 constexpr int oracleMoveDepth = 2;               // Fixed depth used by oracle to score each move
 constexpr bool rootPVS = true;                   // Use null-window probe for non-first root moves
 constexpr int rootPVSMaxDepth = 3;               // Enable rootPVS only up to this root depth
+constexpr int qsFrontierInMainMaxDepth = 1;      // Allow QsFrontier TT reuse in shallow non-PV nodes
 constexpr bool moveLevelFutilityPruning = true;  // Prune late quiet moves at shallow non-PV nodes
 constexpr int moveFutilityMaxDepth = 3;          // Max depth for move-level futility pruning
 constexpr int moveFutilityMinMoveCount = 2;      // Start pruning from this move count (1-based)

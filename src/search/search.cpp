@@ -1164,7 +1164,7 @@ PrincipalVariation tryTTCutoff(
     const Position& position, Hash hash, int depthleft, Score& alpha, Score& beta, Move& ttMove) {
     auto origAlpha = alpha, origBeta = beta;
     const bool isPVNode = beta.cp() - alpha.cp() > 1;
-    const bool allowQsFrontierInMain = !isPVNode && depthleft == 1;
+    const bool allowQsFrontierInMain = !isPVNode && depthleft <= options::qsFrontierInMainMaxDepth;
     ++ttRawProbesMain;
     if (transpositionTable.contains(hash)) ++ttRawHitsMain;
     ++ttProbesMain;
