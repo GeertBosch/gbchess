@@ -605,6 +605,36 @@ struct TranspositionTable {
 size_t history[2][kNumSquares][kNumSquares] = {{{0}}};
 
 /**
+ * Continuation history for quiet move ordering.
+ *
+ * Indexed by the opponent's previous move context [piece][to_square], then by the current
+ * move's [piece][to_square]. This is a conservative 1-ply signal used to improve quiet ordering.
+ */
+int continuationHistory[kNumPieces][kNumSquares][kNumPieces][kNumSquares] = {{{{0}}}};
+
+void updateQuietOrderingHeuristics(
+    Color side, const Board& board, Move move, Move lastMove, int delta) {
+    if (move.kind != MoveKind::Quiet_Move && move.kind != MoveKind::Double_Push) return;
+
+    if (options::historyHeuristic) {
+        auto& h = history[int(side)][move.from][move.to];
+        if (delta >= 0)
+            h = std::min<size_t>(h + size_t(delta), 100000);
+        else {
+            auto d = size_t(-delta);
+            h = h > d ? h - d : 0;
+        }
+    }
+
+    if (lastMove) {
+        auto prevPiece = board[lastMove.to];
+        auto movePiece = board[move.from];
+        auto& cont = continuationHistory[index(prevPiece)][lastMove.to][index(movePiece)][move.to];
+        cont = std::clamp(cont + delta, -100000, 100000);
+    }
+}
+
+/**
  * Countermove heuristic: stores the best move to play in response to opponent's last move.
  * Indexed by [color][to_square] of the opponent's move.
  */
@@ -632,6 +662,18 @@ void storeKillerMove(Move move, int depth) {
 }
 
 using MoveIt = MoveVector::iterator;
+
+int quietMoveScore(const Position& position, Move move, Move lastMove) {
+    auto score = int(history[int(position.active())][move.from][move.to]);
+
+    if (!lastMove) return score;
+
+    auto prevPiece = position.board[lastMove.to];
+    auto movePiece = position.board[move.from];
+    score += 2 * continuationHistory[index(prevPiece)][lastMove.to][index(movePiece)][move.to];
+
+    return score;
+}
 
 [[maybe_unused]] MoveIt sortCountermove(Move countermove, MoveIt begin, MoveIt end) {
     if (!countermove) return begin;
@@ -712,10 +754,9 @@ MoveIt sortMoves(const Position& position, MoveIt begin, MoveIt end, Move lastMo
     if constexpr (options::maxKillerMoves > 0 && options::maxKillerDepth > 0)
         quietBegin = sortKillerMoves(depth, quietBegin, end);
 
-    // Then sort remaining quiet moves by history heuristic
+    // Then sort remaining quiet moves by history + continuation history
     std::stable_sort(quietBegin, end, [&](const Move& a, const Move& b) {
-        return history[int(position.active())][a.from][a.to] >
-            history[int(position.active())][b.from][b.to];
+        return quietMoveScore(position, a, lastMove) > quietMoveScore(position, b, lastMove);
     });
 
     return begin;
@@ -920,7 +961,7 @@ bool betaCutoff(Score score,
 
     // Only apply heuristics to quiet moves
     if (move.kind == MoveKind::Quiet_Move || move.kind == MoveKind::Double_Push) {
-        if (options::historyHeuristic) history[int(side)][move.from][move.to] += ply * ply;
+        updateQuietOrderingHeuristics(side, board, move, lastMove, ply * ply);
         storeKillerMove(move, ply);
 
         // Store countermove: this move is a good response to the opponent's last move
@@ -1110,7 +1151,8 @@ PrincipalVariation alphaBeta(
 
     // Check the transposition table, which may tighten one or both search bounds
     Move ttMove;
-    if (auto pv = tryTTCutoff(position, hash, depth.left, alpha, beta, ttMove)) return pv;
+    if (auto pv = tryTTCutoff(position, hash, depth.left, alpha, beta, ttMove))
+        return pv;
 
     // Try null move pruning (only in non-PV nodes)
     if (tryNullMovePruning(position, hash, alpha, beta, depth)) return {{}, beta};
@@ -1407,6 +1449,10 @@ void clearState() {
     maxSelDepth = 0;
     repetitions.clear();
     std::fill(&history[0][0][0], &history[0][0][0] + sizeof(history) / sizeof(history[0][0][0]), 0);
+    std::fill(&continuationHistory[0][0][0][0],
+              &continuationHistory[0][0][0][0] +
+                  sizeof(continuationHistory) / sizeof(continuationHistory[0][0][0][0]),
+              0);
     std::fill(&killerMoves[0][0],
               &killerMoves[0][0] + sizeof(killerMoves) / sizeof(killerMoves[0][0]),
               Move());
