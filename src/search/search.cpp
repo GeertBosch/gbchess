@@ -140,6 +140,45 @@ std::string pct(uint64_t some, uint64_t all) {
     return all ? " " + std::to_string((some * 100) / all) + "%" : "";
 }
 
+bool traceSearchEnabled(int ply) {
+    return options::traceSearchTree && ply <= options::traceSearchMaxPly;
+}
+
+std::string traceIndent(int ply) {
+    return std::string((ply + 1) * 2, ' ');
+}
+
+const char* traceNodeKind(Score alpha, Score beta) {
+    return beta.cp() - alpha.cp() > 1 ? "PV" : "NP";
+}
+
+void traceNodeEnter(int ply, int depthleft, Score alpha, Score beta, Move move) {
+    if (!traceSearchEnabled(ply)) return;
+    std::cerr << traceIndent(ply) << "[" << traceNodeKind(alpha, beta) << " d" << depthleft << " p"
+              << ply << "] ";
+    if (ply == 0)
+        std::cerr << "root";
+    else
+        std::cerr << to_string(move);
+    std::cerr << " a=" << alpha.cp() << " b=" << beta.cp() << "\n";
+}
+
+void traceBetaCutoff(int ply, Move move, Score score, Score beta, int moveCount) {
+    if (!traceSearchEnabled(ply)) return;
+    std::cerr << traceIndent(ply) << "-> beta cutoff: " << to_string(move) << " val=" << score.cp()
+              << " beta=" << beta.cp();
+    if (moveCount == 1) std::cerr << " [first-move]";
+    std::cerr << "\n";
+}
+
+void tracePrune(int ply, const char* reason, Move move = Move(), Score eval = Score()) {
+    if (!traceSearchEnabled(ply)) return;
+    std::cerr << traceIndent(ply) << "-> " << reason;
+    if (move) std::cerr << ": " << to_string(move);
+    if (eval != Score()) std::cerr << " eval=" << eval.cp();
+    std::cerr << "\n";
+}
+
 }  // namespace
 
 static Hash debugHash = {};
@@ -1018,6 +1057,7 @@ bool betaCutoff(Score score,
                 const Board& board,
                 Move lastMove) {
     if (score < beta) return false;  // No beta cutoff
+    traceBetaCutoff(ply, move, score, beta, moveCount);
     ++betaCutoffs;
     if (moveCount == 1) ++firstMoveCutoffs;
 
@@ -1194,6 +1234,7 @@ PrincipalVariation tryTTCutoff(
 PrincipalVariation alphaBeta(
     Position& position, Hash hash, Score alpha, Score beta, Depth depth, Move lastMove) {
     ++nodeCount;
+    traceNodeEnter(depth.current, depth.left, alpha, beta, lastMove);
 
     if (depth.left > 0) {
         auto [_, inserted] = seenMainHashKeys.insert(mainHashKey(hash));
@@ -1253,6 +1294,7 @@ PrincipalVariation alphaBeta(
 
         if (staticEval - futilityMargin >= beta) {
             ++futilityPruned;
+            tracePrune(depth.current, "rfp prune", Move(), staticEval);
             return {{}, staticEval};
         }
     }
