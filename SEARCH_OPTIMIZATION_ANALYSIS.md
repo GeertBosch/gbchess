@@ -125,20 +125,22 @@ same guard but with a depth-scaled margin that allows more attempts when near-eq
 9. **MVV/LVA Move Ordering** — Yes
 10. **Static Exchange Evaluation (SEE)** — Yes (in quiescence)
 11. **Quiescence Search** — Yes (depth=5, includes checks)
-12. **Reverse Futility Pruning** — Yes (max depth=3, margin=100cp×depth+100cp = 300cp at depth 2)
+12. **Reverse Futility Pruning** — Yes (max depth=3, margin=200cp×depth+100cp = 500cp at depth 2)
 13. **Principal Variation Search (PVS)** — Yes
 
 ### ❌ Missing or Miscalibrated Optimizations
 
 #### High Impact (confirmed by Stockfish trace)
-1. **Futility Margin Too Small** — gbchess uses `100×depth+100cp` (300cp at depth 2) vs
-   Stockfish's `223×(depth-improving)` (446cp at depth 2 non-improving). The 146cp gap means
+1. **Futility Margin Still Below Stockfish** — gbchess uses `200×depth+100cp` (500cp at depth 2)
+   vs Stockfish's `223×(depth-improving)` (446cp at depth 2 non-improving, larger at depth 3+).
+   The original 146cp gap at depth 2 was reduced, but formula differences still affect pruning shape.
    positions with static eval between -34 and +112 (relative to beta) recurse in gbchess but
    are pruned immediately in Stockfish. This is the single largest confirmed contributor to the
-   depth-3 node gap. **Fix: raise the margin formula toward Stockfish's.**
-2. **LMR Not Firing at Depth 2** — gbchess gates LMR at `depth.left > 2`, disabling it for
-   depth-2 children. Stockfish reduces late depth-2 moves to depth-1, converting full subtrees
-   into single qsearch calls. **Fix: lower the LMR threshold to `depth.left >= 2`.**
+   depth-3 node gap. **Status: partially mitigated; further tuning remains possible.**
+2. **Contextual Move Ordering Gap (Primary Next Target)** — gbchess uses TT move + history +
+   killer/countermove, but lacks Stockfish-style continuation history and capture-history terms.
+   This weakens late-move quality signals used by LMR. **Fix: add continuation-history scoring
+   and updates for quiet moves.**
 3. **Move Count Pruning (Late Move Pruning)** — After N moves searched at shallow depth, skip
    remaining quiet moves. Stockfish: `moveCount >= futility_move_count(improving, depth)`.
    Previously attempted (Step 4) but gate was too aggressive; needs re-try with tighter margins.
@@ -402,15 +404,21 @@ they enter qsearch immediately, producing a single node instead of a full depth-
 
 **Previously hypothesized root causes that are now disproven:**
 - *TT write volume* was not the bottleneck (gbchess writes more entries than Stockfish).
-- *Move ordering quality* was not the primary cause (ply-1 cutoffs already happen early).
+- *Purely delayed ply-1 cutoffs* were not the primary cause (ply-1 cutoffs already happen early).
 - *Aspiration re-search overhead* was real but accounted for only ~40% of the original gap.
 
-The remaining 26x gap at depth 3 is substantially explained by (1) the futility margin mismatch
-and (2) LMR not firing at depth 2. These are the concrete targets for the next implementation step.
+Updated interpretation:
+- The remaining depth-3 gap at ply-1 is largely explained by futility/LMR behavior differences.
+- However, a direct `depth.left >= 2` LMR change (and a conservative gated variant) regressed
+   depth-9 nodes, indicating deeper-tree move ordering quality is still a limiting factor.
+- Therefore, move ordering quality is now a primary implementation target, especially contextual
+   quiet-move ordering (continuation history), before revisiting aggressive shallow LMR.
 
 5. **Revisit move ordering once cutoff histograms are available**
    - If cutoffs are frequently late (`moveCount > 3`), prioritize move ordering adjustments.
-   - Current histogram shows late cutoffs are uncommon at ply1, so continue with pruning first.
+    - Current histogram shows late cutoffs are uncommon at ply1, but this does not rule out deeper
+       move-ordering weaknesses where LMR decisions are made.
+    - Action: prioritize contextual quiet-move ordering (continuation history), then re-test LMR.
 
 6. **Prioritize TT reuse quality over TT write volume (new priority)**
     - Stockfish/gbchess comparison shows write volume is already sufficient; conversion is weak.
@@ -444,7 +452,7 @@ NMP-only tuning was attempted earlier and did not satisfy acceptance criteria at
 Given the new aspiration baseline, any future NMP re-tuning should be re-run from the new
 baseline rather than using the older failed matrix.
 
-### Step 2: Increase Reverse Futility Pruning Margin ← **Next Concrete Step**
+### Step 2: Increase Reverse Futility Pruning Margin
 
 **Goal:** Match Stockfish's futility margin to prune the same set of hopeless positions.
 
@@ -501,7 +509,7 @@ Conclusion:
 - The primary remaining depth-3 gap is LMR not firing at depth 2 (the 23 `[NP d1 p1]` nodes in
   Stockfish vs depth-2 subtrees in gbchess). That is the next isolated step.
 
-### Step 3: Enable LMR at Depth 2 ← **Next Concrete Step**
+### Step 3: Enable LMR at Depth 2
 
 **Goal:** Allow LMR to reduce late depth-2 moves to depth-1, turning subtrees into qsearch calls.
 
@@ -513,6 +521,133 @@ are depth-reduced from 2 → 1 in the depth-3 pass.
 - In `src/search/search.cpp`, change the LMR condition from `depth.left > 2` to `depth.left >= 2`.
 
 **Validation**: same as Step 2.
+
+#### Step 9 Execution Result (April 28, 2026)
+
+**Status:** Failed (both variants reverted).
+
+Variant A (plain threshold):
+- Change: `depth.left > 2` -> `depth.left >= 2`
+- Depth 3 nodes: `4,798 -> 4,042` (**-15.7%**)
+- Depth 9 nodes: `673,815 -> 745,188` (**+10.6%**, regression)
+- Puzzles: `96/100 -> 95/100` (regression)
+
+Variant B (conservative gate):
+- Change: allow depth-2 LMR only when `!isPVNode && !inCheck`
+- Depth 3 nodes: `4,798 -> 4,802` (flat)
+- Depth 9 nodes: `673,815 -> 753,176` (**+11.8%**, regression)
+- Puzzles: `96/100` (stable)
+
+Conclusion:
+- Directly enabling depth-2 LMR in gbchess is currently unsafe for depth-9 efficiency.
+- The likely issue is that late-move rank is not yet reliable enough as a quality signal deeper in
+  the tree. Improve move ordering quality first, then retry depth-2 LMR.
+
+### Step 10: Implement Continuation History for Quiet Move Ordering
+
+**Goal:** Improve contextual quiet-move ordering so "late move" is a stronger proxy for poor quality,
+making LMR and late-move pruning safer and more effective.
+
+**Rationale from Stockfish comparison:**
+- TT move usage is already present in gbchess.
+- The largest ordering gap is quiet scoring: Stockfish blends main history with continuation
+  history terms from prior plies; gbchess currently uses only main history for quiet ordering.
+
+**Implementation plan (isolated, ordered):**
+1. Add a continuation-history table keyed by previous move context and current move destination.
+   - Implemented shape: `continuationHistory[kNumPieces][kNumSquares][kNumPieces][kNumSquares]`.
+2. Wire quiet-move scoring in `sortMoves(...)` to include continuation bonus from previous ply.
+   - Implemented as: `history + 2 * continuationHistory(lastMoveCtx, moveCtx)`.
+3. Update continuation-history on quiet beta cutoffs.
+   - Implemented conservative positive reinforcement only (no fail-low penalty yet).
+4. Keep capture ordering unchanged in this step (no capture-history changes yet).
+5. Measure and report:
+   - first-move cutoff ratio at ply1 and deeper plies,
+   - LMR re-search rate,
+   - depth-3 and depth-9 nodes,
+   - puzzles / tactical tests.
+
+**Acceptance criteria:**
+- `make test -j` passes
+- `make puzzles` remains >= 96/100
+- Depth-9 nodes do not increase
+- First-move cutoff rate and/or node count improves
+
+#### Step 10 Execution Result (April 28, 2026)
+
+**Status:** Success (accepted).
+
+Applied change:
+- Added 1-ply continuation history for quiet move ordering.
+- Quiet score now combines main history with continuation signal from opponent's last move context.
+- Continuation table is updated on quiet beta cutoffs.
+
+Measured impact on the test FEN:
+
+| Metric | Before | After | Delta |
+|--------|--------|-------|-------|
+| Depth 3 nodes | 4,798 | 4,798 | 0.0% |
+| Depth 9 nodes | 673,815 | 672,996 | **-0.1%** |
+
+Validation:
+- `make test -j`: pass
+- `make puzzles`: 96/100 (stable)
+
+Conclusion:
+- The minimal continuation-history integration is safe and does not regress quality.
+- Immediate node reduction is small, which is expected for a conservative first pass.
+- This establishes the data path needed for stronger contextual ordering updates in follow-up steps.
+
+### Step 11: Strengthen Continuation History Updates
+
+**Goal:** Increase ordering signal quality now that continuation-history plumbing is in place.
+
+Proposed isolated follow-up:
+1. Add conservative fail-low penalties for quiet moves searched before cutoff.
+2. Scale continuation bonus/penalty by depth similar to existing history update.
+3. Add one extra continuation source (our previous move context) if step 1 remains safe.
+4. Re-measure depth 3/9, first-move cutoffs, LMR re-search rate, and puzzle score.
+
+#### Step 11 Execution Result (April 28, 2026)
+
+**Status:** Failed (reverted).
+
+Attempted change:
+- Added TT early-return learning updates in main search:
+   - reward quiet TT move on TT cutoff,
+   - conservative fail-low penalty variant when TT hit did not cut.
+
+Observed impact on the test FEN:
+
+| Variant | Depth 3 nodes | Depth 9 nodes | Delta vs 672,996 |
+|--------|----------------|---------------|------------------|
+| TT cutoff reward + fail-low penalty | 4,798 | 702,200 | **+4.3%** |
+| TT cutoff reward only | 4,798 | 710,653 | **+5.6%** |
+
+Validation:
+- `make test -j`: pass
+- `make puzzles`: 96/100 (stable)
+
+Conclusion:
+- TT early-return ordering updates as implemented increased depth-9 node count and were reverted.
+- This suggests the added feedback loop over-amplifies currently noisy TT move signals in this
+   search configuration.
+
+### Step 12: Add Low-Ply History for Quiet Ordering ← **Next Concrete Step**
+
+**Goal:** Improve quiet move ordering near the root with a bounded, context-light signal that is
+less likely to destabilize deeper search.
+
+Proposed isolated implementation:
+1. Add `lowPlyHistory[maxTrackedPly][kNumSquares][kNumSquares]`.
+2. During quiet move scoring, add a small weighted term when `ply < maxTrackedPly`.
+3. Update low-ply history only on quiet beta cutoffs at low ply (conservative bonus scale).
+4. No TT early-return updates in this step.
+5. Re-measure depth 3/9, first-move cutoffs, and puzzle score.
+
+**Follow-up after Step 12:**
+- Re-attempt depth-2 LMR with conservative guards once continuation history shows improved
+  ordering quality.
 
 ### Step 4: Move Count Pruning (retry)
 
