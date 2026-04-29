@@ -2,205 +2,159 @@
 
 ## Goal
 
-Bring gbchess to within roughly 2-3x of Stockfish's node efficiency.
+Bring gbchess closer to Stockfish's node efficiency while preserving playing strength and test
+quality.
 
 Priority order:
-- First close the gap at depth 3 on the standard diagnostic FEN.
-- Then carry the same improvements to deeper searches, with depth 9 as the first meaningful target.
+- Improve depth-3 efficiency on the standard diagnostic FEN.
+- Carry those gains to deeper searches, especially depth 9.
+- Keep search behavior strong enough to pass the full test suite and at least 96/100 puzzles.
 
-## Test Positions
-
-### Depth-3 diagnostic position
-
-```text
-FEN: rn3br1/1pk1pNpp/p7/q1pP4/2P2PP1/P4p1N/1PQ4P/4RK2 w - - 3 23
-Depth: 3
-```
-
-### Depth-9 comparison position
+## Diagnostic Position
 
 ```text
 FEN: rn3br1/1pk1pNpp/p7/q1pP4/2P2PP1/P4p1N/1PQ4P/4RK2 w - - 3 23
-Depth: 9
 ```
 
 Both engines find `c2h7` on this position.
 
-## Current Baselines
+## Current Tuned State
 
-### Production baseline (accepted search changes, no diagnostic oracle)
+### Tuned settings currently enabled
 
-| Depth | Stockfish 12 | gbchess | Ratio |
-|-------|--------------|---------|-------|
-| 3 | 185 | 4,798 | 25.9x |
-| 9 | 9,503 | 672,996 | 70.8x |
+- `useMoveOracle = false`
+- `rootPVS = true`
+- `rootPVSMaxDepth = 3`
+- `qsFrontierInMainMaxDepth = 1`
+- `moveLevelFutilityPruning = true`
+- `moveFutilityMaxDepth = 3`
+- `moveFutilityMinMoveCount = 2`
+- `moveFutilityMarginSlope = 180`
+- `moveFutilityMarginBase = 240`
+- `traceSearchTree = false`
 
-### Diagnostic oracle results (not production candidates)
+### Current measured results
 
-These runs use an isolated move-ordering oracle to estimate the best node count reachable from
-ordering alone.
+| Metric | Stockfish 12 | gbchess current | Gap |
+|--------|--------------|-----------------|-----|
+| Depth 3 nodes | 185 | ~1,800 | ~9.7x |
+| Depth 9 nodes | 9,503 | 567,787 | ~59.7x |
+| Puzzles | — | 96/100 | target met |
 
-| Oracle mode | Depth-3 nodes | First-move cutoffs | Runtime |
-|-------------|---------------|--------------------|---------|
-| None | 4,798 | 68% | ~12 ms |
-| Root-only oracle | 4,862 | 69% | small |
-| All-node oracle, depth 4 | 3,998 | 95% | ~48 s |
-| All-node oracle, depth 3 | 3,934 | 100% | ~6.4 s |
-| All-node oracle, depth 2 | 3,862 | 99% | ~1.1 s |
+Compared with the earlier baseline:
+- Depth 3 improved from `4,798` to about `1,800` nodes.
+- Depth 9 improved from `672,996` to `567,787` nodes.
 
-Key conclusion: even near-perfect ordering only reduces depth-3 nodes by about 20%. The
-remaining gap to Stockfish is overwhelmingly a pruning and search-structure gap, not just an
-ordering gap.
+## Strength Results
 
-## What Worked
+Extensive SPRT self-play against [b6caa84](b6caa84) (`Raise RFP margin from 100x+100 to 200x+100`):
 
-### Accepted changes
+```text
+Elo: 16.86 +/- 6.16
+LOS: 100.00 %
+Games: 1712
+SPRT ([0.00, 5.00]) completed - H1 was accepted
+```
 
-1. **Null-move PV-check fix**
-   - Fixed an inverted PV/null-window guard in null-move pruning.
-   - Large depth-9 improvement versus the pre-fix baseline.
-   - This remains one of the highest-value fixes so far.
+Interpretation:
+- The current tuned search is not only faster on the diagnostic position, it also improved actual
+  playing strength in self-play.
+- Earlier concern that the efficiency gains might just trade away tactical quality is no longer the
+  best explanation for the current tuned profile.
 
-2. **Disable aspiration windows**
-   - Reduced unnecessary re-search overhead on the diagnostic workload.
-   - Improved both shallow and deeper measurements in the current setup.
+## What Moved the Needle
 
-3. **Increase reverse futility margin**
-   - Raising the margin to `200 * depth + 100` gave a small but real improvement.
-   - Helped depth 3 slightly and depth 9 more meaningfully.
+### 1. Root-level PVS was the biggest structural improvement
 
-4. **Conservative shallow SEE pruning in main search**
-   - Capture-only, shallow, non-PV SEE pruning is tactically safe in the current configuration.
-   - Benefit is small, but it is a sound building block.
+The largest single gain came from changing root search shape so only the first root move gets a
+full-window search and later root moves get null-window probes first.
 
-5. **1-ply continuation history**
-   - Safe and integrated cleanly.
-   - Immediate node-count gain is minimal, but the data path is now present for stronger future
-     contextual ordering work.
+Why it mattered:
+- Stockfish already had this root-child shape.
+- gbchess had been searching too many root children with wide PV windows.
+- Fixing that reduced unnecessary expensive searches and made the tree shape much closer to
+  Stockfish at depth 3.
 
-6. **Fix continuation-history save/restore state**
-   - Correctness fix, not a speed optimization.
-   - Prevents search state corruption when saving/restoring engine state.
+### 2. Conservative shallow pruning helped once made configurable
 
-## What Did Not Work
+The current tuned profile keeps a conservative move-level futility rule enabled. The exact tuning
+matters; stronger or poorly scoped variants caused quality regressions.
 
-1. **Aggressive move-count pruning**
-   - Reduced nodes but failed tactical validation and puzzle quality.
-   - Current implementation approach is too unsafe.
+### 3. Shallow QsFrontier TT reuse is helpful, but secondary
 
-2. **TT-driven learning updates on early return**
-   - Rewarding TT moves or adding fail-low penalties increased depth-9 nodes.
-   - The TT feedback signal is too noisy in the current search.
+Allowing limited main-search reuse of shallow frontier qsearch entries is useful, but its impact is
+incremental compared with the root-PVS fix.
 
-3. **Low-ply history**
-   - No measurable gain on the diagnostic workload.
-   - Safe, but not useful enough to keep.
+### 4. Reverse futility and the null-move PV fix remain foundational
 
-4. **Depth-2 LMR**
-   - Consistently improved depth 3.
-   - Consistently regressed depth 9 and/or puzzle quality.
-   - Conclusion: current late-move ranking is not reliable enough to safely reduce depth-2 nodes.
+These earlier accepted improvements still matter and remain part of the current good profile.
 
-5. **Root-only ordering oracle**
-   - No meaningful gain.
-   - Confirms root move ordering is not the main issue.
+## Diagnostic Findings That Shaped the Tuned Search
+
+### 1. Oracle move ordering (diagnostic-only by design)
+
+The oracle was intentionally introduced as a diagnostic instrument, not as a deployable search
+mechanism.
+
+What it proved:
+- Even near-perfect ordering alone only explained a minority of the depth-3 gap.
+- Search structure and pruning policy mattered more than root ordering alone.
+
+### 2. Depth-2 LMR
+
+Depth-2 LMR repeatedly reduced depth-3 nodes but did not hold up on broader quality checks. It is
+still considered unsafe with current ordering quality.
+
+### 3. Aggressive late pruning variants
+
+Several stronger pruning experiments reduced nodes but damaged puzzles or broader search quality.
+The current lesson is to keep shallow pruning conservative and configurable.
+
+### 4. TT learning updates from early returns
+
+Those feedback-style updates increased noise and did not help overall strength.
 
 ## Main Learnings
 
-### 1. Ordering is not the main bottleneck
+### 1. Ordering alone was not the main bottleneck
 
-The all-node oracle pushes first-move cutoffs to 99-100%, yet depth-3 nodes only fall from 4,798
-to 3,862-3,934. That is still about 21x above Stockfish. Better ordering matters, but it is not
-the dominant reason for the gap.
+Oracle diagnostics showed that even near-perfect ordering did not get gbchess close enough to
+Stockfish by itself.
 
-### 2. The biggest remaining gap is shallow pruning coverage
+### 2. Root search shape mattered far more than expected
 
-Stockfish is cutting far more branches before they become full subtrees. The strongest remaining
-evidence points to:
-- more effective shallow pruning,
-- better reduction policy at low depths,
-- and better conversion of search information into immediate cutoffs.
+Changing non-first root moves to null-window probing was a major structural win and translated from
+analysis mode into the tuned default search.
 
-### 3. Depth-2 LMR is attractive but currently unsafe
+### 3. Configurability was necessary
 
-When enabled, it gives the kind of depth-3 node reduction we want. But it harms deeper search.
-That means the idea is probably directionally right, but gbchess does not yet have the move-quality
-signals needed to use it safely.
+The newer optimizations only became practical once they could be tuned independently in
+[options.h](src/core/options.h). This made it possible to recover puzzle quality while keeping much
+of the efficiency gain.
 
-### 4. TT write volume is not the problem
+### 4. Full validation beats isolated node-count wins
 
-gbchess writes enough TT entries. The weakness is reuse quality, not lack of writes.
+The best profile is the one that improves both efficiency and playing strength. The current tuned
+settings passed:
+- `make test -j`
+- `make ci`
+- `make puzzles` with 96/100
+- SPRT self-play improvement versus `b6caa84`
 
-### 5. Small, validated pruning changes are still worthwhile
+## Current Recommendation
 
-The reverse futility margin increase and shallow SEE pruning both helped or at least stayed safe.
-The right path is still isolated, measurable pruning changes with full validation.
+Keep the current tuned profile as the new baseline.
 
-## Current Search State
-
-Relevant current characteristics:
-- Aspiration windows are disabled.
-- Null move pruning is enabled with the PV-check fix.
-- Reverse futility pruning is enabled with the larger accepted margin.
-- LMR still does **not** safely operate at depth 2.
-- 1-ply continuation history exists, but has not yet translated into major node savings.
-- The move-ordering oracle is a diagnostic tool only and should not be treated as a production
-  solution.
+Reason:
+- It materially improves depth-3 and depth-9 efficiency.
+- It meets the puzzle-quality floor.
+- It passes the test suite.
+- It improved in self-play, which is the strongest evidence that the search trade-offs are good.
 
 ## Next Steps
 
-### Immediate depth-3 priority
-
-Target: get substantially closer to Stockfish at depth 3 without harming correctness.
-
-1. **Focus on pruning, not more oracle work**
-   - The oracle answered the main question already.
-   - Further oracle refinement is unlikely to change the conclusion.
-
-2. **Improve shallow pruning coverage with one change at a time**
-   - Best candidates:
-   - safer move-level futility pruning,
-   - tighter late-move pruning variants,
-   - or more selective SEE-based pruning beyond the current minimal gate.
-
-3. **Improve TT reuse quality**
-   - Investigate why TT hits convert poorly into cutoffs, especially at shallow depth.
-   - Prioritize reuse behavior over increasing TT insert count.
-
-4. **Revisit depth-2 LMR only after better move-quality signals exist**
-   - Depth-2 LMR is still the most promising lever for depth-3 node count.
-   - But it must be retried only after ordering and pruning signals are reliable enough.
-
-### Depth-9 follow-through
-
-Any depth-3 improvement is only acceptable if it stays neutral or positive at depth 9.
-
-Validation standard for every experiment:
-- `make test -j` passes.
-- `make puzzles` stays at or above the current acceptable quality bar.
-- Depth-3 nodes improve materially.
-- Depth-9 nodes do not regress.
-
-### Practical success criteria
-
-Near-term targets:
-- Depth 3: move from 4,798 toward the low thousands first, then toward a few hundred.
-- Depth 9: move from 672,996 toward the tens of thousands.
-
-Strategic target:
-- Finish within roughly 2-3x of Stockfish at both shallow and medium depth.
-
-## Code Areas Most Likely to Matter Next
-
-### Search core
-- `src/search/search.cpp`
-  - `alphaBeta()`
-  - `tryNullMovePruning()`
-  - `quiesce()`
-  - LMR and futility gates
-
-### Options and tuning constants
-- `src/core/options.h`
-
-### Diagnostic reference only
-- move-ordering oracle code in `src/search/search.cpp`
+1. Improve move ordering using safe heuristics, informed by oracle
+  diagnostics when useful.
+2. Revisit deeper TT reuse and shallow pruning only through configurable, isolated changes.
+3. Re-test depth-2 LMR only after move ordering quality improves further.
+4. Continue using SPRT/self-play as the final gate for changes that meaningfully affect search.
