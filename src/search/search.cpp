@@ -810,6 +810,85 @@ bool isQuiet(Position& position, int depthleft) {
     return true;
 }
 
+Score oracleStaticEval(Position& position) {
+    if (options::useNNUE) {
+        auto score = Score::fromCP(nnue::evaluate(position, *network));
+        return position.active() == Color::w ? score : -score;
+    }
+    auto score = evaluateBoard(position.board);
+    return position.active() == Color::w ? score : -score;
+}
+
+Score oracleQuiesce(Position& position, Score alpha, Score beta, int depthleft) {
+    auto standPat = oracleStaticEval(position);
+    if (!depthleft) return standPat;
+
+    if (standPat >= beta && isQuiet(position, depthleft)) return beta;
+    if (standPat > alpha && isQuiet(position, depthleft)) alpha = standPat;
+
+    auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, depthleft);
+    if (moveList.empty() && isInCheck(position)) return Score::min();
+
+    std::stable_sort(moveList.begin(), moveList.end(), [&](const Move& a, const Move& b) {
+        return scoreMove(position.board, a) > scoreMove(position.board, b);
+    });
+
+    for (auto move : moveList) {
+        if (options::staticExchangeEvaluation && move.kind == MoveKind::Capture &&
+            staticExchangeEvaluation(position.board, move.from, move.to) < 0_cp &&
+            !isInCheck(position))
+            continue;
+
+        auto nextPosition = moves::applyMove(position, move);
+        auto score = -oracleQuiesce(nextPosition, -beta, -alpha, depthleft - 1);
+        if (score >= beta) return beta;
+        if (score > alpha) alpha = score;
+    }
+
+    return alpha;
+}
+
+Score oracleAlphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
+    if (depthleft <= 0) return oracleQuiesce(position, alpha, beta, options::quiescenceDepth);
+
+    auto moveList = moves::allLegalMovesAndCaptures(position.turn, position.board);
+    if (moveList.empty()) {
+        if (isInCheck(position)) return Score::min();
+        return Score();
+    }
+
+    std::stable_sort(moveList.begin(), moveList.end(), [&](const Move& a, const Move& b) {
+        return scoreMove(position.board, a) > scoreMove(position.board, b);
+    });
+
+    for (auto move : moveList) {
+        auto nextPosition = moves::applyMove(position, move);
+        auto score = -oracleAlphaBeta(nextPosition, -beta, -alpha, depthleft - 1);
+        if (score >= beta) return beta;
+        if (score > alpha) alpha = score;
+    }
+
+    return alpha;
+}
+
+void applyMoveOracle(Position& position, MoveVector& moveList) {
+    if (!options::useMoveOracle) return;
+
+    std::vector<std::pair<Score, Move>> scoredMoves;
+    scoredMoves.reserve(moveList.size());
+    for (auto move : moveList) {
+        auto nextPosition = moves::applyMove(position, move);
+        auto score = -oracleAlphaBeta(nextPosition, Score::min(), Score::max(), options::oracleMoveDepth - 1);
+        scoredMoves.emplace_back(score, move);
+    }
+
+    std::stable_sort(scoredMoves.begin(), scoredMoves.end(), [&](const auto& a, const auto& b) {
+        return a.first > b.first;
+    });
+
+    for (size_t i = 0; i < scoredMoves.size(); ++i) moveList[i] = scoredMoves[i].second;
+}
+
 Score quiesce(
     Position& position, Score alpha, Score beta, int depthleft, Score standPat, int qply = 0) {
     ++nodeCount;
@@ -1187,6 +1266,7 @@ PrincipalVariation alphaBeta(
     }
 
     sortMoves(position, ttMove, hash, moveList.begin(), moveList.end(), lastMove, depth.current);
+    applyMoveOracle(position, moveList);
 
     PrincipalVariation pv;
     int moveCount = 0;
@@ -1332,6 +1412,7 @@ PrincipalVariation toplevelAlphaBeta(
 
     // computeBestMove already entered the current position in the repetition table
     sortMoves(position, hash, moveList.begin(), moveList.end(), Move(), depthleft);
+    applyMoveOracle(position, moveList);
     PrincipalVariation pv;
 
     int currmovenumber = 0;
