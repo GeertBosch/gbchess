@@ -1281,18 +1281,25 @@ PrincipalVariation alphaBeta(
     // This is also called "reverse futility pruning" or "static null move pruning"
     const bool isPVNode = beta.cp() - alpha.cp() > 1;
 
+    Score staticEval;
+    bool haveStaticEval = false;
+    auto getStaticEval = [&]() {
+        if (!haveStaticEval) {
+            staticEval = Score::fromCP(nnue::evaluate(position, *network));
+            if (position.active() == Color::b) staticEval = -staticEval;
+            ++evalCount;
+            haveStaticEval = true;
+        }
+        return staticEval;
+    };
+
     if (options::reverseFutilityPruning && !isPVNode &&
         depth.left <= options::reverseFutilityMaxDepth && !inCheck && !beta.mate() &&
         hasNonPawnMaterial(position)) {
-        // Get static evaluation
-        Score staticEval = Score::fromCP(nnue::evaluate(position, *network));
-        if (position.active() == Color::b) staticEval = -staticEval;
-        ++evalCount;
-
         // Futility margin increases with depth (more conservative at higher depths)
         Score futilityMargin = Score::fromCP(200 * depth.left + 100);
 
-        if (staticEval - futilityMargin >= beta) {
+        if (getStaticEval() - futilityMargin >= beta) {
             ++futilityPruned;
             tracePrune(depth.current, "rfp prune", Move(), staticEval);
             return {{}, staticEval};
@@ -1315,6 +1322,22 @@ PrincipalVariation alphaBeta(
 
     for (auto move : moveList) {
         ++moveCount;
+
+        // Conservative move-level futility pruning for late quiet moves at shallow depth.
+        const auto curAlpha = std::max(alpha, pv.score);
+        if (options::moveLevelFutilityPruning && !isPVNode && !inCheck &&
+            depth.left <= options::moveFutilityMaxDepth &&
+            moveCount >= options::moveFutilityMinMoveCount && !beta.mate() &&
+            (move.kind == MoveKind::Quiet_Move || move.kind == MoveKind::Double_Push)) {
+            Score moveFutilityMargin =
+                Score::fromCP(options::moveFutilityMarginSlope * depth.left +
+                              options::moveFutilityMarginBase);
+            if (getStaticEval() + moveFutilityMargin <= curAlpha) {
+                ++futilityPruned;
+                tracePrune(depth.current, "move futility prune", move, staticEval);
+                continue;
+            }
+        }
 
         if (options::staticExchangeEvaluation && !isPVNode && depth.left <= 3 && !inCheck &&
             moveCount > 1 && move.kind == MoveKind::Capture &&
@@ -1341,8 +1364,6 @@ PrincipalVariation alphaBeta(
             isQuiet(position, depth.left);
         if (applyLMR) ++lmrAttempts;
 
-        // Current alpha is the best score found so far at this node
-        const auto curAlpha = std::max(alpha, pv.score);
         const auto fullDepth = depth.left - 1;
         const auto reducedDepth = depth.left - 1 - applyLMR;
 
