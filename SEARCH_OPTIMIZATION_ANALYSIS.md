@@ -22,28 +22,37 @@ Both engines find `c2h7` on this position.
 
 ### Tuned settings currently enabled
 
-- `useMoveOracle = false`
+- `useOracleMaxDepth = 0` (oracle disabled)
 - `rootPVS = true`
-- `rootPVSMaxDepth = 3`
-- `qsFrontierInMainMaxDepth = 1`
+- `rootPVSMaxDepthLeft = 3`
+- `qsFrontierInMainMaxDepthLeft = 1`
 - `moveLevelFutilityPruning = true`
-- `moveFutilityMaxDepth = 3`
+- `moveFutilityMaxDepthLeft = 3`
 - `moveFutilityMinMoveCount = 2`
-- `moveFutilityMarginSlope = 180`
 - `moveFutilityMarginBase = 240`
-- `traceSearchTree = false`
+- `internalIterativeDeepening = true`
+- `iidMinDepthLeft = 4`
+- `iidDepthReduction = 2`
+- History bonus scaled by `depthLeft**2` (not `ply**2`)
 
 ### Current measured results
 
 | Metric | Stockfish 12 | gbchess current | Gap |
 |--------|--------------|-----------------|-----|
 | Depth 3 nodes | 185 | ~1,800 | ~9.7x |
-| Depth 9 nodes | 9,503 | 567,787 | ~59.7x |
+| Depth 9 nodes | 9,503 | ~514,000 | ~54x |
 | Puzzles | — | 96/100 | target met |
 
 Compared with the earlier baseline:
 - Depth 3 improved from `4,798` to about `1,800` nodes.
-- Depth 9 improved from `672,996` to `567,787` nodes.
+- Depth 9 improved from `672,996` to ~`514,000` nodes.
+
+Oracle diagnostic (for reference only):
+
+| oracle depth | Depth 3 nodes | Depth 9 nodes |
+| ------------ | ------------- | ------------- |
+| 2            | 1,301         | 309,100       |
+| 3            | 1,469         | 272,533       |
 
 ## Strength Results
 
@@ -80,12 +89,24 @@ Why it mattered:
 The current tuned profile keeps a conservative move-level futility rule enabled. The exact tuning
 matters; stronger or poorly scoped variants caused quality regressions.
 
-### 3. Shallow QsFrontier TT reuse is helpful, but secondary
+### 3. Internal Iterative Deepening reduced depth-9 nodes ~7%
+
+When no TT move is available at `depth.left >= 4`, a reduced-depth probe (`depth.left - 2`)
+seeds `sortMoves` with a searched best move rather than relying on history/killers alone. This
+directly addresses TT-miss nodes where move ordering had no first-move hint.
+
+### 4. Scaling history bonus by $\tt{depthLeft}^2$ (not $\tt{ply}^2$)
+
+Beta cutoffs at high remaining depth are stronger evidence than shallow-remaining cutoffs.
+Scaling the quiet-history update by `depthLeft * depthLeft` (as Stockfish does) weights updates
+by evidence quality rather than tree position, giving ~4% node reduction.
+
+### 5. Shallow QsFrontier TT reuse is helpful, but secondary
 
 Allowing limited main-search reuse of shallow frontier qsearch entries is useful, but its impact is
 incremental compared with the root-PVS fix.
 
-### 4. Reverse futility and the null-move PV fix remain foundational
+### 6. Reverse futility and the null-move PV fix remain foundational
 
 These earlier accepted improvements still matter and remain part of the current good profile.
 
@@ -153,8 +174,8 @@ Reason:
 
 ## Next Steps
 
-1. Improve move ordering using safe heuristics, informed by oracle
-  diagnostics when useful.
+1. Improve move ordering further — oracle diagnostics show ~54% gap remaining at depth 9
+   vs Stockfish; IID has begun closing it but ordering quality is still the main bottleneck.
 2. Revisit deeper TT reuse and shallow pruning only through configurable, isolated changes.
 3. Re-test depth-2 LMR only after move ordering quality improves further.
 4. Continue using SPRT/self-play as the final gate for changes that meaningfully affect search.
