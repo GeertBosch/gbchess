@@ -1,181 +1,157 @@
 # Search Optimization Analysis
 
-## Goal
-
-Bring gbchess closer to Stockfish's node efficiency while preserving playing strength and test
-quality.
-
-Priority order:
-- Improve depth-3 efficiency on the standard diagnostic FEN.
-- Carry those gains to deeper searches, especially depth 9.
-- Keep search behavior strong enough to pass the full test suite and at least 96/100 puzzles.
-
 ## Diagnostic Position
 
-```text
+```
 FEN: rn3br1/1pk1pNpp/p7/q1pP4/2P2PP1/P4p1N/1PQ4P/4RK2 w - - 3 23
 ```
 
-Both engines find `c2h7` on this position.
+Both engines agree this position is a win for White. gbchess plays `c2h7`, SF plays `h3g5`.
 
-## Current Tuned State
+## Node Counting: Critical Finding
 
-### Tuned settings currently enabled
+**The 9.7x reported gap is largely a measurement artifact** -- the engines do not count nodes the
+same way.
 
-- `useOracleMaxDepth = 0` (oracle disabled)
-- `rootPVS = true`
-- `rootPVSMaxDepthLeft = 3`
-- `qsFrontierInMainMaxDepthLeft = 1`
-- `moveLevelFutilityPruning = true`
-- `moveFutilityMaxDepthLeft = 3`
-- `moveFutilityMinMoveCount = 2`
-- `moveFutilityMarginBase = 240`
-- `internalIterativeDeepening = true`
-- `iidMinDepthLeft = 4`
-- `iidDepthReduction = 2`
-- History bonus scaled by `depthLeft**2` (not `ply**2`)
+| What is counted | Stockfish | gbchess |
+|-----------------|-----------|---------|
+| `search()` at depth > 0 | yes | yes (`alphaBeta`, depth.left > 0) |
+| Leaf call at depth = 0 (goes to QS) | **no** (returns before `++totalNodes`) | yes (`alphaBeta` at depth.left=0 still increments) |
+| QS recursion calls | **no** (`qsearch` has no node increment) | yes (inner `quiesce()` increments `nodeCount`) |
 
-### Current measured results
+Stockfish: `depth <= 0 -> return qsearch(...)` fires at line 651, **before** `++totalNodes`
+at line 674 in `Stockfish/src/search.cpp`. `qsearch()` itself never increments. So SF `nodes`
+= main search calls with `depth > 0` only.
 
-| Metric | Stockfish 12 | gbchess current | Gap |
-|--------|--------------|-----------------|-----|
-| Depth 3 nodes | 185 | ~1,800 | ~9.7x |
-| Depth 9 nodes | 9,503 | ~514,000 | ~54x |
-| Puzzles | — | 96/100 | target met |
+gbchess: `alphaBeta` increments `nodeCount` at every depth including depth.left=0, and the inner
+recursive `quiesce()` also increments `nodeCount`. So gbchess `nodes` = main + all QS recursion.
 
-Compared with the earlier baseline:
-- Depth 3 improved from `4,798` to about `1,800` nodes.
-- Depth 9 improved from `672,996` to ~`514,000` nodes.
+### Depth-3 node breakdown (diagnostic FEN, from statistics output)
 
-Oracle diagnostic (for reference only):
-
-| oracle depth | Depth 3 nodes | Depth 9 nodes |
-| ------------ | ------------- | ------------- |
-| 2            | 1,301         | 309,100       |
-| 3            | 1,469         | 272,533       |
-
-## Strength Results
-
-Extensive SPRT self-play against [b6caa84](b6caa84) (`Raise RFP margin from 100x+100 to 200x+100`):
-
-```text
-Elo: 16.86 +/- 6.16
-LOS: 100.00 %
-Games: 1712
-SPRT ([0.00, 5.00]) completed - H1 was accepted
+```
+Category                        gbchess    Stockfish    Notes
+Main search (depth.left > 0)       122        185        1.5x gap
+Leaf alphaBeta (depth.left = 0)    621          0        counted by gbchess, not SF
+Inner QS recursion               1,057          0        counted by gbchess, not SF
+----------------------------------------------------------------------
+Total reported nodes             1,800        185        9.7x (misleading)
 ```
 
-Interpretation:
-- The current tuned search is not only faster on the diagnostic position, it also improved actual
-  playing strength in self-play.
-- Earlier concern that the efficiency gains might just trade away tactical quality is no longer the
-  best explanation for the current tuned profile.
+**The real main-search tree gap is only ~1.5x.** Every other reported gap is an artifact of
+how QS work is counted.
 
-## What Moved the Needle
+## Current Measured State
 
-### 1. Root-level PVS was the biggest structural improvement
+| Metric | Stockfish 12 | gbchess | Raw ratio |
+|--------|--------------|---------|-----------|
+| Depth 3 nodes | 185 | 1,800 | 9.7x |
+| Depth 9 nodes | 9,503 | ~514,000 | ~54x |
+| Puzzles | -- | 96/100 | target met |
 
-The largest single gain came from changing root search shape so only the first root move gets a
-full-window search and later root moves get null-window probes first.
+These ratios are inflated by the counting difference (see Step 1 below). The depth-3 baseline
+improved from 4,798 nodes in initial work -- the 1,800 figure represents real gains.
 
-Why it mattered:
-- Stockfish already had this root-child shape.
-- gbchess had been searching too many root children with wide PV windows.
-- Fixing that reduced unnecessary expensive searches and made the tree shape much closer to
-  Stockfish at depth 3.
+### Key diagnostic stats (depth 3, gbchess)
 
-### 2. Conservative shallow pruning helped once made configurable
+```
+Total nodes:            1,800
+  Main (d.left > 0):      122
+  Leaf -> QS:             621  (quiescenceCount; each enters quiesce once, then may recurse)
+  Inner QS recursion:   1,057  (nodeCount - alphaBeta calls)
+Null move:              39 attempts, 27 cutoffs (69%)
+First-move cutoffs:     37 / 62 total (59%)   <- SF is 5/5 = 100%
+TT main depth-miss:     38 cases where d=2 was needed, d=1 was found (in depth-3 search)
+QS avg recursion depth: 1,057 / 621 = 1.7 inner calls per QS entry
+```
 
-The current tuned profile keeps a conservative move-level futility rule enabled. The exact tuning
-matters; stronger or poorly scoped variants caused quality regressions.
+### Stockfish depth-3 stats (for comparison)
 
-### 3. Internal Iterative Deepening reduced depth-9 nodes ~7%
+```
+Total nodes:   185  (main-search only, depth > 0)
+First-move:    5/5 = 100%
+TT main hit:   90/93 = 97%
+TT qs probes:  104  (no recursion counted)
+```
 
-When no TT move is available at `depth.left >= 4`, a reduced-depth probe (`depth.left - 2`)
-seeds `sortMoves` with a searched best move rather than relying on history/killers alone. This
-directly addresses TT-miss nodes where move ordering had no first-move hint.
+## What Drove Progress
 
-### 4. Scaling history bonus by $\tt{depthLeft}^2$ (not $\tt{ply}^2$)
+1. **Root-level PVS** -- largest single gain. Non-first root moves now get null-window probes,
+   matching SF's root shape. gbchess had been searching too many root children with wide PV
+   windows; fixing that was the biggest structural win.
+2. **Reverse futility pruning and null-move PV fix** -- foundational; still in the profile.
+3. **Move-level futility pruning** -- conservative tuning required; aggressive variants hurt
+   puzzles. Currently enabled at `moveFutilityMaxDepthLeft = 3`.
+4. **IID at `depth.left >= 4`** -- ~7% depth-9 reduction by seeding move ordering with a
+   reduced-depth best move when TT has no hint.
+5. **History bonus scaled by `depthLeft^2`** -- matches SF weighting (~4% depth-9 reduction).
+6. **SPRT validation** -- the combined profile confirmed +16.86 Elo in self-play vs `b6caa84`.
 
-Beta cutoffs at high remaining depth are stronger evidence than shallow-remaining cutoffs.
-Scaling the quiet-history update by `depthLeft * depthLeft` (as Stockfish does) weights updates
-by evidence quality rather than tree position, giving ~4% node reduction.
+## Mistakes to Avoid Repeating
 
-### 5. Shallow QsFrontier TT reuse is helpful, but secondary
-
-Allowing limited main-search reuse of shallow frontier qsearch entries is useful, but its impact is
-incremental compared with the root-PVS fix.
-
-### 6. Reverse futility and the null-move PV fix remain foundational
-
-These earlier accepted improvements still matter and remain part of the current good profile.
-
-## Diagnostic Findings That Shaped the Tuned Search
-
-### 1. Oracle move ordering (diagnostic-only by design)
-
-The oracle was intentionally introduced as a diagnostic instrument, not as a deployable search
-mechanism.
-
-What it proved:
-- Even near-perfect ordering alone only explained a minority of the depth-3 gap.
-- Search structure and pruning policy mattered more than root ordering alone.
-
-### 2. Depth-2 LMR
-
-Depth-2 LMR repeatedly reduced depth-3 nodes but did not hold up on broader quality checks. It is
-still considered unsafe with current ordering quality.
-
-### 3. Aggressive late pruning variants
-
-Several stronger pruning experiments reduced nodes but damaged puzzles or broader search quality.
-The current lesson is to keep shallow pruning conservative and configurable.
-
-### 4. TT learning updates from early returns
-
-Those feedback-style updates increased noise and did not help overall strength.
-
-## Main Learnings
-
-### 1. Ordering alone was not the main bottleneck
-
-Oracle diagnostics showed that even near-perfect ordering did not get gbchess close enough to
-Stockfish by itself.
-
-### 2. Root search shape mattered far more than expected
-
-Changing non-first root moves to null-window probing was a major structural win and translated from
-analysis mode into the tuned default search.
-
-### 3. Configurability was necessary
-
-The newer optimizations only became practical once they could be tuned independently in
-[options.h](src/core/options.h). This made it possible to recover puzzle quality while keeping much
-of the efficiency gain.
-
-### 4. Full validation beats isolated node-count wins
-
-The best profile is the one that improves both efficiency and playing strength. The current tuned
-settings passed:
-- `make test -j`
-- `make ci`
-- `make puzzles` with 96/100
-- SPRT self-play improvement versus `b6caa84`
-
-## Current Recommendation
-
-Keep the current tuned profile as the new baseline.
-
-Reason:
-- It materially improves depth-3 and depth-9 efficiency.
-- It meets the puzzle-quality floor.
-- It passes the test suite.
-- It improved in self-play, which is the strongest evidence that the search trade-offs are good.
+- **Depth-2 LMR**: always reduced node counts but reliably caused quality regressions. Do not
+  re-enable until move ordering quality improves substantially.
+- **Aggressive move-count pruning**: nodes dropped but puzzles fell below 96/100.
+- **TT learning from early returns**: increased noise, no strength gain.
+- **Multiple simultaneous changes**: after these failures, strict one-change-at-a-time discipline
+  was adopted. It works.
+- **Trusting raw node counts without verifying counting semantics**: the 9.7x gap was taken at
+  face value for too long. Always verify what "nodes" means in each engine before comparing.
+- **Oracle ordering as a fix**: proved that even perfect ordering closes only a minority of the
+  gap. Structure and pruning matter more than ordering at this stage.
 
 ## Next Steps
 
-1. Improve move ordering further — oracle diagnostics show ~54% gap remaining at depth 9
-   vs Stockfish; IID has begun closing it but ordering quality is still the main bottleneck.
-2. Revisit deeper TT reuse and shallow pruning only through configurable, isolated changes.
-3. Re-test depth-2 LMR only after move ordering quality improves further.
-4. Continue using SPRT/self-play as the final gate for changes that meaningfully affect search.
+### Step 1 -- Fix node counting to match Stockfish (reporting change only, no search impact)
+
+Move `++nodeCount` out of inner `quiesce()` into a dedicated `qsNodeCount` counter. Do not
+count `alphaBeta` calls at `depth.left = 0` in the main `nodes` reporter (matching SF semantics:
+those are leaf transitions to QS, not main-search nodes).
+
+After this change, depth-3 reported `nodes` drops from 1,800 to 122 -- directly comparable to
+SF's 185. Add to the stats block:
+
+```
+nodes(main/leaf/qs) = 122 / 621 / 1,057
+```
+
+Validate: `make test -j` output unchanged. Pure instrumentation, no search behavior change.
+
+### Step 2 -- Diagnose and close the first-move cutoff gap
+
+gbchess 59% vs SF 100% first-move cutoffs. The 41% late-cutoff rate wastes nodes finding
+refutations that better ordering would surface first.
+
+Add per-depth first-move cutoff rate to the stats printout. Profile which move categories
+(quiet, capture, killer, counter) are causing late cutoffs before attempting fixes. Measure first.
+
+### Step 3 -- Reduce QS work (after Step 1, so gains are measurable)
+
+QS over-expansion has several separable causes; test each in isolation:
+
+1. **Reduce check generation depth in QS** (`checksMinDepthLeft`): currently 5 (all QS levels).
+   SF generates checks only at the first QS level. Try `checksMinDepthLeft = 1`. Low risk.
+
+2. **Delta pruning in QS**: after computing `standPat`, set `futilityBase = standPat + 145cp`.
+   Before each capture, if `futilityBase + capturedPieceValue(move) <= alpha`, skip it.
+   Directly limits recursion depth.
+
+3. **Tighten QS SEE threshold to >= 0**: currently `< -100cp`; SF uses `see_ge(move, 0)`.
+   Skips all losing captures. May affect endgame tactics -- test with puzzles.
+
+4. **QS move count hard cap**: after `moveCount > 2` (no check, no advanced pawn push), skip
+   remaining captures. Matches SF's hard cap.
+
+Test each independently. Puzzle floor is 96/100. Commit only if: all tests pass AND QS
+entry/recursion counts decrease with no puzzle regression.
+
+### Step 4 -- Address TT depth misses
+
+38 depth-2 TT misses at depth 3 because QsFrontier entries are stored at depth 0, insufficient
+for depth-2 re-use. These 38 positions expand full subtrees instead of cutting. Investigate
+raising the stored depth of QsFrontier entries from 0 to 1.
+
+### Step 5 -- LMR and deeper pruning
+
+Revisit depth-2 LMR and deeper null-move tuning only after Steps 1-3 are complete and node
+counts are on a comparable footing with SF. The remaining gap at that point may be much smaller
+than the current raw ratios suggest.
