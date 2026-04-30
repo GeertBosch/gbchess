@@ -79,10 +79,11 @@ void printStatistics(std::ostream& os) {
     // First-move cutoffs: 14 (100% of beta cutoffs)
     // ===================================
     os << "\n=== " + std::string(cmdName) + " Search Statistics ===\n";
-    os << "Total nodes: " << search::nodeCount << "\n";
+    os << "Total nodes: " << search::nodeCount << " (main=" << search::mainNodeCount
+       << " leaf->QS=" << search::quiescenceCount << " QS=" << search::qsNodeCount << ")\n";
     os << "Null move attempts: " << search::nullMoveAttempts << " ("
-       << (search::nodeCount ? (search::nullMoveAttempts * 100 / search::nodeCount) : 0)
-       << "% of nodes)\n";
+       << (search::mainNodeCount ? (search::nullMoveAttempts * 100 / search::mainNodeCount) : 0)
+       << "% of main nodes)\n";
     os << "Null move cutoffs: " << search::nullMoveCutoffs << " ("
        << (search::nullMoveAttempts ? (search::nullMoveCutoffs * 100 / search::nullMoveAttempts)
                                     : 0)
@@ -144,8 +145,8 @@ void printStatistics(std::ostream& os) {
      os << "TT refine no-cut: main=" << search::ttRefineNoCut << " (shallow="
          << search::ttRefineNoCutShallow << ") qs=" << search::qsTTRefineNoCut << "\n";
     os << "Beta cutoffs: " << search::betaCutoffs << " ("
-       << (search::nodeCount ? (search::betaCutoffs * 100 / search::nodeCount) : 0)
-       << "% of nodes)\n";
+       << (search::mainNodeCount ? (search::betaCutoffs * 100 / search::mainNodeCount) : 0)
+       << "% of main nodes)\n";
     os << "First-move cutoffs: " << search::firstMoveCutoffs << " ("
        << (search::betaCutoffs ? (search::firstMoveCutoffs * 100 / search::betaCutoffs) : 0)
        << "% of beta cutoffs)\n";

@@ -28,8 +28,10 @@ int maxSelDepth = 0;
 
 // Diagnostic counters
 uint64_t evalCount = 0;
-uint64_t nodeCount = 0;
+uint64_t nodeCount = 0;      // total: all alphaBeta calls + inner QS recursion (used for node limit)
+uint64_t mainNodeCount = 0;  // SF-comparable: alphaBeta calls with depth.left > 0 only
 uint64_t quiescenceCount = 0;
+uint64_t qsNodeCount = 0;    // inner quiesce() recursive calls
 uint64_t cacheCount = 0;
 
 uint64_t betaCutoffs = 0;
@@ -124,6 +126,8 @@ using timepoint = clock::time_point;
 // Copy various counters at the start of the search, so they can be reported later
 uint64_t searchEvalCount = 0;
 uint64_t searchNodeCount = 0;
+uint64_t searchMainNodeCount = 0;
+uint64_t searchQsNodeCount = 0;
 uint64_t searchQuiescenceCount = 0;
 uint64_t searchCacheCount = 0;
 timepoint searchStartTime = {};
@@ -932,6 +936,7 @@ void applyMoveOracle(Position& position, MoveVector& moveList, int ply) {
 Score quiesce(
     Position& position, Score alpha, Score beta, int depthleft, Score standPat, int qply = 0) {
     ++nodeCount;
+    ++qsNodeCount;
 
     Hash hash(position);
     const auto originalAlpha = alpha;
@@ -1237,6 +1242,7 @@ PrincipalVariation tryTTCutoff(
 PrincipalVariation alphaBeta(
     Position& position, Hash hash, Score alpha, Score beta, Depth depth, Move lastMove) {
     ++nodeCount;
+    if (depth.left > 0) ++mainNodeCount;
     traceNodeEnter(depth.current, depth.left, alpha, beta, lastMove);
 
     if (depth.left > 0) {
@@ -1434,9 +1440,9 @@ PrincipalVariation alphaBeta(
 bool currmoveInfo(InfoFn info, int depthleft, Move currmove, int currmovenumber) {
     if (!info || depthleft < options::currmoveMinDepthLeft) return false;
     std::stringstream ss;
-    ss << "depth " << std::to_string(depthleft)     //
-       << " nodes " << nodeCount - searchNodeCount  //
-       << " currmove " << to_string(currmove)       //
+    ss << "depth " << std::to_string(depthleft)                    //
+       << " nodes " << mainNodeCount - searchMainNodeCount  //
+       << " currmove " << to_string(currmove)               //
        << " currmovenumber " + std::to_string(currmovenumber);
     auto stop = info(ss.str());
     return stop;
@@ -1452,7 +1458,7 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
     else
         pvString += " score cp " + std::to_string(score.cp());
 
-    auto nodes = nodeCount - searchNodeCount;
+    auto nodes = mainNodeCount - searchMainNodeCount;
     pvString += " nodes " + std::to_string(nodes);
 
     auto millis = duration_cast<milliseconds>(clock::now() - searchStartTime).count();
@@ -1672,6 +1678,8 @@ bool restoreState(std::istream& in) {
 PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector moves, InfoFn info) {
     evalTable = EvalTable{position.board, true};
     searchNodeCount = nodeCount;
+    searchMainNodeCount = mainNodeCount;
+    searchQsNodeCount = qsNodeCount;
     searchEvalCount = evalCount;
     searchQuiescenceCount = quiescenceCount;
     searchCacheCount = cacheCount;
