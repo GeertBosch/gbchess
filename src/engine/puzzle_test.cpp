@@ -1,12 +1,18 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <condition_variable>
 #include <cstdlib>
+#include <deque>
 #include <fstream>
+#include <future>
 #include <iostream>
+#include <mutex>
 #include <numeric>
+#include <queue>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <fcntl.h>
@@ -18,17 +24,25 @@
 #include "eval/eval.h"
 #include "move/move.h"
 #include "search/elo.h"
-#include "search/search.h"
 
 namespace {
 
 bool verbose = false;
+int numJobs = -1;  // -1 = default to one engine per CPU
 std::string cmdName = "puzzle-test";
 
+int getNumCPUs() {
+    long n = sysconf(_SC_NPROCESSORS_ONLN);
+    return (n > 0) ? (int)n : 1;
+}
+
 void usage() {
-    std::cerr << "Usage: " << cmdName << " [-v|--verbose] <engine-cmd> <depth> [puzzle-file.csv]\n"
-              << "  engine-cmd     UCI engine to test (e.g. ./build/engine or stockfish)\n"
-              << "  depth          Search depth passed to 'go depth'\n"
+    std::cerr << "Usage: " << cmdName
+              << " [-v|--verbose] [-j[N]] <engine-cmd> <depth> [puzzle-file.csv]\n"
+              << "  -j       Use one engine per CPU (default)\n"
+              << "  -jN      Use N parallel engines\n"
+              << "  engine-cmd       UCI engine to test (e.g. ./build/engine or stockfish)\n"
+              << "  depth            Search depth passed to 'go depth'\n"
               << "  puzzle-file.csv  Lichess CSV format; read from stdin if omitted\n";
     std::exit(1);
 }
@@ -195,43 +209,34 @@ Position applyUCIMove(const Position& pos, const std::string& uciMove) {
  * puzzleMoves[0] is the opponent's last move that sets up the puzzle position;
  * subsequent moves alternate engine / opponent in the expected solution.
  *
- * For mate puzzles (mateDepth > 0): any engine line that achieves checkmate in
- * exactly mateDepth full moves (engine half-moves) is accepted. We play the
- * strongest available defense using computeBestMove.
- *
- * For non-mate puzzles: require exact engine moves, playing the puzzle's
- * prescribed opponent responses after each correct engine move.
+ * The engine must play the expected move at each step, unless its move achieves
+ * checkmate. Output (error messages and verbose info) is written to `out`.
  */
 PuzzleError runPuzzle(UCIEngine& engine,
                       const std::string& label,
                       const std::string& fen,
                       const std::vector<std::string>& puzzleMoves,
-                      int depth) {
+                      int depth,
+                      std::ostream& out) {
     if (puzzleMoves.size() < 2) {
-        if (verbose) std::cout << label << ": too few moves, skipping\n";
+        if (verbose) out << label << ": too few moves, skipping\n";
         return DEPTH_ERROR;
     }
     // The solution is puzzleMoves[1..]; skip puzzles whose solution exceeds depth.
     size_t solutionLen = puzzleMoves.size() - 1;
     if (solutionLen > size_t(depth)) {
         if (verbose)
-            std::cout << label << ": solution length " << solutionLen
-                      << " exceeds depth " << depth << " (skipped)\n";
+            out << label << ": solution length " << solutionLen
+                << " exceeds depth " << depth << " (skipped)\n";
         return DEPTH_ERROR;
     }
 
     engine.newGame();
-    search::newGame();
 
-    // For non-mate puzzles, we require exact move matches at each step.
     Position pos = fen::parsePosition(fen);
 
     // Each loop iteration applies one puzzle move and checks the engine's response.
     for (size_t i = 0; i + 1 < puzzleMoves.size(); i += 2) {
-        // For every step, we first apply the given move from the puzzle solution, then check the
-        // engine's response. Answers must always be correct, unless they are the final move and
-        // lead to a checkmate.
-
         pos = applyUCIMove(pos, puzzleMoves[i]);
 
         auto engineMove = engine.go(fen::to_string(pos), {}, depth);
@@ -242,8 +247,8 @@ PuzzleError runPuzzle(UCIEngine& engine,
         if (engineMove == puzzleMoves[i + 1] || isCheckmate(enginePos)) continue;
 
         // print error message
-        std::cout << label << ": step " << (i / 2) + 1 << ", expected " << puzzleMoves[i + 1]
-                      << ", got " << engineMove << "\n";
+        out << label << ": step " << (i / 2) + 1 << ", expected " << puzzleMoves[i + 1]
+            << ", got " << engineMove << "\n";
         return isCheckmate(pos) ? MATE_ERROR : WRONG_MOVE;
     }
     return NO_ERROR;
@@ -251,7 +256,7 @@ PuzzleError runPuzzle(UCIEngine& engine,
 
 // ─── CSV driver ──────────────────────────────────────────────────────────────
 
-void testFromStream(std::istream& input, UCIEngine& engine, int depth) {
+void testFromStream(std::istream& input, const std::string& engineCmd, int depth, int numEngines) {
     constexpr int kExpectedPuzzleRating = 2300;
 
     std::string line;
@@ -262,10 +267,75 @@ void testFromStream(std::istream& input, UCIEngine& engine, int depth) {
     auto colPuzzleId = find(header, "PuzzleId");
     auto colRating = find(header, "Rating");
     auto colThemes = find(header, "Themes");
+    size_t minCols = std::max({colFEN, colMoves, colPuzzleId, colRating, colThemes}) + 1;
+
+    // ─── Thread pool ──────────────────────────────────────────────────────────
+
+    struct Task {
+        std::string label, fen;
+        std::vector<std::string> puzzleMoves;
+        std::promise<std::pair<PuzzleError, std::string>> promise;
+    };
+
+    std::queue<std::unique_ptr<Task>> workQueue;
+    std::mutex workMutex;
+    std::condition_variable workCV;
+    bool noMoreWork = false;
+
+    auto workerFn = [&]() {
+        UCIEngine engine(engineCmd);
+        engine.initialize();
+        while (true) {
+            std::unique_ptr<Task> task;
+            {
+                std::unique_lock lk(workMutex);
+                workCV.wait(lk, [&] { return !workQueue.empty() || noMoreWork; });
+                if (workQueue.empty()) break;
+                task = std::move(workQueue.front());
+                workQueue.pop();
+            }
+            std::ostringstream oss;
+            auto err = runPuzzle(engine, task->label, task->fen, task->puzzleMoves, depth, oss);
+            task->promise.set_value({err, oss.str()});
+        }
+    };
+
+    std::vector<std::thread> workers;
+    for (int i = 0; i < numEngines; ++i)
+        workers.emplace_back(workerFn);
+
+    // ─── Pipeline: ordered futures for in-order output ────────────────────────
+
+    struct PipelineEntry {
+        std::future<std::pair<PuzzleError, std::string>> future;
+        int rating;
+    };
+
+    std::deque<PipelineEntry> pipeline;
+    // Keep enough tasks ahead to saturate all workers, but bounded to avoid
+    // reading the entire input into memory.
+    const size_t kMaxPipeline = numEngines * 4;
 
     ELO puzzleRating(kExpectedPuzzleRating);
     PuzzleStats stats;
-    size_t minCols = std::max({colFEN, colMoves, colPuzzleId, colRating, colThemes}) + 1;
+
+    auto outputEntry = [&](PipelineEntry& entry) {
+        auto [err, output] = entry.future.get();  // blocks until result ready
+        std::cout << output;
+        ++stats[err];
+        if (err != DEPTH_ERROR)
+            puzzleRating.updateOne(ELO(entry.rating), err == NO_ERROR ? ELO::WIN : ELO::LOSS);
+    };
+
+    // Drain any pipeline entries that are already done (non-blocking).
+    auto drainReady = [&]() {
+        while (!pipeline.empty() &&
+               pipeline.front().future.wait_for(std::chrono::seconds(0)) ==
+                   std::future_status::ready) {
+            outputEntry(pipeline.front());
+            pipeline.pop_front();
+        }
+    };
 
     while (std::getline(input, line)) {
         if (line.empty()) continue;
@@ -275,14 +345,46 @@ void testFromStream(std::istream& input, UCIEngine& engine, int depth) {
         auto puzzleMoves = split(cols[colMoves], ' ');
         if (puzzleMoves.empty()) continue;
 
-        auto rating = ELO(std::stoi(cols[colRating]));
-        auto label =
-            "Puzzle " + cols[colPuzzleId] + ", rating " + std::to_string(rating());
+        int ratingVal = std::stoi(cols[colRating]);
+        auto label = "Puzzle " + cols[colPuzzleId] + ", rating " + std::to_string(ratingVal);
 
-        auto result = runPuzzle(engine, label, cols[colFEN], puzzleMoves, depth);
-        ++stats[result];
-        if (result != DEPTH_ERROR)
-            puzzleRating.updateOne(rating, result == NO_ERROR ? ELO::WIN : ELO::LOSS);
+        // When the pipeline is full, wait for the oldest (in-order) result first.
+        while (pipeline.size() >= kMaxPipeline) {
+            outputEntry(pipeline.front());
+            pipeline.pop_front();
+        }
+
+        auto task = std::make_unique<Task>();
+        task->label = label;
+        task->fen = cols[colFEN];
+        task->puzzleMoves = std::move(puzzleMoves);
+
+        PipelineEntry entry;
+        entry.future = task->promise.get_future();
+        entry.rating = ratingVal;
+
+        {
+            std::lock_guard lk(workMutex);
+            workQueue.push(std::move(task));
+        }
+        workCV.notify_one();
+
+        pipeline.push_back(std::move(entry));
+        drainReady();
+    }
+
+    // Signal workers that no more tasks are coming, then join.
+    {
+        std::lock_guard lk(workMutex);
+        noMoreWork = true;
+    }
+    workCV.notify_all();
+    for (auto& t : workers) t.join();
+
+    // Drain remaining results in input order.
+    while (!pipeline.empty()) {
+        outputEntry(pipeline.front());
+        pipeline.pop_front();
     }
 
     std::cout << stats.str() << ", " << puzzleRating() << " rating\n";
@@ -318,11 +420,26 @@ int main(int argc, char* argv[]) {
     }
 
     int i = 1;
-    while (i < argc &&
-           (std::string(argv[i]) == "-v" || std::string(argv[i]) == "--verbose")) {
-        verbose = true;
+    while (i < argc) {
+        std::string arg(argv[i]);
+        if (arg == "-v" || arg == "--verbose") {
+            verbose = true;
+        } else if (arg == "-j") {
+            numJobs = getNumCPUs();
+        } else if (arg.size() >= 2 && arg[0] == '-' && arg[1] == 'j') {
+            std::string numStr = arg.substr(2);
+            bool allDigits =
+                !numStr.empty() && std::all_of(numStr.begin(), numStr.end(), ::isdigit);
+            if (!allDigits) usage("-j requires a positive integer or no argument");
+            numJobs = std::stoi(numStr);
+            if (numJobs <= 0) usage("-j value must be positive");
+        } else {
+            break;
+        }
         ++i;
     }
+
+    if (numJobs < 0) numJobs = getNumCPUs();  // default: one engine per CPU
 
     if (argc - i < 2) usage();
 
@@ -335,15 +452,12 @@ int main(int argc, char* argv[]) {
     int depth = std::stoi(depthStr);
     if (depth <= 0) usage("depth must be positive");
 
-    UCIEngine engine(engineCmd);
-    engine.initialize();
-
     if (i < argc) {
         std::ifstream file(argv[i]);
         if (!file.is_open()) usage("Could not open file: " + std::string(argv[i]));
-        testFromStream(file, engine, depth);
+        testFromStream(file, engineCmd, depth, numJobs);
     } else {
-        testFromStream(std::cin, engine, depth);
+        testFromStream(std::cin, engineCmd, depth, numJobs);
     }
 
     return 0;
