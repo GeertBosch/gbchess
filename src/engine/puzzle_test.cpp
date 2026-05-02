@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cassert>
 #include <condition_variable>
 #include <cstdlib>
@@ -30,6 +31,8 @@ namespace {
 bool verbose = false;
 int numJobs = -1;  // -1 = default to one engine per CPU
 std::string cmdName = "puzzle-test";
+std::string debugPath;  // empty = disabled
+std::atomic<int> engineCounter{0};
 
 int getNumCPUs() {
     long n = sysconf(_SC_NPROCESSORS_ONLN);
@@ -37,13 +40,19 @@ int getNumCPUs() {
 }
 
 void usage() {
-    std::cerr << "Usage: " << cmdName
-              << " [-v|--verbose] [-j[N]] <engine-cmd> <depth> [puzzle-file.csv]\n"
-              << "  -j       Use one engine per CPU (default)\n"
-              << "  -jN      Use N parallel engines\n"
-              << "  engine-cmd       UCI engine to test (e.g. ./build/engine or stockfish)\n"
-              << "  depth            Search depth passed to 'go depth'\n"
-              << "  puzzle-file.csv  Lichess CSV format; read from stdin if omitted\n";
+    std::cerr
+        << "Usage: " << cmdName
+        << " [-v|--verbose] [-j[N]] [-d] [--depth N] [--nodes N] [--movetime N]"
+           " <engine-cmd> [engine-opts...] [puzzle-file.csv]\n"
+        << "  -j               Use one engine per CPU (default)\n"
+        << "  -jN              Use N parallel engines\n"
+        << "  -d               Log UCI I/O to $TMPDIR/puzzle-test (or ./puzzle-test) per engine\n"
+        << "  --depth N        Search depth for 'go depth N'\n"
+        << "  --nodes N        Node limit for 'go nodes N'\n"
+        << "  --movetime N     Time limit in ms for 'go movetime N'\n"
+        << "  engine-cmd       UCI engine to test (e.g. ./build/engine or stockfish)\n"
+        << "  engine-opts      Options starting with '-' forwarded to the engine command\n"
+        << "  puzzle-file.csv  Lichess CSV format; read from stdin if omitted\n";
     std::exit(1);
 }
 
@@ -52,6 +61,24 @@ void usage(const std::string& msg) {
     usage();
 }
 
+// ─── Go parameters ───────────────────────────────────────────────────────────
+
+struct GoParams {
+    int depth = 0;
+    long long nodes = 0;
+    int movetime = 0;
+
+    bool valid() const { return depth > 0 || nodes > 0 || movetime > 0; }
+
+    std::string command() const {
+        std::string cmd = "go";
+        if (depth > 0) cmd += " depth " + std::to_string(depth);
+        if (nodes > 0) cmd += " nodes " + std::to_string(nodes);
+        if (movetime > 0) cmd += " movetime " + std::to_string(movetime);
+        return cmd;
+    }
+};
+
 // ─── UCI engine subprocess ────────────────────────────────────────────────────
 
 /** Spawns a UCI engine process and provides send/readline communication. */
@@ -59,9 +86,11 @@ class UCIEngine {
     pid_t pid = -1;
     int toEngine = -1;    // write to engine stdin
     FILE* reader = nullptr;  // read from engine stdout
+    std::ofstream debugOut;
 
 public:
-    explicit UCIEngine(const std::string& command) {
+    explicit UCIEngine(const std::string& command, const std::string& debugFilePath = {}) {
+        if (!debugFilePath.empty()) debugOut.open(debugFilePath);
         int toChild[2], fromChild[2];
         if (pipe(toChild) || pipe(fromChild))
             throw std::runtime_error("pipe() failed");
@@ -113,6 +142,7 @@ public:
     UCIEngine(const UCIEngine&) = delete;
 
     void sendLine(const std::string& line) {
+        if (debugOut.is_open()) debugOut << "> " << line << "\n" << std::flush;
         std::string msg = line + "\n";
         write(toEngine, msg.c_str(), msg.size());
     }
@@ -123,7 +153,12 @@ public:
         std::string line(buf);
         while (!line.empty() && (line.back() == '\n' || line.back() == '\r'))
             line.pop_back();
+        if (debugOut.is_open()) debugOut << "< " << line << "\n" << std::flush;
         return line;
+    }
+
+    void debugLine(const std::string& line) {
+        if (debugOut.is_open()) debugOut << "! " << line << "\n" << std::flush;
     }
 
     /** Send uci / isready handshake. Must be called once before searching. */
@@ -141,19 +176,19 @@ public:
     }
 
     /**
-     * Set position from FEN + list of UCI moves, then search at the given depth.
+     * Set position from FEN + list of UCI moves, then search with the given params.
      * Returns the bestmove string (e.g. "e2e4"), or empty string on failure.
      */
     std::string go(const std::string& fen,
                    const std::vector<std::string>& moves,
-                   int depth) {
+                   const GoParams& params) {
         std::string pos = "position fen " + fen;
         if (!moves.empty()) {
             pos += " moves";
             for (const auto& m : moves) pos += " " + m;
         }
         sendLine(pos);
-        sendLine("go depth " + std::to_string(depth));
+        sendLine(params.command());
 
         for (std::string line; !(line = readline()).empty();) {
             if (line.substr(0, 9) == "bestmove ") {
@@ -216,39 +251,35 @@ PuzzleError runPuzzle(UCIEngine& engine,
                       const std::string& label,
                       const std::string& fen,
                       const std::vector<std::string>& puzzleMoves,
-                      int depth,
+                      const GoParams& params,
                       std::ostream& out) {
     if (puzzleMoves.size() < 2) {
         if (verbose) out << label << ": too few moves, skipping\n";
-        return DEPTH_ERROR;
-    }
-    // The solution is puzzleMoves[1..]; skip puzzles whose solution exceeds depth.
-    size_t solutionLen = puzzleMoves.size() - 1;
-    if (solutionLen > size_t(depth)) {
-        if (verbose)
-            out << label << ": solution length " << solutionLen
-                << " exceeds depth " << depth << " (skipped)\n";
         return DEPTH_ERROR;
     }
 
     engine.newGame();
 
     Position pos = fen::parsePosition(fen);
+    std::string uciPos = "position fen \"" + fen + "\"";
 
     // Each loop iteration applies one puzzle move and checks the engine's response.
     for (size_t i = 0; i + 1 < puzzleMoves.size(); i += 2) {
         pos = applyUCIMove(pos, puzzleMoves[i]);
 
-        auto engineMove = engine.go(fen::to_string(pos), {}, depth);
+        // Pass puzzleMoves[0..i] as the move history to the engine, so it can use them for move
+        // ordering and TT probes.
+        auto moves = std::vector<std::string>(puzzleMoves.begin(), puzzleMoves.begin() + i + 1);
+        auto engineMove = engine.go(fen, moves, params);
 
         auto enginePos = applyUCIMove(pos, engineMove);
         pos = applyUCIMove(pos, puzzleMoves[i + 1]);
 
         if (engineMove == puzzleMoves[i + 1] || isCheckmate(enginePos)) continue;
 
-        // print error message
-        out << label << ": step " << (i / 2) + 1 << ", expected " << puzzleMoves[i + 1]
-            << ", got " << engineMove << "\n";
+        engine.debugLine("expected " + puzzleMoves[i + 1]);
+        out << label << ": step " << (i / 2) + 1 << ", expected " << puzzleMoves[i + 1] << ", got "
+            << engineMove << ", fen " << fen::to_string(pos) << "\n";
         return isCheckmate(pos) ? MATE_ERROR : WRONG_MOVE;
     }
     return NO_ERROR;
@@ -256,8 +287,8 @@ PuzzleError runPuzzle(UCIEngine& engine,
 
 // ─── CSV driver ──────────────────────────────────────────────────────────────
 
-void testFromStream(std::istream& input, const std::string& engineCmd, int depth, int numEngines) {
-    constexpr int kExpectedPuzzleRating = 2300;
+void testFromStream(std::istream& input, const std::string& engineCmd, const GoParams& params, int numEngines) {
+    constexpr int kExpectedPuzzleRating = 2000;
 
     std::string line;
     std::getline(input, line);
@@ -283,7 +314,12 @@ void testFromStream(std::istream& input, const std::string& engineCmd, int depth
     bool noMoreWork = false;
 
     auto workerFn = [&]() {
-        UCIEngine engine(engineCmd);
+        std::string dbgFile;
+        if (!debugPath.empty()) {
+            int id = engineCounter++;
+            dbgFile = (numJobs == 1) ? debugPath : debugPath + "." + std::to_string(id);
+        }
+        UCIEngine engine(engineCmd, dbgFile);
         engine.initialize();
         while (true) {
             std::unique_ptr<Task> task;
@@ -295,7 +331,7 @@ void testFromStream(std::istream& input, const std::string& engineCmd, int depth
                 workQueue.pop();
             }
             std::ostringstream oss;
-            auto err = runPuzzle(engine, task->label, task->fen, task->puzzleMoves, depth, oss);
+            auto err = runPuzzle(engine, task->label, task->fen, task->puzzleMoves, params, oss);
             task->promise.set_value({err, oss.str()});
         }
     };
@@ -419,11 +455,17 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
+    GoParams goParams;
     int i = 1;
     while (i < argc) {
         std::string arg(argv[i]);
         if (arg == "-v" || arg == "--verbose") {
             verbose = true;
+        } else if (arg == "-d") {
+            const char* tmpdir = std::getenv("TMPDIR");
+            std::string dir = tmpdir ? tmpdir : ".";
+            if (dir.size() > 1 && dir.back() == '/') dir.pop_back();
+            debugPath = dir + "/puzzle-test";
         } else if (arg == "-j") {
             numJobs = getNumCPUs();
         } else if (arg.size() >= 2 && arg[0] == '-' && arg[1] == 'j') {
@@ -433,6 +475,18 @@ int main(int argc, char* argv[]) {
             if (!allDigits) usage("-j requires a positive integer or no argument");
             numJobs = std::stoi(numStr);
             if (numJobs <= 0) usage("-j value must be positive");
+        } else if (arg == "--depth") {
+            if (++i >= argc) usage("--depth requires an argument");
+            goParams.depth = std::stoi(std::string(argv[i]));
+            if (goParams.depth <= 0) usage("--depth must be positive");
+        } else if (arg == "--nodes") {
+            if (++i >= argc) usage("--nodes requires an argument");
+            goParams.nodes = std::stoll(std::string(argv[i]));
+            if (goParams.nodes <= 0) usage("--nodes must be positive");
+        } else if (arg == "--movetime") {
+            if (++i >= argc) usage("--movetime requires an argument");
+            goParams.movetime = std::stoi(std::string(argv[i]));
+            if (goParams.movetime <= 0) usage("--movetime must be positive");
         } else {
             break;
         }
@@ -440,24 +494,21 @@ int main(int argc, char* argv[]) {
     }
 
     if (numJobs < 0) numJobs = getNumCPUs();  // default: one engine per CPU
+    if (!goParams.valid()) usage("at least one of --depth, --nodes, or --movetime is required");
 
-    if (argc - i < 2) usage();
+    if (argc - i < 1) usage();
 
     std::string engineCmd = argv[i++];
-    std::string depthStr = argv[i++];
 
-    bool allDigits = !depthStr.empty() &&
-                     std::all_of(depthStr.begin(), depthStr.end(), ::isdigit);
-    if (!allDigits) usage("depth must be a positive integer");
-    int depth = std::stoi(depthStr);
-    if (depth <= 0) usage("depth must be positive");
+    // Append any engine options (args starting with '-') to the engine command string.
+    while (i < argc && argv[i][0] == '-') engineCmd += std::string(" ") + argv[i++];
 
     if (i < argc) {
         std::ifstream file(argv[i]);
         if (!file.is_open()) usage("Could not open file: " + std::string(argv[i]));
-        testFromStream(file, engineCmd, depth, numJobs);
+        testFromStream(file, engineCmd, goParams, numJobs);
     } else {
-        testFromStream(std::cin, engineCmd, depth, numJobs);
+        testFromStream(std::cin, engineCmd, goParams, numJobs);
     }
 
     return 0;

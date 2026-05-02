@@ -291,13 +291,13 @@ puzzles: build/search-test ${CI_NONMATE_PUZZLES} ${NNUE_FILE}
 
 # UCI-based puzzle tests: run puzzle-test against the engine binary
 build/mate123-uci.out: build/puzzle-test build/engine ${CI_MATE123_PUZZLES} ${NNUE_FILE}
-	$(Q)./build/puzzle-test $(VOPT) ./build/engine 7 ${CI_MATE123_PUZZLES} $(REDIR)
+	$(Q)./build/puzzle-test $(VOPT) --depth 7 ./build/engine ${CI_MATE123_PUZZLES} $(REDIR)
 
 build/mate45-uci.out: build/puzzle-test build/engine ${CI_MATE45_PUZZLES} ${NNUE_FILE}
-	$(Q)./build/puzzle-test $(VOPT) ./build/engine 11 ${CI_MATE45_PUZZLES} $(REDIR)
+	$(Q)./build/puzzle-test $(VOPT) --depth 11 ./build/engine ${CI_MATE45_PUZZLES} $(REDIR)
 
 build/puzzles-uci.out: build/puzzle-test build/engine ${CI_NONMATE_PUZZLES} ${NNUE_FILE}
-	$(Q)./build/puzzle-test $(VOPT) ./build/engine 7 ${CI_NONMATE_PUZZLES} $(REDIR)
+	$(Q)./build/puzzle-test $(VOPT) --depth 7 ./build/engine ${CI_NONMATE_PUZZLES} $(REDIR)
 
 mate123-uci: build/mate123-uci.out
 mate45-uci: build/mate45-uci.out

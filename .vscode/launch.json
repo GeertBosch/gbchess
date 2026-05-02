@@ -43,6 +43,22 @@
             ],
         },
         {
+            "name": "puzzle-debug with current file",
+            "type": "lldb-dap",
+            "request": "launch",
+            "preLaunchTask": "build: puzzle-debug",
+            "initCommands": [
+                "command source ${workspaceRoot}/chess.lldbinit"
+            ],
+            "program": "${workspaceFolder}/build/puzzle-debug",
+            "args": [
+                "${workspaceFolder}/build/engine",
+                "--depth",
+                "9",
+                "${file}",
+            ],
+        },
+        {
             "name": "pgn-debug with current file",
             "type": "lldb-dap",
             "request": "launch",
