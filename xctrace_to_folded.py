@@ -4,7 +4,8 @@
 Usage:
   python xctrace_to_folded.py \
     --input build/profile/perft8.time-profile.xml \
-    --output build/profile/perft8.xctrace.folded
+    --output build/profile/perft8.xctrace.folded \
+    [--process NAME]
 """
 
 import argparse
@@ -12,13 +13,18 @@ import xml.etree.ElementTree as ET
 from collections import Counter
 
 
-def convert(input_path: str, output_path: str) -> tuple[int, int]:
+def convert(
+    input_path: str,
+    output_path: str,
+    process_filter: str | None = None,
+) -> tuple[int, int]:
     root = ET.parse(input_path).getroot()
 
     frame_name_by_id = {}
     thread_state_fmt_by_id = {}
     backtrace_frame_ids_by_id = {}
-    tagged_backtrace_to_backtrace_id = {}  # tagged-backtrace id -> backtrace id
+    tagged_backtrace_to_backtrace_id = {}
+    process_name_by_id = {}
 
     for elem in root.iter():
         if elem.tag == "frame":
@@ -26,6 +32,12 @@ def convert(input_path: str, output_path: str) -> tuple[int, int]:
             frame_name = elem.attrib.get("name")
             if frame_id and frame_name:
                 frame_name_by_id[frame_id] = frame_name
+        elif elem.tag == "process":
+            proc_id = elem.attrib.get("id")
+            proc_fmt = elem.attrib.get("fmt")
+            if proc_id and proc_fmt:
+                # fmt is "process-name (pid)" — strip the pid suffix
+                process_name_by_id[proc_id] = proc_fmt.rsplit(" (", 1)[0]
         elif elem.tag == "thread-state":
             state_id = elem.attrib.get("id")
             state_fmt = elem.attrib.get("fmt")
@@ -55,9 +67,21 @@ def convert(input_path: str, output_path: str) -> tuple[int, int]:
                 frame_ids.append(frame_id)
         backtrace_frame_ids_by_id[backtrace_id] = frame_ids
 
+    needle = process_filter.lower() if process_filter else None
+
     folded = Counter()
 
     for row in root.iter("row"):
+        if needle is not None:
+            proc_elem = row.find("process")
+            if proc_elem is not None:
+                proc_ref = proc_elem.attrib.get("ref") or proc_elem.attrib.get("id")
+                proc_name = process_name_by_id.get(proc_ref or "", "")
+            else:
+                proc_name = ""
+            if needle not in proc_name.lower():
+                continue
+
         state = None
         backtrace_id = None
 
@@ -115,9 +139,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, help="xctrace time-profile XML export path")
     parser.add_argument("--output", required=True, help="Folded stack output path")
+    parser.add_argument(
+        "--process",
+        metavar="NAME",
+        help="Only include samples from processes whose name contains NAME (case-insensitive substring)",
+    )
     args = parser.parse_args()
 
-    folded_stacks, samples = convert(args.input, args.output)
+    folded_stacks, samples = convert(args.input, args.output, process_filter=args.process)
     print(f"folded_stacks={folded_stacks}")
     print(f"samples={samples}")
     print(f"out={args.output}")
