@@ -178,6 +178,7 @@ $(eval $(call test_rules,eval/nnue/nnue,${NNUE_SRCS} engine/fen/fen.cpp))
 $(eval $(call test_rules,search/elo,))
 $(eval $(call test_rules,book/pgn/pgn,${MOVES_SRCS} book/pgn/pgn.cpp engine/fen/fen.cpp))
 $(eval $(call test_rules,book/book,${BOOK_SRCS} ${MOVES_SRCS} core/hash/hash.cpp))
+$(eval $(call test_rules,engine/puzzle,${SEARCH_SRCS} engine/fen/fen.cpp))
 
 .deps: $(call calc_deps,${OPTOBJ},${ALLSRCS}) $(call calc_deps,${DBGOBJ},${ALLSRCS})
 	$(Q)./check-arch.sh $(VOPT)
@@ -287,6 +288,20 @@ build/puzzles.out: build/search-test ${CI_NONMATE_PUZZLES} ${NNUE_FILE}
 
 puzzles: build/search-test ${CI_NONMATE_PUZZLES} ${NNUE_FILE}
 	$(Q)./build/search-test $(VOPT) 7 ${CI_NONMATE_PUZZLES}
+
+# UCI-based puzzle tests: run puzzle-test against the engine binary
+build/mate123-uci.out: build/puzzle-test build/engine ${CI_MATE123_PUZZLES} ${NNUE_FILE}
+	$(Q)./build/puzzle-test $(VOPT) ./build/engine 7 ${CI_MATE123_PUZZLES} $(REDIR)
+
+build/mate45-uci.out: build/puzzle-test build/engine ${CI_MATE45_PUZZLES} ${NNUE_FILE}
+	$(Q)./build/puzzle-test $(VOPT) ./build/engine 11 ${CI_MATE45_PUZZLES} $(REDIR)
+
+build/puzzles-uci.out: build/puzzle-test build/engine ${CI_NONMATE_PUZZLES} ${NNUE_FILE}
+	$(Q)./build/puzzle-test $(VOPT) ./build/engine 7 ${CI_NONMATE_PUZZLES} $(REDIR)
+
+mate123-uci: build/mate123-uci.out
+mate45-uci: build/mate45-uci.out
+puzzles-uci: build/puzzles-uci.out
 
 ${NNUE_FILE}:
 	$(Q)curl -fsSL -O ${NNUE_URL}

@@ -147,6 +147,18 @@
       },
       {
          "type": "shell",
+         "label": "build: puzzle-debug",
+         "command": "make",
+         "args": [
+            "build/puzzle-debug"
+         ],
+         "group": "build",
+         "problemMatcher": [
+            "$gcc"
+         ]
+      },
+      {
+         "type": "shell",
          "label": "build: book-debug",
          "command": "make",
          "args": [
