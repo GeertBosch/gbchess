@@ -15,7 +15,7 @@ fi
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROFILE_DIR="${ROOT_DIR}/build/profile"
 
-DURATION="15s"
+DURATION="60s"
 TITLE=""
 GEN_SVG=0
 CHILD_PROCESSES=0
