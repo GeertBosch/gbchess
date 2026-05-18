@@ -70,30 +70,35 @@ struct PerftCache {
         void unlock(Key key) const { _keyAndLock.store(key & ~kLockMask); }
     };
 
-    PerftCache(size_t size) : table(size / sizeof(Entry)) {}
+    PerftCache() = default;
+    ~PerftCache() { std::free(table); }
 
     Value lookup(HashValue hash, int level) const {
-        if (table.empty()) return 0;
+        if (!table) return 0;
         Key key = makeKey(hash, level);
-        size_t idx = static_cast<size_t>(key % table.size());
+        size_t idx = static_cast<size_t>(key % size);
         return table[idx].load(key);
     }
 
     void enter(HashValue hash, int level, Value value) {
-        if (table.empty()) return;
+        if (!table) return;
         Key key = makeKey(hash, level);
-        size_t idx = static_cast<size_t>(key % table.size());
+        size_t idx = static_cast<size_t>(key % size);
         table[idx].store(key, value);
     }
 
-    void resize(size_t newSize) {
-        auto newEntries = newSize / sizeof(Entry);
-        if (newEntries == table.size()) return;
-        std::vector<Entry> newTable(newEntries);
-        table = std::move(newTable);
+    void resize(size_t newBytes) {
+        size_t newSize = newBytes / sizeof(Entry);
+        if (newSize == size) return;
+        std::free(table);
+        table = static_cast<Entry*>(std::calloc(newSize, sizeof(Entry)));
+        size = table ? newSize : 0;
+        std::uninitialized_default_construct_n(table, size);
     }
 
-    std::vector<Entry> table;
+private:
+    Entry* table = nullptr;
+    size_t size = 0;
 };
 
 /**
@@ -126,7 +131,7 @@ private:
 
 std::atomic<size_t> ShardedCounter::nextShard{0};
 
-static PerftCache perftCache(0);
+static PerftCache perftCache;
 static ShardedCounter perftCached;
 static std::atomic<NodeCount> perftInProgress{0};
 
@@ -138,32 +143,34 @@ static constexpr size_t kPerft2CacheBitsForCount = 16;
 static constexpr uint128_t kPerft2CacheCountMask = (uint128_t{1} << kPerft2CacheBitsForCount) - 1;
 
 struct Perft2Cache {
-    Perft2Cache(size_t size) : table(size / sizeof(uint128_t)) {}
+    ~Perft2Cache() { std::free(_table); }
     uint32_t lookup(HashValue hash) const {
-        if (table.size() < kPerft2MinCacheSize) return 0;
-        size_t idx = static_cast<size_t>(hash & (table.size() - 1));
-        uint128_t entry = table[idx].load(std::memory_order_relaxed);
+        if (_size < kPerft2MinCacheSize) return 0;
+        size_t idx = static_cast<size_t>(hash & (_size - 1));
+        uint128_t entry = __atomic_load_n(&_table[idx], __ATOMIC_RELAXED);
         return static_cast<HashValue>(entry >> kPerft2CacheBitsForCount) ==
                 (hash >> kPerft2CacheBitsForCount)
             ? static_cast<uint32_t>(entry & kPerft2CacheCountMask)
             : 0;
     }
     void enter(HashValue hash, uint32_t count) {
-        if (table.size() < kPerft2MinCacheSize) return;
-        size_t idx = static_cast<size_t>(hash & (table.size() - 1));
+        if (_size < kPerft2MinCacheSize) return;
+        size_t idx = static_cast<size_t>(hash & (_size - 1));
         uint128_t entry = (hash & ~kPerft2CacheCountMask) | count;
-        table[idx].store(entry, std::memory_order_relaxed);
+        __atomic_store_n(&_table[idx], entry, __ATOMIC_RELAXED);
     }
-    void resize(size_t newSize) {
-        auto newEntries = newSize / sizeof(uint128_t);
-        // if (newEntries == table.size()) return;
-        std::vector<std::atomic<uint128_t>> newTable(newEntries);
-        table = std::move(newTable);
+    void resize(size_t newBytes) {
+        size_t newSize = newBytes / sizeof(uint128_t);
+        if (newSize == _size) return;
+        std::free(_table);
+        _table = static_cast<uint128_t*>(std::calloc(newSize, sizeof(uint128_t)));
+        _size = _table ? newSize : 0;
     }
-    std::vector<std::atomic<uint128_t>> table;
+    uint128_t* _table = nullptr;
+    size_t _size = 0;
 };
 
-static Perft2Cache perft2cache(0);
+static Perft2Cache perft2cache;
 /**
  * Specialize perft with 2 levels left. The bulk of the work is done here, so optimize this.
  */
