@@ -3,6 +3,8 @@
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
+#include <cstdlib>
+#include <iostream>
 #include <mutex>
 #include <thread>
 
@@ -368,8 +370,18 @@ NodeCount perft(Position position, int depth, const ProgressCallback& callback, 
     // Anything with an apparent depth of 6 or more is likely to benefit from caching and
     // threading, so resize caches (no-op if already done before) and use threads.
     static constexpr size_t MB = 1ull << 20;
-    perftCache.resize(options::cachePerftMB * 7 / 8 * MB);
-    perft2cache.resize(options::cachePerftMB / 8 * MB / sizeof(uint128_t));
+
+    auto t0 = std::chrono::high_resolution_clock::now();
+    perftCache.resize(options::cachePerftMB / 2 * MB);
+    auto t1 = std::chrono::high_resolution_clock::now();
+    perft2cache.resize(options::cachePerftMB / 2 * MB);
+    auto t2 = std::chrono::high_resolution_clock::now();
+    auto ms = [](auto a, auto b) {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count();
+    };
+    if (ms(t0, t2) > 1)
+        std::cerr << "perftCache resize: " << ms(t0, t1) << " ms, "
+                  << "perft2cache resize: " << ms(t1, t2) << " ms\n";
     return threadedPerft(position, depth, callback, numThreads);
 }
 
