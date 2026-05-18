@@ -558,8 +558,7 @@ def _run_server(sock_path: pathlib.Path, build_dir: str, root: pathlib.Path, qui
         except FileNotFoundError:
             pass
         client.shutdown()
-        if shutdown_requested.is_set():
-            return  # silent on explicit shutdown
+    if not shutdown_requested.is_set():
         log('dead-code server stopped')
 
 
