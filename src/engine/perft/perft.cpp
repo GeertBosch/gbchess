@@ -25,7 +25,7 @@ std::string pct(double some, double all) {
     double percentage = all > 0 ? some * 100.0 / all : 0.0;
     if (!all) return "";
     std::ostringstream oss;
-    oss << " " << std::fixed << std::setprecision(1) << percentage << "%";
+    oss << " " << std::fixed << std::setprecision(2) << percentage << "%";
     return oss.str();
 }
 
