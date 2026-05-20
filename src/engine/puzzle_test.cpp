@@ -562,6 +562,50 @@ void testBasics() {
     // split
     auto parts = split("a b c", ' ');
     assert(parts.size() == 3 && parts[0] == "a" && parts[2] == "c");
+
+    // parseScore - centipawn and mate scores extracted from typical UCI info lines
+    assert(parseScore("info depth 10 score cp 42 nodes 1234 pv e2e4") == "cp 42");
+    assert(parseScore("info depth 5 score mate 3 nodes 100 pv d1h5") == "mate 3");
+    assert(parseScore("info depth 5 score mate -1 nodes 100 pv d1h5") == "mate -1");
+    assert(parseScore("info depth 8 nodes 500") == "");  // no score token
+
+    // parsePV - PV extracted from typical UCI info lines
+    assert(parsePV("info depth 10 score cp 42 nodes 1234 pv e2e4 e7e5 g1f3") == "e2e4 e7e5 g1f3");
+    assert(parsePV("info depth 5 score mate 1 nodes 100 pv d1h5") == "d1h5");
+    assert(parsePV("info depth 8 nodes 500 score cp 0") == "");  // no pv token
+
+    // applyUCIMove - e2e4 from start position advances the e-pawn
+    auto startPos = fen::parsePosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    auto afterE4 = applyUCIMove(startPos, "e2e4");
+    auto afterE4Fen = fen::to_string(afterE4);
+    assert(afterE4Fen.find("4P3") != std::string::npos);       // e4 pawn is now on rank 4
+    assert(afterE4Fen.find("PPPP1PPP") != std::string::npos);  // e2 is vacated
+
+    // buildErrorContext - non-mate puzzle: step 0 wrong, solution is e7e5
+    // Puzzle: start pos, setup move e2e4 (index 0), solution e7e5 (index 1)
+    Puzzle nonMatePuzzle{
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "Test",
+        {"e2e4", "e7e5"},
+    };
+    auto ctx0 = buildErrorContext(nonMatePuzzle, 0);
+    assert(!ctx0.mate);
+    assert(ctx0.expected == "e7e5");
+    assert(ctx0.fen.find("PPPP1PPP") != std::string::npos);  // e2 vacated after e2e4
+
+    // buildErrorContext - mate-in-1 puzzle: Scholar's mate setup, solution h5f7 is checkmate
+    // FEN after 1.e4 e5 2.Qh5 Nc6 3.Bc4 — it's black's turn to blunder, but as a puzzle the
+    // setup move (index 0) is black's last move b8c6 from the prior position, and the engine
+    // must reply h5f7#.
+    // Prior FEN: after 1.e4 e5 2.Qh5 (black to move, before Nc6)
+    Puzzle matePuzzle{
+        "rnbqkbnr/pppp1ppp/8/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3",
+        "Test",
+        {"b8c6", "h5f7"},  // setup: black plays Nc6; solution: white plays Qxf7#
+    };
+    auto ctx1 = buildErrorContext(matePuzzle, 0);
+    assert(ctx1.mate);
+    assert(ctx1.expected == "h5f7 mate 1");
 }
 
 }  // namespace
