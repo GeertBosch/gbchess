@@ -63,14 +63,16 @@ void usage(const std::string& msg) {
     usage();
 }
 
+void info(std::ostream& oss, const std::string& msg) {
+    if (verbose) oss << msg << "\n";
+}
+
 // ─── Go parameters ───────────────────────────────────────────────────────────
 
 struct GoParams {
-    int depth = 0;
-    long long nodes = 0;
-    int movetime = 0;
-
-    bool valid() const { return depth > 0 || nodes > 0 || movetime > 0; }
+    int depth = 0;  // signed, to avoid unsigned underflow when comparing depths
+    unsigned nodes = 0;
+    unsigned movetime = 0;
 
     std::string command() const {
         std::string cmd = "go";
@@ -88,6 +90,8 @@ class UCIEngine {
     pid_t pid = -1;
     int toEngine = -1;    // write to engine stdin
     FILE* reader = nullptr;  // read from engine stdout
+    std::string lastInfo;    // last info string from engine since list sendLine call
+    GoParams lastGoParams;
     std::ofstream debugOut;
 
 public:
@@ -145,6 +149,7 @@ public:
 
     void sendLine(const std::string& line) {
         if (debugOut.is_open()) debugOut << "> " << line << "\n" << std::flush;
+        lastInfo = {};
         std::string msg = line + "\n";
         write(toEngine, msg.c_str(), msg.size());
     }
@@ -181,9 +186,8 @@ public:
      * Set position from FEN + list of UCI moves, then search with the given params.
      * Returns the bestmove string (e.g. "e2e4"), or empty string on failure.
      */
-    std::string go(const std::string& fen,
-                   const std::vector<std::string>& moves,
-                   const GoParams& params) {
+    std::string go(const std::string& fen, const StringVector& moves, const GoParams& params) {
+        lastGoParams = params;
         std::string pos = "position fen " + fen;
         if (!moves.empty()) {
             pos += " moves";
@@ -193,13 +197,18 @@ public:
         sendLine(params.command());
 
         for (std::string line; !(line = readline()).empty();) {
-            if (line.substr(0, 9) == "bestmove ") {
+            if (startsWith(line, "bestmove ")) {
                 auto parts = split(line, ' ');
                 return parts.size() >= 2 ? parts[1] : std::string{};
             }
+            if (startsWith(line, "info ")) lastInfo = line.substr(5);
         }
         return {};
     }
+
+    std::string info() const { return lastInfo; }
+
+    int depth() const { return lastGoParams.depth; }
 
 private:
     void waitReady() {
@@ -209,9 +218,28 @@ private:
     }
 };
 
-// ─── Puzzle result types ──────────────────────────────────────────────────────
+// ─── Puzzle types ──────────────────────────────────────────────────────-────
 
-enum PuzzleError { NO_ERROR, DEPTH_ERROR, WRONG_MOVE, MATE_ERROR, COUNT };
+struct Puzzle {
+    std::string fen;
+    std::string label;
+    StringVector moves;
+    int depth() const { return moves.size() - 1; }
+};
+
+enum PuzzleError { NO_ERROR, DEPTH_ERROR, MOVE_ERROR, EVAL_ERROR, SEARCH_ERROR, MATE_ERROR, COUNT };
+
+std::string to_string(PuzzleError e) {
+    switch (e) {
+    case NO_ERROR: return "no error";
+    case DEPTH_ERROR: return "depth error";
+    case MOVE_ERROR: return "move error";
+    case EVAL_ERROR: return "evaluation error";
+    case SEARCH_ERROR: return "search error";
+    case MATE_ERROR: return "mate error";
+    default: return "unknown error";
+    }
+}
 
 struct PuzzleStats {
     std::array<uint64_t, PuzzleError::COUNT> counts = {};
@@ -219,16 +247,15 @@ struct PuzzleStats {
     uint64_t total() const { return std::accumulate(counts.begin(), counts.end(), 0ULL); }
     std::string str() const {
         std::ostringstream ss;
-        ss << total() << " puzzles, "
-           << counts[NO_ERROR] << " correct, "
-           << counts[DEPTH_ERROR] << " skipped, "
-           << counts[WRONG_MOVE] << " wrong moves, "
-           << counts[MATE_ERROR] << " mate errors";
+        ss << total() << " puzzles, " << counts[NO_ERROR] << " correct, " << counts[DEPTH_ERROR]
+           << " depth errors, " << counts[MOVE_ERROR] << " move errors, " << counts[MATE_ERROR]
+           << " mate errors, " << counts[SEARCH_ERROR] << " search errors, " << counts[EVAL_ERROR]
+           << " evaluation errors";
         return ss.str();
     }
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 /**
  * Apply a UCI move string to a Position, returning the new Position.
@@ -238,7 +265,109 @@ Position applyUCIMove(const Position& pos, const std::string& uciMove) {
     return moves::applyMove(pos, move);
 }
 
-// ─── Puzzle runner ────────────────────────────────────────────────────────────
+std::string parseScore(const std::string& info) {
+    auto parts = split(info, ' ');
+    for (size_t i = 0; i + 2 < parts.size(); ++i)
+        if (parts[i] == "score" && (parts[i + 1] == "cp" || parts[i + 1] == "mate"))
+            return parts[i + 1] + " " + parts[i + 2];
+    return {};
+}
+
+std::string parsePV(const std::string& info) {
+    std::string pv;
+    auto parts = split(info, ' ');
+    for (size_t i = 0; i + 1 < parts.size(); ++i)
+        if (parts[i] == "pv")
+            while (++i < parts.size()) pv += parts[i] + " ";
+    if (!pv.empty()) pv.pop_back();
+    return pv;
+}
+
+// ─── Puzzle runner ──────────────────────────────────────────────────────────
+
+struct ErrorContext {
+    std::string fen;      // FEN at the position where engine moved
+    std::string expected; // expected move sequence (and mate annotation if applicable)
+    bool mate = false;    // whether the solution ends in checkmate
+};
+
+/** Build position context at the error step: FEN, expected moves, and mate info. */
+ErrorContext buildErrorContext(const Puzzle& puzzle, size_t i) {
+    Position pos = fen::parsePosition(puzzle.fen);
+    for (size_t j = 0; j <= i; ++j) pos = applyUCIMove(pos, puzzle.moves[j]);
+    auto errorFen = fen::to_string(pos);
+
+    for (size_t j = i + 1; j < puzzle.moves.size(); ++j) pos = applyUCIMove(pos, puzzle.moves[j]);
+    bool mate = isCheckmate(pos);
+    int mateInN = mate ? puzzle.moves.size() / 2 - i / 2 : 0;
+
+    StringVector expectedMoves(puzzle.moves.begin() + i + 1, puzzle.moves.end());
+    std::string expected = join(expectedMoves, ' ');
+    if (mate) expected += " mate " + std::to_string(mateInN);
+
+    return {errorFen, expected, mate};
+}
+
+/**
+ * Refine a MOVE_ERROR by re-searching the correct move in a fresh context. Compares the engine's
+ * score on the wrong move vs. the correct move to distinguish SEARCH_ERROR (engine agrees solution
+ * is better but missed it) from EVAL_ERROR (engine disagrees). Updates `expected` and `got` with
+ * score annotations.
+ */
+PuzzleError classifyMoveError(UCIEngine& engine,
+                               const Puzzle& puzzle,
+                               size_t i,
+                               std::string& expected,
+                               std::string& got,
+                               const std::string& gotScore) {
+    // Re-search from the correct move at depth-1 to avoid TT pollution from the wrong search.
+    // The resulting eval is from the opponent's perspective, so we negate it.
+    auto correctMoves = StringVector(puzzle.moves.begin(), puzzle.moves.begin() + i + 2);
+    auto depth = engine.depth() - 1;
+    engine.newGame();
+    engine.go(puzzle.fen, correctMoves, GoParams{.depth = depth});
+
+    auto solvedScore = parseScore(engine.info());
+    auto solvedCP = -parseInt(solvedScore.substr(3));
+    auto gotCP = parseInt(gotScore.substr(3));
+    if (startsWith(solvedScore, "cp ")) expected += " score " + std::to_string(solvedCP);
+    got += " score " + gotScore;
+
+    if (startsWith(solvedScore, "mate "))
+        return MATE_ERROR;   // Engine thinks the solution (it didn't find!) is mate
+    if (solvedCP > gotCP)
+        return SEARCH_ERROR; // Engine agrees solution is better, but didn't find it
+    return EVAL_ERROR;       // Engine disagrees that the solution is better
+}
+
+/** Report an error for a puzzle step. */
+PuzzleError reportPuzzleError(
+    UCIEngine& engine, Puzzle puzzle, size_t i, std::string got, std::ostream& out) {
+    assert(i + 1 < puzzle.moves.size() && i % 2 == 0);
+    engine.debugLine("expected " + puzzle.moves[i + 1]);
+
+    auto ctx = buildErrorContext(puzzle, i);
+
+    auto gotScore = parseScore(engine.info());
+    auto gotPV = parsePV(engine.info());
+    if (!startsWith(gotPV, got + " "))
+        gotPV = {};
+    else
+        got = gotPV;
+
+    auto error = ctx.mate ? MATE_ERROR : MOVE_ERROR;
+
+    if (engine.depth() && engine.depth() < puzzle.depth() - (int)i)
+        error = DEPTH_ERROR;
+
+    // Refine MOVE_ERROR into SEARCH_ERROR or EVAL_ERROR by comparing scores.
+    if (error == MOVE_ERROR && engine.depth() && startsWith(gotScore, "cp "))
+        error = classifyMoveError(engine, puzzle, i, ctx.expected, got, gotScore);
+
+    out << puzzle.label << ": " + to_string(error) + " in step " << (i / 2) + 1 << ", expected "
+        << ctx.expected << ", got " << got << ", fen " << ctx.fen << "\n";
+    return error;
+}
 
 /**
  * Run a single puzzle against the engine.
@@ -249,48 +378,40 @@ Position applyUCIMove(const Position& pos, const std::string& uciMove) {
  * The engine must play the expected move at each step, unless its move achieves
  * checkmate. Output (error messages and verbose info) is written to `out`.
  */
-PuzzleError runPuzzle(UCIEngine& engine,
-                      const std::string& label,
-                      const std::string& fen,
-                      const std::vector<std::string>& puzzleMoves,
-                      const GoParams& params,
-                      std::ostream& out) {
-    if (puzzleMoves.size() < 2) {
-        if (verbose) out << label << ": too few moves, skipping\n";
-        return DEPTH_ERROR;
-    }
+PuzzleError runPuzzle(UCIEngine& engine, Puzzle puzzle, const GoParams& params, std::ostream& out) {
+    if (params.depth && puzzle.depth() > (int)params.depth && false)
+        return info(out, "skipping " + puzzle.label + ", depth " + std::to_string(puzzle.depth())),
+               DEPTH_ERROR;
 
     engine.newGame();
 
-    Position pos = fen::parsePosition(fen);
-    std::string uciPos = "position fen \"" + fen + "\"";
+    Position pos = fen::parsePosition(puzzle.fen);
+    std::string uciPos = "position fen \"" + puzzle.fen + "\"";
 
     // Each loop iteration applies one puzzle move and checks the engine's response.
     size_t limit = firstOnly ? 2 : puzzle.moves.size();
-    for (size_t i = 0; i + 1 < puzzleMoves.size(); i += 2) {
-        pos = applyUCIMove(pos, puzzleMoves[i]);
+    for (size_t i = 0; i + 1 < limit; i += 2) {
+        pos = applyUCIMove(pos, puzzle.moves[i]);
 
         // Pass puzzleMoves[0..i] as the move history to the engine, so it can use them for move
         // ordering and TT probes.
-        auto moves = std::vector<std::string>(puzzleMoves.begin(), puzzleMoves.begin() + i + 1);
-        auto engineMove = engine.go(fen, moves, params);
+        auto moves = std::vector<std::string>(puzzle.moves.begin(), puzzle.moves.begin() + i + 1);
+        auto engineMove = engine.go(puzzle.fen, moves, params);
 
-        auto enginePos = applyUCIMove(pos, engineMove);
-        pos = applyUCIMove(pos, puzzleMoves[i + 1]);
+        if (engineMove != puzzle.moves[i + 1] && !isCheckmate(applyUCIMove(pos, engineMove)))
+            return reportPuzzleError(engine, puzzle, i, engineMove, out);
 
-        if (engineMove == puzzleMoves[i + 1] || isCheckmate(enginePos)) continue;
-
-        engine.debugLine("expected " + puzzleMoves[i + 1]);
-        out << label << ": step " << (i / 2) + 1 << ", expected " << puzzleMoves[i + 1] << ", got "
-            << engineMove << ", fen " << fen::to_string(pos) << "\n";
-        return isCheckmate(pos) ? MATE_ERROR : WRONG_MOVE;
+        pos = applyUCIMove(pos, puzzle.moves[i + 1]);
     }
     return NO_ERROR;
 }
 
 // ─── CSV driver ──────────────────────────────────────────────────────────────
 
-void testFromStream(std::istream& input, const std::string& engineCmd, const GoParams& params, int numEngines) {
+void testFromStream(std::istream& input,
+                    const std::string& engineCmd,
+                    const GoParams& params,
+                    int numEngines) {
     constexpr int kExpectedPuzzleRating = 2000;
 
     std::string line;
@@ -306,8 +427,7 @@ void testFromStream(std::istream& input, const std::string& engineCmd, const GoP
     // ─── Thread pool ──────────────────────────────────────────────────────────
 
     struct Task {
-        std::string label, fen;
-        std::vector<std::string> puzzleMoves;
+        Puzzle puzzle;
         std::promise<std::pair<PuzzleError, std::string>> promise;
     };
 
@@ -334,7 +454,7 @@ void testFromStream(std::istream& input, const std::string& engineCmd, const GoP
                 workQueue.pop();
             }
             std::ostringstream oss;
-            auto err = runPuzzle(engine, task->label, task->fen, task->puzzleMoves, params, oss);
+            auto err = runPuzzle(engine, task->puzzle, params, oss);
             task->promise.set_value({err, oss.str()});
         }
     };
@@ -394,9 +514,7 @@ void testFromStream(std::istream& input, const std::string& engineCmd, const GoP
         }
 
         auto task = std::make_unique<Task>();
-        task->label = label;
-        task->fen = cols[colFEN];
-        task->puzzleMoves = std::move(puzzleMoves);
+        task->puzzle = {cols[colFEN], label, std::move(puzzleMoves)};
 
         PipelineEntry entry;
         entry.future = task->promise.get_future();
@@ -429,8 +547,7 @@ void testFromStream(std::istream& input, const std::string& engineCmd, const GoP
     std::cout << stats.str() << ", " << puzzleRating() << " rating\n";
 }
 
-// ─── Self-tests (run when invoked with no arguments) ─────────────────────────
-
+// ─── Self-tests ─────────────────────────────────────────────────────────────
 void testBasics() {
     // ELO - winning against an equal opponent increases our rating
     ELO a(1500), b(1500);
@@ -453,10 +570,7 @@ int main(int argc, char* argv[]) {
     cmdName = argv[0];
 
     // Self-test mode when run without arguments (as a unit test)
-    if (argc == 1) {
-        testBasics();
-        return 0;
-    }
+    testBasics();
 
     GoParams goParams;
     int i = 1;
@@ -482,16 +596,18 @@ int main(int argc, char* argv[]) {
             firstOnly = true;
         } else if (arg == "--depth") {
             if (++i >= argc) usage("--depth requires an argument");
-            goParams.depth = std::stoi(std::string(argv[i]));
-            if (goParams.depth <= 0) usage("--depth must be positive");
+            goParams.depth = parsePositiveInt(std::string(argv[i]));
+            if (goParams.depth <= 0 || goParams.depth >= 1000)
+                usage("--depth must be positive and less than 1000");
         } else if (arg == "--nodes") {
             if (++i >= argc) usage("--nodes requires an argument");
-            goParams.nodes = std::stoll(std::string(argv[i]));
-            if (goParams.nodes <= 0) usage("--nodes must be positive");
+            goParams.nodes = parsePositiveInt(std::string(argv[i]));
+            if (goParams.nodes <= 0) usage("--nodes must be positive and less than 1,000,000,000");
         } else if (arg == "--movetime") {
             if (++i >= argc) usage("--movetime requires an argument");
-            goParams.movetime = std::stoi(std::string(argv[i]));
-            if (goParams.movetime <= 0) usage("--movetime must be positive");
+            goParams.movetime = parsePositiveInt(std::string(argv[i]));
+            if (goParams.movetime <= 0)
+                usage("--movetime must be positive and less than 1,000,000,000 ms");
         } else {
             break;
         }
@@ -499,22 +615,19 @@ int main(int argc, char* argv[]) {
     }
 
     if (numJobs < 0) numJobs = getNumCPUs();  // default: one engine per CPU
-    if (!goParams.valid()) usage("at least one of --depth, --nodes, or --movetime is required");
 
-    if (argc - i < 1) usage();
+    // Exit after self-tests if no arguments are provided. This runs the binary as a unit test.
+    if (argc - i < 1) return 0;
 
     std::string engineCmd = argv[i++];
 
     // Append any engine options (args starting with '-') to the engine command string.
     while (i < argc && argv[i][0] == '-') engineCmd += std::string(" ") + argv[i++];
 
-    if (i < argc) {
-        std::ifstream file(argv[i]);
-        if (!file.is_open()) usage("Could not open file: " + std::string(argv[i]));
-        testFromStream(file, engineCmd, goParams, numJobs);
-    } else {
-        testFromStream(std::cin, engineCmd, goParams, numJobs);
-    }
+    if (i >= argc) return testFromStream(std::cin, engineCmd, goParams, numJobs), 0;
 
-    return 0;
+    std::ifstream file(argv[i]);
+    if (!file.is_open()) usage("Could not open file: " + std::string(argv[i]));
+
+    return testFromStream(file, engineCmd, goParams, numJobs), 0;
 }

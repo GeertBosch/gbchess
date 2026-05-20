@@ -3,10 +3,13 @@
 #include <algorithm>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
-inline std::vector<std::string> split(std::string line, char delim) {
+using StringVector = std::vector<std::string>;
+
+inline StringVector split(std::string line, char delim) {
     std::vector<std::string> res;
     std::string word;
     for (auto c : line)
@@ -20,10 +23,20 @@ inline std::vector<std::string> split(std::string line, char delim) {
     return res;
 }
 
-inline size_t find(const std::vector<std::string>& vec, std::string what) {
+inline std::string join(const StringVector& parts, char delim) {
+    std::string res;
+    for (auto&& part : parts) res += res.empty() ? part : delim + part;
+    return res;
+}
+
+inline size_t find(const StringVector& vec, std::string what) {
     auto it = std::find(vec.begin(), vec.end(), what);
     if (it == vec.end()) throw std::runtime_error("Missing field \"" + what + "\"");
     return it - vec.begin();
+}
+
+inline bool startsWith(std::string_view str, std::string_view prefix) {
+    return str.size() >= prefix.size() && str.substr(0, prefix.size()) == prefix;
 }
 
 /** Safe positive integer parsing without exceptions - returns 0 for invalid input */
@@ -40,3 +53,8 @@ inline int parsePositiveInt(std::string_view str) {
     return value;
 }
 
+/** Safe integer parsing without exceptions - returns 0 for invalid input */
+inline int parseInt(std::string_view str) {
+    if (startsWith(str, "-")) return -parsePositiveInt(str.substr(1));
+    return parsePositiveInt(str);
+}
