@@ -329,6 +329,7 @@ PuzzleError classifyMoveError(UCIEngine& engine,
     engine.go(puzzle.fen, correctMoves, GoParams{.depth = depth});
 
     auto solvedScore = parseScore(engine.info());
+    if (solvedScore.size() < 3 || gotScore.size() < 3) return MOVE_ERROR;
     auto solvedCP = -parseInt(solvedScore.substr(3));
     auto gotCP = parseInt(gotScore.substr(3));
     if (startsWith(solvedScore, "cp ")) expected += " score " + std::to_string(solvedCP);
@@ -534,8 +535,7 @@ class PuzzlePipeline {
         auto [err, output] = e.future.get();
         std::cout << output;
         ++stats[err];
-        if (err != DEPTH_ERROR)
-            puzzleRating.updateOne(ELO(e.rating), err == NO_ERROR ? ELO::WIN : ELO::LOSS);
+        puzzleRating.updateOne(ELO(e.rating), err == NO_ERROR ? ELO::WIN : ELO::LOSS);
     }
 
 public:
@@ -577,7 +577,7 @@ void testFromStream(std::istream& input,
     PuzzlePipeline pipeline;
     // Keep enough tasks ahead to saturate all workers, but bounded to avoid
     // reading the entire input into memory.
-    const size_t kMaxPipeline = numEngines * 4;
+    const size_t kMaxPipeline = numEngines * 10;
 
     while (std::getline(input, line)) {
         if (line.empty()) continue;
