@@ -16,41 +16,20 @@ usage() {
 }
 
 # The chkfen function checks the FEN piece placement string for validity, including each rank having
-# 8 squares, there being 8 ranks, and the pieces being valid. It does not check the number of
-# pieces, or the presence of pawns in rank 1 and 8. The function an exit status of 0 if valid, or an
-# exit status of 1 if invalid.
+# 8 squares, there being 8 ranks, and the pieces being valid. It does not check the number of pieces
+# or the presence of pawns in rank 1 and 8. The function an exit status of 0 if valid, or an exit
+# status of 1 - 8 indicating the invalid rank or 9 if the FEN doesn't pass basic validity.
 chkfen() {
-    local fen="$1/" # Add a trailing slash to the FEN string to make it easier to parse
-
-    # Check for valid basic FEN format.
-    if [[ ! "$fen" =~ ^([pnbrqkPNBRQK1-8]{1,8}/){8}$ ]] ; then
-        return 1
-    fi
-
-    # Iterate over the string, keeping count of the number of occurrences of each piece using
-    #  arrays. While iterating, keep track of the number of squares in each rank. When reaching a
-    # slash or the end of the string, check that the number of squares in the rank is 8.
-    local rank_squares=0
+    local rank=0 file=0 fen="$1/" # A trailing slash makes the FEN placement easier to parse
+    [[ "$fen" =~ ^([pnbrqkPNBRQK1-8]{1,8}/){8}$ ]] || return 9 # basic placement validity
     for ((i = 0; i < ${#fen}; ++i)); do
-        char=${fen:i:1}
-        case $char in
-            [1-8]) # Number of empty squares
-                ((rank_squares += char))
-                ;;
-            /) # End of rank
-                ((rank_count++))
-                if ((rank_squares != 8)); then
-                    echo "Invalid rank ${rank_count}: $rank_squares squares" >&2
-                    return 1
-                fi
-                rank_squares=0
-                ;;
-            *) # Piece
-                ((rank_squares++))
-                ;;
+        local n=${fen:i:1}
+        case $n in
+            [1-8]) ((rank += n)) ;;
+            /) ((file++)) ; ((rank == 8)) || return $file ; rank=0 ;;
+            *) ((rank++)) ;;
         esac
     done
-    return 0
 }
 
 # Process the command line options
