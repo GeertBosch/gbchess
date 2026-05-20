@@ -40,7 +40,7 @@ int getNumCPUs() {
     return (n > 0) ? (int)n : 1;
 }
 
-void usage() {
+[[noreturn]] void usage() {
     std::cerr
         << "Usage: " << cmdName
         << " [-v|--verbose] [-j[N]] [-d] [--first-only] [--depth N] [--nodes N] [--movetime N]"
@@ -58,7 +58,7 @@ void usage() {
     std::exit(1);
 }
 
-void usage(const std::string& msg) {
+[[noreturn]] void usage(const std::string& msg) {
     std::cerr << "Error: " << msg << "\n";
     usage();
 }
@@ -224,6 +224,7 @@ struct Puzzle {
     std::string fen;
     std::string label;
     StringVector moves;
+    operator bool() const { return !fen.empty() && !moves.empty(); }
     int depth() const { return moves.size() - 1; }
 };
 
@@ -406,216 +407,322 @@ PuzzleError runPuzzle(UCIEngine& engine, Puzzle puzzle, const GoParams& params, 
     return NO_ERROR;
 }
 
+// ─── CSV header parsing ───────────────────────────────────────────────────────
+
+struct CsvColumns {
+    size_t fen, moves, puzzleId, rating, themes;
+    size_t minCols;  // minimum number of columns required per row
+};
+
+/** Parse required column indices from a Lichess puzzle CSV header line. */
+CsvColumns parseCsvHeader(const std::string& headerLine) {
+    auto header = split(headerLine, ',');
+    CsvColumns col;
+    col.fen = find(header, "FEN");
+    col.moves = find(header, "Moves");
+    col.puzzleId = find(header, "PuzzleId");
+    col.rating = find(header, "Rating");
+    col.themes = find(header, "Themes");
+    col.minCols = std::max({col.fen, col.moves, col.puzzleId, col.rating, col.themes}) + 1;
+    return col;
+}
+
+// ─── Worker pool ──────────────────────────────────────────────────────────────
+
+using PuzzleResult = std::pair<PuzzleError, std::string>;
+
+template <typename Container>
+[[nodiscard]] auto pop(Container& c) -> typename Container::value_type {
+    if (c.empty()) return {};
+    auto item = std::move(c.front());
+    if constexpr (std::is_same_v<Container, std::deque<typename Container::value_type>>)
+        c.pop_front();
+    else
+        c.pop();
+    return item;
+}
+
+/**
+ * Runs puzzles in parallel using a fixed pool of UCI engine workers.
+ * Each call to submit() enqueues a puzzle and returns a future for its result.
+ * Call shutdown() once all puzzles have been submitted to join the workers.
+ */
+class PuzzleWorkerPool {
+    struct Task {
+        Task() = default;
+        Task(Puzzle puzzle) : puzzle(puzzle) {}
+        Puzzle puzzle;
+        operator bool() const { return puzzle; }
+        std::promise<PuzzleResult> promise;
+    };
+
+    std::queue<Task> workQueue;
+    std::mutex workMutex;
+    std::condition_variable workCV;
+    bool noMoreWork = false;
+    std::vector<std::thread> workers;
+
+public:
+    PuzzleWorkerPool(const std::string& engineCmd, const GoParams& params, int numWorkers) {
+        auto workerFn = [this, engineCmd, params]() {
+            std::string dbgFile;
+            if (!debugPath.empty()) {
+                int id = engineCounter++;
+                dbgFile = (numJobs == 1) ? debugPath : debugPath + "." + std::to_string(id);
+            }
+            UCIEngine engine(engineCmd, dbgFile);
+            engine.initialize();
+            while (auto task = dequeue()) {
+                std::ostringstream oss;
+                auto err = runPuzzle(engine, task.puzzle, params, oss);
+                task.promise.set_value({err, oss.str()});
+            }
+        };
+        for (int i = 0; i < numWorkers; ++i) workers.emplace_back(workerFn);
+    }
+
+    std::future<PuzzleResult> submit(Puzzle puzzle) {
+        Task task(puzzle);
+        auto fut = task.promise.get_future();
+        {
+            std::lock_guard lk(workMutex);
+            workQueue.push(std::move(task));
+        }
+        workCV.notify_one();
+        return fut;
+    }
+
+    Task dequeue() {
+        std::unique_lock lk(workMutex);
+        workCV.wait(lk, [this] { return !workQueue.empty() || noMoreWork; });
+        return pop(workQueue);
+    }
+
+    void shutdown() {
+        {
+            std::lock_guard lk(workMutex);
+            noMoreWork = true;
+        }
+        workCV.notify_all();
+        for (auto& t : workers) t.join();
+    }
+};
+
+// ─── Ordered output pipeline ──────────────────────────────────────────────────
+
+/**
+ * Accumulates puzzle futures in submission order and outputs results in that
+ * order, updating stats and ELO as each future resolves.
+ */
+class PuzzlePipeline {
+    struct Entry {
+        std::future<PuzzleResult> future;
+        int rating;
+
+        bool ready() const {
+            return future.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+        }
+    };
+
+    constexpr static int kExpectedPuzzleRating = 2000;
+
+    std::deque<Entry> entries;
+    ELO puzzleRating{kExpectedPuzzleRating};
+    PuzzleStats stats;
+
+    void consume(Entry e) {
+        auto [err, output] = e.future.get();
+        std::cout << output;
+        ++stats[err];
+        if (err != DEPTH_ERROR)
+            puzzleRating.updateOne(ELO(e.rating), err == NO_ERROR ? ELO::WIN : ELO::LOSS);
+    }
+
+public:
+    size_t size() const { return entries.size(); }
+
+    void push(std::future<PuzzleResult> future, int rating) {
+        entries.push_back({std::move(future), rating});
+    }
+
+    /** Block until the front entry is ready, then output and remove it. */
+    void drainOne() { consume(pop(entries)); }
+
+    /** Output and remove all completed entries at the front (non-blocking). */
+    void drainReady() {
+        while (!entries.empty() && entries.front().ready()) consume(pop(entries));
+    }
+
+    /** Block until all remaining entries have been output. */
+    void drainAll() {
+        while (!entries.empty()) consume(pop(entries));
+    }
+
+    std::string summary() const {
+        return stats.str() + ", " + std::to_string(static_cast<int>(puzzleRating())) + " rating";
+    }
+};
+
 // ─── CSV driver ──────────────────────────────────────────────────────────────
 
 void testFromStream(std::istream& input,
                     const std::string& engineCmd,
                     const GoParams& params,
                     int numEngines) {
-    constexpr int kExpectedPuzzleRating = 2000;
-
     std::string line;
     std::getline(input, line);
-    auto header = split(line, ',');
-    auto colFEN = find(header, "FEN");
-    auto colMoves = find(header, "Moves");
-    auto colPuzzleId = find(header, "PuzzleId");
-    auto colRating = find(header, "Rating");
-    auto colThemes = find(header, "Themes");
-    size_t minCols = std::max({colFEN, colMoves, colPuzzleId, colRating, colThemes}) + 1;
+    auto cols = parseCsvHeader(line);
 
-    // ─── Thread pool ──────────────────────────────────────────────────────────
-
-    struct Task {
-        Puzzle puzzle;
-        std::promise<std::pair<PuzzleError, std::string>> promise;
-    };
-
-    std::queue<std::unique_ptr<Task>> workQueue;
-    std::mutex workMutex;
-    std::condition_variable workCV;
-    bool noMoreWork = false;
-
-    auto workerFn = [&]() {
-        std::string dbgFile;
-        if (!debugPath.empty()) {
-            int id = engineCounter++;
-            dbgFile = (numJobs == 1) ? debugPath : debugPath + "." + std::to_string(id);
-        }
-        UCIEngine engine(engineCmd, dbgFile);
-        engine.initialize();
-        while (true) {
-            std::unique_ptr<Task> task;
-            {
-                std::unique_lock lk(workMutex);
-                workCV.wait(lk, [&] { return !workQueue.empty() || noMoreWork; });
-                if (workQueue.empty()) break;
-                task = std::move(workQueue.front());
-                workQueue.pop();
-            }
-            std::ostringstream oss;
-            auto err = runPuzzle(engine, task->puzzle, params, oss);
-            task->promise.set_value({err, oss.str()});
-        }
-    };
-
-    std::vector<std::thread> workers;
-    for (int i = 0; i < numEngines; ++i)
-        workers.emplace_back(workerFn);
-
-    // ─── Pipeline: ordered futures for in-order output ────────────────────────
-
-    struct PipelineEntry {
-        std::future<std::pair<PuzzleError, std::string>> future;
-        int rating;
-    };
-
-    std::deque<PipelineEntry> pipeline;
+    PuzzleWorkerPool pool(engineCmd, params, numEngines);
+    PuzzlePipeline pipeline;
     // Keep enough tasks ahead to saturate all workers, but bounded to avoid
     // reading the entire input into memory.
     const size_t kMaxPipeline = numEngines * 4;
 
-    ELO puzzleRating(kExpectedPuzzleRating);
-    PuzzleStats stats;
-
-    auto outputEntry = [&](PipelineEntry& entry) {
-        auto [err, output] = entry.future.get();  // blocks until result ready
-        std::cout << output;
-        ++stats[err];
-        if (err != DEPTH_ERROR)
-            puzzleRating.updateOne(ELO(entry.rating), err == NO_ERROR ? ELO::WIN : ELO::LOSS);
-    };
-
-    // Drain any pipeline entries that are already done (non-blocking).
-    auto drainReady = [&]() {
-        while (!pipeline.empty() &&
-               pipeline.front().future.wait_for(std::chrono::seconds(0)) ==
-                   std::future_status::ready) {
-            outputEntry(pipeline.front());
-            pipeline.pop_front();
-        }
-    };
-
     while (std::getline(input, line)) {
         if (line.empty()) continue;
-        auto cols = split(line, ',');
-        if (cols.size() < minCols) continue;
+        auto fields = split(line, ',');
+        if (fields.size() < cols.minCols) continue;
 
-        auto puzzleMoves = split(cols[colMoves], ' ');
+        auto puzzleMoves = split(fields[cols.moves], ' ');
         if (puzzleMoves.empty()) continue;
 
-        int ratingVal = std::stoi(cols[colRating]);
-        auto label = "Puzzle " + cols[colPuzzleId] + ", rating " + std::to_string(ratingVal);
+        int ratingVal = std::stoi(fields[cols.rating]);
+        auto label = "Puzzle " + fields[cols.puzzleId] + ", rating " + std::to_string(ratingVal);
 
-        // When the pipeline is full, wait for the oldest (in-order) result first.
-        while (pipeline.size() >= kMaxPipeline) {
-            outputEntry(pipeline.front());
-            pipeline.pop_front();
-        }
+        // When the pipeline is full, block on the oldest entry to make room.
+        while (pipeline.size() >= kMaxPipeline) pipeline.drainOne();
 
-        auto task = std::make_unique<Task>();
-        task->puzzle = {cols[colFEN], label, std::move(puzzleMoves)};
-
-        PipelineEntry entry;
-        entry.future = task->promise.get_future();
-        entry.rating = ratingVal;
-
-        {
-            std::lock_guard lk(workMutex);
-            workQueue.push(std::move(task));
-        }
-        workCV.notify_one();
-
-        pipeline.push_back(std::move(entry));
-        drainReady();
+        pipeline.push(pool.submit({fields[cols.fen], label, puzzleMoves}), ratingVal);
+        pipeline.drainReady();
     }
 
-    // Signal workers that no more tasks are coming, then join.
-    {
-        std::lock_guard lk(workMutex);
-        noMoreWork = true;
-    }
-    workCV.notify_all();
-    for (auto& t : workers) t.join();
+    pool.shutdown();
+    pipeline.drainAll();
 
-    // Drain remaining results in input order.
-    while (!pipeline.empty()) {
-        outputEntry(pipeline.front());
-        pipeline.pop_front();
-    }
-
-    std::cout << stats.str() << ", " << puzzleRating() << " rating\n";
+    std::cout << pipeline.summary() << "\n";
 }
 
 // ─── Self-tests ─────────────────────────────────────────────────────────────
-void testBasics() {
-    // ELO - winning against an equal opponent increases our rating
+
+void testELO() {
     ELO a(1500), b(1500);
     a.updateOne(b, ELO::WIN);
     assert(a() > 1500);
 
-    // ELO - losing against an equal opponent decreases our rating
     ELO c(1500), d(1500);
     c.updateOne(d, ELO::LOSS);
     assert(c() < 1500);
+}
 
-    // split
-    auto parts = split("a b c", ' ');
-    assert(parts.size() == 3 && parts[0] == "a" && parts[2] == "c");
-
-    // parseScore - centipawn and mate scores extracted from typical UCI info lines
+void testParseScore() {
     assert(parseScore("info depth 10 score cp 42 nodes 1234 pv e2e4") == "cp 42");
     assert(parseScore("info depth 5 score mate 3 nodes 100 pv d1h5") == "mate 3");
     assert(parseScore("info depth 5 score mate -1 nodes 100 pv d1h5") == "mate -1");
-    assert(parseScore("info depth 8 nodes 500") == "");  // no score token
+    assert(parseScore("info depth 8 nodes 500") == "");
+}
 
-    // parsePV - PV extracted from typical UCI info lines
+void testParsePV() {
     assert(parsePV("info depth 10 score cp 42 nodes 1234 pv e2e4 e7e5 g1f3") == "e2e4 e7e5 g1f3");
     assert(parsePV("info depth 5 score mate 1 nodes 100 pv d1h5") == "d1h5");
-    assert(parsePV("info depth 8 nodes 500 score cp 0") == "");  // no pv token
+    assert(parsePV("info depth 8 nodes 500 score cp 0") == "");
+}
 
-    // applyUCIMove - e2e4 from start position advances the e-pawn
-    auto startPos = fen::parsePosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-    auto afterE4 = applyUCIMove(startPos, "e2e4");
-    auto afterE4Fen = fen::to_string(afterE4);
-    assert(afterE4Fen.find("4P3") != std::string::npos);       // e4 pawn is now on rank 4
-    assert(afterE4Fen.find("PPPP1PPP") != std::string::npos);  // e2 is vacated
+void testApplyUCIMove() {
+    auto pos = fen::parsePosition("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    auto result = fen::to_string(applyUCIMove(pos, "e2e4"));
+    assert(result.find("4P3") != std::string::npos);       // e4 pawn on rank 4
+    assert(result.find("PPPP1PPP") != std::string::npos);  // e2 vacated
+}
 
-    // buildErrorContext - non-mate puzzle: step 0 wrong, solution is e7e5
-    // Puzzle: start pos, setup move e2e4 (index 0), solution e7e5 (index 1)
-    Puzzle nonMatePuzzle{
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        "Test",
-        {"e2e4", "e7e5"},
-    };
-    auto ctx0 = buildErrorContext(nonMatePuzzle, 0);
-    assert(!ctx0.mate);
-    assert(ctx0.expected == "e7e5");
-    assert(ctx0.fen.find("PPPP1PPP") != std::string::npos);  // e2 vacated after e2e4
+void testBuildErrorContext() {
+    // Non-mate: setup e2e4, engine must play e7e5
+    Puzzle p1{"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "T", {"e2e4", "e7e5"}};
+    auto ctx = buildErrorContext(p1, 0);
+    assert(!ctx.mate);
+    assert(ctx.expected == "e7e5");
+    assert(ctx.fen.find("PPPP1PPP") != std::string::npos);  // e2 vacated after e2e4
 
-    // buildErrorContext - mate-in-1 puzzle: Scholar's mate setup, solution h5f7 is checkmate
-    // FEN after 1.e4 e5 2.Qh5 Nc6 3.Bc4 — it's black's turn to blunder, but as a puzzle the
-    // setup move (index 0) is black's last move b8c6 from the prior position, and the engine
-    // must reply h5f7#.
-    // Prior FEN: after 1.e4 e5 2.Qh5 (black to move, before Nc6)
-    Puzzle matePuzzle{
+    // Mate-in-1: Scholar's mate — black plays Nc6, white must reply Qxf7#
+    // FEN is after 1.e4 e5 2.Qh5 (black to move)
+    Puzzle p2{
         "rnbqkbnr/pppp1ppp/8/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3",
-        "Test",
-        {"b8c6", "h5f7"},  // setup: black plays Nc6; solution: white plays Qxf7#
+        "T",
+        {"b8c6", "h5f7"},
     };
-    auto ctx1 = buildErrorContext(matePuzzle, 0);
-    assert(ctx1.mate);
-    assert(ctx1.expected == "h5f7 mate 1");
+    auto ctx2 = buildErrorContext(p2, 0);
+    assert(ctx2.mate);
+    assert(ctx2.expected == "h5f7 mate 1");
+}
+
+void testParseCsvHeader() {
+    auto h = parseCsvHeader("PuzzleId,FEN,Moves,Rating,Themes");
+    assert(h.puzzleId == 0 && h.fen == 1 && h.moves == 2 && h.rating == 3 && h.themes == 4);
+    assert(h.minCols == 5);
+
+    // Lichess production header has extra columns between Rating and Themes
+    auto h2 = parseCsvHeader(
+        "PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,GameUrl,OpeningTags");
+    assert(h2.fen == 1 && h2.moves == 2 && h2.rating == 3 && h2.themes == 7);
+    assert(h2.minCols == 8);
+}
+
+void testPuzzlePipeline() {
+    PuzzlePipeline pl;
+    std::promise<PuzzleResult> p1, p2, p3;
+    pl.push(p1.get_future(), 1500);
+    pl.push(p2.get_future(), 1500);
+    pl.push(p3.get_future(), 1500);
+
+    // Nothing ready: drainReady is a no-op
+    pl.drainReady();
+    assert(pl.size() == 3);
+
+    // Resolving p2 before p1 does not advance the front
+    p2.set_value({NO_ERROR, ""});
+    pl.drainReady();
+    assert(pl.size() == 3);
+
+    // Resolving p1 unblocks both p1 and p2
+    p1.set_value({MOVE_ERROR, ""});
+    pl.drainReady();
+    assert(pl.size() == 1);
+
+    // drainOne blocks until p3 resolves
+    p3.set_value({NO_ERROR, ""});
+    pl.drainOne();
+    assert(pl.size() == 0);
+
+    auto s = pl.summary();
+    assert(s.find("3 puzzles") != std::string::npos);
+    assert(s.find("2 correct") != std::string::npos);
+    assert(s.find("1 move errors") != std::string::npos);
+}
+
+void testSelf() {
+    testELO();
+    testParseScore();
+    testParsePV();
+    testApplyUCIMove();
+    testBuildErrorContext();
+    testParseCsvHeader();
+    testPuzzlePipeline();
 }
 
 }  // namespace
 
-int main(int argc, char* argv[]) {
-    cmdName = argv[0];
+struct Options {
+    GoParams goParams;
+    std::string engineCmd;
+    std::string puzzleFile;  // empty = read from stdin
+};
 
-    // Self-test mode when run without arguments (as a unit test)
-    testBasics();
-
+/**
+ * Parse command-line arguments, setting global flags (verbose, firstOnly, numJobs, debugPath)
+ * and returning the engine command, go parameters, and optional puzzle file path.
+ * Calls usage() and exits on invalid input.
+ */
+Options parseOptions(int argc, char* argv[]) {
     GoParams goParams;
     int i = 1;
     while (i < argc) {
@@ -658,20 +765,36 @@ int main(int argc, char* argv[]) {
         ++i;
     }
 
-    if (numJobs < 0) numJobs = getNumCPUs();  // default: one engine per CPU
+    if (numJobs < 0) numJobs = getNumCPUs();
 
-    // Exit after self-tests if no arguments are provided. This runs the binary as a unit test.
-    if (argc - i < 1) return 0;
-
-    std::string engineCmd = argv[i++];
-
-    // Append any engine options (args starting with '-') to the engine command string.
+    std::string engineCmd = (i < argc) ? argv[i++] : "";
     while (i < argc && argv[i][0] == '-') engineCmd += std::string(" ") + argv[i++];
 
-    if (i >= argc) return testFromStream(std::cin, engineCmd, goParams, numJobs), 0;
+    std::string puzzleFile = (i < argc) ? argv[i] : "";
+    return {goParams, engineCmd, puzzleFile};
+}
 
-    std::ifstream file(argv[i]);
-    if (!file.is_open()) usage("Could not open file: " + std::string(argv[i]));
+bool openFile(std::ifstream& file, const std::string& path) {
+    if (path.empty()) return false;
 
-    return testFromStream(file, engineCmd, goParams, numJobs), 0;
+    file.open(path);
+
+    if (!file.is_open()) usage("Could not open file: " + path);
+    return true;
+}
+
+int main(int argc, char* argv[]) {
+    cmdName = argv[0];
+    testSelf();
+
+    if (argc < 2) return 0;  // self-test only
+
+    auto opts = parseOptions(argc, argv);
+
+    std::ifstream file;
+    std::istream& input = openFile(file, opts.puzzleFile) ? file : std::cin;
+
+    testFromStream(input, opts.engineCmd, opts.goParams, numJobs);
+
+    return 0;
 }
