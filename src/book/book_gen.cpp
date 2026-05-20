@@ -21,6 +21,7 @@
 #include "book/pgn/pgn.h"
 #include "core/core.h"
 #include "core/hash/hash.h"
+#include "core/text_util.h"
 #include "engine/fen/fen.h"
 #include "move/move.h"
 
@@ -141,26 +142,6 @@ struct BookStats {
         return droppedLowElo + droppedShortTime + droppedVariants + droppedOverflow;
     }
 };
-
-/** Safe positive integer parsing without exceptions - returns 0 for invalid input */
-static int parsePositiveInt(std::string str) {
-    if (str.empty()) return 0;
-
-    // Skip leading '+' sign if any
-    if (str[0] == '+') str = str.substr(1);
-
-    // Avoid overflow by rejecting input over 9 digits
-    if (str.length() > 9) return 0;
-
-    int value = 0;
-    for (auto digit : str)
-        if (digit < '0' || digit > '9')
-            return 0;
-        else
-            value = value * 10 + (digit - '0');
-
-    return value;
-}
 
 /** Check if a game meets quality criteria for inclusion in the book */
 bool shouldIncludeGame(const pgn::PGN& game, BookStats& stats) {
