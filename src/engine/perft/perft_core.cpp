@@ -4,9 +4,9 @@
 #include <cmath>
 #include <condition_variable>
 #include <cstdlib>
-#include <iostream>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 #include "core/hash/hash.h"
 #include "core/options.h"
@@ -16,7 +16,6 @@
 #include "move/move_gen.h"
 #include "move/move_table.h"
 #include "perft_core.h"
-#include <vector>
 
 /**
  * Hash table for caching perft results to speed up computation
