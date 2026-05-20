@@ -29,6 +29,7 @@
 namespace {
 
 bool verbose = false;
+bool firstOnly = false;
 int numJobs = -1;  // -1 = default to one engine per CPU
 std::string cmdName = "puzzle-test";
 std::string debugPath;  // empty = disabled
@@ -42,11 +43,12 @@ int getNumCPUs() {
 void usage() {
     std::cerr
         << "Usage: " << cmdName
-        << " [-v|--verbose] [-j[N]] [-d] [--depth N] [--nodes N] [--movetime N]"
+        << " [-v|--verbose] [-j[N]] [-d] [--first-only] [--depth N] [--nodes N] [--movetime N]"
            " <engine-cmd> [engine-opts...] [puzzle-file.csv]\n"
         << "  -j               Use one engine per CPU (default)\n"
         << "  -jN              Use N parallel engines\n"
         << "  -d               Log UCI I/O to $TMPDIR/puzzle-test (or ./puzzle-test) per engine\n"
+        << "  --first-only     Only check the engine's first move in each puzzle\n"
         << "  --depth N        Search depth for 'go depth N'\n"
         << "  --nodes N        Node limit for 'go nodes N'\n"
         << "  --movetime N     Time limit in ms for 'go movetime N'\n"
@@ -264,6 +266,7 @@ PuzzleError runPuzzle(UCIEngine& engine,
     std::string uciPos = "position fen \"" + fen + "\"";
 
     // Each loop iteration applies one puzzle move and checks the engine's response.
+    size_t limit = firstOnly ? 2 : puzzle.moves.size();
     for (size_t i = 0; i + 1 < puzzleMoves.size(); i += 2) {
         pos = applyUCIMove(pos, puzzleMoves[i]);
 
@@ -475,6 +478,8 @@ int main(int argc, char* argv[]) {
             if (!allDigits) usage("-j requires a positive integer or no argument");
             numJobs = std::stoi(numStr);
             if (numJobs <= 0) usage("-j value must be positive");
+        } else if (arg == "--first-only") {
+            firstOnly = true;
         } else if (arg == "--depth") {
             if (++i >= argc) usage("--depth requires an argument");
             goParams.depth = std::stoi(std::string(argv[i]));
