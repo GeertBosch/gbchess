@@ -43,6 +43,24 @@
             ],
         },
         {
+            "name": "puzzle-debug with ci_nonmate_100.csv",
+            "type": "lldb-dap",
+            "request": "launch",
+            "preLaunchTask": "build: puzzle-debug",
+            "initCommands": [
+                "command source ${workspaceRoot}/chess.lldbinit"
+            ],
+            "program": "${workspaceFolder}/build/puzzle-debug",
+            "args": [
+                "--puzzle",
+                "004d8",
+                "--nodes",
+                "100000",
+                "${workspaceFolder}/build/engine",
+                "${workspaceFolder}/lichess/ci_nonmate_100.csv",
+            ],
+        },
+        {
             "name": "puzzle-debug with current file",
             "type": "lldb-dap",
             "request": "launch",

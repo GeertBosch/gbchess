@@ -33,6 +33,7 @@ bool firstOnly = false;
 int numJobs = -1;  // -1 = default to one engine per CPU
 std::string cmdName = "puzzle-test";
 std::string debugPath;  // empty = disabled
+std::string puzzleName;  // If non-empty, only run puzzles whose label contains this string
 std::atomic<int> engineCounter{0};
 
 int getNumCPUs() {
@@ -45,26 +46,23 @@ int getNumCPUs() {
         << "Usage: " << cmdName
         << " [-v|--verbose] [-j[N]] [-d] [--first-only] [--depth N] [--nodes N] [--movetime N]"
            " <engine-cmd> [engine-opts...] [puzzle-file.csv]\n"
-        << "  -j               Use one engine per CPU (default)\n"
-        << "  -jN              Use N parallel engines\n"
-        << "  -d               Log UCI I/O to $TMPDIR/puzzle-test (or ./puzzle-test) per engine\n"
-        << "  --first-only     Only check the engine's first move in each puzzle\n"
-        << "  --depth N        Search depth for 'go depth N'\n"
-        << "  --nodes N        Node limit for 'go nodes N'\n"
-        << "  --movetime N     Time limit in ms for 'go movetime N'\n"
-        << "  engine-cmd       UCI engine to test (e.g. ./build/engine or stockfish)\n"
-        << "  engine-opts      Options starting with '-' forwarded to the engine command\n"
-        << "  puzzle-file.csv  Lichess CSV format; read from stdin if omitted\n";
+        << "  -j                Use one engine per CPU (default)\n"
+        << "  -jN               Use N parallel engines\n"
+        << "  -d                Log UCI I/O to $TMPDIR/puzzle-test (or ./puzzle-test) per engine\n"
+        << "  --first-only      Only check the engine's first move in each puzzle\n"
+        << "  --depth N         Search depth for 'go depth N'\n"
+        << "  --nodes N         Node limit for 'go nodes N'\n"
+        << "  --movetime N      Time limit in ms for 'go movetime N'\n"
+        << "  --puzzle N        Only run puzzles whose label contains this string\n"
+        << "  engine-cmd        UCI engine to test (e.g. ./build/engine or stockfish)\n"
+        << "  engine-opts       Options starting with '-' forwarded to the engine command\n"
+        << "  puzzle-file.csv   Lichess CSV format; read from stdin if omitted\n";
     std::exit(1);
 }
 
 [[noreturn]] void usage(const std::string& msg) {
     std::cerr << "Error: " << msg << "\n";
     usage();
-}
-
-void info(std::ostream& oss, const std::string& msg) {
-    if (verbose) oss << msg << "\n";
 }
 
 // ─── Go parameters ───────────────────────────────────────────────────────────
@@ -201,14 +199,15 @@ public:
                 auto parts = split(line, ' ');
                 return parts.size() >= 2 ? parts[1] : std::string{};
             }
-            if (startsWith(line, "info ")) lastInfo = line.substr(5);
+            if (startsWith(line, "info ") && !startsWith(line, "info string "))
+                lastInfo = line.substr(5);
         }
         return {};
     }
 
     std::string info() const { return lastInfo; }
 
-    int depth() const { return lastGoParams.depth; }
+    GoParams goParams() const { return lastGoParams; }
 
 private:
     void waitReady() {
@@ -324,9 +323,8 @@ PuzzleError classifyMoveError(UCIEngine& engine,
     // Re-search from the correct move at depth-1 to avoid TT pollution from the wrong search.
     // The resulting eval is from the opponent's perspective, so we negate it.
     auto correctMoves = StringVector(puzzle.moves.begin(), puzzle.moves.begin() + i + 2);
-    auto depth = engine.depth() - 1;
     engine.newGame();
-    engine.go(puzzle.fen, correctMoves, GoParams{.depth = depth});
+    engine.go(puzzle.fen, correctMoves, engine.goParams());
 
     auto solvedScore = parseScore(engine.info());
     if (solvedScore.size() < 3 || gotScore.size() < 3) return MOVE_ERROR;
@@ -359,11 +357,11 @@ PuzzleError reportPuzzleError(
 
     auto error = ctx.mate ? MATE_ERROR : MOVE_ERROR;
 
-    if (engine.depth() && engine.depth() < puzzle.depth() - (int)i)
-        error = DEPTH_ERROR;
+    auto goParams = engine.goParams();
+    if (goParams.depth && goParams.depth < puzzle.depth() - (int)i) error = DEPTH_ERROR;
 
     // Refine MOVE_ERROR into SEARCH_ERROR or EVAL_ERROR by comparing scores.
-    if (error == MOVE_ERROR && engine.depth() && startsWith(gotScore, "cp "))
+    if (error == MOVE_ERROR && startsWith(gotScore, "cp "))
         error = classifyMoveError(engine, puzzle, i, ctx.expected, got, gotScore);
 
     out << puzzle.label << ": " + to_string(error) + " in step " << (i / 2) + 1 << ", expected "
@@ -381,10 +379,6 @@ PuzzleError reportPuzzleError(
  * checkmate. Output (error messages and verbose info) is written to `out`.
  */
 PuzzleError runPuzzle(UCIEngine& engine, Puzzle puzzle, const GoParams& params, std::ostream& out) {
-    if (params.depth && puzzle.depth() > (int)params.depth && false)
-        return info(out, "skipping " + puzzle.label + ", depth " + std::to_string(puzzle.depth())),
-               DEPTH_ERROR;
-
     engine.newGame();
 
     Position pos = fen::parsePosition(puzzle.fen);
@@ -590,6 +584,9 @@ void testFromStream(std::istream& input,
         int ratingVal = std::stoi(fields[cols.rating]);
         auto label = "Puzzle " + fields[cols.puzzleId] + ", rating " + std::to_string(ratingVal);
 
+        // Skip puzzles whose label doesn't contain the specified substring, if any.
+        if (label.find(puzzleName) == std::string::npos) continue;
+
         // When the pipeline is full, block on the oldest entry to make room.
         while (pipeline.size() >= kMaxPipeline) pipeline.drainOne();
 
@@ -759,6 +756,9 @@ Options parseOptions(int argc, char* argv[]) {
             goParams.movetime = parsePositiveInt(std::string(argv[i]));
             if (goParams.movetime <= 0)
                 usage("--movetime must be positive and less than 1,000,000,000 ms");
+        } else if (arg == "--puzzle") {
+            if (++i >= argc) usage("--puzzle requires an argument");
+            puzzleName = argv[i];
         } else {
             break;
         }
@@ -790,6 +790,9 @@ int main(int argc, char* argv[]) {
     if (argc < 2) return 0;  // self-test only
 
     auto opts = parseOptions(argc, argv);
+    std::cerr << "Testing puzzle file: " << (opts.puzzleFile.empty() ? "stdin" : opts.puzzleFile)
+              << ", engine command: " << opts.engineCmd
+              << ", go params: " << opts.goParams.command() << ", num jobs: " << numJobs << "\n";
 
     std::ifstream file;
     std::istream& input = openFile(file, opts.puzzleFile) ? file : std::cin;
