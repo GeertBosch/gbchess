@@ -8,34 +8,33 @@ allow verification of evaluation, including the quiescence search.
 
 You'll need:
 - A known-good chess engine like Stockfish for reference
-- Chess puzzles
-- The `search-test` program provided with this chess engine
+- Chess puzzles -- https://lichess.org has many
+- The `puzzle-test` program provided with this chess engine
 
 ## Chess puzzles
 
-This project uses puzzles downloaded from https://database.lichess.org/lichess_db_puzzle.csv. The
-`puzzles/lichess_db_puzzle.csv` file contains millions of chess puzzles in a specific CSV format.
-For our testing purposes the `FEN` and `Moves` fields are most important. The start position for a
-puzzle is the given `FEN` after applying the first half-move from `Moves`. The remaining moves form
-the solution of the puzzle. If the solution has more half-moves than our search depth, the tests
-should skip that puzzle as the search-depth is insufficient to find the solution.
+This project uses puzzles downloaded from https://database.lichess.org/lichess_db_puzzle.csv.zst.
+The `puzzles/lichess_db_puzzle.csv` file contains millions of chess puzzles in a specific CSV
+format. For our testing purposes the `FEN` and `Moves` fields are most important. The start position
+for a puzzle is the given `FEN` after applying the first half-move from `Moves`. The remaining moves
+form the solution of the puzzle. If the solution has more half-moves than our search depth, the
+tests should skip that puzzle as the search-depth is insufficient to find the solution.
 
 ### What is a correct solution for a mate-in-N puzzle?
 
-For mate-in-N puzzles, the puzzle is solved correctly if a solution is found with the same number of
-moves as the given solution, as sometimes there is more than one equivalent mate.
+For mate-in-N puzzles, the puzzle is solved correctly even if the final move leading to mate is different, as sometimes there is more than one equivalent mate.
 
 ### What is a correct solution for other (non-mate) puzzles?
 
-For non-mate puzzles, the puzzle is considered solved when the first half-move of the found solution
-matches that of the given solution. The file `puzzles/puzzles.csv` contains a subset of 100
-non-mate-in-N puzzles.
+For non-mate puzzles, the engine will be repeatedly asked to compute the best move for an odd number
+of puzzle moves applied. The puzzle is considered solved only if the engine finds the correct move
+in all cases.  The file `puzzles/puzzles.csv` contains a subset of 100 non-mate-in-N puzzles.
 
 
-## The `search_test` program
+## The `puzzle-test` program
 
-The `search_test` program can be found in the `build` directory. If missing or out of date,
-use `make -j build/search_test` to rebuild it. The program can be used in two ways:
+The `puzzle-test` program can be found in the `build` directory. If missing or out of date,
+use `make -j build/puzzle-test` to rebuild it. The program can be used in two ways:
  - CSV puzzles: `grep mateIn5 puzzles/lichess_db_puzzle.csv | build/search_test 9`, or
  - Single position: `build/search-test "1k6/p4ppp/1P4r1/1R6/6r1/3Nb3/2P3bP/1Q4RK w - - 0 3" 9`
 
