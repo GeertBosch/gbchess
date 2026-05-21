@@ -30,6 +30,7 @@ namespace {
 
 bool verbose = false;
 bool firstOnly = false;
+bool minimize = false;
 int numJobs = -1;  // -1 = default to one engine per CPU
 std::string cmdName = "puzzle-test";
 std::string debugPath;  // empty = disabled
@@ -41,15 +42,15 @@ int getNumCPUs() {
     return (n > 0) ? (int)n : 1;
 }
 
-[[noreturn]] void usage() {
+[[noreturn]] void usage(int exitCode) {
     std::cerr
         << "Usage: " << cmdName
-        << " [-v|--verbose] [-j[N]] [-d] [--first-only] [--depth N] [--nodes N] [--movetime N]"
-           " <engine-cmd> [engine-opts...] [puzzle-file.csv]\n"
+        << " [ options... ] <engine-cmd> [engine-opts...] [puzzle-file.csv]\n"
         << "  -j                Use one engine per CPU (default)\n"
         << "  -jN               Use N parallel engines\n"
         << "  -d                Log UCI I/O to $TMPDIR/puzzle-test (or ./puzzle-test) per engine\n"
         << "  --first-only      Only check the engine's first move in each puzzle\n"
+        << "  --minimize        Report only the shallowest derived sub-puzzle that fails\n"
         << "  --depth N         Search depth for 'go depth N'\n"
         << "  --nodes N         Node limit for 'go nodes N'\n"
         << "  --movetime N      Time limit in ms for 'go movetime N'\n"
@@ -57,12 +58,12 @@ int getNumCPUs() {
         << "  engine-cmd        UCI engine to test (e.g. ./build/engine or stockfish)\n"
         << "  engine-opts       Options starting with '-' forwarded to the engine command\n"
         << "  puzzle-file.csv   Lichess CSV format; read from stdin if omitted\n";
-    std::exit(1);
+    std::exit(exitCode);
 }
 
 [[noreturn]] void usage(const std::string& msg) {
     std::cerr << "Error: " << msg << "\n";
-    usage();
+    usage(1);
 }
 
 // ─── Go parameters ───────────────────────────────────────────────────────────
@@ -369,6 +370,58 @@ PuzzleError reportPuzzleError(
     return error;
 }
 
+// Forward declaration — defined after minimizePuzzle.
+PuzzleError runPuzzle(
+    UCIEngine& engine, Puzzle puzzle, const GoParams& params, std::ostream& out, bool doMinimize);
+
+/**
+ * Build a derived puzzle with the first 2*skip moves absorbed into the base FEN.
+ * The label gets a " (skip N)" suffix.
+ */
+Puzzle derivePuzzle(const Puzzle& puzzle, int skip) {
+    Position pos = fen::parsePosition(puzzle.fen);
+    for (int j = 0; j < 2 * skip; ++j) pos = applyUCIMove(pos, puzzle.moves[j]);
+    return {fen::to_string(pos),
+            puzzle.label + " (skip " + std::to_string(skip) + ")",
+            StringVector(puzzle.moves.begin() + 2 * skip, puzzle.moves.end())};
+}
+
+/**
+ * Find the shallowest derived sub-puzzle (via skip) that still fails, and report it.
+ * Returns the error from that sub-puzzle. If no derived sub-puzzle fails, reports
+ * the original error using the already-accumulated `originalOut` text.
+ *
+ * Precondition: the original puzzle has already failed with `originalError`.
+ */
+PuzzleError minimizePuzzle(UCIEngine& engine,
+                           const Puzzle& puzzle,
+                           const GoParams& params,
+                           PuzzleError originalError,
+                           const std::string& originalOut,
+                           std::ostream& out) {
+    // Maximum skip: need at least 1 setup move + 1 engine move remaining,
+    // i.e. moves.size() >= 2, so skip <= (moves.size() - 2) / 2.
+    int maxSkip = ((int)puzzle.moves.size() - 2) / 2;
+    if (maxSkip < 1) {
+        out << originalOut;
+        return originalError;
+    }
+
+    for (int skip = 1; skip <= maxSkip; ++skip) {
+        auto derived = derivePuzzle(puzzle, skip);
+        std::ostringstream tryOut;
+        auto err = runPuzzle(engine, derived, params, tryOut, false);
+        if (err != NO_ERROR) {
+            out << tryOut.str();
+            return err;
+        }
+    }
+
+    // No derived sub-puzzle failed: report the original.
+    out << originalOut;
+    return originalError;
+}
+
 /**
  * Run a single puzzle against the engine.
  *
@@ -378,11 +431,11 @@ PuzzleError reportPuzzleError(
  * The engine must play the expected move at each step, unless its move achieves
  * checkmate. Output (error messages and verbose info) is written to `out`.
  */
-PuzzleError runPuzzle(UCIEngine& engine, Puzzle puzzle, const GoParams& params, std::ostream& out) {
+PuzzleError runPuzzle(
+    UCIEngine& engine, Puzzle puzzle, const GoParams& params, std::ostream& out, bool doMinimize) {
     engine.newGame();
 
     Position pos = fen::parsePosition(puzzle.fen);
-    std::string uciPos = "position fen \"" + puzzle.fen + "\"";
 
     // Each loop iteration applies one puzzle move and checks the engine's response.
     size_t limit = firstOnly ? 2 : puzzle.moves.size();
@@ -394,8 +447,12 @@ PuzzleError runPuzzle(UCIEngine& engine, Puzzle puzzle, const GoParams& params, 
         auto moves = std::vector<std::string>(puzzle.moves.begin(), puzzle.moves.begin() + i + 1);
         auto engineMove = engine.go(puzzle.fen, moves, params);
 
-        if (engineMove != puzzle.moves[i + 1] && !isCheckmate(applyUCIMove(pos, engineMove)))
-            return reportPuzzleError(engine, puzzle, i, engineMove, out);
+        if (engineMove != puzzle.moves[i + 1] && !isCheckmate(applyUCIMove(pos, engineMove))) {
+            if (!doMinimize) return reportPuzzleError(engine, puzzle, i, engineMove, out);
+            std::ostringstream originalOut;
+            auto originalError = reportPuzzleError(engine, puzzle, i, engineMove, originalOut);
+            return minimizePuzzle(engine, puzzle, params, originalError, originalOut.str(), out);
+        }
 
         pos = applyUCIMove(pos, puzzle.moves[i + 1]);
     }
@@ -469,7 +526,7 @@ public:
             engine.initialize();
             while (auto task = dequeue()) {
                 std::ostringstream oss;
-                auto err = runPuzzle(engine, task.puzzle, params, oss);
+                auto err = runPuzzle(engine, task.puzzle, params, oss, minimize);
                 task.promise.set_value({err, oss.str()});
             }
         };
@@ -742,6 +799,8 @@ Options parseOptions(int argc, char* argv[]) {
             if (numJobs <= 0) usage("-j value must be positive");
         } else if (arg == "--first-only") {
             firstOnly = true;
+        } else if (arg == "--minimize") {
+            minimize = true;
         } else if (arg == "--depth") {
             if (++i >= argc) usage("--depth requires an argument");
             goParams.depth = parsePositiveInt(std::string(argv[i]));
@@ -759,6 +818,10 @@ Options parseOptions(int argc, char* argv[]) {
         } else if (arg == "--puzzle") {
             if (++i >= argc) usage("--puzzle requires an argument");
             puzzleName = argv[i];
+        } else if (arg == "--help" || arg == "-h") {
+            usage(0);
+        } else if (startsWith(arg, "-")) {
+            usage("Unknown option: " + arg);
         } else {
             break;
         }
