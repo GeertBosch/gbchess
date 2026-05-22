@@ -754,6 +754,8 @@ void testBuildErrorContext() {
         .fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
         .label = "T",
         .moves = {"e2e4", "e7e5"},
+        .url = {},
+        .themes = {},
     };
     auto ctx = buildErrorContext(p1, 0);
     assert(!ctx.mate);
@@ -766,6 +768,8 @@ void testBuildErrorContext() {
         .fen = "rnbqkbnr/pppp1ppp/8/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3",
         .label = "T",
         .moves = {"b8c6", "h5f7"},
+        .url = {},
+        .themes = {},
     };
     auto ctx2 = buildErrorContext(p2, 0);
     assert(ctx2.mate);

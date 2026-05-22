@@ -18,7 +18,13 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential clang llvm clangd wget zstd libc++-dev libc++abi-dev
+          sudo apt-get install -y build-essential wget zstd
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-19 main" | sudo tee /etc/apt/sources.list.d/llvm.list
+          sudo apt-get update
+          sudo apt-get install -y clang-19 llvm-19 clangd-19 libc++-19-dev libc++abi-19-dev
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-19 100
+          sudo update-alternatives --install /usr/bin/clangd clangd /usr/bin/clangd-19 100
 
       - name: Run CI checks
         run: make -j"$(nproc)" ci
