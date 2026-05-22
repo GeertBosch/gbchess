@@ -28,14 +28,10 @@
 
 namespace {
 
-bool verbose = false;
-bool firstOnly = false;
-bool minimize = false;
-int numJobs = -1;  // -1 = default to one engine per CPU
 std::string cmdName = "puzzle-test";
-std::string debugPath;  // empty = disabled
-std::string puzzleName;  // If non-empty, only run puzzles whose label contains this string
 std::atomic<int> engineCounter{0};
+
+constexpr size_t kMaxUCILineLength = 4096;  // Many engines use 1 KB buffers, so this is plenty
 
 int getNumCPUs() {
     long n = sysconf(_SC_NPROCESSORS_ONLN);
@@ -55,6 +51,7 @@ int getNumCPUs() {
         << "  --nodes N         Node limit for 'go nodes N'\n"
         << "  --movetime N      Time limit in ms for 'go movetime N'\n"
         << "  --puzzle N        Only run puzzles whose label contains this string\n"
+        << "  --theme T         Only run puzzles with this theme tag\n"
         << "  engine-cmd        UCI engine to test (e.g. ./build/engine or stockfish)\n"
         << "  engine-opts       Options starting with '-' forwarded to the engine command\n"
         << "  puzzle-file.csv   Lichess CSV format; read from stdin if omitted\n";
@@ -82,12 +79,29 @@ struct GoParams {
     }
 };
 
+struct Options {
+    GoParams goParams;
+    std::string engineCmd;
+    std::string puzzleFile;  // empty = read from stdin
+    std::string debugPath;   // empty = disabled
+    std::string puzzleName;  // empty = run all puzzles
+    std::string theme;       // empty = run all puzzles
+    int numJobs = 1;
+    bool firstOnly = false;
+    bool minimize = false;
+};
+
+struct RunOptions {
+    bool firstOnly = false;
+    bool minimize = false;
+};
+
 // ─── UCI engine subprocess ────────────────────────────────────────────────────
 
 /** Spawns a UCI engine process and provides send/readline communication. */
 class UCIEngine {
     pid_t pid = -1;
-    int toEngine = -1;    // write to engine stdin
+    int toEngine = -1;       // write to engine stdin
     FILE* reader = nullptr;  // read from engine stdout
     std::string lastInfo;    // last info string from engine since list sendLine call
     GoParams lastGoParams;
@@ -97,8 +111,7 @@ public:
     explicit UCIEngine(const std::string& command, const std::string& debugFilePath = {}) {
         if (!debugFilePath.empty()) debugOut.open(debugFilePath);
         int toChild[2], fromChild[2];
-        if (pipe(toChild) || pipe(fromChild))
-            throw std::runtime_error("pipe() failed");
+        if (pipe(toChild) || pipe(fromChild)) throw std::runtime_error("pipe() failed");
 
         pid = fork();
         if (pid < 0) throw std::runtime_error("fork() failed");
@@ -154,25 +167,32 @@ public:
     }
 
     std::string readline() {
-        char buf[4096];
-        if (!fgets(buf, sizeof(buf), reader)) return {};
-        std::string line(buf);
-        while (!line.empty() && (line.back() == '\n' || line.back() == '\r'))
-            line.pop_back();
-        if (debugOut.is_open()) debugOut << "< " << line << "\n" << std::flush;
-        return line;
+        char buf[kMaxUCILineLength];
+        while (fgets(buf, sizeof(buf), reader)) {
+            std::string line(buf);
+            while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
+            if (line.empty()) continue;
+            if (debugOut.is_open()) debugOut << "< " << line << "\n" << std::flush;
+            return line;
+        }
+        return {};
     }
 
     void debugLine(const std::string& line) {
         if (debugOut.is_open()) debugOut << "! " << line << "\n" << std::flush;
     }
 
-    /** Send uci / isready handshake. Must be called once before searching. */
-    void initialize() {
+    /**
+     * Send uci / isready handshake. Must be called once before searching.
+     * Returns false if the engine didn't respond with uciok (bad engine command).
+     */
+    bool initialize() {
         sendLine("uci");
-        for (std::string line; (line = readline()) != "uciok" && !line.empty();)
-            ;
+        std::string line;
+        while ((line = readline()) != "uciok")
+            if (line.empty()) return false;
         waitReady();
+        return true;
     }
 
     /** Send ucinewgame + isready to reset engine state between puzzles. */
@@ -213,8 +233,7 @@ public:
 private:
     void waitReady() {
         sendLine("isready");
-        for (std::string line; (line = readline()) != "readyok" && !line.empty();)
-            ;
+        for (std::string line; (line = readline()) != "readyok" && !line.empty(););
     }
 };
 
@@ -224,15 +243,27 @@ struct Puzzle {
     std::string fen;
     std::string label;
     StringVector moves;
+    std::string url;
+    StringVector themes;
     operator bool() const { return !fen.empty() && !moves.empty(); }
     int depth() const { return moves.size() - 1; }
 };
 
-enum PuzzleError { NO_ERROR, DEPTH_ERROR, MOVE_ERROR, EVAL_ERROR, SEARCH_ERROR, MATE_ERROR, COUNT };
+enum PuzzleError {
+    NO_ERROR,
+    ENGINE_ERROR,
+    DEPTH_ERROR,
+    MOVE_ERROR,
+    EVAL_ERROR,
+    SEARCH_ERROR,
+    MATE_ERROR,
+    COUNT
+};
 
 std::string to_string(PuzzleError e) {
     switch (e) {
     case NO_ERROR: return "no error";
+    case ENGINE_ERROR: return "engine error";
     case DEPTH_ERROR: return "depth error";
     case MOVE_ERROR: return "move error";
     case EVAL_ERROR: return "evaluation error";
@@ -248,10 +279,10 @@ struct PuzzleStats {
     uint64_t total() const { return std::accumulate(counts.begin(), counts.end(), 0ULL); }
     std::string str() const {
         std::ostringstream ss;
-        ss << total() << " puzzles, " << counts[NO_ERROR] << " correct, " << counts[DEPTH_ERROR]
-           << " depth errors, " << counts[MOVE_ERROR] << " move errors, " << counts[MATE_ERROR]
-           << " mate errors, " << counts[SEARCH_ERROR] << " search errors, " << counts[EVAL_ERROR]
-           << " evaluation errors";
+        ss << total() << " puzzles, " << counts[NO_ERROR] << " correct, " << counts[ENGINE_ERROR]
+           << " engine errors, " << counts[DEPTH_ERROR] << " depth errors, " << counts[MOVE_ERROR]
+           << " move errors, " << counts[MATE_ERROR] << " mate errors, " << counts[SEARCH_ERROR]
+           << " search errors, " << counts[EVAL_ERROR] << " evaluation errors";
         return ss.str();
     }
 };
@@ -287,9 +318,9 @@ std::string parsePV(const std::string& info) {
 // ─── Puzzle runner ──────────────────────────────────────────────────────────
 
 struct ErrorContext {
-    std::string fen;      // FEN at the position where engine moved
-    std::string expected; // expected move sequence (and mate annotation if applicable)
-    bool mate = false;    // whether the solution ends in checkmate
+    std::string fen;       // FEN at the position where engine moved
+    std::string expected;  // expected move sequence (and mate annotation if applicable)
+    bool mate = false;     // whether the solution ends in checkmate
 };
 
 /** Build position context at the error step: FEN, expected moves, and mate info. */
@@ -316,11 +347,11 @@ ErrorContext buildErrorContext(const Puzzle& puzzle, size_t i) {
  * score annotations.
  */
 PuzzleError classifyMoveError(UCIEngine& engine,
-                               const Puzzle& puzzle,
-                               size_t i,
-                               std::string& expected,
-                               std::string& got,
-                               const std::string& gotScore) {
+                              const Puzzle& puzzle,
+                              size_t i,
+                              std::string& expected,
+                              std::string& got,
+                              const std::string& gotScore) {
     // Re-search from the correct move at depth-1 to avoid TT pollution from the wrong search.
     // The resulting eval is from the opponent's perspective, so we negate it.
     auto correctMoves = StringVector(puzzle.moves.begin(), puzzle.moves.begin() + i + 2);
@@ -335,10 +366,10 @@ PuzzleError classifyMoveError(UCIEngine& engine,
     got += " score " + gotScore;
 
     if (startsWith(solvedScore, "mate "))
-        return MATE_ERROR;   // Engine thinks the solution (it didn't find!) is mate
+        return MATE_ERROR;  // Engine thinks the solution (it didn't find!) is mate
     if (solvedCP > gotCP)
-        return SEARCH_ERROR; // Engine agrees solution is better, but didn't find it
-    return EVAL_ERROR;       // Engine disagrees that the solution is better
+        return SEARCH_ERROR;  // Engine agrees solution is better, but didn't find it
+    return EVAL_ERROR;        // Engine disagrees that the solution is better
 }
 
 /** Report an error for a puzzle step. */
@@ -365,26 +396,35 @@ PuzzleError reportPuzzleError(
     if (error == MOVE_ERROR && startsWith(gotScore, "cp "))
         error = classifyMoveError(engine, puzzle, i, ctx.expected, got, gotScore);
 
-    out << puzzle.label << ": " + to_string(error) + " in step " << (i / 2) + 1 << ", expected "
-        << ctx.expected << ", got " << got << ", fen " << ctx.fen << "\n";
+    out << puzzle.label << ": " + to_string(error) + " in step " << (i / 2) + 1 << "\n";
+    out << "    fen " << ctx.fen << "\n";
+    if (puzzle.themes.size()) out << "    themes " << join(puzzle.themes, ' ') << "\n";
+    if (!puzzle.url.empty()) out << "    url " << puzzle.url << "\n";
+    out << "    expected " << ctx.expected << "\n"
+        << "    got " << got << "\n";
     return error;
 }
 
-// Forward declaration — defined after minimizePuzzle.
-PuzzleError runPuzzle(
-    UCIEngine& engine, Puzzle puzzle, const GoParams& params, std::ostream& out, bool doMinimize);
 
 /**
  * Build a derived puzzle with the first 2*skip moves absorbed into the base FEN.
  * The label gets a " (skip N)" suffix.
  */
-Puzzle derivePuzzle(const Puzzle& puzzle, int skip) {
+Puzzle derivePuzzle(Puzzle puzzle, int skip) {
     Position pos = fen::parsePosition(puzzle.fen);
     for (int j = 0; j < 2 * skip; ++j) pos = applyUCIMove(pos, puzzle.moves[j]);
-    return {fen::to_string(pos),
-            puzzle.label + " (skip " + std::to_string(skip) + ")",
-            StringVector(puzzle.moves.begin() + 2 * skip, puzzle.moves.end())};
+    puzzle.fen = fen::to_string(pos);
+    puzzle.label = puzzle.label + " (skip " + std::to_string(skip) + ")";
+    puzzle.moves = StringVector(puzzle.moves.begin() + 2 * skip, puzzle.moves.end());
+    return puzzle;
 }
+
+// Forward declaration — mutually recursive with minimizePuzzle.
+PuzzleError runPuzzle(UCIEngine& engine,
+                      Puzzle puzzle,
+                      const GoParams& params,
+                      std::ostream& out,
+                      RunOptions runOpts);
 
 /**
  * Find the shallowest derived sub-puzzle (via skip) that still fails, and report it.
@@ -396,30 +436,23 @@ Puzzle derivePuzzle(const Puzzle& puzzle, int skip) {
 PuzzleError minimizePuzzle(UCIEngine& engine,
                            const Puzzle& puzzle,
                            const GoParams& params,
+                           RunOptions runOpts,
                            PuzzleError originalError,
                            const std::string& originalOut,
                            std::ostream& out) {
     // Maximum skip: need at least 1 setup move + 1 engine move remaining,
-    // i.e. moves.size() >= 2, so skip <= (moves.size() - 2) / 2.
-    int maxSkip = ((int)puzzle.moves.size() - 2) / 2;
-    if (maxSkip < 1) {
-        out << originalOut;
-        return originalError;
-    }
+    int maxSkip = puzzle.moves.size() / 2 - 1;
 
-    for (int skip = 1; skip <= maxSkip; ++skip) {
+    // Find the largest skip that still fails, this is the shallowest failing derived puzzle.
+    for (int skip = maxSkip; skip >= 1; --skip) {
         auto derived = derivePuzzle(puzzle, skip);
         std::ostringstream tryOut;
-        auto err = runPuzzle(engine, derived, params, tryOut, false);
-        if (err != NO_ERROR) {
-            out << tryOut.str();
-            return err;
-        }
+        auto err = runPuzzle(engine, derived, params, tryOut, {runOpts.firstOnly, false});
+        if (err != NO_ERROR) return out << tryOut.str(), err;
     }
 
     // No derived sub-puzzle failed: report the original.
-    out << originalOut;
-    return originalError;
+    return out << originalOut, originalError;
 }
 
 /**
@@ -431,14 +464,17 @@ PuzzleError minimizePuzzle(UCIEngine& engine,
  * The engine must play the expected move at each step, unless its move achieves
  * checkmate. Output (error messages and verbose info) is written to `out`.
  */
-PuzzleError runPuzzle(
-    UCIEngine& engine, Puzzle puzzle, const GoParams& params, std::ostream& out, bool doMinimize) {
+PuzzleError runPuzzle(UCIEngine& engine,
+                      Puzzle puzzle,
+                      const GoParams& params,
+                      std::ostream& out,
+                      RunOptions runOpts) {
     engine.newGame();
 
     Position pos = fen::parsePosition(puzzle.fen);
 
     // Each loop iteration applies one puzzle move and checks the engine's response.
-    size_t limit = firstOnly ? 2 : puzzle.moves.size();
+    size_t limit = runOpts.firstOnly ? 2 : puzzle.moves.size();
     for (size_t i = 0; i + 1 < limit; i += 2) {
         pos = applyUCIMove(pos, puzzle.moves[i]);
 
@@ -448,10 +484,11 @@ PuzzleError runPuzzle(
         auto engineMove = engine.go(puzzle.fen, moves, params);
 
         if (engineMove != puzzle.moves[i + 1] && !isCheckmate(applyUCIMove(pos, engineMove))) {
-            if (!doMinimize) return reportPuzzleError(engine, puzzle, i, engineMove, out);
+            if (!runOpts.minimize) return reportPuzzleError(engine, puzzle, i, engineMove, out);
             std::ostringstream originalOut;
             auto originalError = reportPuzzleError(engine, puzzle, i, engineMove, originalOut);
-            return minimizePuzzle(engine, puzzle, params, originalError, originalOut.str(), out);
+            return minimizePuzzle(
+                engine, puzzle, params, runOpts, originalError, originalOut.str(), out);
         }
 
         pos = applyUCIMove(pos, puzzle.moves[i + 1]);
@@ -462,7 +499,7 @@ PuzzleError runPuzzle(
 // ─── CSV header parsing ───────────────────────────────────────────────────────
 
 struct CsvColumns {
-    size_t fen, moves, puzzleId, rating, themes;
+    size_t fen, moves, puzzleId, rating, themes, url;
     size_t minCols;  // minimum number of columns required per row
 };
 
@@ -475,7 +512,8 @@ CsvColumns parseCsvHeader(const std::string& headerLine) {
     col.puzzleId = find(header, "PuzzleId");
     col.rating = find(header, "Rating");
     col.themes = find(header, "Themes");
-    col.minCols = std::max({col.fen, col.moves, col.puzzleId, col.rating, col.themes}) + 1;
+    col.url = find(header, "GameUrl");
+    col.minCols = std::max({col.fen, col.moves, col.puzzleId, col.rating, col.themes, col.url}) + 1;
     return col;
 }
 
@@ -513,24 +551,30 @@ class PuzzleWorkerPool {
     std::condition_variable workCV;
     bool noMoreWork = false;
     std::vector<std::thread> workers;
+    std::atomic<bool> engineFailed{false};
 
 public:
-    PuzzleWorkerPool(const std::string& engineCmd, const GoParams& params, int numWorkers) {
-        auto workerFn = [this, engineCmd, params]() {
+    PuzzleWorkerPool(const Options& opts) {
+        RunOptions runOpts{opts.firstOnly, opts.minimize};
+        auto workerFn = [this, &opts, runOpts]() {
             std::string dbgFile;
-            if (!debugPath.empty()) {
+            if (!opts.debugPath.empty()) {
                 int id = engineCounter++;
-                dbgFile = (numJobs == 1) ? debugPath : debugPath + "." + std::to_string(id);
+                dbgFile = (opts.numJobs == 1) ? opts.debugPath
+                                              : opts.debugPath + "." + std::to_string(id);
             }
-            UCIEngine engine(engineCmd, dbgFile);
-            engine.initialize();
+            UCIEngine engine(opts.engineCmd, dbgFile);
+            if (!engine.initialize())
+                fail("engine did not respond to UCI handshake: " + opts.engineCmd);
             while (auto task = dequeue()) {
                 std::ostringstream oss;
-                auto err = runPuzzle(engine, task.puzzle, params, oss, minimize);
+                auto err = engineFailed
+                    ? ENGINE_ERROR
+                    : runPuzzle(engine, task.puzzle, opts.goParams, oss, runOpts);
                 task.promise.set_value({err, oss.str()});
             }
         };
-        for (int i = 0; i < numWorkers; ++i) workers.emplace_back(workerFn);
+        for (int i = 0; i < opts.numJobs; ++i) workers.emplace_back(workerFn);
     }
 
     std::future<PuzzleResult> submit(Puzzle puzzle) {
@@ -550,13 +594,21 @@ public:
         return pop(workQueue);
     }
 
-    void shutdown() {
+    void fail(std::string message) {
+        if (!engineFailed.exchange(true)) std::cerr << "Error: " << message << "\n";
+        std::lock_guard lk(workMutex);
+        noMoreWork = true;
+    }
+
+    // Returns false if any worker failed to initialize.
+    bool shutdown() {
         {
             std::lock_guard lk(workMutex);
             noMoreWork = true;
         }
         workCV.notify_all();
         for (auto& t : workers) t.join();
+        return !engineFailed;
     }
 };
 
@@ -616,19 +668,16 @@ public:
 
 // ─── CSV driver ──────────────────────────────────────────────────────────────
 
-void testFromStream(std::istream& input,
-                    const std::string& engineCmd,
-                    const GoParams& params,
-                    int numEngines) {
+bool testFromStream(std::istream& input, const Options& opts) {
     std::string line;
     std::getline(input, line);
     auto cols = parseCsvHeader(line);
 
-    PuzzleWorkerPool pool(engineCmd, params, numEngines);
+    PuzzleWorkerPool pool(opts);
     PuzzlePipeline pipeline;
     // Keep enough tasks ahead to saturate all workers, but bounded to avoid
     // reading the entire input into memory.
-    const size_t kMaxPipeline = numEngines * 10;
+    const size_t kMaxPipeline = opts.numJobs * 10;
 
     while (std::getline(input, line)) {
         if (line.empty()) continue;
@@ -638,23 +687,33 @@ void testFromStream(std::istream& input,
         auto puzzleMoves = split(fields[cols.moves], ' ');
         if (puzzleMoves.empty()) continue;
 
+        auto themes = split(fields[cols.themes], ' ');
+
         int ratingVal = std::stoi(fields[cols.rating]);
         auto label = "Puzzle " + fields[cols.puzzleId] + ", rating " + std::to_string(ratingVal);
 
         // Skip puzzles whose label doesn't contain the specified substring, if any.
-        if (label.find(puzzleName) == std::string::npos) continue;
+        if (label.find(opts.puzzleName) == std::string::npos) continue;
+
+        // Skip puzzles that don't have the required theme tag, if any.
+        if (!opts.theme.empty() &&
+            std::find(themes.begin(), themes.end(), opts.theme) == themes.end())
+            continue;
 
         // When the pipeline is full, block on the oldest entry to make room.
         while (pipeline.size() >= kMaxPipeline) pipeline.drainOne();
 
-        pipeline.push(pool.submit({fields[cols.fen], label, puzzleMoves}), ratingVal);
+        auto puzzle = Puzzle{fields[cols.fen], label, puzzleMoves, fields[cols.url], themes};
+
+        pipeline.push(pool.submit(puzzle), ratingVal);
         pipeline.drainReady();
     }
 
-    pool.shutdown();
+    bool ok = pool.shutdown();
     pipeline.drainAll();
 
     std::cout << pipeline.summary() << "\n";
+    return ok;
 }
 
 // ─── Self-tests ─────────────────────────────────────────────────────────────
@@ -691,7 +750,11 @@ void testApplyUCIMove() {
 
 void testBuildErrorContext() {
     // Non-mate: setup e2e4, engine must play e7e5
-    Puzzle p1{"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", "T", {"e2e4", "e7e5"}};
+    Puzzle p1{
+        .fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        .label = "T",
+        .moves = {"e2e4", "e7e5"},
+    };
     auto ctx = buildErrorContext(p1, 0);
     assert(!ctx.mate);
     assert(ctx.expected == "e7e5");
@@ -700,9 +763,9 @@ void testBuildErrorContext() {
     // Mate-in-1: Scholar's mate — black plays Nc6, white must reply Qxf7#
     // FEN is after 1.e4 e5 2.Qh5 (black to move)
     Puzzle p2{
-        "rnbqkbnr/pppp1ppp/8/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3",
-        "T",
-        {"b8c6", "h5f7"},
+        .fen = "rnbqkbnr/pppp1ppp/8/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3",
+        .label = "T",
+        .moves = {"b8c6", "h5f7"},
     };
     auto ctx2 = buildErrorContext(p2, 0);
     assert(ctx2.mate);
@@ -710,15 +773,16 @@ void testBuildErrorContext() {
 }
 
 void testParseCsvHeader() {
-    auto h = parseCsvHeader("PuzzleId,FEN,Moves,Rating,Themes");
-    assert(h.puzzleId == 0 && h.fen == 1 && h.moves == 2 && h.rating == 3 && h.themes == 4);
-    assert(h.minCols == 5);
+    auto h = parseCsvHeader("PuzzleId,FEN,Moves,Rating,Themes,GameUrl");
+    assert(h.puzzleId == 0 && h.fen == 1 && h.moves == 2 && h.rating == 3 && h.themes == 4 &&
+           h.url == 5);
+    assert(h.minCols == 6);
 
     // Lichess production header has extra columns between Rating and Themes
     auto h2 = parseCsvHeader(
         "PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,GameUrl,OpeningTags");
     assert(h2.fen == 1 && h2.moves == 2 && h2.rating == 3 && h2.themes == 7);
-    assert(h2.minCols == 8);
+    assert(h2.minCols == 9);
 }
 
 void testPuzzlePipeline() {
@@ -765,59 +829,55 @@ void testSelf() {
 
 }  // namespace
 
-struct Options {
-    GoParams goParams;
-    std::string engineCmd;
-    std::string puzzleFile;  // empty = read from stdin
-};
-
 /**
- * Parse command-line arguments, setting global flags (verbose, firstOnly, numJobs, debugPath)
- * and returning the engine command, go parameters, and optional puzzle file path.
+ * Parse command-line arguments into an Options struct.
  * Calls usage() and exits on invalid input.
  */
 Options parseOptions(int argc, char* argv[]) {
-    GoParams goParams;
+    Options opts;
+    opts.numJobs = -1;  // sentinel: resolve to getNumCPUs() after parsing
     int i = 1;
     while (i < argc) {
         std::string arg(argv[i]);
-        if (arg == "-v" || arg == "--verbose") {
-            verbose = true;
-        } else if (arg == "-d") {
+        if (arg == "-d") {
             const char* tmpdir = std::getenv("TMPDIR");
             std::string dir = tmpdir ? tmpdir : ".";
             if (dir.size() > 1 && dir.back() == '/') dir.pop_back();
-            debugPath = dir + "/puzzle-test";
+            opts.debugPath = dir + "/puzzle-test";
         } else if (arg == "-j") {
-            numJobs = getNumCPUs();
+            opts.numJobs = getNumCPUs();
         } else if (arg.size() >= 2 && arg[0] == '-' && arg[1] == 'j') {
             std::string numStr = arg.substr(2);
             bool allDigits =
                 !numStr.empty() && std::all_of(numStr.begin(), numStr.end(), ::isdigit);
             if (!allDigits) usage("-j requires a positive integer or no argument");
-            numJobs = std::stoi(numStr);
-            if (numJobs <= 0) usage("-j value must be positive");
+            opts.numJobs = std::stoi(numStr);
+            if (opts.numJobs <= 0) usage("-j value must be positive");
         } else if (arg == "--first-only") {
-            firstOnly = true;
+            opts.firstOnly = true;
         } else if (arg == "--minimize") {
-            minimize = true;
+            opts.minimize = true;
         } else if (arg == "--depth") {
             if (++i >= argc) usage("--depth requires an argument");
-            goParams.depth = parsePositiveInt(std::string(argv[i]));
-            if (goParams.depth <= 0 || goParams.depth >= 1000)
+            opts.goParams.depth = parsePositiveInt(std::string(argv[i]));
+            if (opts.goParams.depth <= 0 || opts.goParams.depth >= 1000)
                 usage("--depth must be positive and less than 1000");
         } else if (arg == "--nodes") {
             if (++i >= argc) usage("--nodes requires an argument");
-            goParams.nodes = parsePositiveInt(std::string(argv[i]));
-            if (goParams.nodes <= 0) usage("--nodes must be positive and less than 1,000,000,000");
+            opts.goParams.nodes = parsePositiveInt(std::string(argv[i]));
+            if (opts.goParams.nodes <= 0)
+                usage("--nodes must be positive and less than 1,000,000,000");
         } else if (arg == "--movetime") {
             if (++i >= argc) usage("--movetime requires an argument");
-            goParams.movetime = parsePositiveInt(std::string(argv[i]));
-            if (goParams.movetime <= 0)
+            opts.goParams.movetime = parsePositiveInt(std::string(argv[i]));
+            if (opts.goParams.movetime <= 0)
                 usage("--movetime must be positive and less than 1,000,000,000 ms");
         } else if (arg == "--puzzle") {
             if (++i >= argc) usage("--puzzle requires an argument");
-            puzzleName = argv[i];
+            opts.puzzleName = argv[i];
+        } else if (arg == "--theme") {
+            if (++i >= argc) usage("--theme requires an argument");
+            opts.theme = argv[i];
         } else if (arg == "--help" || arg == "-h") {
             usage(0);
         } else if (startsWith(arg, "-")) {
@@ -828,13 +888,14 @@ Options parseOptions(int argc, char* argv[]) {
         ++i;
     }
 
-    if (numJobs < 0) numJobs = getNumCPUs();
+    if (opts.numJobs < 0) opts.numJobs = getNumCPUs();
 
-    std::string engineCmd = (i < argc) ? argv[i++] : "";
-    while (i < argc && argv[i][0] == '-') engineCmd += std::string(" ") + argv[i++];
+    opts.engineCmd = (i < argc) ? argv[i++] : "";
+    if (opts.engineCmd.empty()) usage("engine command is required");
+    while (i < argc && argv[i][0] == '-') opts.engineCmd += std::string(" ") + argv[i++];
 
-    std::string puzzleFile = (i < argc) ? argv[i] : "";
-    return {goParams, engineCmd, puzzleFile};
+    opts.puzzleFile = (i < argc) ? argv[i] : "";
+    return opts;
 }
 
 bool openFile(std::ifstream& file, const std::string& path) {
@@ -853,14 +914,9 @@ int main(int argc, char* argv[]) {
     if (argc < 2) return 0;  // self-test only
 
     auto opts = parseOptions(argc, argv);
-    std::cerr << "Testing puzzle file: " << (opts.puzzleFile.empty() ? "stdin" : opts.puzzleFile)
-              << ", engine command: " << opts.engineCmd
-              << ", go params: " << opts.goParams.command() << ", num jobs: " << numJobs << "\n";
 
     std::ifstream file;
     std::istream& input = openFile(file, opts.puzzleFile) ? file : std::cin;
 
-    testFromStream(input, opts.engineCmd, opts.goParams, numJobs);
-
-    return 0;
+    return testFromStream(input, opts) ? 0 : 1;
 }
