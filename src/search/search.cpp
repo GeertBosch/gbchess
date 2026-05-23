@@ -4,6 +4,7 @@
 #include <iostream>
 #include <optional>
 #include <sstream>
+#include <string>
 #include <unordered_set>
 #include <utility>
 
@@ -118,6 +119,8 @@ uint64_t forcedMoveExtensions = 0;
 uint64_t mainHashSeenFirst = 0;
 uint64_t mainHashSeenRepeat = 0;
 
+static Hash debugHash = {};
+
 namespace {
 using namespace std::chrono;
 using clock = high_resolution_clock;
@@ -182,18 +185,6 @@ void tracePrune(int ply, const char* reason, Move move = Move(), Score eval = Sc
     if (eval != Score()) std::cerr << " eval=" << eval.cp();
     std::cerr << "\n";
 }
-
-}  // namespace
-
-static Hash debugHash = {};
-void debugPosition(Position position) {
-    debugHash = Hash(position);
-    // Convert debugHash to a hexadecimal string
-    std::cerr << "Debugging position:\n"
-              << fen::to_string(position) << ", hash 0x" << to_hex_string(debugHash()) << "\n";
-}
-
-namespace {
 
 /**
  * The repetition table stores the hashes of all positions played so far in the game, so we can
@@ -280,8 +271,17 @@ struct TranspositionTable {
 
     enum class Scope : uint8_t { Main, QsFrontier, QsDeep };
 
+    static std::string to_string(Scope scope) {
+        switch (scope) {
+        case Scope::Main: return "Main";
+        case Scope::QsFrontier: return "QsFrontier";
+        case Scope::QsDeep: return "QsDeep";
+        default: return std::to_string(int(scope));
+        }
+    }
+
     enum class EntryType : uint8_t { EXACT, LOWERBOUND, UPPERBOUND };
-    std::string to_string(EntryType type) const {
+    static std::string to_string(EntryType type) {
         switch (type) {
         case EntryType::EXACT: return "EXACT";
         case EntryType::LOWERBOUND: return "LOWERBOUND";
@@ -317,8 +317,16 @@ struct TranspositionTable {
               generation(generation),
                             scope(scope) {}
 
+
         [[nodiscard]] bool occupied() const { return key; }
     };
+
+    static std::string to_string(const Entry& entry) {
+        return "type " + to_string(entry.type) + " move " + ::to_string(entry.eval.move) +
+            " score " + std::to_string(entry.eval.score.cp()) + " depthleft " +
+            std::to_string(int(entry.depthleft)) + " scope " +
+            TranspositionTable::to_string(entry.scope);
+    }
 
     struct Stats {
         uint64_t numInserted = 0;
@@ -350,14 +358,15 @@ struct TranspositionTable {
         if (transpositionTableDebug) printStats();
     }
 
+    const Entry& operator[](Hash hash) const { return entries[indexOf(hash)]; }
+    Entry& operator[](Hash hash) { return entries[indexOf(hash)]; }
+
     Eval find(Hash hash) {
         if constexpr (kNumEntries == 0) return {};
 
-        auto domainHash = domainHashValue(hash);
-        auto& entry = entries[indexOf(domainHash)];
+        auto& entry = (*this)[hash];
         ++stats.numMisses;
-        if (!entry.occupied() || keyOf(domainHash) != entry.key ||
-            entry.generation != numGenerations)
+        if (!entry.occupied() || keyOf(hash) != entry.key || entry.generation != numGenerations)
             return {};
 
         --stats.numMisses;
@@ -373,10 +382,8 @@ struct TranspositionTable {
     Eval peek(Hash hash) const {
         if constexpr (kNumEntries == 0) return {};
 
-        auto domainHash = domainHashValue(hash);
-        const auto& entry = entries[indexOf(domainHash)];
-        if (!entry.occupied() || keyOf(domainHash) != entry.key ||
-            entry.generation != numGenerations)
+        const auto& entry = (*this)[hash];
+        if (!entry.occupied() || keyOf(hash) != entry.key || entry.generation != numGenerations)
             return {};
         return entry.eval;
     }
@@ -384,10 +391,8 @@ struct TranspositionTable {
     [[nodiscard]] bool contains(Hash hash) const {
         if constexpr (kNumEntries == 0) return false;
 
-        auto domainHash = domainHashValue(hash);
-        const auto& entry = entries[indexOf(domainHash)];
-        return entry.occupied() && keyOf(domainHash) == entry.key &&
-            entry.generation == numGenerations;
+        const auto& entry = (*this)[hash];
+        return entry.occupied() && keyOf(hash) == entry.key && entry.generation == numGenerations;
     }
 
     PrincipalVariation pv(Position pos, int depth) {
@@ -420,12 +425,11 @@ struct TranspositionTable {
                                  Score& beta,
                                  bool allowQsFrontierInMain = false) {
         if constexpr (kNumEntries == 0) return RefineResult::MissKey;
-        auto domainHash = domainHashValue(hash);
-        auto idx = indexOf(domainHash);
+        auto idx = indexOf(hash);
         auto& entry = entries[idx];
 
         ++stats.numMisses;
-        if (entry.key != keyOf(domainHash)) {
+        if (entry.key != keyOf(hash)) {
             if (depthleft > 0) {
                 if (!entry.occupied())
                     ++ttMissKeyMainEmpty;
@@ -563,11 +567,9 @@ struct TranspositionTable {
 
         ++ttInsertAttempts;
 
-        auto domainHash = domainHashValue(hash);
-
         Entry newEntry = {hash, move, depthleft, type, numGenerations, scope};
-        auto& oldEntry = entries[indexOf(domainHash)];
-        newEntry.key = keyOf(domainHash);
+        auto& oldEntry = entries[indexOf(hash)];
+        newEntry.key = keyOf(hash);
         // Keep the existing move for same-key updates when the new entry has no move.
         if (!newEntry.eval.move && oldEntry.occupied() && oldEntry.key == newEntry.key)
             newEntry.eval.move = oldEntry.eval.move;
@@ -586,7 +588,7 @@ struct TranspositionTable {
             ++ttInsertUpper;
 
         // 3 cases: improve existing entry, collision with unrelated entry, or occupy an empty slot
-        if (oldEntry.key == keyOf(domainHash))
+        if (oldEntry.key == keyOf(hash))
             ++stats.numImproved;
         else if (oldEntry.occupied())
             ++stats.numCollisions;
@@ -623,6 +625,14 @@ struct TranspositionTable {
         stats = {};
         if (!++numGenerations) std::fill(entries.begin(), entries.end(), Entry{});
     };
+
+    bool clear(Hash hash) {
+        auto& entry = (*this)[hash];
+        if (!entry.occupied() || entry.key != keyOf(hash) || entry.generation != numGenerations)
+            return false;
+        --stats.numOccupied, entry = Entry{};
+        return true;
+    }
 
     void printStats() {
         auto numLookups = stats.numHits + stats.numMisses;
@@ -747,6 +757,34 @@ int quietMoveScore(const Position& position, Move move, Move lastMove) {
     return current;
 }
 }  // namespace
+
+std::string lookupPosition(Position position) {
+    auto hash = Hash(position);
+    auto entry = transpositionTable[hash];
+    if (!entry.occupied() || TranspositionTable::keyOf(hash) != entry.key ||
+        entry.generation != transpositionTable.numGenerations)
+        return {};
+    return TranspositionTable::to_string(entry);
+}
+
+void debugPosition(Position position) {
+    debugHash = Hash(position);
+    // Convert debugHash to a hexadecimal string
+    std::cerr << "Debugging position:\n"
+              << fen::to_string(position) << ", hash 0x" << to_hex_string(debugHash()) << "\n";
+    std::cerr << "TT entry: " << lookupPosition(position) << "\n";
+    auto moves = moves::allLegalMovesAndCaptures(position.turn, position.board);
+    for (auto move : moves) {
+        auto ttentry = lookupPosition(moves::applyMove(position, move));
+        if (!ttentry.empty())
+            std::cerr << "  Move " << to_string(move) << " entry " + ttentry << "\n";
+    }
+}
+
+bool invalidatePosition(Position position) {
+    auto hash = Hash(position);
+    return transpositionTable.clear(hash);
+}
 
 /**
  * Sorts the moves (including captures) in the range [begin, end) in place, so that the move or

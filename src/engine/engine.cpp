@@ -460,6 +460,20 @@ void UCIRunner::dispatch(const std::string& command,
         in >> std::ws;
         auto debugMoves = parseUCIMoves(debugPosition, getUCIArguments(in));
         search::debugPosition(applyMoves(debugPosition, debugMoves));
+    } else if (command == "lookup") {
+        auto debugPosition = applyMoves(position, moves);
+        in >> std::ws;
+        auto args = getUCIArguments(in);
+        auto debugMoves = parseUCIMoves(debugPosition, args);
+        auto ttEntry = search::lookupPosition(applyMoves(debugPosition, debugMoves));
+        std::cerr << "TT Entry: " << (ttEntry.empty() ? "(none)" : ttEntry) << "\n";
+    } else if (command == "invalidate") {
+        auto debugPosition = applyMoves(position, moves);
+        in >> std::ws;
+        auto debugMoves = parseUCIMoves(debugPosition, getUCIArguments(in));
+        if (!search::invalidatePosition(applyMoves(debugPosition, debugMoves)))
+            std::cerr << "No TT entry found for this position to invalidate\n";
+
     } else if (command == "sleep") {
         // Test command to sleep for a number of milliseconds
         int ms;

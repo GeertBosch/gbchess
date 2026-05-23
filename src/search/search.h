@@ -166,7 +166,24 @@ void clearState();
  */
 bool restoreState(std::istream& in);
 
+/**
+ * Mark the specfied position as of interest for debugging, so that any lookup or insert of the
+ * position in the transposition table will log debug info.
+ */
 void debugPosition(Position position);
+
+/**
+ * Return a string representation of the transposition table entry for the given position, or an
+ * empty string if no entry is found.
+ */
+std::string lookupPosition(Position position);
+
+/**
+ * Remove the specified position from the transposition table. Useful for debugging problematic
+ * cached information. Returns true iff an entry was found and removed.
+ */
+bool invalidatePosition(Position position);
+
 /**
  * Search all tactical moves necessary to achieve a quiet position and return the best score
  */
