@@ -1,6 +1,6 @@
 #!/bin/bash
 usage() {
-    echo "usage: $0 [-m[X][-[Y]]] <w|b|white|black> pgnfile [goopts]\n" >&2
+    echo "usage: $0 [-m[X][-[Y]]] <w|b|white|black> pgnfile [goopts...]\n" >&2
     echo "  -mX-Y: limit replay to moves X through Y (inclusive)" >&2
     echo "goopts: additional options to pass to the engine, such as:" >&2
     echo "        depth <n>: set the search depth to <n>" >&2
@@ -44,7 +44,7 @@ while getopts "m:" opt; do
 done
 shift $((OPTIND-1))
 
-if [ $# -lt 3 ] ; then
+if [ $# -lt 2 ] ; then
     usage
 fi
 
@@ -59,7 +59,7 @@ shift
 pgnfile=$1
 shift
 
-goopt=$1
+goopt=$*
 shift
 
 if [ ! -f "$pgnfile" ] ; then
@@ -105,9 +105,8 @@ for j in $(seq $((side - 1)) 2 $n) ; do
         position="startpos"
     else
         position="startpos moves $(echo $moves | cut -d' ' -f1-$j)"
+        echo "position $position"
     fi
-    echo "position $position"
-    echo "d"
     # During the last iteration, save the search state
     if [ $num -eq $end_move ] ; then
         echo "save"
