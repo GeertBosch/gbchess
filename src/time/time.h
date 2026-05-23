@@ -93,7 +93,8 @@ public:
     void setFixedTimeMillis(uint32_t fixedMillis) { setFixedTimeMillis(fixedMillis, fixedMillis); }
 
     int64_t computeMillisForMove(Color color, uint16_t fullmove) const {
-        if (fixedTime) return getMillis(color);
+        // Limit per move time to avoid overflow etc
+        if (fixedTime) return std::min(getMillis(color), kMaxIncrementMillis);
 
         int movesToGo = this->movesToGo;
         // If no moves to go is specified, estimate it based on expected game length and number of

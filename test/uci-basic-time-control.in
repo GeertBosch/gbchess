@@ -2,5 +2,6 @@
 uci
 position startpos
 go depth 12 nodes 0 wtime 2500 btime 2500 winc 100 binc 100 movestogo 20 wait
-expect time exceeded [1-9][0-9][0-9]ms
+# With a total time budget of 2500, per turn time should be between 100 and 999ms
+expect time [1-9][0-9][0-9] exceeded
 expect bestmove [a-h][1-8][a-h][1-8]

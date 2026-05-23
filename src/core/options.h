@@ -48,7 +48,7 @@ constexpr int iidMinDepthLeft = 4;                 // Min depth left to trigger 
 constexpr int iidDepthReduction = 2;               // Depth reduction for IID probe
 constexpr bool traceSearchTree = false;            // Print tree diagnostics to stderr
 constexpr int traceSearchMaxPly = 2;               // Max ply to print in tree diagnostics
-constexpr int fixedNodesSearch = 250'000;          // Fixed nodes per search (0 to disable)
+constexpr int timeNodesRate = 250'000;             // Use node count a time control (0 to disable)
 
 /**
  * Caching options for the perft program
