@@ -125,9 +125,9 @@ build/$(notdir $1)-test: ${OPTOBJ}/$(1)-test
 build/$(notdir $1)-debug: ${DBGOBJ}/$(1)-debug
 endef
 
-build/engine: $(call calc_objs,${OPTOBJ},$(call prefix_src,${ENGINE_SRCS}))
+build/gbchess: $(call calc_objs,${OPTOBJ},$(call prefix_src,${ENGINE_SRCS}))
 	$(call BUILDCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
-build/engine-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,${ENGINE_SRCS}))
+build/gbchess-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,${ENGINE_SRCS}))
 	$(call BUILDCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
 
 BOOK_GEN_SRCS=book/book_gen.cpp book/pgn/pgn.cpp engine/fen/fen.cpp core/hash/hash.cpp ${MOVES_SRCS}
@@ -290,14 +290,14 @@ puzzles: build/search-test ${CI_NONMATE_PUZZLES} ${NNUE_FILE}
 	$(Q)./build/search-test $(VOPT) 7 ${CI_NONMATE_PUZZLES}
 
 # UCI-based puzzle tests: run puzzle-test against the engine binary
-build/mate123-uci.out: build/puzzle-test build/engine ${CI_MATE123_PUZZLES} ${NNUE_FILE}
-	$(Q)./build/puzzle-test $(VOPT) --depth 7 ./build/engine ${CI_MATE123_PUZZLES} $(REDIR)
+build/mate123-uci.out: build/puzzle-test build/gbchess ${CI_MATE123_PUZZLES} ${NNUE_FILE}
+	$(Q)./build/puzzle-test $(VOPT) --depth 7 ./build/gbchess ${CI_MATE123_PUZZLES} $(REDIR)
 
-build/mate45-uci.out: build/puzzle-test build/engine ${CI_MATE45_PUZZLES} ${NNUE_FILE}
-	$(Q)./build/puzzle-test $(VOPT) --depth 11 ./build/engine ${CI_MATE45_PUZZLES} $(REDIR)
+build/mate45-uci.out: build/puzzle-test build/gbchess ${CI_MATE45_PUZZLES} ${NNUE_FILE}
+	$(Q)./build/puzzle-test $(VOPT) --depth 11 ./build/gbchess ${CI_MATE45_PUZZLES} $(REDIR)
 
-build/puzzles-uci.out: build/puzzle-test build/engine ${CI_NONMATE_PUZZLES} ${NNUE_FILE}
-	$(Q)./build/puzzle-test $(VOPT) --depth 7 ./build/engine ${CI_NONMATE_PUZZLES} $(REDIR)
+build/puzzles-uci.out: build/puzzle-test build/gbchess ${CI_NONMATE_PUZZLES} ${NNUE_FILE}
+	$(Q)./build/puzzle-test $(VOPT) --depth 7 ./build/gbchess ${CI_NONMATE_PUZZLES} $(REDIR)
 
 mate123-uci: build/mate123-uci.out
 mate45-uci: build/mate45-uci.out
@@ -340,8 +340,8 @@ build/perft-test.out: build/perft-test
 build/perft-debug.out: build/perft-debug
 	$(Q)./build/perft-debug $(REDIR)
 
-debug: $(patsubst %-test,%-debug,$(CPP_TESTS)) build/perft-debug build/engine-debug build/book-gen-debug
-build-ci: .deps $(CPP_TESTS) $(COMPILE_COMMANDS) build/engine build/perft-simple build/book-gen
+debug: $(patsubst %-test,%-debug,$(CPP_TESTS)) build/perft-debug build/gbchess-debug build/book-gen-debug
+build-ci: .deps $(CPP_TESTS) $(COMPILE_COMMANDS) build/gbchess build/perft-simple build/book-gen
 build:  build/perft build-ci
 	$(Q)echo "\n✅ Build complete\n"
 
@@ -360,8 +360,8 @@ build/searches.out: build/search-debug ${NNUE_FILE}
 
 searches: build/searches.out
 
-build/uci-%.out: test/uci-%.in build/engine ${NNUE_FILE}
-	$(Q)./build/engine $< 2>&1 | grep -wv "expect" $(REDIR)
+build/uci-%.out: test/uci-%.in build/gbchess ${NNUE_FILE}
+	$(Q)./build/gbchess $< 2>&1 | grep -wv "expect" $(REDIR)
 
 build/uci.out: $(patsubst test/uci-%.in,build/uci-%.out,$(wildcard test/uci-*.in))
 	$(Q)./test/check-uci.sh
@@ -434,23 +434,23 @@ $(COMPILE_COMMANDS):
 
 .PHONY: ci install-hooks generate-book
 
-SPRT_NEW ?= build/engine
-SPRT_BASE ?= build/engine-base
+SPRT_NEW ?= build/gbchess
+SPRT_BASE ?= build/gbchess-base
 SPRT_STOCKFISH12 ?= stockfish-12
 SPRT_ARGS ?= --tc 60+2
 
-sprt-base: build/engine
+sprt-base: build/gbchess
 	# Require a clean working tree so we can tag the current source files using git
 	@git diff --quiet || { echo "❌ Working tree is not clean, please commit or stash changes before running this target"; exit 1; }
-	# Force tag this commit as sprt-base and save the engine as build/engine-base for SPRT testing.
+	# Force tag this commit as sprt-base and save the engine as build/gbchess-base for SPRT testing.
 	$(Q)git tag -f sprt-base
-	$(Q)cp build/engine build/engine-base
-	$(Q)echo "✅ Current commit tagged as sprt-base and engine saved as build/engine-base"
+	$(Q)cp build/gbchess build/gbchess-base
+	$(Q)echo "✅ Current commit tagged as sprt-base and engine saved as build/gbchess-base"
 
-sprt-self: build/engine
+sprt-self: build/gbchess
 	$(Q)./test/sprt.sh --new-cmd "$(SPRT_NEW)" --base-cmd "$(SPRT_BASE)" --new-name gbchess-new --base-name gbchess-base $(SPRT_ARGS)
 
-sprt-sf12: build/engine
+sprt-sf12: build/gbchess
 	$(Q)./test/sprt.sh --new-cmd "$(SPRT_NEW)" --base-cmd "$(SPRT_STOCKFISH12)" --new-name gbchess --base-name stockfish-12 $(SPRT_ARGS)
 
 .PHONY: sprt-self sprt-sf12

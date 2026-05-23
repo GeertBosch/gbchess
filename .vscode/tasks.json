@@ -111,10 +111,10 @@
       },
       {
          "type": "shell",
-         "label": "build: engine-debug",
+         "label": "build: gbchess-debug",
          "command": "make",
          "args": [
-            "build/engine-debug"
+            "build/gbchess-debug"
          ],
          "group": "build",
          "problemMatcher": [
@@ -171,8 +171,8 @@
       },
       {
          "type": "shell",
-         "label": "run: engine-debug with current file",
-         "command": "build/engine-debug",
+         "label": "run: gbchess-debug with current file",
+         "command": "build/gbchess-debug",
          "args": [
             "<",
             "${file}"

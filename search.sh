@@ -29,7 +29,7 @@ done | (
 if [ "$engine" = "stockfish" ] ; then
     Stockfish/src/stockfish
 elif [ "$engine" = "gbchess" ] ; then
-    build/engine
+    build/gbchess
 else
     echo "unknown engine: $engine" >&2
     exit 2

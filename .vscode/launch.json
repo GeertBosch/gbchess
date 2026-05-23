@@ -30,14 +30,14 @@
             "args": [],
         },
         {
-            "name": "engine-debug with current file",
+            "name": "gbchess-debug with current file",
             "type": "lldb-dap",
             "request": "launch",
-            "preLaunchTask": "build: engine-debug",
+            "preLaunchTask": "build: gbchess-debug",
             "initCommands": [
                 "command source ${workspaceRoot}/chess.lldbinit"
             ],
-            "program": "${workspaceFolder}/build/engine-debug",
+            "program": "${workspaceFolder}/build/gbchess-debug",
             "args": [
                 "${file}"
             ],
@@ -56,7 +56,7 @@
                 "004d8",
                 "--nodes",
                 "100000",
-                "${workspaceFolder}/build/engine",
+                "${workspaceFolder}/build/gbchess",
                 "${workspaceFolder}/lichess/ci_nonmate_100.csv",
             ],
         },
@@ -70,7 +70,7 @@
             ],
             "program": "${workspaceFolder}/build/puzzle-debug",
             "args": [
-                "${workspaceFolder}/build/engine",
+                "${workspaceFolder}/build/gbchess",
                 "--depth",
                 "9",
                 "${file}",
@@ -209,14 +209,14 @@
             "args": [],
         },
         {
-            "name": "engine-debug",
+            "name": "gbchess-debug",
             "type": "lldb-dap",
             "request": "launch",
-            "preLaunchTask": "build: engine-debug",
+            "preLaunchTask": "build: gbchess-debug",
             "initCommands": [
                "command source ${workspaceRoot}/chess.lldbinit"
             ],
-            "program": "${workspaceFolder}/build/engine-debug",
+            "program": "${workspaceFolder}/build/gbchess-debug",
             "args": [
             "--cmd",
             "restore",

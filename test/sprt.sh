@@ -9,10 +9,10 @@ Usage:
   test/sprt.sh --base-cmd <cmd> [options]
 
 Required:
-  --base-cmd <cmd>           Baseline engine command, e.g. build/engine-base or stockfish
+  --base-cmd <cmd>           Baseline engine command, e.g. build/gbchess-base or stockfish
 
 Options:
-  --new-cmd <cmd>            New engine command (default: build/engine)
+  --new-cmd <cmd>            New engine command (default: build/gbchess)
   --base-name <name>         Baseline engine name (default: baseline)
   --new-name <name>          New engine name (default: gbchess-new)
   --base-option <K=V>        UCI option for baseline engine (repeatable)
@@ -33,9 +33,9 @@ Options:
   -h, --help                 Show this help
 
 Examples:
-  test/sprt.sh --base-cmd build/engine-base
+  test/sprt.sh --base-cmd build/gbchess-base
     test/sprt.sh --base-cmd stockfish-12 --base-name stockfish-12
-    test/sprt.sh --base-cmd build/engine-base --new-option OwnBook=false --base-option OwnBook=false
+    test/sprt.sh --base-cmd build/gbchess-base --new-option OwnBook=false --base-option OwnBook=false
 EOF
 }
 
@@ -102,7 +102,7 @@ require_cmd() {
 
 BASE_CMD=
 BASE_NAME=baseline
-NEW_CMD=build/engine
+NEW_CMD=build/gbchess
 NEW_NAME=gbchess-new
 TC=8+0.08
 CONCURRENCY=$(cpu_count)

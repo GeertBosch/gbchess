@@ -16,7 +16,7 @@ It supports:
 2. Build the engine:
 
 ```bash
-make -j build/engine
+make -j build/gbchess
 ```
 
 ## Quick start
@@ -24,13 +24,13 @@ make -j build/engine
 ### 1) gbchess vs previous gbchess build
 
 ```bash
-make sprt-self SPRT_BASE=build/engine-prev
+make sprt-self SPRT_BASE=build/gbchess-prev
 ```
 
 This runs:
 
-- new engine: `build/engine` (or `SPRT_NEW=...`)
-- base engine: `build/engine-prev`
+- new engine: `build/gbchess` (or `SPRT_NEW=...`)
+- base engine: `build/gbchess-prev`
 
 ### 2) gbchess vs stockfish-12
 
@@ -50,21 +50,21 @@ Pass extra arguments through `SPRT_ARGS`.
 ### Faster smoke SPRT
 
 ```bash
-make sprt-self SPRT_BASE=build/engine-prev \
+make sprt-self SPRT_BASE=build/gbchess-prev \
   SPRT_ARGS='--tc 5+0.05 --games 4000 --elo0 0 --elo1 5'
 ```
 
 ### More conservative confirmation run
 
 ```bash
-make sprt-self SPRT_BASE=build/engine-prev \
+make sprt-self SPRT_BASE=build/gbchess-prev \
   SPRT_ARGS='--tc 10+0.1 --games 40000 --elo0 0 --elo1 3 --alpha 0.05 --beta 0.05'
 ```
 
 ### Explicit gbchess options (optional)
 
 ```bash
-make sprt-self SPRT_BASE=build/engine-prev \
+make sprt-self SPRT_BASE=build/gbchess-prev \
   SPRT_ARGS='--new-option OwnBook=false --base-option OwnBook=false'
 ```
 
@@ -78,13 +78,13 @@ By default the script tries to use `build/sprt-openings.epd`.
 Override openings explicitly:
 
 ```bash
-test/sprt.sh --base-cmd build/engine-prev --openings-file your.epd --openings-format epd
+test/sprt.sh --base-cmd build/gbchess-prev --openings-file your.epd --openings-format epd
 ```
 
 Disable openings:
 
 ```bash
-test/sprt.sh --base-cmd build/engine-prev --no-openings
+test/sprt.sh --base-cmd build/gbchess-prev --no-openings
 ```
 
 ## Output
@@ -96,7 +96,7 @@ The script writes PGN output to:
 Override with:
 
 ```bash
-test/sprt.sh --base-cmd build/engine-prev --pgnout build/my-sprt-run.pgn
+test/sprt.sh --base-cmd build/gbchess-prev --pgnout build/my-sprt-run.pgn
 ```
 
 ## Full script help
