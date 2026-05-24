@@ -402,10 +402,13 @@ struct TranspositionTable {
         auto move = eval.move;
         if (!move) return {};
         PrincipalVariation pv(Move(), eval.score);
+        auto drawState = repetitions.enter(hash);
         do {
             pv.moves.push_back(move);
             pos = moves::applyMove(pos, move);
             hash = Hash(pos);
+            repetitions.enter(drawState, hash);
+            if (repetitions.drawn(pos.turn.halfmove())) return pv.score = {}, pv;
         } while ((move = find(hash).move) && --depth > 0);
         return pv;
     }
@@ -1256,18 +1259,7 @@ PrincipalVariation tryTTCutoff(
         return {};
     }
 
-    // Guard against stale TT entries from previous turns: the TT best move may now step
-    // into a position that is drawn by repetition given the current game history, even
-    // though it wasn't when the entry was stored. Check one ply ahead.
-    auto nextPos = moves::applyMove(position, pv.front());
-    auto nextState = repetitions.enter(Hash(nextPos));
-    if (!repetitions.drawn(nextPos.turn.halfmove())) return ++ttCutoffs, pv;
-
-    // Stale entry: restore the original window and fall through to a fresh search.
-    ++ttNoCutMain;
-    alpha = origAlpha;
-    beta = origBeta;
-    return {};
+    return pv;
 }
 
 /**
@@ -1733,24 +1725,6 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
 
     auto pv = options::iterativeDeepening ? iterativeDeepening(position, maxdepth, info)
                                           : toplevelAlphaBeta(position, maxdepth, info);
-
-    // Sanity check for repetitions: if the PV includes a repetition, it should be a draw
-    MoveVector checkedMoves;
-    for (auto move : pv.moves) {
-        position = moves::applyMove(position, move);
-        repetitions.enter(drawState, Hash(position));
-        checkedMoves.push_back(move);
-        if (repetitions.drawn(position.turn.halfmove()) &&
-            checkedMoves.size() < pv.moves.size()) {
-            auto scoreStr = std::string(pv.score);
-            std::stringstream ss;
-            pv.moves.resize(checkedMoves.size());  // truncate after last non-repeating move
-            ss << "string pv continues after repetition with move " << to_string(pv) << " score "
-               << scoreStr;
-            info(ss.str());
-            break;
-        }
-    }
 
     // Adjust mate scores to reflect the number of moves to mate
     return pv;
