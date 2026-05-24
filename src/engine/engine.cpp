@@ -69,89 +69,6 @@ OutputIt skip(InputIt first, InputIt last, size_t skip, OutputIt d_first) {
     }
     return d_first;
 }
-void printStatistics(std::ostream& os) {
-    using namespace search;
-    // === gbchess Search Statistics ===
-    // Total nodes: 47
-    // Null move attempts: 0 (0% of nodes)
-    // Null move cutoffs: 0 (0% of attempts)
-    // Beta cutoffs: 14 (29% of nodes)
-    // First-move cutoffs: 14 (100% of beta cutoffs)
-    // ===================================
-    os << "\n=== " + std::string(cmdName) + " Search Statistics ===\n";
-    os << "Total nodes: " << search::nodeCount << " (main=" << search::mainNodeCount
-       << " leaf->QS=" << search::quiescenceCount << " QS=" << search::qsNodeCount << ")\n";
-    os << "Null move attempts: " << search::nullMoveAttempts << " ("
-       << (search::mainNodeCount ? (search::nullMoveAttempts * 100 / search::mainNodeCount) : 0)
-       << "% of main nodes)\n";
-    os << "Null move cutoffs: " << search::nullMoveCutoffs << " ("
-       << (search::nullMoveAttempts ? (search::nullMoveCutoffs * 100 / search::nullMoveAttempts)
-                                    : 0)
-       << "% of attempts)\n";
-    os << "Root search calls: " << search::rootSearchCalls << "\n";
-    os << "Root move visits: " << search::rootMoveVisits << " ("
-       << (search::rootSearchCalls ? (search::rootMoveVisits / search::rootSearchCalls) : 0)
-       << " per root pass)\n";
-    os << "Aspiration attempts: " << search::aspirationAttempts
-       << " (fail-low=" << search::aspirationFailLow << ", fail-high=" << search::aspirationFailHigh
-       << ", fallback=" << search::aspirationFallbackFullWindow << ")\n";
-    os << "PVS: attempts=" << search::pvsAttempts << " researches=" << search::pvsResearches
-       << "\n";
-    os << "LMR: attempts=" << search::lmrAttempts << " researches=" << search::lmrResearches
-       << "\n";
-    os << "Main SEE pruned: " << search::mainSeePruned << "\n";
-    os << "TT cutoffs: " << search::ttCutoffs << " refinements=" << search::ttRefinements << "\n";
-    os << "TT main: probes=" << search::ttProbesMain << " hits=" << search::ttHitsMain
-       << " cutoffs=" << search::ttCutoffs << " no-cut=" << search::ttNoCutMain
-       << " miss(key/depth/gen/repetition)=" << search::ttMissKeyMain << "/"
-       << search::ttMissDepthMain << "/" << search::ttMissGenerationMain << "/"
-       << search::ttMissRepetitionMain << "\n";
-    os << "TT main key-miss detail: empty/occupied(curr/old)=" << search::ttMissKeyMainEmpty << "/"
-       << search::ttMissKeyMainOccupied << "(" << search::ttMissKeyMainOccupiedCurrentGen << "/"
-       << search::ttMissKeyMainOccupiedOldGen << ")\n";
-    os << "TT main hit types: exact/lower/upper=" << search::ttHitExactMain << "/"
-       << search::ttHitLowerMain << "/" << search::ttHitUpperMain << "\n";
-    os << "TT main depth-miss gaps: d1/d2/d3+=" << search::ttMissDepthGap1Main << "/"
-       << search::ttMissDepthGap2Main << "/" << search::ttMissDepthGap3PlusMain << "\n";
-    os << "TT main depth-miss d1 potential: would-cut=" << search::ttMissDepthGap1WouldCutMain
-       << " would-tighten=" << search::ttMissDepthGap1WouldTightenMain << "\n";
-    os << "TT main depth-miss at requested depth 1/2/3/4+=" << search::ttMissDepthAt1Main << "/"
-       << search::ttMissDepthAt2Main << "/" << search::ttMissDepthAt3Main << "/"
-       << search::ttMissDepthAt4PlusMain << "\n";
-    os << "TT qs: probes=" << search::ttProbesQs << " hits=" << search::ttHitsQs
-       << " cutoffs=" << search::qsTTCutoffs << " no-cut=" << search::ttNoCutQs
-       << " miss(key/depth/gen/repetition)=" << search::ttMissKeyQs << "/" << search::ttMissDepthQs
-       << "/" << search::ttMissGenerationQs << "/" << search::ttMissRepetitionQs << "\n";
-    os << "TT inserts: attempts=" << search::ttInsertAttempts
-       << " writes=" << search::ttInsertWrites << " rejected=" << search::ttInsertRejected
-       << " (exact/lower/upper)=" << search::ttInsertExact << "/" << search::ttInsertLower << "/"
-       << search::ttInsertUpper << "\n";
-     os << "TT conversion: raw-probes(main/qs)=" << search::ttRawProbesMain << "/"
-         << search::ttRawProbesQs << " raw-hits(main/qs)=" << search::ttRawHitsMain << "/"
-         << search::ttRawHitsQs << " hit-per-write="
-         << (search::ttInsertWrites ? ((search::ttRawHitsMain + search::ttRawHitsQs) * 100 /
-                                                     search::ttInsertWrites)
-                                             : 0)
-         << "%\n";
-    os << "Root cutoffs: total=" << search::rootBetaCutoffs << " (m1=" << search::rootCutoffMove1
-       << ", m2-3=" << search::rootCutoffMoveLe3 << ", m4+=" << search::rootCutoffMoveGt3 << ")\n";
-    os << "Ply1 cutoffs: total=" << search::ply1BetaCutoffs << " (m1=" << search::ply1CutoffMove1
-       << ", m2-3=" << search::ply1CutoffMoveLe3 << ", m4+=" << search::ply1CutoffMoveGt3 << ")\n";
-     os << "Shallow nodes (depth<=3): main=" << search::shallowMainNodes
-         << " leaves->QS=" << search::shallowLeavesToQS << "\n";
-     os << "Main hash visits: first=" << search::mainHashSeenFirst
-        << " repeat=" << search::mainHashSeenRepeat << "\n";
-     os << "Forced move extensions: " << search::forcedMoveExtensions << "\n";
-     os << "TT refine no-cut: main=" << search::ttRefineNoCut << " (shallow="
-         << search::ttRefineNoCutShallow << ") qs=" << search::qsTTRefineNoCut << "\n";
-    os << "Beta cutoffs: " << search::betaCutoffs << " ("
-       << (search::mainNodeCount ? (search::betaCutoffs * 100 / search::mainNodeCount) : 0)
-       << "% of main nodes)\n";
-    os << "First-move cutoffs: " << search::firstMoveCutoffs << " ("
-       << (search::betaCutoffs ? (search::firstMoveCutoffs * 100 / search::betaCutoffs) : 0)
-       << "% of beta cutoffs)\n";
-    os << "===================================\n";
-}
 
 }  // namespace
 
@@ -457,7 +374,6 @@ void UCIRunner::dispatch(const std::string& command,
     } else if (command == "isready") {
         out << "readyok\n";
     } else if (command == "quit") {
-        printStatistics(out);
         std::exit(0);
     } else if (command == "ucinewgame") {
         search::newGame();

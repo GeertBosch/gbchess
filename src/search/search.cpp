@@ -5,7 +5,6 @@
 #include <optional>
 #include <sstream>
 #include <string>
-#include <unordered_set>
 #include <utility>
 
 #include "core/core.h"
@@ -31,93 +30,48 @@ int maxSelDepth = 0;
 uint64_t evalCount = 0;
 uint64_t nodeCount = 0;      // total: all alphaBeta calls + inner QS recursion (used for node limit)
 uint64_t mainNodeCount = 0;  // SF-comparable: alphaBeta calls with depth.left > 0 only
+uint64_t cacheCount = 0;
 uint64_t quiescenceCount = 0;
 uint64_t qsNodeCount = 0;    // inner quiesce() recursive calls
-uint64_t cacheCount = 0;
+
+extern uint64_t evalCount;
+extern uint64_t nodeCount;
+extern uint64_t mainNodeCount;
+extern uint64_t cacheCount;
+extern uint64_t quiescenceCount;
+extern uint64_t qsNodeCount;
+
+extern uint64_t betaCutoffs;
+extern uint64_t countermoveAttempts;
+extern uint64_t countermoveHits;
+extern uint64_t firstMoveCutoffs;
+extern uint64_t futilityPruned;
+extern uint64_t lmrAttempts;
+extern uint64_t lmrResearches;
+extern uint64_t nullMoveAttempts;
+extern uint64_t nullMoveCutoffs;
+extern uint64_t pvsAttempts;
+extern uint64_t pvsResearches;
+extern uint64_t qsTTCutoffs;
+extern uint64_t qsTTRefinements;
+extern uint64_t ttCutoffs;
+extern uint64_t ttRefinements;
 
 uint64_t betaCutoffs = 0;
 uint64_t countermoveAttempts = 0;
 uint64_t countermoveHits = 0;
 uint64_t firstMoveCutoffs = 0;
 uint64_t futilityPruned = 0;
-uint64_t mainSeePruned = 0;
 uint64_t lmrAttempts = 0;
 uint64_t lmrResearches = 0;
 uint64_t nullMoveAttempts = 0;
 uint64_t nullMoveCutoffs = 0;
-uint64_t nullMoveSkippedInCheck = 0;
-uint64_t nullMoveSkippedMate = 0;
-uint64_t nullMoveSkippedEndgame = 0;
-uint64_t nullMoveSkippedPV = 0;
-uint64_t nullMoveSkippedBehind = 0;
 uint64_t pvsAttempts = 0;
 uint64_t pvsResearches = 0;
-uint64_t rootBetaCutoffs = 0;
-uint64_t rootCutoffMove1 = 0;
-uint64_t rootCutoffMoveLe3 = 0;
-uint64_t rootCutoffMoveGt3 = 0;
-uint64_t ply1BetaCutoffs = 0;
-uint64_t ply1CutoffMove1 = 0;
-uint64_t ply1CutoffMoveLe3 = 0;
-uint64_t ply1CutoffMoveGt3 = 0;
-uint64_t rootMoveVisits = 0;
-uint64_t rootSearchCalls = 0;
-uint64_t aspirationAttempts = 0;
-uint64_t aspirationFailLow = 0;
-uint64_t aspirationFailHigh = 0;
-uint64_t aspirationFallbackFullWindow = 0;
 uint64_t qsTTCutoffs = 0;
 uint64_t qsTTRefinements = 0;
-uint64_t qsTTRefineNoCut = 0;
 uint64_t ttCutoffs = 0;
 uint64_t ttRefinements = 0;
-uint64_t ttRefineNoCut = 0;
-uint64_t ttRefineNoCutShallow = 0;
-uint64_t ttProbesMain = 0;
-uint64_t ttHitsMain = 0;
-uint64_t ttNoCutMain = 0;
-uint64_t ttMissKeyMain = 0;
-uint64_t ttMissKeyMainEmpty = 0;
-uint64_t ttMissKeyMainOccupied = 0;
-uint64_t ttMissKeyMainOccupiedCurrentGen = 0;
-uint64_t ttMissKeyMainOccupiedOldGen = 0;
-uint64_t ttMissDepthMain = 0;
-uint64_t ttMissDepthGap1Main = 0;
-uint64_t ttMissDepthGap2Main = 0;
-uint64_t ttMissDepthGap3PlusMain = 0;
-uint64_t ttMissDepthGap1WouldCutMain = 0;
-uint64_t ttMissDepthGap1WouldTightenMain = 0;
-uint64_t ttMissDepthAt1Main = 0;
-uint64_t ttMissDepthAt2Main = 0;
-uint64_t ttMissDepthAt3Main = 0;
-uint64_t ttMissDepthAt4PlusMain = 0;
-uint64_t ttMissGenerationMain = 0;
-uint64_t ttMissRepetitionMain = 0;
-uint64_t ttHitExactMain = 0;
-uint64_t ttHitLowerMain = 0;
-uint64_t ttHitUpperMain = 0;
-uint64_t ttProbesQs = 0;
-uint64_t ttHitsQs = 0;
-uint64_t ttNoCutQs = 0;
-uint64_t ttMissKeyQs = 0;
-uint64_t ttMissDepthQs = 0;
-uint64_t ttMissGenerationQs = 0;
-uint64_t ttMissRepetitionQs = 0;
-uint64_t ttInsertAttempts = 0;
-uint64_t ttInsertWrites = 0;
-uint64_t ttInsertRejected = 0;
-uint64_t ttInsertExact = 0;
-uint64_t ttInsertLower = 0;
-uint64_t ttInsertUpper = 0;
-uint64_t ttRawProbesMain = 0;
-uint64_t ttRawHitsMain = 0;
-uint64_t ttRawProbesQs = 0;
-uint64_t ttRawHitsQs = 0;
-uint64_t shallowMainNodes = 0;
-uint64_t shallowLeavesToQS = 0;
-uint64_t forcedMoveExtensions = 0;
-uint64_t mainHashSeenFirst = 0;
-uint64_t mainHashSeenRepeat = 0;
 
 static Hash debugHash = {};
 
@@ -136,54 +90,9 @@ uint64_t searchCacheCount = 0;
 timepoint searchStartTime = {};
 
 std::optional<nnue::NNUE> network = nnue::loadNNUE("nn-82215d0fd0df.nnue", nnue::kQuiet);
-std::unordered_set<uint64_t> seenMainHashKeys;
-
-uint64_t mainHashKey(Hash hash) {
-    auto v = hash();
-    return uint64_t(v) ^ uint64_t(v >> 64);
-}
 
 std::string pct(uint64_t some, uint64_t all) {
     return all ? " " + std::to_string((some * 100) / all) + "%" : "";
-}
-
-bool traceSearchEnabled(int ply) {
-    return options::traceSearchTree && ply <= options::traceSearchMaxPly;
-}
-
-std::string traceIndent(int ply) {
-    return std::string((ply + 1) * 2, ' ');
-}
-
-const char* traceNodeKind(Score alpha, Score beta) {
-    return beta.cp() - alpha.cp() > 1 ? "PV" : "NP";
-}
-
-void traceNodeEnter(int ply, int depthleft, Score alpha, Score beta, Move move) {
-    if (!traceSearchEnabled(ply)) return;
-    std::cerr << traceIndent(ply) << "[" << traceNodeKind(alpha, beta) << " d" << depthleft << " p"
-              << ply << "] ";
-    if (ply == 0)
-        std::cerr << "root";
-    else
-        std::cerr << to_string(move);
-    std::cerr << " a=" << alpha.cp() << " b=" << beta.cp() << "\n";
-}
-
-void traceBetaCutoff(int ply, Move move, Score score, Score beta, int moveCount) {
-    if (!traceSearchEnabled(ply)) return;
-    std::cerr << traceIndent(ply) << "-> beta cutoff: " << to_string(move) << " val=" << score.cp()
-              << " beta=" << beta.cp();
-    if (moveCount == 1) std::cerr << " [first-move]";
-    std::cerr << "\n";
-}
-
-void tracePrune(int ply, const char* reason, Move move = Move(), Score eval = Score()) {
-    if (!traceSearchEnabled(ply)) return;
-    std::cerr << traceIndent(ply) << "-> " << reason;
-    if (move) std::cerr << ": " << to_string(move);
-    if (eval != Score()) std::cerr << " eval=" << eval.cp();
-    std::cerr << "\n";
 }
 
 /**
@@ -205,9 +114,9 @@ class Repetitions {
         halfmove = std::min(halfmove, int(hashes.size()));
 
         int count = 0;
-        for (auto it = hashes.begin() + hashes.size() - halfmove; it != hashes.end(); ++it) {
+        for (auto it = hashes.begin() + hashes.size() - halfmove; it != hashes.end(); ++it)
             count += (*it == hash);
-        }
+
         return count;
     }
 
@@ -413,105 +322,37 @@ struct TranspositionTable {
         return pv;
     }
 
-    enum class RefineResult : uint8_t {
-        Hit,
-        MissKey,
-        MissDepth,
-        MissGeneration,
-        MissRepetition,
-    };
-
-    RefineResult refineAlphaBeta(Hash hash,
-                                 Turn turn,
-                                 int depthleft,
-                                 Score& alpha,
-                                 Score& beta,
-                                 bool allowQsFrontierInMain = false) {
-        if constexpr (kNumEntries == 0) return RefineResult::MissKey;
-        auto idx = indexOf(hash);
-        auto& entry = entries[idx];
+    [[nodiscard]] bool refineAlphaBeta(
+        Hash hash, int depthleft, Score& alpha, Score& beta, bool allowQsFrontierInMain) {
+        if constexpr (kNumEntries == 0) return false;
+        auto& entry = (*this)[hash];
 
         ++stats.numMisses;
-        if (entry.key != keyOf(hash)) {
-            if (depthleft > 0) {
-                if (!entry.occupied())
-                    ++ttMissKeyMainEmpty;
-                else {
-                    ++ttMissKeyMainOccupied;
-                    if (entry.generation == numGenerations)
-                        ++ttMissKeyMainOccupiedCurrentGen;
-                    else
-                        ++ttMissKeyMainOccupiedOldGen;
-                }
-            }
-            return RefineResult::MissKey;
-        }
-        if (entry.depthleft < depthleft) {
-            if (depthleft > 0) {
-                if (depthleft == 1)
-                    ++ttMissDepthAt1Main;
-                else if (depthleft == 2)
-                    ++ttMissDepthAt2Main;
-                else if (depthleft == 3)
-                    ++ttMissDepthAt3Main;
-                else
-                    ++ttMissDepthAt4PlusMain;
+        if (entry.key != keyOf(hash) || entry.generation != numGenerations ||
+            entry.depthleft < depthleft)
+            return false;
 
-                auto gap = depthleft - int(entry.depthleft);
-                if (gap == 1) {
-                    ++ttMissDepthGap1Main;
-                    auto wouldAlpha = alpha;
-                    auto wouldBeta = beta;
-                    switch (entry.type) {
-                    case EntryType::EXACT: wouldAlpha = wouldBeta = entry.eval.score; break;
-                    case EntryType::LOWERBOUND:
-                        wouldAlpha = std::max(wouldAlpha, entry.eval.score);
-                        break;
-                    case EntryType::UPPERBOUND:
-                        wouldBeta = std::min(wouldBeta, entry.eval.score);
-                        break;
-                    }
-                    if (wouldAlpha >= wouldBeta)
-                        ++ttMissDepthGap1WouldCutMain;
-                    else if (wouldAlpha > alpha || wouldBeta < beta)
-                        ++ttMissDepthGap1WouldTightenMain;
-                } else if (gap == 2)
-                    ++ttMissDepthGap2Main;
-                else
-                    ++ttMissDepthGap3PlusMain;
-            }
-            return RefineResult::MissDepth;
-        }
-        if (entry.generation != numGenerations) return RefineResult::MissGeneration;
         // Main-search TT reuse policy:
         // - Never consume deep-qsearch entries
         // - Allow frontier-qsearch entries only under explicit shallow/non-PV gate
         if (depthleft > 0) {
-            if (entry.scope == Scope::QsDeep) return RefineResult::MissDepth;
-            if (entry.scope == Scope::QsFrontier) {
-                if (!allowQsFrontierInMain) return RefineResult::MissDepth;
-                if (entry.type == EntryType::EXACT || entry.eval.score.mate())
-                    return RefineResult::MissDepth;
-            }
+            if (entry.scope == Scope::QsDeep) return false;
+            if (entry.scope == Scope::QsFrontier &&
+                (!allowQsFrontierInMain || entry.type == EntryType::EXACT ||
+                 entry.eval.score.mate()))
+                return false;
         }
-        if (repetitions.drawn(turn.halfmove())) {
-            // Don't refine if this position may be drawn by repetition, to avoid
-            // polluting the table with inaccurate evaluations.
-            return RefineResult::MissRepetition;
-        }
+        // Don't refine if this position may be drawn by repetition, to avoid
+        // polluting the table with inaccurate evaluations.
+        // if (repetitions.drawn(turn.halfmove())) return false;
+
         --stats.numMisses;
         ++stats.numHits;
 
         ++cacheCount;
-        if (depthleft) {
+        if (depthleft)
             ++ttRefinements;
-            if (entry.type == EntryType::EXACT)
-                ++ttHitExactMain;
-            else if (entry.type == EntryType::LOWERBOUND)
-                ++ttHitLowerMain;
-            else
-                ++ttHitUpperMain;
-        } else
+        else
             ++qsTTRefinements;
 
         switch (entry.type) {
@@ -519,7 +360,7 @@ struct TranspositionTable {
         case EntryType::LOWERBOUND: alpha = std::max(alpha, entry.eval.score); break;
         case EntryType::UPPERBOUND: beta = std::min(beta, entry.eval.score); break;
         }
-        return RefineResult::Hit;
+        return true;
     }
 
     /**
@@ -568,8 +409,6 @@ struct TranspositionTable {
         if constexpr (kNumEntries == 0) return;
         if (!move.move && move.score.mate()) return;
 
-        ++ttInsertAttempts;
-
         Entry newEntry = {hash, move, depthleft, type, numGenerations, scope};
         auto& oldEntry = entries[indexOf(hash)];
         newEntry.key = keyOf(hash);
@@ -578,17 +417,9 @@ struct TranspositionTable {
             newEntry.eval.move = oldEntry.eval.move;
         if (!shouldReplace(oldEntry, newEntry)) {
             ++stats.numWorse;
-            ++ttInsertRejected;
             return;
         }
         ++stats.numInserted;
-        ++ttInsertWrites;
-        if (type == EntryType::EXACT)
-            ++ttInsertExact;
-        else if (type == EntryType::LOWERBOUND)
-            ++ttInsertLower;
-        else
-            ++ttInsertUpper;
 
         // 3 cases: improve existing entry, collision with unrelated entry, or occupy an empty slot
         if (oldEntry.key == keyOf(hash))
@@ -894,86 +725,6 @@ bool isQuiet(Position& position, int depthleft) {
     return true;
 }
 
-Score oracleStaticEval(Position& position) {
-    if (options::useNNUE) {
-        auto score = Score::fromCP(nnue::evaluate(position, *network));
-        return position.active() == Color::w ? score : -score;
-    }
-    auto score = evaluateBoard(position.board);
-    return position.active() == Color::w ? score : -score;
-}
-
-Score oracleQuiesce(Position& position, Score alpha, Score beta, int depthleft) {
-    auto standPat = oracleStaticEval(position);
-    if (!depthleft) return standPat;
-
-    if (standPat >= beta && isQuiet(position, depthleft)) return beta;
-    if (standPat > alpha && isQuiet(position, depthleft)) alpha = standPat;
-
-    auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, depthleft);
-    if (moveList.empty() && isInCheck(position)) return Score::min();
-
-    std::stable_sort(moveList.begin(), moveList.end(), [&](const Move& a, const Move& b) {
-        return scoreMove(position.board, a) > scoreMove(position.board, b);
-    });
-
-    for (auto move : moveList) {
-        if (options::staticExchangeEvaluation && move.kind == MoveKind::Capture &&
-            staticExchangeEvaluation(position.board, move.from, move.to) < 0_cp &&
-            !isInCheck(position))
-            continue;
-
-        auto nextPosition = moves::applyMove(position, move);
-        auto score = -oracleQuiesce(nextPosition, -beta, -alpha, depthleft - 1);
-        if (score >= beta) return beta;
-        if (score > alpha) alpha = score;
-    }
-
-    return alpha;
-}
-
-Score oracleAlphaBeta(Position& position, Score alpha, Score beta, int depthleft) {
-    if (depthleft <= 0) return oracleQuiesce(position, alpha, beta, options::quiescenceDepth);
-
-    auto moveList = moves::allLegalMovesAndCaptures(position.turn, position.board);
-    if (moveList.empty()) {
-        if (isInCheck(position)) return Score::min();
-        return Score();
-    }
-
-    std::stable_sort(moveList.begin(), moveList.end(), [&](const Move& a, const Move& b) {
-        return scoreMove(position.board, a) > scoreMove(position.board, b);
-    });
-
-    for (auto move : moveList) {
-        auto nextPosition = moves::applyMove(position, move);
-        auto score = -oracleAlphaBeta(nextPosition, -beta, -alpha, depthleft - 1);
-        if (score >= beta) return beta;
-        if (score > alpha) alpha = score;
-    }
-
-    return alpha;
-}
-
-void applyMoveOracle(Position& position, MoveVector& moveList, int ply) {
-    // Apply oracle ordering only near the root to bound total cost.
-    if (options::useOracleMaxDepth <= 0 || ply >= options::useOracleMaxDepth) return;
-
-    std::vector<std::pair<Score, Move>> scoredMoves;
-    scoredMoves.reserve(moveList.size());
-    for (auto move : moveList) {
-        auto nextPosition = moves::applyMove(position, move);
-        auto score = -oracleAlphaBeta(nextPosition, Score::min(), Score::max(), options::oracleMoveDepth - 1);
-        scoredMoves.emplace_back(score, move);
-    }
-
-    std::stable_sort(scoredMoves.begin(), scoredMoves.end(), [&](const auto& a, const auto& b) {
-        return a.first > b.first;
-    });
-
-    for (size_t i = 0; i < scoredMoves.size(); ++i) moveList[i] = scoredMoves[i].second;
-}
-
 Score quiesce(
     Position& position, Score alpha, Score beta, int depthleft, Score standPat, int qply = 0) {
     ++nodeCount;
@@ -985,40 +736,21 @@ Score quiesce(
     Move bestMove = Move();
 
     if constexpr (options::useQsTT) {
-        ++ttRawProbesQs;
-        if (transpositionTable.contains(hash)) ++ttRawHitsQs;
-        ++ttProbesQs;
-        auto refine = transpositionTable.refineAlphaBeta(hash, position.turn, 0, alpha, beta);
-        if (refine == TranspositionTable::RefineResult::Hit)
-            ++ttHitsQs;
-        else if (refine == TranspositionTable::RefineResult::MissKey)
-            ++ttMissKeyQs;
-        else if (refine == TranspositionTable::RefineResult::MissDepth)
-            ++ttMissDepthQs;
-        else if (refine == TranspositionTable::RefineResult::MissGeneration)
-            ++ttMissGenerationQs;
-        else if (refine == TranspositionTable::RefineResult::MissRepetition)
-            ++ttMissRepetitionQs;
+        (void)transpositionTable.refineAlphaBeta(hash, 0, alpha, beta, false);
 
-        if (alpha >= beta) {
-            ++qsTTCutoffs;
-            return beta;
-        }
-        ++qsTTRefineNoCut;
-        if (refine == TranspositionTable::RefineResult::Hit) ++ttNoCutQs;
+        if (alpha >= beta && ++qsTTCutoffs) return beta;
     }
 
     if (!depthleft) return standPat;
 
     if (standPat >= beta && isQuiet(position, depthleft)) {
-        if (!beta.mate())
-            transpositionTable.insert(hash,
-                                      {Move(), beta},
-                                      depthleft,
-                                      originalAlpha,
-                                      originalBeta,
-                                      qply == 0 ? TranspositionTable::Scope::QsFrontier
-                                                : TranspositionTable::Scope::QsDeep);
+        transpositionTable.insert(hash,
+                                  {Move(), beta},
+                                  depthleft,
+                                  originalAlpha,
+                                  originalBeta,
+                                  qply == 0 ? TranspositionTable::Scope::QsFrontier
+                                            : TranspositionTable::Scope::QsDeep);
         return beta;
     }
 
@@ -1028,10 +760,8 @@ Score quiesce(
 
     // The moveList includes moves needed to get out of check; an empty list means mate
     auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, depthleft);
-    if (moveList.empty() && isInCheck(position)) {
-        auto mateScore = Score::min();
-        return mateScore;
-    }
+    if (moveList.empty() && isInCheck(position)) return Score::min();
+
     sortMoves(position, moveList.begin(), moveList.end(), Move());  // No killer moves in quiescence
     for (auto move : moveList) {
         if (options::staticExchangeEvaluation && move.kind == MoveKind::Capture &&
@@ -1045,23 +775,18 @@ Score quiesce(
         unmakeMove(position, undo);
 
         if (score >= beta) {
-            if (!beta.mate())
-                transpositionTable.insert(hash,
-                                          {move, beta},
-                                          depthleft,
-                                          originalAlpha,
-                                          originalBeta,
-                                          qply == 0 ? TranspositionTable::Scope::QsFrontier
-                                                    : TranspositionTable::Scope::QsDeep);
+            transpositionTable.insert(hash,
+                                      {move, beta},
+                                      depthleft,
+                                      originalAlpha,
+                                      originalBeta,
+                                      qply == 0 ? TranspositionTable::Scope::QsFrontier
+                                                : TranspositionTable::Scope::QsDeep);
             return beta;
         }
-        if (score > alpha) {
-            alpha = score;
-            bestMove = move;
-        }
+        if (score > alpha) alpha = score, bestMove = move;
     }
 
-    if (!alpha.mate())
         transpositionTable.insert(hash,
                                   {bestMove, alpha},
                                   depthleft,
@@ -1105,26 +830,8 @@ bool betaCutoff(Score score,
                 const Board& board,
                 Move lastMove) {
     if (score < beta) return false;  // No beta cutoff
-    traceBetaCutoff(ply, move, score, beta, moveCount);
     ++betaCutoffs;
     if (moveCount == 1) ++firstMoveCutoffs;
-
-    // Cutoff histograms for depth-3 efficiency analysis.
-    auto bucketCutoff = [&](uint64_t& move1, uint64_t& moveLe3, uint64_t& moveGt3) {
-        if (moveCount == 1)
-            ++move1;
-        else if (moveCount <= 3)
-            ++moveLe3;
-        else
-            ++moveGt3;
-    };
-    if (ply == 0) {
-        ++rootBetaCutoffs;
-        bucketCutoff(rootCutoffMove1, rootCutoffMoveLe3, rootCutoffMoveGt3);
-    } else if (ply == 1) {
-        ++ply1BetaCutoffs;
-        bucketCutoff(ply1CutoffMove1, ply1CutoffMoveLe3, ply1CutoffMoveGt3);
-    }
 
     // Only apply heuristics to quiet moves
     if (move.kind == MoveKind::Quiet_Move || move.kind == MoveKind::Double_Push) {
@@ -1149,38 +856,20 @@ PrincipalVariation alphaBeta(
  * Only effective in non-PV nodes with sufficient margin.
  */
 bool tryNullMovePruning(Position& position, Hash hash, Score alpha, Score beta, Depth depth) {
-    if (!options::nullMovePruning) return false;
-    if (depth.left < options::nullMoveMinDepth) return false;
+    if (!options::nullMovePruning || depth.left < options::nullMoveMinDepth) return false;
 
-    if (beta.mate()) {
-        ++nullMoveSkippedMate;
-        return false;
-    }
+    // A move is likely forced here
+    if (beta.mate() || isInCheck(position) || !hasNonPawnMaterial(position)) return false;
 
     // Skip null-move in PV nodes (full-window search). NMP is for non-PV (cut/all) nodes only.
-    if (beta.cp() - alpha.cp() > 1) {
-        ++nullMoveSkippedPV;
-        return false;
-    }
-
-    if (isInCheck(position)) {
-        ++nullMoveSkippedInCheck;
-        return false;
-    }
-    if (!hasNonPawnMaterial(position)) {
-        ++nullMoveSkippedEndgame;
-        return false;
-    }
+    if (beta.cp() - alpha.cp() > 1) return false;
 
     // Get quick evaluation for pruning decisions
     Score staticEval = Score::fromCP(nnue::evaluate(position, *network));
     if (position.active() == Color::b) staticEval = -staticEval;
     ++evalCount;
 
-    if (staticEval < beta) {
-        ++nullMoveSkippedBehind;
-        return false;
-    }
+    if (staticEval < beta) return false;
 
     ++nullMoveAttempts;
 
@@ -1206,7 +895,7 @@ bool tryNullMovePruning(Position& position, Hash hash, Score alpha, Score beta, 
 /**
  * Checks the transposition table and returns a cutoff PV if the TT bounds exclude the current
  * window. Validates that the TT best move doesn't walk into a draw-by-repetition that wasn't
- * present when the entry was stored (stale entry guard). Returns empty optional on miss.
+ * present when the entry was stored (stale entry guard). Returns empty PV on miss.
  */
 PrincipalVariation tryTTCutoff(
     const Position& position, Hash hash, int depthleft, Score& alpha, Score& beta, Move& ttMove) {
@@ -1214,11 +903,8 @@ PrincipalVariation tryTTCutoff(
     const bool isPVNode = beta.cp() - alpha.cp() > 1;
     const bool allowQsFrontierInMain =
         !isPVNode && depthleft <= options::qsFrontierInMainMaxDepthLeft;
-    ++ttRawProbesMain;
-    if (transpositionTable.contains(hash)) ++ttRawHitsMain;
-    ++ttProbesMain;
-    auto refine = transpositionTable.refineAlphaBeta(
-        hash, position.turn, depthleft, alpha, beta, allowQsFrontierInMain);
+    const bool refined =
+        transpositionTable.refineAlphaBeta(hash, depthleft, alpha, beta, allowQsFrontierInMain);
     auto ttEval = transpositionTable.peek(hash);
     if (!ttEval.move) {
         // Keep qsearch entries out of main bound refinement, but use their move
@@ -1227,33 +913,19 @@ PrincipalVariation tryTTCutoff(
         if (qsEval.move) ttEval.move = qsEval.move;
     }
     ttMove = ttEval.move;
-    if (refine == TranspositionTable::RefineResult::Hit)
-        ++ttHitsMain;
-    else if (refine == TranspositionTable::RefineResult::MissKey)
-        ++ttMissKeyMain;
-    else if (refine == TranspositionTable::RefineResult::MissDepth)
-        ++ttMissDepthMain;
-    else if (refine == TranspositionTable::RefineResult::MissGeneration)
-        ++ttMissGenerationMain;
-    else if (refine == TranspositionTable::RefineResult::MissRepetition)
-        ++ttMissRepetitionMain;
 
     if (alpha < beta) {
         if (!ttMove) {
             alpha = origAlpha;
             beta = origBeta;
         }
-        ++ttRefineNoCut;
-        if (depthleft <= 3) ++ttRefineNoCutShallow;
-        if (refine == TranspositionTable::RefineResult::Hit) ++ttNoCutMain;
         return {};
     }
 
-    if (refine != TranspositionTable::RefineResult::Hit) return {};
+    if (!refined) return {};
 
     auto pv = transpositionTable.pv(position, depthleft);
     if (!pv) {
-        ++ttNoCutMain;
         alpha = origAlpha;
         beta = origBeta;
         return {};
@@ -1273,23 +945,6 @@ PrincipalVariation alphaBeta(
     Position& position, Hash hash, Score alpha, Score beta, Depth depth, Move lastMove) {
     ++nodeCount;
     if (depth.left > 0) ++mainNodeCount;
-    traceNodeEnter(depth.current, depth.left, alpha, beta, lastMove);
-
-    if (depth.left > 0) {
-        auto [_, inserted] = seenMainHashKeys.insert(mainHashKey(hash));
-        if (inserted)
-            ++mainHashSeenFirst;
-        else
-            ++mainHashSeenRepeat;
-    }
-
-    // Step-3 diagnostics: classify shallow main-search nodes and shallow leaves that enter QS.
-    if (depth.current <= 3) {
-        if (depth.left <= 0)
-            ++shallowLeavesToQS;
-        else
-            ++shallowMainNodes;
-    }
 
     // Track maximum selective depth reached in main search (excludes quiescence)
     if (depth.current > maxSelDepth) maxSelDepth = depth.current;
@@ -1300,9 +955,8 @@ PrincipalVariation alphaBeta(
 
     if (depth.left <= 0) {
         auto score = quiesce(position, alpha, beta, options::quiescenceDepth);
-        if (!score.mate())
-            transpositionTable.insert(
-                hash, {Move(), score}, 0, alpha, beta, TranspositionTable::Scope::QsFrontier);
+        transpositionTable.insert(
+            hash, {Move(), score}, 0, alpha, beta, TranspositionTable::Scope::QsFrontier);
         return {{}, score};
     }
 
@@ -1340,7 +994,6 @@ PrincipalVariation alphaBeta(
 
         if (getStaticEval() - futilityMargin >= beta) {
             ++futilityPruned;
-            tracePrune(depth.current, "rfp prune", Move(), staticEval);
             return {{}, staticEval};
         }
     }
@@ -1356,13 +1009,9 @@ PrincipalVariation alphaBeta(
     auto moveList = moves::allLegalMovesAndCaptures(position.turn, position.board);
 
     // Forced moves don't count towards depth
-    if (moveList.size() == 1) {
-        ++forcedMoveExtensions;
-        ++depth.left;
-    }
+    if (moveList.size() == 1) ++depth.left;
 
     sortMoves(position, ttMove, hash, moveList.begin(), moveList.end(), lastMove, depth.current);
-    applyMoveOracle(position, moveList, depth.current);
 
     PrincipalVariation pv;
     int moveCount = 0;
@@ -1381,17 +1030,14 @@ PrincipalVariation alphaBeta(
                               options::moveFutilityMarginBase);
             if (getStaticEval() + moveFutilityMargin <= curAlpha) {
                 ++futilityPruned;
-                tracePrune(depth.current, "move futility prune", move, staticEval);
                 continue;
             }
         }
 
         if (options::staticExchangeEvaluation && !isPVNode && depth.left <= 3 && !inCheck &&
             moveCount > 1 && move.kind == MoveKind::Capture &&
-            staticExchangeEvaluation(position.board, move.from, move.to) < -100_cp) {
-            ++mainSeePruned;
+            staticExchangeEvaluation(position.board, move.from, move.to) < -100_cp)
             continue;
-        }
 
         auto newHash = hash;
 
@@ -1411,19 +1057,17 @@ PrincipalVariation alphaBeta(
             isQuiet(position, depth.left);
         if (applyLMR) ++lmrAttempts;
 
-        const auto fullDepth = depth.left - 1;
-        const auto reducedDepth = depth.left - 1 - applyLMR;
+        const auto fullDepth = Depth{depth.current + 1, depth.left - 1};
+        const auto reducedDepth = Depth{depth.current + 1, depth.left - 1 - applyLMR};
 
         PrincipalVariation newVar;
-        if (moveCount == 1 || !options::principleVariationSearch) {
+        if (moveCount == 1 || !options::PVS) {
 
             // First move: full window (PV candidate)
-            newVar = -alphaBeta(
-                position, newHash, -beta, -curAlpha, {depth.current + 1, reducedDepth}, move);
+            newVar = -alphaBeta(position, newHash, -beta, -curAlpha, reducedDepth, move);
             if (newVar.score > curAlpha && applyLMR && ++lmrResearches)
                 // If it beats alpha, re-search at full depth
-                newVar = -alphaBeta(
-                    position, newHash, -beta, -curAlpha, {depth.current + 1, fullDepth}, move);
+                newVar = -alphaBeta(position, newHash, -beta, -curAlpha, fullDepth, move);
 
         } else {
             // Later moves: Principal Variation Search (PVS) null-window probe first
@@ -1432,17 +1076,15 @@ PrincipalVariation alphaBeta(
             ++pvsAttempts;
 
             // Try the null-window probe first at reduced depth if LMR applies
-            newVar = -alphaBeta(
-                position, newHash, -probeBeta, -curAlpha, {depth.current + 1, reducedDepth}, move);
+            newVar = -alphaBeta(position, newHash, -probeBeta, -curAlpha, reducedDepth, move);
+
+            // If it fails high, reprobe at full depth as that's cheaper than full window
             if (newVar.score > curAlpha && applyLMR && ++lmrResearches)
-                // If it fails high, reprobe at full depth as that's cheaper than full window
-                newVar = -alphaBeta(
-                    position, newHash, -probeBeta, -curAlpha, {depth.current + 1, fullDepth}, move);
+                newVar = -alphaBeta(position, newHash, -probeBeta, -curAlpha, fullDepth, move);
 
             // If it still beats alpha, confirm with full window
             if (newVar.score > curAlpha && newVar.score < beta && ++pvsResearches)
-                newVar = -alphaBeta(
-                    position, newHash, -beta, -curAlpha, {depth.current + 1, fullDepth}, move);
+                newVar = -alphaBeta(position, newHash, -beta, -curAlpha, fullDepth, move);
         }
 
         unmakeMove(position, undo);
@@ -1505,7 +1147,6 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
 PrincipalVariation toplevelAlphaBeta(
     Position& position, Score alpha, Score beta, int depthleft, InfoFn info) {
     assert(depthleft > 0);
-    ++rootSearchCalls;
     Depth depth = {0, depthleft};
 
     Hash hash(position);
@@ -1513,50 +1154,34 @@ PrincipalVariation toplevelAlphaBeta(
     auto moveList = moves::allLegalMovesAndCaptures(position.turn, position.board);
 
     // Forced moves don't count towards depth
-    if (moveList.size() == 1) {
-        ++forcedMoveExtensions;
-        ++depth.left;
-    }
+    if (moveList.size() == 1) ++depth.left;
 
     // No moves means either checkmate or stalemate
     if (moveList.empty() && !isInCheck(position)) return {Move(), Score()};
 
     // computeBestMove already entered the current position in the repetition table
     sortMoves(position, hash, moveList.begin(), moveList.end(), Move(), depthleft);
-    applyMoveOracle(position, moveList, depth.current);
     PrincipalVariation pv;
 
     int currmovenumber = 0;
     for (auto move : moveList) {
-        ++rootMoveVisits;
         if (currmoveInfo(info, depthleft, move, ++currmovenumber)) return pv;
 
         auto newPosition = moves::applyMove(position, move);
         Hash newHash(newPosition);
 
         const auto curAlpha = std::max(alpha, pv.score);
+        auto newDepth = Depth{depth.current + 1, depth.left - 1};
         PrincipalVariation newVar;
-        if (currmovenumber == 1 || !options::principleVariationSearch || !options::rootPVS ||
-            depth.left > options::rootPVSMaxDepthLeft) {
-            newVar = -alphaBeta(
-                newPosition, newHash, -beta, -curAlpha, {depth.current + 1, depth.left - 1}, move);
+        if (currmovenumber == 1 || !options::PVS || depth.left > options::rootPVSMaxDepthLeft) {
+            newVar = -alphaBeta(newPosition, newHash, -beta, -curAlpha, newDepth, move);
         } else {
             const auto probeBeta = curAlpha + 1_cp;
             ++pvsAttempts;
-            newVar = -alphaBeta(newPosition,
-                                newHash,
-                                -probeBeta,
-                                -curAlpha,
-                                {depth.current + 1, depth.left - 1},
-                                move);
+            newVar = -alphaBeta(newPosition, newHash, -probeBeta, -curAlpha, newDepth, move);
 
             if (newVar.score > curAlpha && newVar.score < beta && ++pvsResearches)
-                newVar = -alphaBeta(newPosition,
-                                    newHash,
-                                    -beta,
-                                    -curAlpha,
-                                    {depth.current + 1, depth.left - 1},
-                                    move);
+                newVar = -alphaBeta(newPosition, newHash, -beta, -curAlpha, newDepth, move);
         }
         if (newVar.score > pv.score || !pv.front()) pv = {move, newVar};
         if (betaCutoff(pv.score,
@@ -1595,24 +1220,19 @@ PrincipalVariation aspirationWindows(Position position,
         auto alpha = expected - Score::fromCP(*alphaIt);
         auto beta = expected + Score::fromCP(*betaIt);
 
-        ++aspirationAttempts;
         newpv = toplevelAlphaBeta(position, alpha, beta, maxdepth, info);
 
-        if (newpv.score <= alpha) {
-            ++aspirationFailLow;
+        if (newpv.score <= alpha)
             ++alphaIt;
-        } else if (newpv.score >= beta) {
-            ++aspirationFailHigh;
+        else if (newpv.score >= beta)
             ++betaIt;
-        } else {
+        else
             break;
-        }
+
         newpv = {};
     }
-    if (!newpv) {
-        ++aspirationFallbackFullWindow;
-        newpv = toplevelAlphaBeta(position, maxdepth, info);
-    }
+    if (!newpv) newpv = toplevelAlphaBeta(position, maxdepth, info);
+
 
     return newpv ? newpv : pv;
 }
@@ -1715,13 +1335,10 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
     searchCacheCount = cacheCount;
 
     searchStartTime = clock::now();
-    seenMainHashKeys.clear();
 
     auto drawState = repetitions.enter(Hash(position));
-    for (auto move : moves) {
-        position = moves::applyMove(position, move);
-        repetitions.enter(drawState, Hash(position));
-    }
+    for (auto move : moves)
+        repetitions.enter(drawState, Hash(position = moves::applyMove(position, move)));
 
     auto pv = options::iterativeDeepening ? iterativeDeepening(position, maxdepth, info)
                                           : toplevelAlphaBeta(position, maxdepth, info);

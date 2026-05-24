@@ -229,7 +229,7 @@ struct Move {
     Square to : 6;
     MoveKind kind : 4;
 
-    Move() = default;
+    Move() : from(Square{}), to(Square{}), kind(MoveKind{}) {};
     Move(Square from, Square to, MoveKind kind) : from(from), to(to), kind(kind) {}
 
     operator bool() const { return from != to; }
