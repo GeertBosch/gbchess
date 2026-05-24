@@ -734,9 +734,11 @@ Score quiesce(
     ++qsNodeCount;
 
     Hash hash(position);
-    const auto originalAlpha = alpha;
-    const auto originalBeta = beta;
-    Move bestMove = Move();
+    Move bestMove{};
+    auto scope = qply == 0 ? TT::Scope::QsFrontier : TT::Scope::QsDeep;
+    auto ttInsert = [&, alpha, beta](TT::Eval eval) -> Score {  // Use original alpha/beta
+        return transpositionTable.insert(hash, eval, depthleft, alpha, beta, scope), eval.score;
+    };
 
     if (options::useQsTT) {
         transpositionTable.refineAlphaBeta(hash, 0, alpha, beta, false);
@@ -746,17 +748,7 @@ Score quiesce(
 
     if (!depthleft) return standPat;
 
-    if (standPat >= beta && isQuiet(position, depthleft)) {
-        transpositionTable.insert(hash,
-                                  {Move(), beta},
-                                  depthleft,
-                                  originalAlpha,
-                                  originalBeta,
-                                  qply == 0 ? TranspositionTable::Scope::QsFrontier
-                                            : TranspositionTable::Scope::QsDeep);
-        return beta;
-    }
-
+    if (standPat >= beta && isQuiet(position, depthleft)) return ttInsert({Move{}, beta});
     if (standPat > alpha && isQuiet(position, depthleft)) alpha = standPat;
 
     ++evalCount;
@@ -765,7 +757,7 @@ Score quiesce(
     auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, depthleft);
     if (moveList.empty() && isInCheck(position)) return Score::min();
 
-    sortMoves(position, moveList.begin(), moveList.end(), Move());  // No killer moves in quiescence
+    sortMoves(position, moveList.begin(), moveList.end(), Move{});  // No killer moves in quiescence
     for (auto move : moveList) {
         if (options::staticExchangeEvaluation && move.kind == MoveKind::Capture &&
             staticExchangeEvaluation(position.board, move.from, move.to) < 0_cp &&
@@ -777,39 +769,18 @@ Score quiesce(
         auto score = -quiesce(position, -beta, -alpha, depthleft - 1, -newEval, qply + 1);
         unmakeMove(position, undo);
 
-        if (score >= beta) {
-            transpositionTable.insert(hash,
-                                      {move, beta},
-                                      depthleft,
-                                      originalAlpha,
-                                      originalBeta,
-                                      qply == 0 ? TranspositionTable::Scope::QsFrontier
-                                                : TranspositionTable::Scope::QsDeep);
-            return beta;
-        }
+        if (score >= beta) return ttInsert({move, beta});
         if (score > alpha) alpha = score, bestMove = move;
     }
 
-        transpositionTable.insert(hash,
-                                  {bestMove, alpha},
-                                  depthleft,
-                                  originalAlpha,
-                                  originalBeta,
-                                  qply == 0 ? TranspositionTable::Scope::QsFrontier
-                                            : TranspositionTable::Scope::QsDeep);
-
-    return alpha;
+    return ttInsert({bestMove, alpha});
 }
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
-    ++quiescenceCount;  // Increment quiescence count
-    Score stand_pat;
-    if (options::useNNUE)
-        // Use NNUE evaluation, which is more accurate than the piece-square evaluation
-        stand_pat = Score::fromCP(nnue::evaluate(position, *network));
-    else
-        // Use simple piece-square evaluation
-        stand_pat = evaluateBoard(position.board);
+    ++quiescenceCount;
+    Score stand_pat = options::useNNUE ? Score::fromCP(nnue::evaluate(position, *network))
+                                       : evaluateBoard(position.board);
+
     if (position.active() == Color::b) stand_pat = -stand_pat;
     return quiesce(position, alpha, beta, depthleft, stand_pat, 0);
 }
