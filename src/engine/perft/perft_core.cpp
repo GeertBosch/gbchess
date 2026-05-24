@@ -176,7 +176,7 @@ static Perft2Cache perft2cache;
 NodeCount perft2(Board& board, Hash hash, const moves::SearchState& state) {
     dassert(hash == Hash(Position{board, state.turn}));
 
-    if constexpr (options::cachePerft)
+    if (options::cachePerft)
         if (auto count = perft2cache.lookup(hash())) return perftCached.add(count), count;
     NodeCount nodes = 0;
     auto theirState = state;
@@ -198,7 +198,7 @@ NodeCount perft2(Board& board, Hash hash, const moves::SearchState& state) {
 
         nodes += countLegalMovesAndCaptures(board, theirState);
     });
-    if (options::cachePerft && nodes > options::cachePerftMinNodes)
+    if (options::cachePerft && nodes > NodeCount(options::cachePerftMinNodes))
         perft2cache.enter(hash(), nodes);
 
     return nodes;
@@ -212,7 +212,7 @@ NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
 
     // Unlike normal Zobrist hashing, we need to include the level.
 
-    if constexpr (options::cachePerft)
+    if (options::cachePerft)
         if (auto val = perftCache.lookup(hash(), depth)) return perftCached.add(val), val;
 
     NodeCount nodes = 0;
@@ -235,7 +235,7 @@ NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
         assert(newNodes >= nodes);  // Check for node count overflow
         nodes = newNodes;
     });
-    if (options::cachePerft && nodes > options::cachePerftMinNodes)
+    if (options::cachePerft && nodes > NodeCount(options::cachePerftMinNodes))
         perftCache.enter(hash(), depth, nodes);
     if (depth == 4) perftInProgress.fetch_add(nodes, std::memory_order_relaxed);
     return nodes;

@@ -123,7 +123,7 @@ private:
         // the most expensive part of the search, and tends to have a predictable per-node cost.
         // In this mode, we determine a total "node bugdget" once at the start of a new game, and
         // maintain our remaining time by tracking the nodes we've searched so far.
-        if (!maxNodes) maxNodes = nodesBudget ? (timeMillis * options::timeNodesRate) / 1000 : 0;
+        if (!maxNodes) maxNodes = nodesBudget ? timeMillis * options::nodestime : 0;
         if (nodesBudget)
             respond("info string max nodes " + std::to_string(maxNodes) + " time " +
                     std::to_string(timeMillis));
@@ -139,8 +139,7 @@ private:
                 if (nodesExceeded) {
                     stopping.store(true);
                     if (nodesBudget)
-                        respond("info string time " +
-                                std::to_string(nodes * 1000 / options::timeNodesRate) +
+                        respond("info string time " + std::to_string(nodes / options::nodestime) +
                                 " exceeded " + std::to_string(timeMillis) + " nps " +
                                 std::to_string(nodes * 1000 / elapsed));
                     else
@@ -158,7 +157,7 @@ private:
         // When using node count as clock for reproducibility, at least allow some nodes to be
         // searched in case the opponent doesn't flag us on time. This also allows us to use
         // the nodes budget being non-zero as a signal tht we're in this mode.
-        int64_t kMinNodesBudget = options::timeNodesRate / 1000;  // Allow at least 1ms worth
+        int64_t kMinNodesBudget = options::nodestime;  // Allow at least 1ms worth
         if (nodesBudget)
             nodesBudget =
                 std::max(kMinNodesBudget, nodesBudget - int64_t(search::nodeCount - startNodes));
@@ -186,9 +185,15 @@ private:
         if (name == "OwnBook") {
             useOwnBook = (value == "true");
             respond("info string OwnBook set to " + value);
-        } else {
-            respond("info string unknown option: " + name);
+            return;
         }
+        for (auto* opt : options::UCIOption::registry()) {
+            if (name != opt->name) continue;
+            opt->set(value);
+            respond("info string " + name + " set to " + value);
+            return;
+        }
+        respond("info string unknown option: " + name);
     }
 
     static std::string to_string(Position pos) {
@@ -201,6 +206,15 @@ private:
         stream << "position " << to_string(position);
         if (moves.size()) stream << " moves " << ::to_string(moves);
         if (!useOwnBook) stream << "\nsetoption name OwnBook value false";
+        for (auto* opt : options::UCIOption::registry()) {
+            if (!opt->isDefault()) {
+                stream << "\nsetoption name " << opt->name << " value ";
+                if (opt->isBool)
+                    stream << (opt->value ? "true" : "false");
+                else
+                    stream << opt->value;
+            }
+        }
         stream << "\n\n";  // Empty line indicates end of UCI state
         return stream.good();
     }
@@ -282,7 +296,7 @@ private:
     }
 
     void go(UCIArguments arguments) {
-        auto depth = options::defaultDepth;
+        int depth = options::defaultDepth;
         auto wait = false;
         int64_t wtime = 0, btime = 0;
         uint32_t winc = 0, binc = 0;
@@ -311,11 +325,15 @@ private:
                 return perft(std::stoi(arguments[i]));
         }
 
-        if (options::timeNodesRate) {
-            int64_t time = position.turn.activeColor() == Color::w ? wtime : btime;
-            if (!nodesBudget) nodesBudget = time * options::timeNodesRate / 1000;
-            time = nodesBudget * 1000 / options::timeNodesRate;
-            if (position.turn.activeColor() == Color::w)
+        if (options::nodestime) {
+            // Convert clock to a node budget (once per game), then instead of relying on the
+            // passed wtime / btime each move, we track our own remaining time based on the
+            // remaining nodes budget. This allows for more reproducible time controls, while
+            // staying roughy aligned with real time, assuming a predictable nodes/s rate.
+            bool white = position.active() == Color::w;
+            if (!nodesBudget) nodesBudget = (white ? wtime : btime) * options::nodestime;
+            int64_t time = nodesBudget / options::nodestime;
+            if (white)
                 wtime = time;
             else
                 btime = time;
@@ -370,6 +388,14 @@ void UCIRunner::dispatch(const std::string& command,
         out << "id name " << cmdName << "\n";
         out << "id author " << authorName << "\n";
         out << "option name OwnBook type check default true\n";
+        for (auto* opt : options::UCIOption::registry()) {
+            if (opt->isBool)
+                out << "option name " << opt->name << " type check default "
+                    << (opt->defaultVal ? "true" : "false") << "\n";
+            else
+                out << "option name " << opt->name << " type spin default " << opt->defaultVal
+                    << " min 0 max 1000000\n";
+        }
         out << "uciok\n";
     } else if (command == "isready") {
         out << "readyok\n";

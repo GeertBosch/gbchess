@@ -341,7 +341,7 @@ void forAllLegalQuiescentMoves(Turn turn,
         mayHavePromoMove(!turn.activeColor(), board, !state.occupancy);
 
     // In endgames, allow finding checks in the first plies of quiescence search
-    bool endGame = state.occupancy.size() <= options::checksMaxPiecesLeft;
+    bool endGame = int(state.occupancy.size()) <= options::checksMaxPiecesLeft;
 
     // Allow limited quiescence search in endgames to find checks. Don't double up in case of
     // being in check or promotion threats.

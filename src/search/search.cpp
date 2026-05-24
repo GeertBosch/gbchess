@@ -248,18 +248,17 @@ struct TranspositionTable {
     };
 
     static constexpr size_t MB = 1024 * 1024;
-    static constexpr size_t kNumEntries = options::transpositionTableMB * MB / sizeof(Entry);
 
     static HashValue domainHashValue(Hash hash) {
         auto value = hash();
         return value;
     }
     static uint64_t keyOf(Hash hash) { return keyOf(hash()); }
-    static uint64_t indexOf(Hash hash) { return indexOf(hash()); }
+    uint64_t indexOf(Hash hash) const { return indexOf(hash()); }
     static uint64_t keyOf(HashValue hashValue) { return hashValue >> 64; }
-    static uint64_t indexOf(HashValue hashValue) { return hashValue % kNumEntries; }
+    uint64_t indexOf(HashValue hashValue) const { return hashValue % entries.size(); }
 
-    std::vector<Entry> entries{kNumEntries};
+    std::vector<Entry> entries{size_t(options::transpositionTableMB) * MB / sizeof(Entry)};
     uint8_t numGenerations = 0;
     Stats stats;
 
@@ -271,7 +270,7 @@ struct TranspositionTable {
     Entry& operator[](Hash hash) { return entries[indexOf(hash)]; }
 
     Eval find(Hash hash) {
-        if constexpr (kNumEntries == 0) return {};
+        if (entries.empty()) return {};
 
         auto& entry = (*this)[hash];
         ++stats.numMisses;
@@ -289,7 +288,7 @@ struct TranspositionTable {
     }
 
     Eval peek(Hash hash) const {
-        if constexpr (kNumEntries == 0) return {};
+        if (entries.empty()) return {};
 
         const auto& entry = (*this)[hash];
         if (!entry.occupied() || keyOf(hash) != entry.key || entry.generation != numGenerations)
@@ -298,14 +297,14 @@ struct TranspositionTable {
     }
 
     [[nodiscard]] bool contains(Hash hash) const {
-        if constexpr (kNumEntries == 0) return false;
+        if (entries.empty()) return false;
 
         const auto& entry = (*this)[hash];
         return entry.occupied() && keyOf(hash) == entry.key && entry.generation == numGenerations;
     }
 
     PrincipalVariation pv(Position pos, int depth) {
-        if constexpr (kNumEntries == 0) return {};
+        if (entries.empty()) return {};
         auto hash = Hash(pos);
         auto eval = find(hash);
         auto move = eval.move;
@@ -322,9 +321,9 @@ struct TranspositionTable {
         return pv;
     }
 
-    [[nodiscard]] bool refineAlphaBeta(
+    bool refineAlphaBeta(
         Hash hash, int depthleft, Score& alpha, Score& beta, bool allowQsFrontierInMain) {
-        if constexpr (kNumEntries == 0) return false;
+        if (entries.empty()) return false;
         auto& entry = (*this)[hash];
 
         ++stats.numMisses;
@@ -406,7 +405,7 @@ struct TranspositionTable {
                 uint8_t depthleft,
                 EntryType type,
                 Scope scope = Scope::Main) {
-        if constexpr (kNumEntries == 0) return;
+        if (entries.empty()) return;
         if (!move.move && move.score.mate()) return;
 
         Entry newEntry = {hash, move, depthleft, type, numGenerations, scope};
@@ -472,7 +471,7 @@ struct TranspositionTable {
         auto numLookups = stats.numHits + stats.numMisses;
         auto numInserts = stats.numInserted + stats.numWorse;
         std::cout << "Transposition table stats:\n";
-        std::cout << "  occupied: " << stats.numOccupied << pct(stats.numOccupied, kNumEntries)
+        std::cout << "  occupied: " << stats.numOccupied << pct(stats.numOccupied, entries.size())
                   << "\n";
         std::cout << "  inserts: " << stats.numInserted << "\n";
         std::cout << "  worse: " << stats.numWorse << pct(stats.numWorse, numInserts) << "\n";
@@ -485,6 +484,7 @@ struct TranspositionTable {
                   << "\n";
     }
 } transpositionTable;
+using TT = TranspositionTable;
 
 /**
  * History table for move ordering.
@@ -530,7 +530,10 @@ Move countermoves[2][kNumSquares] = {{}};
 /**
  * Killer move heuristic: stores the best quiet moves that caused beta cutoffs at each depth.
  */
-Move killerMoves[options::maxKillerDepth][options::maxKillerMoves] = {{{}}};
+std::vector<std::vector<Move>> killerMoves{[]() {
+    return std::vector<std::vector<Move>>(options::maxKillerDepth,
+                                          std::vector<Move>(options::maxKillerMoves));
+}()};
 
 void storeKillerMove(Move move, int depth) {
     if (depth >= options::maxKillerDepth || depth < 0 || !options::maxKillerMoves) return;
@@ -595,10 +598,10 @@ int quietMoveScore(const Position& position, Move move, Move lastMove) {
 std::string lookupPosition(Position position) {
     auto hash = Hash(position);
     auto entry = transpositionTable[hash];
-    if (!entry.occupied() || TranspositionTable::keyOf(hash) != entry.key ||
+    if (!entry.occupied() || TT::keyOf(hash) != entry.key ||
         entry.generation != transpositionTable.numGenerations)
         return {};
-    return TranspositionTable::to_string(entry);
+    return TT::to_string(entry);
 }
 
 void debugPosition(Position position) {
@@ -659,14 +662,14 @@ MoveIt sortMoves(const Position& position, MoveIt begin, MoveIt end, Move lastMo
     });
 
     // For quiet moves, first try countermove, then killer moves
-    if constexpr (options::useCountermove) {
+    if (options::useCountermove) {
         if (lastMove) {
             auto piece = position.board[lastMove.to];
             Move countermove = countermoves[int(color(piece))][lastMove.to];
             quietBegin = sortCountermove(countermove, quietBegin, end);
         }
     }
-    if constexpr (options::maxKillerMoves > 0 && options::maxKillerDepth > 0)
+    if (options::maxKillerMoves > 0 && options::maxKillerDepth > 0)
         quietBegin = sortKillerMoves(depth, quietBegin, end);
 
     // Then sort remaining quiet moves by history + continuation history
@@ -697,13 +700,13 @@ std::pair<moves::UndoPosition, Score> makeMoveWithEval(Position& position, Move 
     using namespace moves;
     BoardChange change = prepareMove(position.board, move);
     UndoPosition undo;
-    if constexpr (options::useNNUE) {
+    if (options::useNNUE) {
         // Use NNUE evaluation, which is more accurate than the piece-square evaluation
         undo = makeMove(position, change, move);
         eval = Score::fromCP(nnue::evaluate(position, *network));
         // Note that we evaluated the board after the move, so our evaluation is the inverse
         if (position.active() == Color::w) eval = -eval;
-    } else if constexpr (options::incrementalEvaluation) {
+    } else if (options::incrementalEvaluation) {
         // Incremental evaluation of the piece-square evaluation
         eval += evaluateMove(position.board, position.active(), change, evalTable);
         undo = makeMove(position, change, move);
@@ -735,8 +738,8 @@ Score quiesce(
     const auto originalBeta = beta;
     Move bestMove = Move();
 
-    if constexpr (options::useQsTT) {
-        (void)transpositionTable.refineAlphaBeta(hash, 0, alpha, beta, false);
+    if (options::useQsTT) {
+        transpositionTable.refineAlphaBeta(hash, 0, alpha, beta, false);
 
         if (alpha >= beta && ++qsTTCutoffs) return beta;
     }
@@ -955,8 +958,7 @@ PrincipalVariation alphaBeta(
 
     if (depth.left <= 0) {
         auto score = quiesce(position, alpha, beta, options::quiescenceDepth);
-        transpositionTable.insert(
-            hash, {Move(), score}, 0, alpha, beta, TranspositionTable::Scope::QsFrontier);
+        transpositionTable.insert(hash, {Move(), score}, 0, alpha, beta, TT::Scope::QsFrontier);
         return {{}, score};
     }
 
@@ -1208,15 +1210,15 @@ PrincipalVariation aspirationWindows(Position position,
                                      PrincipalVariation pv,
                                      int maxdepth,
                                      InfoFn info) {
-    auto windows = options::aspirationWindows;
-    auto maxWindow = windows.empty() ? 0_cp : Score::fromCP(windows.back());
+    int windows[] = {options::aspirationWindow1, options::aspirationWindow2};
+    auto maxWindow = Score::fromCP(windows[std::size(windows) - 1]);
     auto expected = std::clamp(pv.score, Score::min() + maxWindow, Score::max() - maxWindow);
-    auto alphaIt = windows.begin();
-    auto betaIt = windows.begin();
+    auto alphaIt = std::begin(windows);
+    auto betaIt = std::begin(windows);
 
     PrincipalVariation newpv;
-    while (maxdepth >= options::aspirationWindowMinDepth && alphaIt != windows.end() &&
-           betaIt != windows.end()) {
+    while (maxdepth >= options::aspirationWindowMinDepth && alphaIt != std::end(windows) &&
+           betaIt != std::end(windows)) {
         auto alpha = expected - Score::fromCP(*alphaIt);
         auto beta = expected + Score::fromCP(*betaIt);
 
@@ -1271,7 +1273,8 @@ bool saveState(std::ostream& out) {
               sizeof(continuationHistory));
 
     // Save killer moves
-    out.write(reinterpret_cast<const char*>(&killerMoves[0][0]), sizeof(killerMoves));
+    for (auto& row : killerMoves)
+        out.write(reinterpret_cast<const char*>(row.data()), row.size() * sizeof(Move));
 
     // Save countermoves
     out.write(reinterpret_cast<const char*>(&countermoves[0][0]), sizeof(countermoves));
@@ -1288,9 +1291,7 @@ void clearState() {
               &continuationHistory[0][0][0][0] +
                   sizeof(continuationHistory) / sizeof(continuationHistory[0][0][0][0]),
               0);
-    std::fill(&killerMoves[0][0],
-              &killerMoves[0][0] + sizeof(killerMoves) / sizeof(killerMoves[0][0]),
-              Move());
+    for (auto& row : killerMoves) std::fill(row.begin(), row.end(), Move{});
     std::fill(&countermoves[0][0],
               &countermoves[0][0] + sizeof(countermoves) / sizeof(countermoves[0][0]),
               Move());
@@ -1317,7 +1318,8 @@ bool restoreState(std::istream& in) {
     in.read(reinterpret_cast<char*>(&continuationHistory[0][0][0][0]), sizeof(continuationHistory));
 
     // Restore killer moves
-    in.read(reinterpret_cast<char*>(&killerMoves[0][0]), sizeof(killerMoves));
+    for (auto& row : killerMoves)
+        in.read(reinterpret_cast<char*>(row.data()), row.size() * sizeof(Move));
 
     // Restore countermoves
     in.read(reinterpret_cast<char*>(&countermoves[0][0]), sizeof(countermoves));

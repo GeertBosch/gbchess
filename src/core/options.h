@@ -1,55 +1,89 @@
 #pragma once
 
-#include <array>
-#include <cstddef>
+#include <string>
+#include <vector>
 
 namespace options {
 
 /**
- * Below options allow disabling or tuning various search optimizations.
+ * A self-registering UCI option. Stores an int value (bools are stored as 0/1).
+ * Implicitly converts to int/bool so it can be used directly in search code.
  */
-constexpr int defaultDepth = 15;                            // Search depth in half-moves (plies)
-constexpr int quiescenceDepth = 5;                          // Depth of the quiescence search (QS)
-constexpr bool iterativeDeepening = true;                   // Aspiration windows need this
-constexpr bool lateMoveReductions = true;                   // Reduce search depth of late moves
-constexpr bool staticExchangeEvaluation = true;             // Use static exchange evaluation
-constexpr int maxKillerMoves = 2;                           // Max killer moves per depth (0=off)
-constexpr int maxKillerDepth = 256;                         // Max depth for killer moves (0=off)
-constexpr bool historyHeuristic = true;                     // Use beta cutoffs for move ordering
-constexpr std::array<int, 2> aspirationWindows{65, 135};    // Given in centipawns, {} disables
-constexpr int aspirationWindowMinDepth = 2;                 // Minimum depth for aspiration windows
-constexpr int promotionMinDepthLeft = 3;                    // Minimum depth left for promos in QS
-constexpr int checksMinDepthLeft = quiescenceDepth;         // Minimum depth left for checks in QS
-constexpr int checksMaxPiecesLeft = 12;                     // Max pieces left for checks in QS
-constexpr int currmoveMinDepthLeft = 1;                     // Min depth left for currmove progress
-constexpr size_t transpositionTableMB = 16;                 // Zero means not enabled
-constexpr bool useNNUE = true;                              // Use NNUE evaluation
-constexpr bool incrementalEvaluation = true;                // Compute QS evaluation using deltas
-constexpr bool PVS = true;                       // Use principal variation search after move 1
-constexpr bool reverseFutilityPruning = true;    // Enable futility pruning
-constexpr int reverseFutilityMaxDepthLeft = 3;   // Max depth left for futility pruning
-constexpr bool nullMovePruning = true;           // Enable null move pruning
-constexpr int nullMoveReduction = 3;             // Depth reduction for null move search
-constexpr int nullMoveMinDepth = 2;              // Min depth to try null move
-constexpr bool useCountermove = true;            // Use the countermove heuristic
-constexpr bool useQsTT = true;                   // Use transposition table in quiescence search
-constexpr int rootPVSMaxDepthLeft = 3;           // Max depth left for rootPVS (0 disables)
-constexpr int qsFrontierInMainMaxDepthLeft = 1;  // Allow QsFrontier TT use in shallow non-PV nodes
-constexpr bool moveLevelFutilityPruning = true;  // Prune late quiet moves at shallow non-PV nodes
-constexpr int moveFutilityMaxDepthLeft = 3;      // Max depth left for move-level futility pruning
-constexpr int moveFutilityMinMoveCount = 2;      // Start pruning from this move count (1-based)
-constexpr int moveFutilityMarginSlope = 150;     // Margin slope in cp per depth
-constexpr int moveFutilityMarginBase = 240;      // Margin base in cp
-constexpr bool internalIterativeDeepening = true;  // Internal iterative deepening with no TT move
-constexpr int iidMinDepthLeft = 4;                 // Min depth left to trigger IID
-constexpr int iidDepthReduction = 2;               // Depth reduction for IID probe
-constexpr int timeNodesRate = 250'000;             // Use node count a time control (0 to disable)
+struct UCIOption {
+    const char* const name;
+    int value;
+    const int defaultVal : 31;
+    const bool isBool : 1;
+
+    UCIOption(const char* name, int defaultVal)
+        : name(name), value(defaultVal), defaultVal(defaultVal), isBool(false) {
+        registry().push_back(this);
+    }
+    UCIOption(const char* name, bool defaultVal)
+        : name(name), value(defaultVal), defaultVal(defaultVal), isBool(true) {
+        registry().push_back(this);
+    }
+
+    operator int() const { return value; }
+
+    bool isDefault() const { return value == defaultVal; }
+
+    void set(const std::string& s) { value = isBool ? int(s == "true") : std::stoi(s); }
+
+    static std::vector<UCIOption*>& registry() {
+        static std::vector<UCIOption*> reg;
+        return reg;
+    }
+};
 
 /**
- * Caching options for the perft program
+ * Search tuning options. All are runtime-mutable and exposed as UCI options.
+ * Self-register into UCIOption::registry() on construction.
  */
-constexpr bool cachePerft = true;           // Allow caching
-constexpr size_t cachePerftMB = 2 * 1024;   // Memory for perft cache in MB
-constexpr int cachePerftMinNodes = 100;     // Minimum nodes to cache perft results
-constexpr int perftProgressMillis = 100;    // Milliseconds between progress updates
+inline UCIOption defaultDepth{"DefaultDepth", 15};
+inline UCIOption iterativeDeepening{"IterativeDeepening", true};
+inline UCIOption lateMoveReductions{"LateMoveReductions", true};
+inline UCIOption staticExchangeEvaluation{"StaticExchangeEvaluation", true};
+inline UCIOption maxKillerMoves{"MaxKillerMoves", 2};
+inline UCIOption maxKillerDepth{"MaxKillerDepth", 256};
+inline UCIOption historyHeuristic{"HistoryHeuristic", true};
+inline UCIOption aspirationWindow1{"AspirationWindow1", 65};   // centipawns
+inline UCIOption aspirationWindow2{"AspirationWindow2", 135};  // centipawns
+inline UCIOption aspirationWindowMinDepth{"AspirationWindowMinDepth", 2};
+inline UCIOption promotionMinDepthLeft{"PromotionMinDepthLeft", 3};
+inline UCIOption checksMinDepthLeft{"ChecksMinDepthLeft", 5};  // == quiescenceDepth
+inline UCIOption checksMaxPiecesLeft{"ChecksMaxPiecesLeft", 12};
+inline UCIOption quiescenceDepth{"QuiescenceDepth", 5};
+inline UCIOption currmoveMinDepthLeft{"CurrmoveMinDepthLeft", 1};
+inline UCIOption transpositionTableMB{"Hash", 16};  // Zero means not enabled
+inline UCIOption useNNUE{"UseNNUE", true};
+inline UCIOption incrementalEvaluation{"IncrementalEvaluation", true};
+inline UCIOption PVS{"PVS", true};
+inline UCIOption reverseFutilityPruning{"ReverseFutilityPruning", true};
+inline UCIOption reverseFutilityMaxDepthLeft{"ReverseFutilityMaxDepthLeft", 3};
+inline UCIOption nullMovePruning{"NullMovePruning", true};
+inline UCIOption nullMoveReduction{"NullMoveReduction", 3};
+inline UCIOption nullMoveMinDepth{"NullMoveMinDepth", 2};
+inline UCIOption useCountermove{"UseCountermove", true};
+inline UCIOption useQsTT{"UseQsTT", true};
+inline UCIOption rootPVSMaxDepthLeft{"RootPVSMaxDepthLeft", 3};
+inline UCIOption qsFrontierInMainMaxDepthLeft{"QsFrontierInMainMaxDepthLeft", 1};
+inline UCIOption moveLevelFutilityPruning{"MoveLevelFutilityPruning", true};
+inline UCIOption moveFutilityMaxDepthLeft{"MoveFutilityMaxDepthLeft", 3};
+inline UCIOption moveFutilityMinMoveCount{"MoveFutilityMinMoveCount", 2};
+inline UCIOption moveFutilityMarginSlope{"MoveFutilityMarginSlope", 150};
+inline UCIOption moveFutilityMarginBase{"MoveFutilityMarginBase", 240};
+inline UCIOption internalIterativeDeepening{"InternalIterativeDeepening", true};
+inline UCIOption iidMinDepthLeft{"IidMinDepthLeft", 4};
+inline UCIOption iidDepthReduction{"IidDepthReduction", 2};
+inline UCIOption nodestime{"nodestime", 250};  // nodes/ms, like Stockfish; 0 = disabled
+
+/**
+ * Caching options for the perft program.
+ */
+inline UCIOption cachePerft{"CachePerft", true};
+inline UCIOption cachePerftMB{"CachePerftMB", 2 * 1024};
+inline UCIOption cachePerftMinNodes{"CachePerftMinNodes", 100};
+inline UCIOption perftProgressMillis{"PerftProgressMillis", 100};
+
 };  // namespace options
