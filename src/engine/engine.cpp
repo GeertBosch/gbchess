@@ -94,8 +94,9 @@ private:
     bool useOwnBook = true;
     Position position = fen::parsePosition(fen::initialPosition);
     TimeControl timeControl = kDefaultTimeControl;
-    int64_t nodesBudget = 0;  // Optional total nodes budget for reproducible time control
-    int64_t maxNodes = 0;     // Max nodes as specified in the go command or derived from the budget
+    int64_t nodestimeBudget = 0;  // Optional total nodes budget for reproducible time control
+    int64_t maxNodes = 0;         // Max nodes as specified in the go command
+    int64_t maxMillis = 0;        // Max time in milliseconds as determined by time control
     MoveVector moves;
     std::atomic_bool stopping = false;
     time_point<clock> startTime = {};
@@ -112,55 +113,60 @@ private:
         respond(log, response);
     }
 
+    /**
+     * Checks if the search should stop due to time or node limits being exceeded.
+     * Returns true if the search should stop, false otherwise.
+     */
+    bool timecheck() {
+        int64_t nodes = search::nodeCount - startNodes;
+        bool nodesExceeded = maxNodes && int64_t(nodes) > maxNodes;
+
+        auto elapsedRealtime = duration_cast<milliseconds>(clock::now() - startTime).count();
+        auto elapsedNodestime = options::nodestime ? nodes / options::nodestime : 0;
+        auto elapsed = options::nodestime ? elapsedNodestime : elapsedRealtime;
+        bool timeExceeded = maxMillis && elapsed > maxMillis;
+
+        if (!nodesExceeded && !timeExceeded) return stopping;  // Happy path, nothing exceeded
+        if (stopping.exchange(true)) return true;              // Already stopping, just return
+
+        // Exceeded something for the first time, so report it
+        auto npsString =
+            elapsedRealtime ? " " + std::to_string(nodes * 1000 / elapsedRealtime) + " nps" : "";
+
+        auto exceededString = nodesExceeded
+            ? "nodes " + std::to_string(nodes) + " exceeded " + std::to_string(maxNodes)
+            : "time " + std::to_string(elapsed) + " exceeded " + std::to_string(maxMillis);
+
+        return respond("info string " + exceededString + npsString), true;
+    }
+
     void performSearch(int depth, Position position, MoveVector moves) try {
         auto color = position.turn.activeColor();
         if (moves.size() % 2 == 1) color = !color;
-        auto timeMillis =
+        maxMillis =
             timeControl.computeMillisForMove(color, position.turn.fullmove() + moves.size() / 2);
 
         // For maximum reproducibility we support using a node count as a clock, where we assume
         // a constant nodes-per-second rate, in practice this can be reasonably as evaluation is
         // the most expensive part of the search, and tends to have a predictable per-node cost.
-        // In this mode, we determine a total "node bugdget" once at the start of a new game, and
+        // In this mode, we determine a total "node budget" once at the start of a new game, and
         // maintain our remaining time by tracking the nodes we've searched so far.
-        if (!maxNodes) maxNodes = nodesBudget ? timeMillis * options::nodestime : 0;
-        if (nodesBudget)
-            respond("info string max nodes " + std::to_string(maxNodes) + " time " +
-                    std::to_string(timeMillis));
+        if (options::nodestime)
+            respond("info string nodestime " + std::to_string(options::nodestime) + " time " +
+                    std::to_string(maxMillis) + " nodes " + std::to_string(nodestimeBudget));
 
-        auto pv = search::computeBestMove(
-            position, depth, moves, [this, timeMillis](std::string info) -> bool {
-                auto elapsed = duration_cast<milliseconds>(clock::now() - startTime).count();
-                auto nodes = search::nodeCount - startNodes;
-                bool nodesExceeded = maxNodes && int64_t(nodes) > maxNodes;
-                bool timeExceeded = timeMillis && elapsed > timeMillis;
-
-                respond("info " + info);
-                if (nodesExceeded) {
-                    stopping.store(true);
-                    if (nodesBudget)
-                        respond("info string time " + std::to_string(nodes / options::nodestime) +
-                                " exceeded " + std::to_string(timeMillis) + " nps " +
-                                std::to_string(nodes * 1000 / elapsed));
-                    else
-                        respond("info string nodes " + std::to_string(nodes) + " exceeded " +
-                                std::to_string(maxNodes));
-                }
-                if (timeExceeded && !maxNodes) {
-                    stopping.store(true);
-                    respond("info string time " + std::to_string(elapsed) + " exceeded " +
-                            std::to_string(timeMillis));
-                }
-                return stopping;
-            });
+        auto pv = search::computeBestMove(position, depth, moves, [this](std::string info) -> bool {
+            if (!info.empty()) respond("info " + info);
+            return timecheck();
+        });
 
         // When using node count as clock for reproducibility, at least allow some nodes to be
         // searched in case the opponent doesn't flag us on time. This also allows us to use
         // the nodes budget being non-zero as a signal tht we're in this mode.
         int64_t kMinNodesBudget = options::nodestime;  // Allow at least 1ms worth
-        if (nodesBudget)
-            nodesBudget =
-                std::max(kMinNodesBudget, nodesBudget - int64_t(search::nodeCount - startNodes));
+        if (nodestimeBudget)
+            nodestimeBudget = std::max(kMinNodesBudget,
+                                       nodestimeBudget - int64_t(search::nodeCount - startNodes));
         std::stringstream ss;
         ss << "bestmove " << pv.front();
         if (Move ponder = pv[1]) ss << " ponder " << ponder;
@@ -331,8 +337,8 @@ private:
             // remaining nodes budget. This allows for more reproducible time controls, while
             // staying roughy aligned with real time, assuming a predictable nodes/s rate.
             bool white = position.active() == Color::w;
-            if (!nodesBudget) nodesBudget = (white ? wtime : btime) * options::nodestime;
-            int64_t time = nodesBudget / options::nodestime;
+            if (!nodestimeBudget) nodestimeBudget = (white ? wtime : btime) * options::nodestime;
+            int64_t time = nodestimeBudget / options::nodestime;
             if (white)
                 wtime = time;
             else
@@ -409,7 +415,7 @@ void UCIRunner::dispatch(const std::string& command,
         book.reseed(random);        // Use seed 0 for deterministic book moves in new game
         respond("info string book reseeded with " + ::to_string(random));
         timeControl = kDefaultTimeControl;
-        nodesBudget = 0;
+        nodestimeBudget = 0;
         moves.clear();
         position = fen::parsePosition(fen::initialPosition);
     } else if (command == "position") {

@@ -89,6 +89,9 @@ uint64_t searchQuiescenceCount = 0;
 uint64_t searchCacheCount = 0;
 timepoint searchStartTime = {};
 
+/** Function to call regularly, abandon the search on a true result. */
+using TimecheckFn = std::function<bool()>;
+
 std::optional<nnue::NNUE> network = nnue::loadNNUE("nn-82215d0fd0df.nnue", nnue::kQuiet);
 
 std::string pct(uint64_t some, uint64_t all) {
@@ -822,8 +825,13 @@ bool betaCutoff(Score score,
 }
 
 // Forward declaration for null move pruning
-PrincipalVariation alphaBeta(
-    Position& position, Hash hash, Score alpha, Score beta, Depth depth, Move lastMove = Move());
+PrincipalVariation alphaBeta(Position& position,
+                             Hash hash,
+                             Score alpha,
+                             Score beta,
+                             Depth depth,
+                             TimecheckFn timecheck,
+                             Move lastMove = Move());
 
 /**
  * Attempts null move pruning. Returns true if we can prune (cutoff occurred).
@@ -856,7 +864,8 @@ bool tryNullMovePruning(Position& position, Hash hash, Score alpha, Score beta, 
     // Search with reduced depth
     auto nullDepth =
         Depth{depth.current + 1, std::max(0, depth.left - 1 - options::nullMoveReduction)};
-    auto nullResult = -alphaBeta(position, nullHash, -beta, -beta + 1_cp, nullDepth, Move());
+    auto nullResult =
+        -alphaBeta(position, nullHash, -beta, -beta + 1_cp, nullDepth, nullptr, Move());
 
     position.turn = savedTurn;
 
@@ -915,8 +924,13 @@ PrincipalVariation tryTTCutoff(
  * the best score that the current player can guarantee, assuming the opponent plays optimally.
  * lastMove is the opponent's last move, used for countermove heuristic.
  */
-PrincipalVariation alphaBeta(
-    Position& position, Hash hash, Score alpha, Score beta, Depth depth, Move lastMove) {
+PrincipalVariation alphaBeta(Position& position,
+                             Hash hash,
+                             Score alpha,
+                             Score beta,
+                             Depth depth,
+                             TimecheckFn timecheck,
+                             Move lastMove) {
     ++nodeCount;
     if (depth.left > 0) ++mainNodeCount;
 
@@ -974,8 +988,8 @@ PrincipalVariation alphaBeta(
     // IID: when there's no TT move and depth is sufficient, run a reduced-depth search to
     // seed move ordering with a searched best move rather than relying on heuristics alone.
     if (options::internalIterativeDeepening && !ttMove && depth.left >= options::iidMinDepthLeft) {
-        auto iidPV = alphaBeta(
-            position, hash, alpha, beta, {depth.current, depth.left - options::iidDepthReduction}, lastMove);
+        auto iidDepth = Depth{depth.current, depth.left - options::iidDepthReduction};
+        auto iidPV = alphaBeta(position, hash, alpha, beta, iidDepth, timecheck, lastMove);
         ttMove = iidPV.front();
     }
 
@@ -991,6 +1005,7 @@ PrincipalVariation alphaBeta(
 
     for (auto move : moveList) {
         ++moveCount;
+        if (timecheck && timecheck()) return pv;  // Check for time cutoff
 
         // Conservative move-level futility pruning for late quiet moves at shallow depth.
         const auto curAlpha = std::max(alpha, pv.score);
@@ -1037,10 +1052,11 @@ PrincipalVariation alphaBeta(
         if (moveCount == 1 || !options::PVS) {
 
             // First move: full window (PV candidate)
-            newVar = -alphaBeta(position, newHash, -beta, -curAlpha, reducedDepth, move);
+            newVar = -alphaBeta(position, newHash, -beta, -curAlpha, reducedDepth, timecheck, move);
             if (newVar.score > curAlpha && applyLMR && ++lmrResearches)
                 // If it beats alpha, re-search at full depth
-                newVar = -alphaBeta(position, newHash, -beta, -curAlpha, fullDepth, move);
+                newVar =
+                    -alphaBeta(position, newHash, -beta, -curAlpha, fullDepth, timecheck, move);
 
         } else {
             // Later moves: Principal Variation Search (PVS) null-window probe first
@@ -1049,15 +1065,18 @@ PrincipalVariation alphaBeta(
             ++pvsAttempts;
 
             // Try the null-window probe first at reduced depth if LMR applies
-            newVar = -alphaBeta(position, newHash, -probeBeta, -curAlpha, reducedDepth, move);
+            newVar =
+                -alphaBeta(position, newHash, -probeBeta, -curAlpha, reducedDepth, timecheck, move);
 
             // If it fails high, reprobe at full depth as that's cheaper than full window
             if (newVar.score > curAlpha && applyLMR && ++lmrResearches)
-                newVar = -alphaBeta(position, newHash, -probeBeta, -curAlpha, fullDepth, move);
+                newVar = -alphaBeta(
+                    position, newHash, -probeBeta, -curAlpha, fullDepth, timecheck, move);
 
             // If it still beats alpha, confirm with full window
             if (newVar.score > curAlpha && newVar.score < beta && ++pvsResearches)
-                newVar = -alphaBeta(position, newHash, -beta, -curAlpha, fullDepth, move);
+                newVar =
+                    -alphaBeta(position, newHash, -beta, -curAlpha, fullDepth, timecheck, move);
         }
 
         unmakeMove(position, undo);
@@ -1107,6 +1126,7 @@ bool pvInfo(InfoFn info, int depthleft, Score score, MoveVector pv) {
     pvString += " nodes " + std::to_string(nodes);
 
     auto millis = duration_cast<milliseconds>(clock::now() - searchStartTime).count();
+    if (options::nodestime) millis = (nodeCount - searchNodeCount) / options::nodestime;
     pvString += " time " + std::to_string(millis);
 
     if (millis) pvString += " nps " + std::to_string(nodes * 1000 / millis);
@@ -1135,6 +1155,7 @@ PrincipalVariation toplevelAlphaBeta(
     // computeBestMove already entered the current position in the repetition table
     sortMoves(position, hash, moveList.begin(), moveList.end(), Move(), depthleft);
     PrincipalVariation pv;
+    auto timecheck = [&info]() { return info && info(""); };
 
     int currmovenumber = 0;
     for (auto move : moveList) {
@@ -1147,14 +1168,16 @@ PrincipalVariation toplevelAlphaBeta(
         auto newDepth = Depth{depth.current + 1, depth.left - 1};
         PrincipalVariation newVar;
         if (currmovenumber == 1 || !options::PVS || depth.left > options::rootPVSMaxDepthLeft) {
-            newVar = -alphaBeta(newPosition, newHash, -beta, -curAlpha, newDepth, move);
+            newVar = -alphaBeta(newPosition, newHash, -beta, -curAlpha, newDepth, timecheck, move);
         } else {
             const auto probeBeta = curAlpha + 1_cp;
             ++pvsAttempts;
-            newVar = -alphaBeta(newPosition, newHash, -probeBeta, -curAlpha, newDepth, move);
+            newVar =
+                -alphaBeta(newPosition, newHash, -probeBeta, -curAlpha, newDepth, timecheck, move);
 
             if (newVar.score > curAlpha && newVar.score < beta && ++pvsResearches)
-                newVar = -alphaBeta(newPosition, newHash, -beta, -curAlpha, newDepth, move);
+                newVar =
+                    -alphaBeta(newPosition, newHash, -beta, -curAlpha, newDepth, timecheck, move);
         }
         if (newVar.score > pv.score || !pv.front()) pv = {move, newVar};
         if (betaCutoff(pv.score,
