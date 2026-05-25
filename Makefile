@@ -74,7 +74,7 @@ test_objs=$(call calc_objs,$(call test_dir,$(1)),$(call prefix_src,$(call test_s
 ALLSRCS=$(wildcard src/*.cpp src/*/*.cpp src/*/*/*.cpp)
 ALLHDRS=$(wildcard src/*.h src/*/*.h src/*/*/*.h)
 
-all: build debug dead-code test perft-bench perft-test build/mate123.out build/mate45.out build/puzzles.out
+all: build debug dead-code test perft-bench perft-test build/mate-123.out build/mate-45.out build/puzzles.out
 	@echo "✅ All tests passed!"
 
 -include $(call calc_deps,${OPTOBJ},${ALLSRCS})
@@ -275,33 +275,19 @@ ${PUZZLES}.zst:
 	$(Q)mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) \
 		&& curl -fsSL -O https://database.lichess.org/$(notdir ${PUZZLES}).zst
 
-# Solve some known mate-in-n puzzles, for correctness of the search methods
-build/mate123.out: build/search-test ${CI_MATE123_PUZZLES} ${NNUE_FILE}
-	$(Q)./build/search-test $(VOPT) 7 ${CI_MATE123_PUZZLES} $(REDIR)
-
-build/mate45.out: build/search-test ${CI_MATE45_PUZZLES} ${NNUE_FILE}
-	$(Q)./build/search-test $(VOPT) 11 ${CI_MATE45_PUZZLES} $(REDIR)
-
-.PHONY: build
-build/puzzles.out: build/search-test ${CI_NONMATE_PUZZLES} ${NNUE_FILE}
-	$(Q)./build/search-test $(VOPT) 7 ${CI_NONMATE_PUZZLES} $(REDIR)
-
-puzzles: build/search-test ${CI_NONMATE_PUZZLES} ${NNUE_FILE}
-	$(Q)./build/search-test $(VOPT) 7 ${CI_NONMATE_PUZZLES}
-
 # UCI-based puzzle tests: run puzzle-test against the engine binary
-build/mate123-uci.out: build/puzzle-test build/gbchess ${CI_MATE123_PUZZLES} ${NNUE_FILE}
+build/mate-123.out: build/puzzle-test build/gbchess ${CI_MATE123_PUZZLES} ${NNUE_FILE}
 	$(Q)./build/puzzle-test $(VOPT) --depth 7 ./build/gbchess ${CI_MATE123_PUZZLES} $(REDIR)
 
-build/mate45-uci.out: build/puzzle-test build/gbchess ${CI_MATE45_PUZZLES} ${NNUE_FILE}
+build/mate-45.out: build/puzzle-test build/gbchess ${CI_MATE45_PUZZLES} ${NNUE_FILE}
 	$(Q)./build/puzzle-test $(VOPT) --depth 11 ./build/gbchess ${CI_MATE45_PUZZLES} $(REDIR)
 
-build/puzzles-uci.out: build/puzzle-test build/gbchess ${CI_NONMATE_PUZZLES} ${NNUE_FILE}
+build/puzzles.out: build/puzzle-test build/gbchess ${CI_NONMATE_PUZZLES} ${NNUE_FILE}
 	$(Q)./build/puzzle-test $(VOPT) --depth 7 ./build/gbchess ${CI_NONMATE_PUZZLES} $(REDIR)
 
-mate123-uci: build/mate123-uci.out
-mate45-uci: build/mate45-uci.out
-puzzles-uci: build/puzzles-uci.out
+mate-123: build/mate-123.out
+mate-45: build/mate-45.out
+puzzles: build/puzzles.out
 
 ${NNUE_FILE}:
 	$(Q)curl -fsSL -O ${NNUE_URL}
@@ -407,7 +393,7 @@ build/test-cpp.out: ${CPP_TESTS} ${NNUE_FILE}
 test-cpp: build/test-cpp.out
 test: build/test-cpp.out build/fixed-puzzles.out build/searches.out build/evals.out build/uci.out build/magic.out
 
-ci: build-ci build/test-cpp.out build/perft-test.out build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate123.out build/mate45.out build/puzzles.out dead-code
+ci: build-ci build/test-cpp.out build/perft-test.out build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate-123.out build/mate-45.out build/puzzles.out dead-code
 	@echo "\n✅ CI checks passed\n"
 
 install-hooks:
