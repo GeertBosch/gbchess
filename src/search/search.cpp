@@ -1315,6 +1315,62 @@ bool restoreState(std::istream& in) {
     return in.good();
 }
 
+void printStats() {
+    if (!nodeCount) return;  // Nothing searched yet
+
+    auto& err = std::cerr;
+    err << "Search statistics:\n";
+
+    // Node counts
+    err << "  nodes:       " << nodeCount << " total"
+        << ", " << quiescenceCount << " qs entries"
+        << ", " << qsNodeCount << " qs nodes\n";
+    err << "  evals:       " << evalCount
+        << ", " << cacheCount << " cached" << pct(cacheCount, evalCount) << "\n";
+
+    // Beta cutoffs and move ordering
+    if (betaCutoffs) {
+        err << "  beta cutoffs:" << betaCutoffs;
+        if (firstMoveCutoffs)
+            err << ", " << firstMoveCutoffs << " first-move" << pct(firstMoveCutoffs, betaCutoffs);
+        err << "\n";
+    }
+
+    // Transposition table
+    if (ttRefinements || ttCutoffs)
+        err << "  TT:          " << ttRefinements << " refinements"
+            << ", " << ttCutoffs << " cutoffs\n";
+    if (qsTTRefinements || qsTTCutoffs)
+        err << "  QS TT:       " << qsTTRefinements << " refinements"
+            << ", " << qsTTCutoffs << " cutoffs\n";
+
+    // Null-move pruning
+    if (nullMoveAttempts)
+        err << "  null move:   " << nullMoveAttempts << " attempts"
+            << ", " << nullMoveCutoffs << " cutoffs" << pct(nullMoveCutoffs, nullMoveAttempts)
+            << "\n";
+
+    // Futility pruning
+    if (futilityPruned)
+        err << "  futility:    " << futilityPruned << " pruned\n";
+
+    // LMR
+    if (lmrAttempts)
+        err << "  LMR:         " << lmrAttempts << " reductions"
+            << ", " << lmrResearches << " re-searches" << pct(lmrResearches, lmrAttempts) << "\n";
+
+    // PVS
+    if (pvsAttempts)
+        err << "  PVS:         " << pvsAttempts << " probes"
+            << ", " << pvsResearches << " re-searches" << pct(pvsResearches, pvsAttempts) << "\n";
+
+    // Countermoves
+    if (countermoveAttempts)
+        err << "  countermove: " << countermoveAttempts << " attempts"
+            << ", " << countermoveHits << " hits" << pct(countermoveHits, countermoveAttempts)
+            << "\n";
+}
+
 PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector moves, InfoFn info) {
     evalTable = EvalTable{position.board, true};
     searchNodeCount = nodeCount;

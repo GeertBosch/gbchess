@@ -125,4 +125,10 @@ bool invalidatePosition(Position position);
  */
 Score quiesce(Position& position, int depthleft);
 
+/**
+ * Print cumulative search statistics (node counts, cache hits, pruning rates, etc.) to stderr.
+ * Intended to be called on engine exit so the stats cover the full session.
+ */
+void printStats();
+
 }  // namespace search
