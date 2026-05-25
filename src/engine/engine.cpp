@@ -193,9 +193,9 @@ private:
             respond("info string OwnBook set to " + value);
             return;
         }
-        for (auto* opt : options::UCIOption::registry()) {
-            if (name != opt->name) continue;
-            opt->set(value);
+        for (auto& info : options::UCIOptionInfo::registry()) {
+            if (name != info.name) continue;
+            info.set(value);
             respond("info string " + name + " set to " + value);
             return;
         }
@@ -212,13 +212,13 @@ private:
         stream << "position " << to_string(position);
         if (moves.size()) stream << " moves " << ::to_string(moves);
         if (!useOwnBook) stream << "\nsetoption name OwnBook value false";
-        for (auto* opt : options::UCIOption::registry()) {
-            if (!opt->isDefault()) {
-                stream << "\nsetoption name " << opt->name << " value ";
-                if (opt->isBool)
-                    stream << (opt->value ? "true" : "false");
+        for (const auto& info : options::UCIOptionInfo::registry()) {
+            if (!info.isDefault()) {
+                stream << "\nsetoption name " << info.name << " value ";
+                if (info.isBool)
+                    stream << (info.opt->value ? "true" : "false");
                 else
-                    stream << opt->value;
+                    stream << info.opt->value;
             }
         }
         stream << "\n\n";  // Empty line indicates end of UCI state
@@ -394,13 +394,13 @@ void UCIRunner::dispatch(const std::string& command,
         out << "id name " << cmdName << "\n";
         out << "id author " << authorName << "\n";
         out << "option name OwnBook type check default true\n";
-        for (auto* opt : options::UCIOption::registry()) {
-            if (opt->isBool)
-                out << "option name " << opt->name << " type check default "
-                    << (opt->defaultVal ? "true" : "false") << "\n";
+        for (const auto& info : options::UCIOptionInfo::registry()) {
+            if (info.isBool)
+                out << "option name " << info.name << " type check default "
+                    << (info.defaultVal ? "true" : "false") << "\n";
             else
-                out << "option name " << opt->name << " type spin default " << opt->defaultVal
-                    << " min 0 max 1000000\n";
+                out << "option name " << info.name << " type spin default " << info.defaultVal
+                    << " min " << info.minVal << " max " << info.maxVal << "\n";
         }
         out << "uciok\n";
     } else if (command == "isready") {
