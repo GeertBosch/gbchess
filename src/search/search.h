@@ -13,7 +13,6 @@ extern int maxSelDepth;
 
 extern uint64_t evalCount;
 extern uint64_t nodeCount;
-extern uint64_t mainNodeCount;
 extern uint64_t cacheCount;
 extern uint64_t quiescenceCount;
 extern uint64_t qsNodeCount;
