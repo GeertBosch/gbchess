@@ -11,6 +11,7 @@
 #include <mutex>
 #include <numeric>
 #include <queue>
+#include <set>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -50,6 +51,7 @@ int getNumCPUs() {
         << "  --depth N         Search depth for 'go depth N'\n"
         << "  --nodes N         Node limit for 'go nodes N'\n"
         << "  --movetime N      Time limit in ms for 'go movetime N'\n"
+        << "  --setoption N V   Send 'setoption name N value V' to the engine at startup\n"
         << "  --puzzle N        Only run puzzles whose label contains this string\n"
         << "  --theme T         Only run puzzles with this theme tag\n"
         << "  engine-cmd        UCI engine to test (e.g. ./build/engine or stockfish)\n"
@@ -82,10 +84,11 @@ struct GoParams {
 struct Options {
     GoParams goParams;
     std::string engineCmd;
-    std::string puzzleFile;  // empty = read from stdin
-    std::string debugPath;   // empty = disabled
-    std::string puzzleName;  // empty = run all puzzles
-    std::string theme;       // empty = run all puzzles
+    std::string puzzleFile;              // empty = read from stdin
+    std::string debugPath;               // empty = disabled
+    std::string puzzleName;              // empty = run all puzzles
+    std::string theme;                   // empty = run all puzzles
+    std::vector<std::string> setoptions; // "name Foo value Bar" strings sent at startup
     int numJobs = 1;
     bool firstOnly = false;
     bool minimize = false;
@@ -184,13 +187,40 @@ public:
 
     /**
      * Send uci / isready handshake. Must be called once before searching.
+     * setoptions is a list of "name Foo value Bar" strings sent after uciok.
      * Returns false if the engine didn't respond with uciok (bad engine command).
+     * Calls usage() and exits if any setoption name is not advertised by the engine.
      */
-    bool initialize() {
+    bool initialize(const std::vector<std::string>& setoptions = {}) {
         sendLine("uci");
         std::string line;
-        while ((line = readline()) != "uciok")
+        std::set<std::string> knownOptions;
+        while ((line = readline()) != "uciok") {
             if (line.empty()) return false;
+            // Parse: "option name <N> type ..."
+            // The name may contain spaces, so collect everything between "name" and "type".
+            auto parts = split(line, ' ');
+            if (parts.size() >= 4 && parts[0] == "option" && parts[1] == "name") {
+                std::string optName;
+                for (size_t k = 2; k < parts.size(); ++k) {
+                    if (parts[k] == "type") break;
+                    if (!optName.empty()) optName += ' ';
+                    optName += parts[k];
+                }
+                if (!optName.empty()) knownOptions.insert(optName);
+            }
+        }
+        for (const auto& opt : setoptions) {
+            // Extract name from "name <N> value <V>" — everything between "name " and " value ".
+            std::string optName;
+            auto namePos = opt.find("name ");
+            auto valuePos = opt.rfind(" value ");
+            if (namePos != std::string::npos && valuePos != std::string::npos && valuePos > namePos)
+                optName = opt.substr(namePos + 5, valuePos - namePos - 5);
+            if (!knownOptions.count(optName))
+                usage("engine does not support option: " + optName);
+            sendLine("setoption " + opt);
+        }
         waitReady();
         return true;
     }
@@ -564,7 +594,7 @@ public:
                                               : opts.debugPath + "." + std::to_string(id);
             }
             UCIEngine engine(opts.engineCmd, dbgFile);
-            if (!engine.initialize())
+            if (!engine.initialize(opts.setoptions))
                 fail("engine did not respond to UCI handshake: " + opts.engineCmd);
             while (auto task = dequeue()) {
                 std::ostringstream oss;
@@ -876,6 +906,11 @@ Options parseOptions(int argc, char* argv[]) {
             opts.goParams.movetime = parsePositiveInt(std::string(argv[i]));
             if (opts.goParams.movetime <= 0)
                 usage("--movetime must be positive and less than 1,000,000,000 ms");
+        } else if (arg == "--setoption") {
+            if (i + 2 >= argc) usage("--setoption requires two arguments: name and value");
+            std::string name = argv[++i];
+            std::string value = argv[++i];
+            opts.setoptions.push_back("name " + name + " value " + value);
         } else if (arg == "--puzzle") {
             if (++i >= argc) usage("--puzzle requires an argument");
             opts.puzzleName = argv[i];
