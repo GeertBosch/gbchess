@@ -37,12 +37,10 @@ struct UCIOptionInfo {
 struct UCIOption {
     int value;
 
-    UCIOption(const char* name, int defaultVal, int minVal, int maxVal)
-        : value(defaultVal) {
+    UCIOption(const char* name, int defaultVal, int minVal, int maxVal) : value(defaultVal) {
         UCIOptionInfo::registry().push_back({name, this, defaultVal, minVal, maxVal, false});
     }
-    UCIOption(const char* name, bool defaultVal)
-        : value(int(defaultVal)) {
+    UCIOption(const char* name, bool defaultVal) : value(int(defaultVal)) {
         UCIOptionInfo::registry().push_back({name, this, int(defaultVal), 0, 1, true});
     }
 
@@ -61,50 +59,50 @@ inline void UCIOptionInfo::set(const std::string& s) const {
  * Self-register into UCIOptionInfo::registry() on construction.
  */
 //                                                           default  min    max
-inline UCIOption defaultDepth                {"DefaultDepth",     15,   1,   100};
-inline UCIOption iterativeDeepening          {"IterativeDeepening",    true};
-inline UCIOption lateMoveReductions          {"LateMoveReductions",    true};
-inline UCIOption staticExchangeEvaluation    {"StaticExchangeEvaluation", true};
-inline UCIOption maxKillerMoves              {"MaxKillerMoves",      2,   0,     8};
-inline UCIOption maxKillerDepth              {"MaxKillerDepth",    256,   1,  1024};
-inline UCIOption historyHeuristic            {"HistoryHeuristic",      true};
-inline UCIOption aspirationWindow1           {"AspirationWindow1",   65,   1,  1000};  // centipawns
-inline UCIOption aspirationWindow2           {"AspirationWindow2",  135,   1,  1000};  // centipawns
-inline UCIOption aspirationWindowMinDepth    {"AspirationWindowMinDepth", 2, 1,   20};
-inline UCIOption promotionMinDepthLeft       {"PromotionMinDepthLeft",   3, 0,   20};
-inline UCIOption checksMinDepthLeft          {"ChecksMinDepthLeft",      5, 0,   20};  // == quiescenceDepth
-inline UCIOption checksMaxPiecesLeft         {"ChecksMaxPiecesLeft",    12, 2,   32};
-inline UCIOption quiescenceDepth             {"QuiescenceDepth",         5, 0,   30};
-inline UCIOption currmoveMinDepthLeft        {"CurrmoveMinDepthLeft",    1, 0,   20};
-inline UCIOption transpositionTableMB        {"Hash",                   16, 0, 65536};  // Zero means not enabled
-inline UCIOption useNNUE                     {"UseNNUE",                true};
-inline UCIOption incrementalEvaluation       {"IncrementalEvaluation",  true};
-inline UCIOption PVS                         {"PVS",                    true};
-inline UCIOption reverseFutilityPruning      {"ReverseFutilityPruning", true};
-inline UCIOption reverseFutilityMaxDepthLeft {"ReverseFutilityMaxDepthLeft", 3, 0, 20};
-inline UCIOption nullMovePruning             {"NullMovePruning",        true};
-inline UCIOption nullMoveReduction           {"NullMoveReduction",      3,   1,   10};
-inline UCIOption nullMoveMinDepth            {"NullMoveMinDepth",       2,   1,   20};
-inline UCIOption useCountermove              {"UseCountermove",         true};
-inline UCIOption useQsTT                     {"UseQsTT",                true};
-inline UCIOption rootPVSMaxDepthLeft         {"RootPVSMaxDepthLeft",    3,   0,   20};
+inline UCIOption defaultDepth{"DefaultDepth", 15, 1, 100};
+inline UCIOption iterativeDeepening{"IterativeDeepening", true};
+inline UCIOption lateMoveReductions{"LateMoveReductions", true};
+inline UCIOption staticExchangeEvaluation{"StaticExchangeEvaluation", true};
+inline UCIOption maxKillerMoves{"MaxKillerMoves", 2, 0, 8};
+inline UCIOption maxKillerDepth{"MaxKillerDepth", 256, 1, 1024};
+inline UCIOption historyHeuristic{"HistoryHeuristic", true};
+inline UCIOption aspirationWindow1{"AspirationWindow1", 65, 1, 1000};   // centipawns
+inline UCIOption aspirationWindow2{"AspirationWindow2", 135, 1, 1000};  // centipawns
+inline UCIOption aspirationWindowMinDepth{"AspirationWindowMinDepth", 2, 1, 20};
+inline UCIOption promotionMinDepthLeft{"PromotionMinDepthLeft", 1, 0, 20};
+inline UCIOption checksMinDepthLeft{"ChecksMinDepthLeft", 1, 0, 20};  // == quiescenceDepth
+inline UCIOption checksMaxPiecesLeft{"ChecksMaxPiecesLeft", 12, 2, 32};
+inline UCIOption quiescenceDepth{"QuiescenceDepth", 3, 0, 30};
+inline UCIOption currmoveMinDepthLeft{"CurrmoveMinDepthLeft", 1, 0, 20};
+inline UCIOption transpositionTableMB{"Hash", 16, 0, 65536};  // Zero means not enabled
+inline UCIOption useNNUE{"UseNNUE", true};
+inline UCIOption incrementalEvaluation{"IncrementalEvaluation", true};
+inline UCIOption PVS{"PVS", true};
+inline UCIOption reverseFutilityPruning{"ReverseFutilityPruning", true};
+inline UCIOption reverseFutilityMaxDepthLeft{"ReverseFutilityMaxDepthLeft", 3, 0, 20};
+inline UCIOption nullMovePruning{"NullMovePruning", true};
+inline UCIOption nullMoveReduction{"NullMoveReduction", 3, 1, 10};
+inline UCIOption nullMoveMinDepth{"NullMoveMinDepth", 2, 1, 20};
+inline UCIOption useCountermove{"UseCountermove", true};
+inline UCIOption useQsTT{"UseQsTT", true};
+inline UCIOption rootPVSMaxDepthLeft{"RootPVSMaxDepthLeft", 3, 0, 20};
 inline UCIOption qsFrontierInMainMaxDepthLeft{"QsFrontierInMainMaxDepthLeft", 1, 0, 10};
-inline UCIOption moveLevelFutilityPruning    {"MoveLevelFutilityPruning", true};
-inline UCIOption moveFutilityMaxDepthLeft    {"MoveFutilityMaxDepthLeft",  3, 0,  20};
-inline UCIOption moveFutilityMinMoveCount    {"MoveFutilityMinMoveCount",  2, 1,  20};
-inline UCIOption moveFutilityMarginSlope     {"MoveFutilityMarginSlope", 150, 0, 1000};
-inline UCIOption moveFutilityMarginBase      {"MoveFutilityMarginBase",  240, 0, 2000};
-inline UCIOption internalIterativeDeepening  {"InternalIterativeDeepening", true};
-inline UCIOption iidMinDepthLeft             {"IidMinDepthLeft",    4,   1,   20};
-inline UCIOption iidDepthReduction           {"IidDepthReduction",  2,   1,   10};
-inline UCIOption nodestime                   {"nodestime",        250,   0, 100000};  // nodes/ms; 0 = disabled
+inline UCIOption moveLevelFutilityPruning{"MoveLevelFutilityPruning", true};
+inline UCIOption moveFutilityMaxDepthLeft{"MoveFutilityMaxDepthLeft", 3, 0, 20};
+inline UCIOption moveFutilityMinMoveCount{"MoveFutilityMinMoveCount", 2, 1, 20};
+inline UCIOption moveFutilityMarginSlope{"MoveFutilityMarginSlope", 150, 0, 1000};
+inline UCIOption moveFutilityMarginBase{"MoveFutilityMarginBase", 240, 0, 2000};
+inline UCIOption internalIterativeDeepening{"InternalIterativeDeepening", true};
+inline UCIOption iidMinDepthLeft{"IidMinDepthLeft", 4, 1, 20};
+inline UCIOption iidDepthReduction{"IidDepthReduction", 2, 1, 10};
+inline UCIOption nodestime{"nodestime", 250, 0, 100000};  // nodes/ms; 0 = disabled
 
 /**
  * Caching options for the perft program.
  */
-inline UCIOption cachePerft         {"CachePerft",          true};
-inline UCIOption cachePerftMB       {"CachePerftMB",        2048,   1, 65536};
-inline UCIOption cachePerftMinNodes {"CachePerftMinNodes",   100,   0, 1000000};
-inline UCIOption perftProgressMillis{"PerftProgressMillis",  100,   0, 60000};
+inline UCIOption cachePerft{"CachePerft", true};
+inline UCIOption cachePerftMB{"CachePerftMB", 2048, 1, 65536};
+inline UCIOption cachePerftMinNodes{"CachePerftMinNodes", 100, 0, 1000000};
+inline UCIOption perftProgressMillis{"PerftProgressMillis", 100, 0, 60000};
 
 };  // namespace options
