@@ -39,7 +39,6 @@ inline std::ostream& operator<<(std::ostream& os, Move mv) {
     return os << to_string(mv);
 }
 
-namespace {
 uint64_t seeds = 1;  // Deterministic seed generator for UCI. Used for book move selection.
 MoveVector parseUCIMoves(Position position, const std::vector<std::string>& moves) {
     MoveVector vector;
@@ -74,8 +73,6 @@ OutputIt skip(InputIt first, InputIt last, size_t skip, OutputIt d_first) {
     }
     return d_first;
 }
-
-}  // namespace
 
 using namespace std::chrono;
 using namespace std::chrono_literals;
@@ -119,17 +116,19 @@ private:
     }
 
     /**
-     * Checks if the search should stop due to time or node limits being exceeded.
+     * Checks if the search should stop due to time or node limits being exceeded. Accepts a limit
+     * argument in the range 0 .. 100 indicating the percentage of the hard limit to check against.
      * Returns true if the search should stop, false otherwise.
      */
-    bool timecheck() {
+    bool timecheck(int limit) {
+        limit = std::clamp(limit, 0, 100);
         int64_t nodes = search::nodeCount - startNodes;
         bool nodesExceeded = maxNodes && int64_t(nodes) > maxNodes;
 
         auto elapsedRealtime = duration_cast<milliseconds>(clock::now() - startTime).count();
         auto elapsedNodestime = options::nodestime ? nodes / options::nodestime : 0;
         auto elapsed = options::nodestime ? elapsedNodestime : elapsedRealtime;
-        bool timeExceeded = maxMillis && elapsed > maxMillis;
+        bool timeExceeded = maxMillis && elapsed * 100 > maxMillis * limit;
 
         if (!nodesExceeded && !timeExceeded) return stopping;  // Happy path, nothing exceeded
         if (stopping.exchange(true)) return true;              // Already stopping, just return
@@ -161,8 +160,13 @@ private:
                     std::to_string(maxMillis) + " nodes " + std::to_string(nodestimeBudget));
 
         auto pv = search::computeBestMove(position, depth, moves, [this](std::string info) -> bool {
-            if (!info.empty()) respond("info " + info);
-            return timecheck();
+            // Called every node - hard bounds check
+            if (info.empty()) return timecheck(100);
+            // We've processed a root node. If most of the available time was spent, don't try
+            // to search more root nodes, as it is unlikely that search will finish in time.
+
+            respond("info " + info);
+            return timecheck(options::softTimecheckPct);
         });
 
         // When using node count as clock for reproducibility, at least allow some nodes to be

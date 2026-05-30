@@ -96,6 +96,7 @@ inline UCIOption internalIterativeDeepening{"InternalIterativeDeepening", true};
 inline UCIOption iidMinDepthLeft{"IidMinDepthLeft", 4, 1, 20};
 inline UCIOption iidDepthReduction{"IidDepthReduction", 2, 1, 10};
 inline UCIOption nodestime{"nodestime", 250, 0, 100000};  // nodes/ms; 0 = disabled
+inline UCIOption softTimecheckPct{"SoftTimecheckPct", 70, 1, 100};  // Root node time check pct
 
 /**
  * Caching options for the perft program.
