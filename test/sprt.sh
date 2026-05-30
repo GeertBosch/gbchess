@@ -105,7 +105,7 @@ BASE_NAME=baseline
 NEW_CMD=build/gbchess
 NEW_NAME=gbchess-new
 TC=8+0.08
-CONCURRENCY=$(cpu_count)
+CONCURRENCY=$(($(cpu_count) - 2))
 GAMES=10000
 ELO0=0
 ELO1=5
@@ -188,7 +188,7 @@ CMD=(
     -recover
     -concurrency "$CONCURRENCY"
     -games "$GAMES"
-    -each "proto=uci" "tc=$TC" "depth=10" "nodes=250000"
+    -each "proto=uci" "tc=$TC" 
     -sprt "elo0=$ELO0" "elo1=$ELO1" "alpha=$ALPHA" "beta=$BETA"
     "${NEW_ENGINE[@]}"
     "${BASE_ENGINE[@]}"

@@ -423,7 +423,7 @@ $(COMPILE_COMMANDS):
 SPRT_NEW ?= build/gbchess
 SPRT_BASE ?= build/gbchess-base
 SPRT_STOCKFISH12 ?= stockfish-12
-SPRT_ARGS ?= --tc 60+2
+SPRT_ARGS ?= --tc 20
 
 sprt-base: build/gbchess
 	# Require a clean working tree so we can tag the current source files using git
