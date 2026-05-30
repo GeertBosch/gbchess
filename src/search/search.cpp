@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <optional>
+#include <ostream>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -10,6 +11,7 @@
 #include "core/core.h"
 #include "core/hash/hash.h"
 #include "core/options.h"
+#include "core/random.h"
 #include "core/square_set/occupancy.h"
 #include "core/uint128_str.h"
 #include "engine/fen/fen.h"
@@ -203,7 +205,7 @@ struct TranspositionTable {
     };
 
     struct Entry {
-        uint64_t key = 0;  // High bits of the hash, used to check for collisions
+        uint64_t key = 0;  // keyOf(hash) ^ hashSalt, used to detect collisions and stale entries
         Eval eval;
         uint8_t depthleft = 0;
         EntryType type = EntryType::EXACT;
@@ -211,22 +213,28 @@ struct TranspositionTable {
         Scope scope = Scope::Main;
         Entry() = default;
 
-        Entry(Hash hash,
-              Eval move,
+        Entry(uint64_t key,
+              Eval eval,
               uint8_t depth,
               EntryType type,
               uint8_t generation,
-                            Scope scope)
-            : key(keyOf(hash)),
-              eval(move),
+              Scope scope)
+            : key(key),
+              eval(eval),
               depthleft(depth),
               type(type),
               generation(generation),
-                            scope(scope) {}
-
+              scope(scope) {}
 
         [[nodiscard]] bool occupied() const { return key; }
     };
+    static_assert(sizeof(Entry) == 16);
+
+    // 4 entries per cluster = 64 bytes = one cache line.
+    struct Cluster {
+        Entry entries[4];
+    };
+    static_assert(sizeof(Cluster) == 64);
 
     static std::string to_string(const Entry& entry) {
         return "type " + to_string(entry.type) + " move " + ::to_string(entry.eval.move) +
@@ -238,7 +246,6 @@ struct TranspositionTable {
     struct Stats {
         uint64_t numInserted = 0;
         uint64_t numWorse = 0;
-        uint64_t numOccupied = 0;
         uint64_t numCollisions = 0;
         uint64_t numImproved = 0;
         uint64_t numHits = 0;
@@ -251,58 +258,73 @@ struct TranspositionTable {
         auto value = hash();
         return value;
     }
-    static uint64_t keyOf(Hash hash) { return keyOf(hash()); }
-    uint64_t indexOf(Hash hash) const { return indexOf(hash()); }
     static uint64_t keyOf(HashValue hashValue) { return hashValue >> 64; }
-    uint64_t indexOf(HashValue hashValue) const { return hashValue % entries.size(); }
+    uint64_t indexOf(HashValue hashValue) const { return hashValue % clusters.size(); }
 
-    std::vector<Entry> entries{size_t(options::transpositionTableMB) * MB / sizeof(Entry)};
+    uint64_t saltedKey(Hash hash) const { return keyOf(hash()) ^ hashSalt; }
+    Cluster& clusterOf(Hash hash) { return clusters[indexOf(hash())]; }
+    const Cluster& clusterOf(Hash hash) const { return clusters[indexOf(hash())]; }
+
+    std::vector<Cluster> clusters{size_t(options::transpositionTableMB) * MB / sizeof(Cluster)};
     uint8_t numGenerations = 0;
+    bool skipNextAging = true;  // skip first newSearch() bump after clear/restore
+    xorshift saltGen;
+    uint64_t hashSalt = saltGen();
     Stats stats;
 
     ~TranspositionTable() {
         if (transpositionTableDebug) printStats();
     }
 
-    const Entry& operator[](Hash hash) const { return entries[indexOf(hash)]; }
-    Entry& operator[](Hash hash) { return entries[indexOf(hash)]; }
+    // Lower score = better eviction candidate. Age penalty: 4 ply per generation behind current.
+    int replacementScore(const Entry& e) const {
+        if (!e.occupied()) return INT_MIN;
+        int age = uint8_t(numGenerations - e.generation);
+        int scopeBonus = (e.scope == Scope::Main) ? 0 : (e.scope == Scope::QsFrontier) ? -2 : -4;
+        return int(e.depthleft) - age * 4 + scopeBonus;
+    }
+
+    Entry* findEntry(Hash hash) {
+        auto key = saltedKey(hash);
+        for (auto& e : clusterOf(hash).entries)
+            if (e.key == key) return &e;
+        return nullptr;
+    }
+
+    const Entry* findEntry(Hash hash) const {
+        auto key = saltedKey(hash);
+        for (auto& e : clusterOf(hash).entries)
+            if (e.key == key) return &e;
+        return nullptr;
+    }
 
     Eval find(Hash hash) {
-        if (entries.empty()) return {};
-
-        auto& entry = (*this)[hash];
+        if (clusters.empty()) return {};
         ++stats.numMisses;
-        if (!entry.occupied() || keyOf(hash) != entry.key || entry.generation != numGenerations)
-            return {};
-
+        auto* entry = findEntry(hash);
+        if (!entry) return {};
         --stats.numMisses;
         ++stats.numHits;
-
         if (hash == debugHash)
-            std::cout << "Found debug position with move " << ::to_string(entry.eval.move)
-                      << " score " << std::string(entry.eval.score) << " depthleft "
-                      << int(entry.depthleft) << " type " << to_string(entry.type) << "\n";
-        return entry.eval;
+            std::cout << "Found debug position with move " << ::to_string(entry->eval.move)
+                      << " score " << std::string(entry->eval.score) << " depthleft "
+                      << int(entry->depthleft) << " type " << to_string(entry->type) << "\n";
+        return entry->eval;
     }
 
     Eval peek(Hash hash) const {
-        if (entries.empty()) return {};
-
-        const auto& entry = (*this)[hash];
-        if (!entry.occupied() || keyOf(hash) != entry.key || entry.generation != numGenerations)
-            return {};
-        return entry.eval;
+        if (clusters.empty()) return {};
+        auto* entry = findEntry(hash);
+        return entry ? entry->eval : Eval{};
     }
 
     [[nodiscard]] bool contains(Hash hash) const {
-        if (entries.empty()) return false;
-
-        const auto& entry = (*this)[hash];
-        return entry.occupied() && keyOf(hash) == entry.key && entry.generation == numGenerations;
+        if (clusters.empty()) return false;
+        return findEntry(hash) != nullptr;
     }
 
     PrincipalVariation pv(Position pos, int depth) {
-        if (entries.empty()) return {};
+        if (clusters.empty()) return {};
         auto hash = Hash(pos);
         auto eval = find(hash);
         auto move = eval.move;
@@ -321,22 +343,20 @@ struct TranspositionTable {
 
     bool refineAlphaBeta(
         Hash hash, int depthleft, Score& alpha, Score& beta, bool allowQsFrontierInMain) {
-        if (entries.empty()) return false;
-        auto& entry = (*this)[hash];
+        if (clusters.empty()) return false;
 
         ++stats.numMisses;
-        if (entry.key != keyOf(hash) || entry.generation != numGenerations ||
-            entry.depthleft < depthleft)
-            return false;
+        auto* entry = findEntry(hash);
+        if (!entry || entry->depthleft < depthleft) return false;
 
         // Main-search TT reuse policy:
         // - Never consume deep-qsearch entries
         // - Allow frontier-qsearch entries only under explicit shallow/non-PV gate
         if (depthleft > 0) {
-            if (entry.scope == Scope::QsDeep) return false;
-            if (entry.scope == Scope::QsFrontier &&
-                (!allowQsFrontierInMain || entry.type == EntryType::EXACT ||
-                 entry.eval.score.mate()))
+            if (entry->scope == Scope::QsDeep) return false;
+            if (entry->scope == Scope::QsFrontier &&
+                (!allowQsFrontierInMain || entry->type == EntryType::EXACT ||
+                 entry->eval.score.mate()))
                 return false;
         }
         // Don't refine if this position may be drawn by repetition, to avoid
@@ -352,125 +372,109 @@ struct TranspositionTable {
         else
             ++qsTTRefinements;
 
-        switch (entry.type) {
-        case EntryType::EXACT: alpha = beta = entry.eval.score; break;
-        case EntryType::LOWERBOUND: alpha = std::max(alpha, entry.eval.score); break;
-        case EntryType::UPPERBOUND: beta = std::min(beta, entry.eval.score); break;
+        switch (entry->type) {
+        case EntryType::EXACT: alpha = beta = entry->eval.score; break;
+        case EntryType::LOWERBOUND: alpha = std::max(alpha, entry->eval.score); break;
+        case EntryType::UPPERBOUND: beta = std::min(beta, entry->eval.score); break;
         }
         return true;
     }
 
-    /**
-     * Decide whether a TT entry should be replaced.
-     */
-    [[nodiscard]] bool shouldReplace(const Entry& oldEntry, const Entry& newEntry) {
-        // Empty slot or past generation, always replace
-        if (!oldEntry.occupied() || oldEntry.generation != newEntry.generation) return true;
-
-        // Prefer preserving higher-coverage entries.
-        if (oldEntry.scope != newEntry.scope) {
-            if (oldEntry.scope == Scope::Main) return false;
-            if (newEntry.scope == Scope::Main) return true;
-            if (oldEntry.scope == Scope::QsFrontier && newEntry.scope == Scope::QsDeep)
-                return false;
-            if (oldEntry.scope == Scope::QsDeep && newEntry.scope == Scope::QsFrontier)
-                return true;
-        }
-
-        // Collision: prefer replacing shallower entries
-        if (oldEntry.key != newEntry.key) return newEntry.depthleft > oldEntry.depthleft;
-
-        // Same key from here on. Prefer deeper entries
-        if (newEntry.depthleft != oldEntry.depthleft)
-            return newEntry.depthleft > oldEntry.depthleft;
-
-        // Equal depth from here on. Prefer EXACT over bounds.
-        if (oldEntry.type == EntryType::EXACT) return false;
-        if (newEntry.type == EntryType::EXACT) return true;
-
-        // Prefer LOWERBOUND as it can cause beta cutoffs, or tighten lower bounds
-        if (newEntry.type == EntryType::LOWERBOUND)
-            return newEntry.eval.score > oldEntry.eval.score ||
-                oldEntry.type == EntryType::UPPERBOUND;
-
-        // New entry is upper bound. Keep it if it's tighter.
-        return newEntry.eval.score <
-            oldEntry.eval.score;  // tighter upper bound or keep lower bound
-    }
-
     void insert(Hash hash,
-                Eval move,
+                Eval eval,
                 uint8_t depthleft,
                 EntryType type,
                 Scope scope = Scope::Main) {
-        if (entries.empty()) return;
-        if (!move.move && move.score.mate()) return;
+        if (clusters.empty()) return;
+        if (!eval.move && eval.score.mate()) return;
 
-        Entry newEntry = {hash, move, depthleft, type, numGenerations, scope};
-        auto& oldEntry = entries[indexOf(hash)];
-        newEntry.key = keyOf(hash);
-        // Keep the existing move for same-key updates when the new entry has no move.
-        if (!newEntry.eval.move && oldEntry.occupied() && oldEntry.key == newEntry.key)
-            newEntry.eval.move = oldEntry.eval.move;
-        if (!shouldReplace(oldEntry, newEntry)) {
-            ++stats.numWorse;
-            return;
+        auto key = saltedKey(hash);
+        auto& cluster = clusterOf(hash);
+
+        // If a slot already holds this position, update it in place if the new entry is better.
+        for (auto& e : cluster.entries) {
+            if (e.key == key) {
+                if (!eval.move) eval.move = e.eval.move;  // preserve existing move
+                // Keep deeper entries; for equal depth prefer EXACT, then LOWERBOUND.
+                if (e.depthleft > depthleft) { ++stats.numWorse; return; }
+                if (e.depthleft == depthleft) {
+                    if (e.type == EntryType::EXACT) { ++stats.numWorse; return; }
+                    if (type != EntryType::EXACT && e.type == EntryType::LOWERBOUND &&
+                        type == EntryType::UPPERBOUND) { ++stats.numWorse; return; }
+                }
+                ++stats.numImproved;
+                ++stats.numInserted;
+                if (hash == debugHash)
+                    std::cout << "Inserting debug position with move " << ::to_string(eval.move)
+                              << " score " << std::string(eval.score) << " depthleft "
+                              << int(depthleft) << " type " << to_string(type) << "\n";
+                e = {key, eval, depthleft, type, numGenerations, scope};
+                return;
+            }
         }
+
+        // No matching slot: evict the entry with the lowest replacement score.
+        auto* victim = &cluster.entries[0];
+        for (auto& e : cluster.entries)
+            if (replacementScore(e) < replacementScore(*victim)) victim = &e;
+
+        if (victim->occupied()) ++stats.numCollisions;
         ++stats.numInserted;
 
-        // 3 cases: improve existing entry, collision with unrelated entry, or occupy an empty slot
-        if (oldEntry.key == keyOf(hash))
-            ++stats.numImproved;
-        else if (oldEntry.occupied())
-            ++stats.numCollisions;
-        else
-            ++stats.numOccupied;  // nothing in this slot yet
-
         if (hash == debugHash)
-            std::cout << "Inserting debug position with move " << ::to_string(move.move)
-                      << " score " << std::string(move.score) << " depthleft " << int(depthleft)
+            std::cout << "Inserting debug position with move " << ::to_string(eval.move)
+                      << " score " << std::string(eval.score) << " depthleft " << int(depthleft)
                       << " type " << to_string(type) << "\n";
 
-        oldEntry = newEntry;
+        *victim = {key, eval, depthleft, type, numGenerations, scope};
     }
 
     void insert(Hash hash,
-                Eval move,
+                Eval eval,
                 uint8_t depthleft,
                 Score alpha,
                 Score beta,
                 Scope scope = Scope::Main) {
-        if (move.score > alpha && move.score < beta)
-            insert(hash, move, depthleft, TranspositionTable::EntryType::EXACT, scope);
-        else if (move.score <= alpha)
-            insert(hash, move, depthleft, TranspositionTable::EntryType::UPPERBOUND, scope);
-        else if (move.score >= beta)
-            insert(hash, move, depthleft, TranspositionTable::EntryType::LOWERBOUND, scope);
+        if (eval.score > alpha && eval.score < beta)
+            insert(hash, eval, depthleft, TranspositionTable::EntryType::EXACT, scope);
+        else if (eval.score <= alpha)
+            insert(hash, eval, depthleft, TranspositionTable::EntryType::UPPERBOUND, scope);
+        else if (eval.score >= beta)
+            insert(hash, eval, depthleft, TranspositionTable::EntryType::LOWERBOUND, scope);
     }
 
+    // Called on ucinewgame: O(1) salt flip makes all existing entries unmatchable.
     void clear() {
         if (debug && transpositionTableDebug && stats.numInserted) {
             printStats();
             std::cout << "Cleared transposition table\n";
         }
         stats = {};
-        if (!++numGenerations) std::fill(entries.begin(), entries.end(), Entry{});
-    };
+        numGenerations = 0;
+        skipNextAging = true;
+        hashSalt = saltGen();
+    }
+
+    // Called once per search (go command) to enable aging.
+    // Skipped after clear/restore so the first search sees generation-0 entries as current.
+    void newSearch() {
+        if (skipNextAging) { skipNextAging = false; return; }
+        ++numGenerations;
+    }
 
     bool clear(Hash hash) {
-        auto& entry = (*this)[hash];
-        if (!entry.occupied() || entry.key != keyOf(hash) || entry.generation != numGenerations)
-            return false;
-        --stats.numOccupied, entry = Entry{};
+        auto* entry = findEntry(hash);
+        if (!entry) return false;
+        *entry = Entry{};
         return true;
     }
 
     void printStats() {
         auto numLookups = stats.numHits + stats.numMisses;
         auto numInserts = stats.numInserted + stats.numWorse;
+        auto numEntries = clusters.size() * 4;
         std::cout << "Transposition table stats:\n";
-        std::cout << "  occupied: " << stats.numOccupied << pct(stats.numOccupied, entries.size())
-                  << "\n";
+        std::cout << "  clusters: " << clusters.size() << " (" << numEntries << " entries)\n";
         std::cout << "  inserts: " << stats.numInserted << "\n";
         std::cout << "  worse: " << stats.numWorse << pct(stats.numWorse, numInserts) << "\n";
         std::cout << "  collisions: " << stats.numCollisions << pct(stats.numCollisions, numInserts)
@@ -595,11 +599,9 @@ int quietMoveScore(const Position& position, Move move, Move lastMove) {
 
 std::string lookupPosition(Position position) {
     auto hash = Hash(position);
-    auto entry = transpositionTable[hash];
-    if (!entry.occupied() || TT::keyOf(hash) != entry.key ||
-        entry.generation != transpositionTable.numGenerations)
-        return {};
-    return TT::to_string(entry);
+    auto* entry = transpositionTable.findEntry(hash);
+    if (!entry) return {};
+    return TT::to_string(*entry);
 }
 
 void debugPosition(Position position) {
@@ -698,6 +700,8 @@ std::pair<moves::UndoPosition, Score> makeMoveWithEval(Position& position, Move 
     using namespace moves;
     BoardChange change = prepareMove(position.board, move);
     UndoPosition undo;
+    ++evalCount;
+
     if (options::useNNUE) {
         // Use NNUE evaluation, which is more accurate than the piece-square evaluation
         undo = makeMove(position, change, move);
@@ -749,8 +753,6 @@ Score quiesce(
     if (standPat >= beta && isQuiet(position, depthleft)) return ttInsert({Move{}, beta});
     if (standPat > alpha && isQuiet(position, depthleft)) alpha = standPat;
 
-    ++evalCount;
-
     // The moveList includes moves needed to get out of check; an empty list means mate
     auto moveList = moves::allLegalQuiescentMoves(position.turn, position.board, depthleft);
     if (moveList.empty() && isInCheck(position)) return Score::min();
@@ -776,6 +778,7 @@ Score quiesce(
 
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     ++quiescenceCount;
+    ++evalCount;
     Score stand_pat = options::useNNUE ? Score::fromCP(nnue::evaluate(position, *network))
                                        : evaluateBoard(position.board);
 
@@ -1246,12 +1249,14 @@ bool saveState(std::ostream& out) {
     if (!out) return false;
 
     // Save transposition table
-    size_t numEntries = transpositionTable.entries.size();
-    out.write(reinterpret_cast<const char*>(&numEntries), sizeof(numEntries));
+    size_t numClusters = transpositionTable.clusters.size();
+    out.write(reinterpret_cast<const char*>(&numClusters), sizeof(numClusters));
     out.write(reinterpret_cast<const char*>(&transpositionTable.numGenerations),
               sizeof(transpositionTable.numGenerations));
-    out.write(reinterpret_cast<const char*>(transpositionTable.entries.data()),
-              numEntries * sizeof(TranspositionTable::Entry));
+    out.write(reinterpret_cast<const char*>(&transpositionTable.hashSalt),
+              sizeof(transpositionTable.hashSalt));
+    out.write(reinterpret_cast<const char*>(transpositionTable.clusters.data()),
+              numClusters * sizeof(TranspositionTable::Cluster));
 
     // Save history table
     out.write(reinterpret_cast<const char*>(&history[0][0][0]), sizeof(history));
@@ -1290,14 +1295,17 @@ bool restoreState(std::istream& in) {
     clearState();
 
     // Restore transposition table
-    size_t numEntries;
-    in.read(reinterpret_cast<char*>(&numEntries), sizeof(numEntries));
-    if (numEntries != transpositionTable.entries.size()) return false;
+    size_t numClusters;
+    in.read(reinterpret_cast<char*>(&numClusters), sizeof(numClusters));
+    if (numClusters != transpositionTable.clusters.size()) return false;
 
     in.read(reinterpret_cast<char*>(&transpositionTable.numGenerations),
             sizeof(transpositionTable.numGenerations));
-    in.read(reinterpret_cast<char*>(transpositionTable.entries.data()),
-                numEntries * sizeof(TranspositionTable::Entry));
+    in.read(reinterpret_cast<char*>(&transpositionTable.hashSalt),
+            sizeof(transpositionTable.hashSalt));
+    in.read(reinterpret_cast<char*>(transpositionTable.clusters.data()),
+            numClusters * sizeof(TranspositionTable::Cluster));
+    transpositionTable.skipNextAging = true;
 
     // Restore history table
     in.read(reinterpret_cast<char*>(&history[0][0][0]), sizeof(history));
@@ -1315,63 +1323,62 @@ bool restoreState(std::istream& in) {
     return in.good();
 }
 
-void printStats() {
+void printStats(std::ostream& out) {
     if (!nodeCount) return;  // Nothing searched yet
 
-    auto& err = std::cerr;
-    err << "Search statistics:\n";
+    out << "Search statistics:\n";
 
     // Node counts
-    err << "  nodes:       " << nodeCount << " total"
+    out << "  nodes:       " << nodeCount << " total"
         << ", " << quiescenceCount << " qs entries"
         << ", " << qsNodeCount << " qs nodes\n";
-    err << "  evals:       " << evalCount
-        << ", " << cacheCount << " cached" << pct(cacheCount, evalCount) << "\n";
+    out << "  evals:       " << evalCount << ", " << cacheCount << " cached"
+        << pct(cacheCount, evalCount) << "\n";
 
     // Beta cutoffs and move ordering
     if (betaCutoffs) {
-        err << "  beta cutoffs:" << betaCutoffs;
+        out << "  beta cutoffs:" << betaCutoffs;
         if (firstMoveCutoffs)
-            err << ", " << firstMoveCutoffs << " first-move" << pct(firstMoveCutoffs, betaCutoffs);
-        err << "\n";
+            out << ", " << firstMoveCutoffs << " first-move" << pct(firstMoveCutoffs, betaCutoffs);
+        out << "\n";
     }
 
     // Transposition table
     if (ttRefinements || ttCutoffs)
-        err << "  TT:          " << ttRefinements << " refinements"
+        out << "  TT:          " << ttRefinements << " refinements"
             << ", " << ttCutoffs << " cutoffs\n";
     if (qsTTRefinements || qsTTCutoffs)
-        err << "  QS TT:       " << qsTTRefinements << " refinements"
+        out << "  QS TT:       " << qsTTRefinements << " refinements"
             << ", " << qsTTCutoffs << " cutoffs\n";
 
     // Null-move pruning
     if (nullMoveAttempts)
-        err << "  null move:   " << nullMoveAttempts << " attempts"
+        out << "  null move:   " << nullMoveAttempts << " attempts"
             << ", " << nullMoveCutoffs << " cutoffs" << pct(nullMoveCutoffs, nullMoveAttempts)
             << "\n";
 
     // Futility pruning
-    if (futilityPruned)
-        err << "  futility:    " << futilityPruned << " pruned\n";
+    if (futilityPruned) out << "  futility:    " << futilityPruned << " pruned\n";
 
     // LMR
     if (lmrAttempts)
-        err << "  LMR:         " << lmrAttempts << " reductions"
+        out << "  LMR:         " << lmrAttempts << " reductions"
             << ", " << lmrResearches << " re-searches" << pct(lmrResearches, lmrAttempts) << "\n";
 
     // PVS
     if (pvsAttempts)
-        err << "  PVS:         " << pvsAttempts << " probes"
+        out << "  PVS:         " << pvsAttempts << " probes"
             << ", " << pvsResearches << " re-searches" << pct(pvsResearches, pvsAttempts) << "\n";
 
     // Countermoves
     if (countermoveAttempts)
-        err << "  countermove: " << countermoveAttempts << " attempts"
+        out << "  countermove: " << countermoveAttempts << " attempts"
             << ", " << countermoveHits << " hits" << pct(countermoveHits, countermoveAttempts)
             << "\n";
 }
 
 PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector moves, InfoFn info) {
+    transpositionTable.newSearch();
     evalTable = EvalTable{position.board, true};
     searchNodeCount = nodeCount;
     searchEvalCount = evalCount;

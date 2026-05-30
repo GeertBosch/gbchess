@@ -415,7 +415,8 @@ void UCIRunner::dispatch(const std::string& command,
     } else if (command == "isready") {
         out << "readyok\n";
     } else if (command == "quit") {
-        search::printStats();
+        search::printStats(log);
+        std::flush(log);
         std::exit(0);
     } else if (command == "ucinewgame") {
         search::newGame();
