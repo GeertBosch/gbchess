@@ -10,12 +10,16 @@
 struct PrincipalVariation {
     Score score = Score::min();
     MoveVector moves;
+    // True iff this score depends on a repetition / fifty-move draw along the line. Such scores
+    // are path-dependent (not a fact about the position) and must not be stored as a TT bound.
+    bool drawDependent = false;
 
     PrincipalVariation() = default;
     PrincipalVariation(Move move, Score score) : score(score) {
         if (move) moves.push_back(move);
     }
-    PrincipalVariation(Move move, PrincipalVariation pv) : score(pv.score) {
+    PrincipalVariation(Move move, PrincipalVariation pv)
+        : score(pv.score), drawDependent(pv.drawDependent) {
         if (move) moves.push_back(move);
         moves.insert(moves.end(), pv.moves.begin(), pv.moves.end());
     }
@@ -34,7 +38,11 @@ struct PrincipalVariation {
         return adjusted;
     }
 
-    PrincipalVariation operator-() const { return {-score, moves}; }
+    PrincipalVariation operator-() const {
+        PrincipalVariation result(-score, moves);
+        result.drawDependent = drawDependent;
+        return result;
+    }
     bool operator<(const PrincipalVariation& other) const {
         return score < other.score || (score == other.score && moves.size() > other.moves.size());
     }
@@ -47,7 +55,8 @@ private:
 };
 
 inline std::string to_string(const PrincipalVariation& pv) {
-    auto& [score, moves] = pv;
+    auto& score = pv.score;
+    auto& moves = pv.moves;
     std::string str;
     auto depth = std::to_string(std::max(1, int(moves.size())));
     if (score.mate() > 0)

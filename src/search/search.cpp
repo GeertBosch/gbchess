@@ -97,7 +97,7 @@ std::string pct(uint64_t some, uint64_t all) {
 
 /**
  * The repetition table stores the hashes of all positions played so far in the game, so we can
- * detect repetitions and apply the rule that a third repetition is a draw.
+ * detect a threefold repetition (a position occurring three times), which is a draw.
  */
 class Repetitions {
     std::vector<Hash> hashes;
@@ -131,7 +131,7 @@ public:
         friend class Repetitions;
         Repetitions& repetitions;
         size_t count;
-        State(Repetitions& repetitions) : repetitions(repetitions), count(1) {};
+        State(Repetitions& repetitions, size_t count) : repetitions(repetitions), count(count) {};
 
     public:
         ~State() {
@@ -140,18 +140,20 @@ public:
     };
 
     /**
-     * Returns true iff the state represents a game drawn by repetition or the fifty move rule.
-     * Avoid any repetition if possible, so the transposition table remains accurate.
+     * Returns true iff the state represents a game drawn by threefold repetition or the fifty
+     * move rule.
      */
     bool drawn(int halfmove) const {
-        // Need at least 4 half moves since the last irreversible move, to get to draw by
-        // repetition. Account for the move we're about to make, which is not yet in the table.
+        // A position can recur a third time only after at least 4 reversible half moves (the two
+        // prior occurrences are at halfmove-2 and halfmove-4). The +1 accounts for the move we're
+        // about to make, which is not yet in the table.
         ++halfmove;
         if (halfmove < 4) return false;
         if (halfmove >= 100) return true;  // Fifty-move rule
 
-        // Check for repetition
-        return count(hashes.back(), halfmove) >= 2;  // Avoid repeating
+        // Threefold repetition: the current position (already in the table) plus two earlier
+        // occurrences within the reversible-move window.
+        return count(hashes.back(), halfmove) >= 3;
     }
 
     /**
@@ -159,9 +161,10 @@ public:
      * Returns a RAII State object that will remove the hash from the table when it goes out of
      * scope. The state object reports whether the position is a draw by repetition.
      */
+    [[nodiscard]] State emptyState() { return State(*this, 0); }
     [[nodiscard]] State enter(Hash hash) {
         push_back(hash);
-        return State(*this);
+        return State(*this, 1);
     }
     void enter(State& state, Hash hash) {
         push_back(hash);
@@ -189,12 +192,17 @@ struct TranspositionTable {
         }
     }
 
-    enum class EntryType : uint8_t { EXACT, LOWERBOUND, UPPERBOUND };
+    // NONE = move-ordering hint only, carrying no usable bound. Used for nodes whose score
+    // depended on a repetition / fifty-move draw (path-dependent, not a fact about the position).
+    // Appended last so existing saved states (which only contain EXACT/LOWERBOUND/UPPERBOUND)
+    // remain binary-compatible.
+    enum class EntryType : uint8_t { EXACT, LOWERBOUND, UPPERBOUND, NONE };
     static std::string to_string(EntryType type) {
         switch (type) {
         case EntryType::EXACT: return "EXACT";
         case EntryType::LOWERBOUND: return "LOWERBOUND";
         case EntryType::UPPERBOUND: return "UPPERBOUND";
+        case EntryType::NONE: return "NONE";
         default: return "UNKNOWN";
         }
     }
@@ -330,13 +338,18 @@ struct TranspositionTable {
         auto move = eval.move;
         if (!move) return {};
         PrincipalVariation pv(Move(), eval.score);
-        auto drawState = repetitions.enter(hash);
+        // Do not re-enter the root hash: alphaBeta has already entered it into the repetition
+        // table before calling tryTTCutoff → pv(). Only enter successor positions.
+        auto drawState = repetitions.emptyState();
         do {
-            pv.moves.push_back(move);
             pos = moves::applyMove(pos, move);
             hash = Hash(pos);
             repetitions.enter(drawState, hash);
-            if (repetitions.drawn(pos.turn.halfmove())) return pv.score = {}, pv;
+            if (repetitions.drawn(pos.turn.halfmove())) {
+                pv.drawDependent = true;
+                return pv;
+            }
+            pv.moves.push_back(move);
         } while ((move = find(hash).move) && --depth > 0);
         return pv;
     }
@@ -349,6 +362,9 @@ struct TranspositionTable {
         auto* entry = findEntry(hash);
         if (!entry || entry->depthleft < depthleft) return false;
 
+        // Move-only hints carry no usable bound and must never refine alpha/beta or cut.
+        if (entry->type == EntryType::NONE) return false;
+
         // Main-search TT reuse policy:
         // - Never consume deep-qsearch entries
         // - Allow frontier-qsearch entries only under explicit shallow/non-PV gate
@@ -359,9 +375,8 @@ struct TranspositionTable {
                  entry->eval.score.mate()))
                 return false;
         }
-        // Don't refine if this position may be drawn by repetition, to avoid
-        // polluting the table with inaccurate evaluations.
-        // if (repetitions.drawn(turn.halfmove())) return false;
+        // Draw-dependent scores never enter the table as bounds (see EntryType::NONE and the
+        // PrincipalVariation::drawDependent taint), so refining on a stored bound is safe here.
 
         --stats.numMisses;
         ++stats.numHits;
@@ -376,6 +391,7 @@ struct TranspositionTable {
         case EntryType::EXACT: alpha = beta = entry->eval.score; break;
         case EntryType::LOWERBOUND: alpha = std::max(alpha, entry->eval.score); break;
         case EntryType::UPPERBOUND: beta = std::min(beta, entry->eval.score); break;
+        case EntryType::NONE: return false;  // unreachable: filtered above
         }
         return true;
     }
@@ -395,6 +411,18 @@ struct TranspositionTable {
         for (auto& e : cluster.entries) {
             if (e.key == key) {
                 if (!eval.move) eval.move = e.eval.move;  // preserve existing move
+                // A move-only hint never overwrites a real bound (just refresh the move/age);
+                // conversely a real bound always replaces a move-only hint.
+                if (type == EntryType::NONE) {
+                    if (eval.move) e.eval.move = eval.move;
+                    e.generation = numGenerations;
+                    return;
+                }
+                if (e.type == EntryType::NONE) {
+                    ++stats.numImproved, ++stats.numInserted;
+                    e = {key, eval, depthleft, type, numGenerations, scope};
+                    return;
+                }
                 // Keep deeper entries; for equal depth prefer EXACT, then LOWERBOUND.
                 if (e.depthleft > depthleft) { ++stats.numWorse; return; }
                 if (e.depthleft == depthleft) {
@@ -441,6 +469,15 @@ struct TranspositionTable {
             insert(hash, eval, depthleft, TranspositionTable::EntryType::UPPERBOUND, scope);
         else if (eval.score >= beta)
             insert(hash, eval, depthleft, TranspositionTable::EntryType::LOWERBOUND, scope);
+    }
+
+    // Store only a move-ordering hint (no usable bound) for a position whose score depended on a
+    // repetition / fifty-move draw. The move stays useful for ordering; the path-dependent score
+    // is discarded so it can never refine bounds. Stored at depth 0 so it is the first to be
+    // evicted under pressure.
+    void insertMoveOnly(Hash hash, Move move, Scope scope = Scope::Main) {
+        if (clusters.empty() || !move) return;
+        insert(hash, {move, Score()}, 0, EntryType::NONE, scope);
     }
 
     // Called on ucinewgame: O(1) salt flip makes all existing entries unmatchable.
@@ -936,7 +973,11 @@ PrincipalVariation alphaBeta(Position& position,
 
     // Check for draws due to repetition or the fifty-move rule
     auto drawState = repetitions.enter(hash);
-    if (repetitions.drawn(position.turn.halfmove())) return {{}, Score()};
+    if (repetitions.drawn(position.turn.halfmove())) {
+        PrincipalVariation drawn{{}, Score()};
+        drawn.drawDependent = true;  // path-dependent draw score: must not become a TT bound
+        return drawn;
+    }
 
     if (depth.left <= 0) {
         auto score = quiesce(position, alpha, beta, options::quiescenceDepth);
@@ -1093,7 +1134,10 @@ PrincipalVariation alphaBeta(Position& position,
 
     if (moveList.empty() && !isInCheck(position)) pv.score = Score();  // Stalemate
 
-    transpositionTable.insert(hash, {pv.front(), pv.score}, depth.left, alpha, beta);
+    if (pv.drawDependent)
+        transpositionTable.insertMoveOnly(hash, pv.front());
+    else
+        transpositionTable.insert(hash, {pv.front(), pv.score}, depth.left, alpha, beta);
 
     return pv;
 }
@@ -1188,7 +1232,10 @@ PrincipalVariation toplevelAlphaBeta(
                        Move()))
             return pv;
     }
-    transpositionTable.insert(hash, {pv.front(), pv.score}, depthleft, alpha, beta);
+    if (pv.drawDependent)
+        transpositionTable.insertMoveOnly(hash, pv.front());
+    else
+        transpositionTable.insert(hash, {pv.front(), pv.score}, depthleft, alpha, beta);
 
     return pv;
 }

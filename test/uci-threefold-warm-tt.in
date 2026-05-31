@@ -1,0 +1,21 @@
+# Same king/rook shuffle position, but a prior search (without history) warms the TT
+# with entries for positions in the repetition cycle.  On the subsequent search with
+# 6-move history, transpositionTable::pv() used those cached moves to extend the PV
+# past the threefold draw.
+#
+# Bug fixed: pv() re-entered the root hash into the repetition table, double-counting
+# it.  The fix uses emptyState() so only successor positions are entered, and checks
+# drawn() before pushing the move into pv.moves.  The result is that even with a warm
+# TT the PV is truncated at the draw boundary.
+
+ucinewgame
+setoption name OwnBook value false
+# Warm the TT with a search from the same position but no game history.
+position fen 7k/1pp5/pb1p2Bp/4p1rP/PP2P1r1/2PP4/5PP1/R4RK1 w - - 0 1
+go depth 9 wait
+# Now search with 6-move history.  The warm TT has entries for the shuffle positions.
+position fen 7k/1pp5/pb1p2Bp/4p1rP/PP2P1r1/2PP4/5PP1/R4RK1 w - - 0 1 moves g1h1 g4h4 h1g1 h4g4 g1h1 g4h4
+go depth 9 wait
+# The draw must be recognised: score must be 0 and PV must not extend past it.
+expect-count 9 score cp 0.*pv h1g1 h4g4$
+expect-count 0 score cp 0.*pv h1g1 h4g4 \S
