@@ -97,10 +97,23 @@ std::string pct(uint64_t some, uint64_t all) {
 
 /**
  * The repetition table stores the hashes of all positions played so far in the game, so we can
- * detect a threefold repetition (a position occurring three times), which is a draw.
+ * detect repetitions. During search a position seen a second time (within the reversible-move
+ * window) is already scored as a draw: if a line repeats once, the side to move can force the
+ * threefold, so the within-search twofold is the relevant draw for the search. This surfaces
+ * perpetuals / forced-draw resources a full repetition cycle earlier than waiting for a true
+ * threefold. Transposition-table soundness is preserved by the drawTainted() distinction: a draw
+ * that depends on the pre-root game history or the fifty-move clock is stored as a move-only hint
+ * (never a bound), while a within-search repetition is a fact about the subtree and may be stored
+ * and reused as a normal bound. This is what makes the within-search twofold safe.
  */
 class Repetitions {
     std::vector<Hash> hashes;
+    // Number of positions belonging to the pre-root game history (set by setRoot() at the start of
+    // each search). Positions at indices [0, rootSize) occurred before the position being searched;
+    // positions at indices >= rootSize are visited during the search itself. Used to tell apart a
+    // repetition formed within the search (a safe fact about the subtree) from one that depends on
+    // the pre-root game history (a Graph-History-Interaction hazard that must not become a TT bound).
+    size_t rootSize = 0;
     void push_back(Hash hash) { hashes.push_back(hash); }
     void pop_back() { hashes.pop_back(); }
     Hash back() const { return hashes.back(); }
@@ -120,9 +133,29 @@ class Repetitions {
         return count;
     }
 
+    /**
+     * Like count(), but only counts occurrences at or after the search root (index >= rootSize),
+     * i.e. repetitions formed during the search rather than in the pre-root game history.
+     */
+    int countWithinSearch(Hash hash, int halfmove) const {
+        halfmove = std::min(halfmove, int(hashes.size()));
+        size_t start = hashes.size() - halfmove;
+        if (start < rootSize) start = rootSize;
+        int count = 0;
+        for (size_t i = start; i < hashes.size(); ++i) count += (hashes[i] == hash);
+        return count;
+    }
+
 public:
     Repetitions() = default;
-    void clear() { hashes.clear(); }
+    void clear() {
+        hashes.clear();
+        rootSize = 0;
+    }
+
+    // Marks the current table size as the search root: everything entered after this is search
+    // tree, everything before is pre-root game history. Call once per search before recursing.
+    void setRoot() { rootSize = hashes.size(); }
 
     /**
      * RAII type that will remove the hashes from the repetition table when it goes out of scope.
@@ -140,20 +173,39 @@ public:
     };
 
     /**
-     * Returns true iff the state represents a game drawn by threefold repetition or the fifty
-     * move rule.
+     * Returns true iff the state represents a draw for search purposes: a within-search repetition
+     * (the current position has occurred once before within the reversible-move window) or the
+     * fifty-move rule.
      */
     bool drawn(int halfmove) const {
-        // A position can recur a third time only after at least 4 reversible half moves (the two
-        // prior occurrences are at halfmove-2 and halfmove-4). The +1 accounts for the move we're
-        // about to make, which is not yet in the table.
+        // A position can recur only after at least 4 reversible half moves (the prior occurrence
+        // is at halfmove-4, same side to move). The +1 accounts for the move we're about to make,
+        // which is not yet in the table.
         ++halfmove;
         if (halfmove < 4) return false;
         if (halfmove >= 100) return true;  // Fifty-move rule
 
-        // Threefold repetition: the current position (already in the table) plus two earlier
-        // occurrences within the reversible-move window.
-        return count(hashes.back(), halfmove) >= 3;
+        // Twofold-in-search: the current position (already in the table) plus one earlier
+        // occurrence within the reversible-move window. A single repetition along a search line is
+        // treated as a draw because the side to move can force the threefold from there.
+        return count(hashes.back(), halfmove) >= 2;
+    }
+
+    /**
+     * For a position that drawn() reports as a draw, returns true iff that draw is path-dependent
+     * in a way that must NOT be stored as a transposition-table bound: a fifty-move draw (depends
+     * on the clock, which is not part of the position hash), or a repetition whose only prior
+     * occurrence lies in the pre-root game history (the Graph-History-Interaction hazard — the same
+     * board reached on a different path is not drawn). A repetition that recurs within the search
+     * (the current position plus another occurrence at/after the root) is a safe fact about the
+     * subtree and is NOT tainted, so its draw score may be stored and reused as a normal bound.
+     */
+    bool drawTainted(int halfmove) const {
+        ++halfmove;
+        if (halfmove >= 100) return true;  // Fifty-move rule: clock-dependent, not a position fact.
+        // The current position is always entered during the search, so it counts once here; a
+        // second within-search occurrence makes this a safe within-search repetition.
+        return countWithinSearch(hashes.back(), halfmove) < 2;
     }
 
     /**
@@ -346,7 +398,8 @@ struct TranspositionTable {
             hash = Hash(pos);
             repetitions.enter(drawState, hash);
             if (repetitions.drawn(pos.turn.halfmove())) {
-                pv.drawDependent = true;
+                pv.drawDependent = repetitions.drawTainted(pos.turn.halfmove());
+                pv.score = {};  // The reconstructed PV reaches a draw: this line scores 0.
                 return pv;
             }
             pv.moves.push_back(move);
@@ -975,7 +1028,9 @@ PrincipalVariation alphaBeta(Position& position,
     auto drawState = repetitions.enter(hash);
     if (repetitions.drawn(position.turn.halfmove())) {
         PrincipalVariation drawn{{}, Score()};
-        drawn.drawDependent = true;  // path-dependent draw score: must not become a TT bound
+        // Only taint draws that depend on pre-root history or the clock (see drawTainted); a
+        // within-search repetition is a safe fact and may be stored as a normal bound.
+        drawn.drawDependent = repetitions.drawTainted(position.turn.halfmove());
         return drawn;
     }
 
@@ -1437,6 +1492,7 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
     auto drawState = repetitions.enter(Hash(position));
     for (auto move : moves)
         repetitions.enter(drawState, Hash(position = moves::applyMove(position, move)));
+    repetitions.setRoot();  // Everything entered above is pre-root game history.
 
     auto pv = options::iterativeDeepening ? iterativeDeepening(position, maxdepth, info)
                                           : toplevelAlphaBeta(position, maxdepth, info);
