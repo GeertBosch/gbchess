@@ -30,7 +30,7 @@ const char* const authorName = "Geert Bosch";
 
 using UCIArguments = std::vector<std::string>;
 
-std::string basename(std::string_view path) {
+std::string executableName(std::string_view path) {
     auto slash = path.rfind('/');
     return std::string(slash == std::string_view::npos ? path : path.substr(slash + 1));
 }
@@ -566,7 +566,7 @@ void fromArgs(int argc, char** argv) {
 }
 
 int main(int argc, char** argv) {
-    if (argc >= 1) cmdName = basename(argv[0]);
+    if (argc >= 1) cmdName = executableName(argv[0]);
 
     if (argc == 1)
         fromStream(std::cin);
