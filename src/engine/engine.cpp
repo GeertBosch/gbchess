@@ -506,6 +506,8 @@ void UCIRunner::execute(std::string line) {
 
 }  // namespace
 
+namespace {
+
 void enterUCI(std::istream& in, std::ostream& out, std::ostream& log) {
     UCIRunner runner(out, log);
     std::flush(log);
@@ -564,6 +566,8 @@ void fromArgs(int argc, char** argv) {
     std::istringstream iss(ss.str());
     enterUCI(iss, std::cout, std::cout);
 }
+
+}  // namespace
 
 int main(int argc, char** argv) {
     if (argc >= 1) cmdName = executableName(argv[0]);
