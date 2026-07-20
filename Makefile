@@ -32,12 +32,15 @@ RUNCMD = $(Q)$(1) || { echo "  ❌ error making $@"; false; }
 BUILDCMD= $(Q)$(1) && echo "  ✅ $@ built" || { echo "  ❌ error building $@"; false; }
 LIBS :=
 UNAME_S := $(shell uname -s)
+UNAME_M := $(shell uname -m)
+DOWNLOAD_REQUIRED_CMDS=curl zstd
 
 ifeq ($(UNAME_S),Linux)
 	LIBS:=${LIBS} -latomic
 	LLVM_PROFDATA:=$(or $(shell command -v llvm-profdata 2>/dev/null),$(lastword $(sort $(wildcard /usr/bin/llvm-profdata-*))))
-	GPP:=clang++
-	CCFLAGS:=${CCFLAGS} -stdlib=libc++ -mcx16
+	ifneq (,$(filter x86_64 amd64,$(UNAME_M)))
+		CCFLAGS:=${CCFLAGS} -mcx16
+	endif
 endif
 ifeq ($(UNAME_S),Darwin)
     LLVM_PROFDATA:=xcrun llvm-profdata
@@ -142,10 +145,10 @@ BROADCAST_FILES := $(addprefix lichess/lichess_db_broadcast_,$(addsuffix .pgn,$(
 # Generate book.csv from all PGN files in lichess directory
 LICHESS_PGNS=$(wildcard lichess/*.pgn) $(BROADCAST_FILES)
 
-lichess/lichess_db_broadcast_%.pgn: lichess/lichess_db_broadcast_%.pgn.zst
+lichess/lichess_db_broadcast_%.pgn: lichess/lichess_db_broadcast_%.pgn.zst | check-download-prereqs
 	$(call RUNCMD,zstd -d -f -k "$<" -o "$@")
 	$(Q)touch "$@"
-lichess/lichess_db_broadcast_%.pgn.zst:
+lichess/lichess_db_broadcast_%.pgn.zst: check-download-prereqs
 	$(Q)
 	mkdir -p lichess
 	cd lichess && curl -fsSL -O https://database.lichess.org/broadcast/$(notdir $@)
@@ -187,6 +190,43 @@ $(eval $(call test_rules,engine/puzzle,${SEARCH_SRCS} engine/fen/fen.cpp))
 
 .SUFFIXES: # Delete the default suffix rules
 
+check-prereqs:
+	$(Q)for cxx in "${GPP}" "${CLANGPP}"; do \
+		command -v "$$cxx" >/dev/null 2>&1 || { \
+			echo "❌ C++ compiler not found: $$cxx"; \
+			exit 1; \
+		}; \
+		printf '#include <vector>\nint main() { return 0; }\n' \
+			| "$$cxx" -std=c++17 -x c++ -c -o /dev/null - >/dev/null 2>&1 \
+			|| { \
+				echo "❌ $$cxx cannot compile a basic C++17 source file."; \
+				echo "If clang++ fails with missing headers, install a complete clang toolchain or use make with CLANGPP=g++."; \
+				exit 1; \
+			}; \
+	done
+	$(Q)${LLVM_PROFDATA} --version >/dev/null 2>&1 || { \
+		echo "❌ Missing llvm-profdata command required by perft/profile targets."; \
+		exit 1; \
+	}
+
+check-download-prereqs:
+	$(Q)for cmd in ${DOWNLOAD_REQUIRED_CMDS}; do \
+		command -v "$$cmd" >/dev/null 2>&1 || { \
+			echo "❌ Missing prerequisite: $$cmd"; \
+			echo "Install download prerequisites first, for example: sudo apt-get install -y curl zstd"; \
+			exit 1; \
+		}; \
+	done
+
+check-dead-code-prereqs:
+	$(Q)command -v clangd >/dev/null 2>&1 || { \
+		echo "❌ Missing clangd command required by dead-code target."; \
+		exit 1; \
+	}
+
+check-eval-prereqs:
+	$(Q)./make-evals.sh --check
+
 clean:
 	rm -fr build
 	rm -f *.log
@@ -227,16 +267,16 @@ PERFT_CLANG_HDRS=src/core/*.h src/core/square_set/*.h src/engine/fen/*.h src/cor
 # Build the perft tool with some different compilation options for speed comparison
 build/perft-clang-sse2: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
 	$(Q)mkdir -p build
-	$(call BUILDCMD,${CLANGPP} -O3 -flto=thin ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
+	$(call BUILDCMD,${CLANGPP} -O3 -flto=thin ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^) ${LIBS})
 build/perft-clang-emul: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
 	$(Q)mkdir -p build
-	$(call BUILDCMD,${CLANGPP} -O3 -flto=thin -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
+	$(call BUILDCMD,${CLANGPP} -O3 -flto=thin -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^) ${LIBS})
 build/perft-gcc-sse2: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
 	$(Q)mkdir -p build
-	$(call BUILDCMD,${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
+	$(call BUILDCMD,${GPP} -O3 ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^) ${LIBS})
 build/perft-gcc-emul: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
 	$(Q)mkdir -p build
-	$(call BUILDCMD,${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^))
+	$(call BUILDCMD,${GPP} -O3 -DSSE2EMUL ${CCFLAGS} -Isrc -g -o $@ $(filter-out %.h,$^) ${LIBS})
 
 # PGO: instrumented builds for profile collection
 build/perft-instr: ${PERFT_SRCS} ${PERFT_CLANG_HDRS}
@@ -267,11 +307,11 @@ perft-test: build/perft.out build/perft-test.out build/perft-debug.out build/per
 
 # Download the lichess puzzles database if not already present. As the puzzles change over time, and
 # the file is large, we don't normally clean and refetch it.
-${PUZZLES}: ${PUZZLES}.zst
+${PUZZLES}: ${PUZZLES}.zst | check-download-prereqs
 	$(call RUNCMD,zstd -d -f -k "$<" -o "$@")
 	$(Q)touch "$@"
 
-${PUZZLES}.zst:
+${PUZZLES}.zst: check-download-prereqs
 	$(Q)mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) \
 		&& curl -fsSL -O https://database.lichess.org/$(notdir ${PUZZLES}).zst
 
@@ -289,10 +329,10 @@ mate-123: build/mate-123.out
 mate-45: build/mate-45.out
 puzzles: build/puzzles.out
 
-${NNUE_FILE}:
+${NNUE_FILE}: check-download-prereqs
 	$(Q)curl -fsSL -O ${NNUE_URL}
 
-lichess/lichess_%_evals.csv: make-evals.sh ${PUZZLES}
+lichess/lichess_%_evals.csv: make-evals.sh ${PUZZLES} | check-eval-prereqs
 	mkdir -p $(dir $@) && ./$< $(@:lichess/lichess_%_evals.csv=%) > $@
 
 build/evals.out: build/eval-test ${EVALS}
@@ -309,7 +349,7 @@ build/dead-code/%.out: src/% dead-code.py $(COMPILE_COMMANDS)
 		> $@ && echo "  ✅ $* has no dead code" | tee -a $@ \
 		|| { cat $@; echo "  ❌ dead code in $*" | tee -a $@; mv $@ $(basename $@).log; false; }
 
-dead-code: $(DEAD_CODE_OUTS)
+dead-code: check-dead-code-prereqs $(DEAD_CODE_OUTS)
 	$(Q)python3 dead-code.py --shutdown
 	@echo "✅ No dead code found"
 
@@ -326,9 +366,9 @@ build/perft-test.out: build/perft-test
 build/perft-debug.out: build/perft-debug
 	$(Q)./build/perft-debug $(REDIR)
 
-debug: $(patsubst %-test,%-debug,$(CPP_TESTS)) build/perft-debug build/gbchess-debug build/book-gen-debug
-build-ci: .deps $(CPP_TESTS) $(COMPILE_COMMANDS) build/gbchess build/perft-simple build/book-gen
-build:  build/perft build-ci
+debug: check-prereqs $(patsubst %-test,%-debug,$(CPP_TESTS)) build/perft-debug build/gbchess-debug build/book-gen-debug
+build-ci: check-prereqs .deps $(CPP_TESTS) $(COMPILE_COMMANDS) build/gbchess build/perft-simple build/book-gen
+build: check-prereqs build/perft build-ci
 	$(Q)echo "\n✅ Build complete\n"
 
 build/fixed-puzzles.out: build/search-test $(FIXED_PUZZLES) ${NNUE_FILE}
@@ -418,7 +458,7 @@ $(COMPILE_COMMANDS):
 	$(Q)echo ']' >> $@
 	$(call BUILDCMD, true)
 
-.PHONY: ci install-hooks generate-book
+.PHONY: ci install-hooks generate-book check-prereqs check-download-prereqs check-dead-code-prereqs check-eval-prereqs
 
 SPRT_NEW ?= build/gbchess
 SPRT_BASE ?= build/gbchess-base
