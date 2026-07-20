@@ -100,6 +100,15 @@ private:
     size_t size = 0;
 };
 
+// Some libstdc++ implementations do not provide fetch_add for atomic uint128_t.
+inline void atomicAddRelaxed(std::atomic<NodeCount>& counter, NodeCount delta) {
+    auto current = counter.load(std::memory_order_relaxed);
+    while (!counter.compare_exchange_weak(current,
+                                          current + delta,
+                                          std::memory_order_relaxed,
+                                          std::memory_order_relaxed));
+}
+
 /**
  * Sharded counter for tracking cache hits across threads without contention.
  * Each thread writes to its own cache-line-isolated shard; reads sum all shards.
@@ -115,7 +124,7 @@ class ShardedCounter {
 public:
     void add(NodeCount delta) {
         thread_local size_t idx = nextShard.fetch_add(1) % kShards;
-        shards[idx].value.fetch_add(delta, std::memory_order_relaxed);
+        atomicAddRelaxed(shards[idx].value, delta);
     }
 
     NodeCount load() const {
@@ -237,7 +246,7 @@ NodeCount perft(Board& board, Hash hash, moves::SearchState state, int depth) {
     });
     if (options::cachePerft && nodes > NodeCount(options::cachePerftMinNodes))
         perftCache.enter(hash(), depth, nodes);
-    if (depth == 4) perftInProgress.fetch_add(nodes, std::memory_order_relaxed);
+    if (depth == 4) atomicAddRelaxed(perftInProgress, nodes);
     return nodes;
 }
 
@@ -298,7 +307,7 @@ NodeCount threadedPerft(Position position,
     std::atomic<size_t> taskIndex{0};
 
     auto addNodes = [](std::atomic<NodeCount>& total, NodeCount delta) {
-        total.fetch_add(delta, std::memory_order_relaxed);
+        atomicAddRelaxed(total, delta);
     };
 
     // Create a bounded number of threads to process the tasks.
