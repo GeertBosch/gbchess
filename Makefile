@@ -148,7 +148,7 @@ LICHESS_PGNS=$(wildcard lichess/*.pgn) $(BROADCAST_FILES)
 lichess/lichess_db_broadcast_%.pgn: lichess/lichess_db_broadcast_%.pgn.zst | check-download-prereqs
 	$(call RUNCMD,zstd -d -f -k "$<" -o "$@")
 	$(Q)touch "$@"
-lichess/lichess_db_broadcast_%.pgn.zst: check-download-prereqs
+lichess/lichess_db_broadcast_%.pgn.zst: | check-download-prereqs
 	$(Q)
 	mkdir -p lichess
 	cd lichess && curl -fsSL -O https://database.lichess.org/broadcast/$(notdir $@)
@@ -186,6 +186,7 @@ $(eval $(call test_rules,engine/puzzle,${SEARCH_SRCS} engine/fen/fen.cpp))
 .deps: $(call calc_deps,${OPTOBJ},${ALLSRCS}) $(call calc_deps,${DBGOBJ},${ALLSRCS})
 	$(Q)./check-arch.sh $(VOPT)
 	$(Q)./make-svgs.sh
+	$(Q)touch $@
 	@echo  "\n✅ All dependencies up to date"
 
 .SUFFIXES: # Delete the default suffix rules
@@ -235,6 +236,7 @@ clean:
 	rm -rf test/out *.dSYM .DS_Store __pycache__
 	find . -name '*_*_*_*_*_*_*.svg' -exec rm {} \;
 	rm -f $(COMPILE_COMMANDS)
+	rm -f .deps
 	rm -f book.csv
 	rm -f book.epd
 
@@ -311,7 +313,7 @@ ${PUZZLES}: ${PUZZLES}.zst | check-download-prereqs
 	$(call RUNCMD,zstd -d -f -k "$<" -o "$@")
 	$(Q)touch "$@"
 
-${PUZZLES}.zst: check-download-prereqs
+${PUZZLES}.zst: | check-download-prereqs
 	$(Q)mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) \
 		&& curl -fsSL -O https://database.lichess.org/$(notdir ${PUZZLES}).zst
 
@@ -329,7 +331,7 @@ mate-123: build/mate-123.out
 mate-45: build/mate-45.out
 puzzles: build/puzzles.out
 
-${NNUE_FILE}: check-download-prereqs
+${NNUE_FILE}: | check-download-prereqs
 	$(Q)curl -fsSL -O ${NNUE_URL}
 
 lichess/lichess_%_evals.csv: make-evals.sh ${PUZZLES} | check-eval-prereqs
@@ -349,9 +351,10 @@ build/dead-code/%.out: src/% dead-code.py $(COMPILE_COMMANDS)
 		> $@ && echo "  ✅ $* has no dead code" | tee -a $@ \
 		|| { cat $@; echo "  ❌ dead code in $*" | tee -a $@; mv $@ $(basename $@).log; false; }
 
-dead-code: check-dead-code-prereqs $(DEAD_CODE_OUTS)
-	$(Q)python3 dead-code.py --shutdown
-	@echo "✅ No dead code found"
+build/dead-code.out: $(DEAD_CODE_OUTS) | check-dead-code-prereqs
+	$(Q)python3 dead-code.py --shutdown $(REDIR)
+
+dead-code: build/dead-code.out
 
 # Some line count statistics, requires the cloc tool, see https://github.com/AlDanial/cloc
 cloc:
@@ -390,7 +393,7 @@ build/uci-%.out: test/uci-%.in build/gbchess ${NNUE_FILE}
 	$(Q)./build/gbchess $< 2>&1 | grep -wv "expect" $(REDIR)
 
 build/uci.out: $(patsubst test/uci-%.in,build/uci-%.out,$(wildcard test/uci-*.in))
-	$(Q)./test/check-uci.sh
+	$(Q)./test/check-uci.sh $(REDIR)
 
 uci: build/uci.out
 
