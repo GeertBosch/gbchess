@@ -166,7 +166,8 @@ public:
         if (debugOut.is_open()) debugOut << "> " << line << "\n" << std::flush;
         lastInfo = {};
         std::string msg = line + "\n";
-        write(toEngine, msg.c_str(), msg.size());
+        if (write(toEngine, msg.c_str(), msg.size()) < 0)
+            throw std::runtime_error("write() to engine failed");
     }
 
     std::string readline() {
