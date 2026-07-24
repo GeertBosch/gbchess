@@ -536,9 +536,9 @@ void usage() {
 }
 
 void fromStream(std::istream& stream) {
-    // Get the /tmp directory from the environment, or use the current directory if not set
+    // Get the /tmp directory from the environment, or use /tmp if not set
     const char* tmpDir = std::getenv("TMPDIR");
-    if (!tmpDir) tmpDir = ".";
+    if (!tmpDir) tmpDir = "/tmp";
 
     // Include a PID in the log file name to avoid conflicts between engines
     std::ofstream log(std::string(tmpDir) + "/engine-" + std::to_string(getpid()) + ".log");
