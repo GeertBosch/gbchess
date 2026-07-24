@@ -37,6 +37,10 @@ DOWNLOAD_REQUIRED_CMDS=curl zstd
 
 ifeq ($(UNAME_S),Linux)
 	LIBS:=${LIBS} -latomic
+	# Ubuntu/Debian's packaged gcc enables _FORTIFY_SOURCE=2 by default at -O1+, which adds
+	# warn_unused_result to write()/read()/etc. Other gcc builds (e.g. custom toolchains) don't
+	# patch this in, so set it explicitly to keep local -O2 builds catching what CI catches.
+	CCFLAGS:=${CCFLAGS} -D_FORTIFY_SOURCE=2
 	LLVM_PROFDATA:=$(or $(shell command -v llvm-profdata 2>/dev/null),$(lastword $(sort $(wildcard /usr/bin/llvm-profdata-*))))
 	ifneq (,$(filter x86_64 amd64,$(UNAME_M)))
 		CCFLAGS:=${CCFLAGS} -mcx16
