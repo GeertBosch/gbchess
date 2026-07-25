@@ -7,7 +7,8 @@ Usage:
 
 For each PGN it prints a markdown report: match summary, pentanomial, per-color
 and per-opening scores, the WDL cause breakdown (mate / 3-fold / fifty-move /
-insufficient material / stalemate / time forfeit / crash), conversion &
+insufficient material / stalemate / time forfeit / crash) both by engine and by the
+colour that lost, conversion &
 "throw" diagnostics from the in-PGN engine evals, and game-length stats.
 
 When two or more PGNs are given it also prints a side-by-side delta table of the
@@ -44,6 +45,16 @@ def parse_games(text):
     return games
 
 
+def sidecar_engines(path):
+    """Read the new=/base= names test/sprt.sh wrote next to the PGN, if present."""
+    try:
+        with open(re.sub(r'\.pgn$', '', path) + '.engines') as f:
+            d = dict(line.strip().split('=', 1) for line in f if '=' in line)
+    except OSError:
+        return None, None
+    return d.get('new'), d.get('base')
+
+
 def detect_engines(games, new_override, base_override):
     names = Counter()
     for g in games:
@@ -53,6 +64,8 @@ def detect_engines(games, new_override, base_override):
     names = list(names)
     if new_override and base_override:
         return new_override, base_override
+    # Engine names are derived from the binary + options, so they no longer reliably
+    # contain "new"; the caller passes the sidecar value in as new_override.
     new = new_override or next((n for n in names if 'new' in n.lower()), None)
     if new is None:
         # fall back to first name
@@ -109,6 +122,12 @@ def parse_evals(moves_text):
     return evals
 
 
+def first_mover(g):
+    """Colour that moved first: the FEN tag's side to move, else white (start position)."""
+    parts = g['tags'].get('FEN', '').split()
+    return 'black' if len(parts) > 1 and parts[1] == 'b' else 'white'
+
+
 def new_points(g, new):
     r = g['tags'].get('Result')
     if r == '1/2-1/2':
@@ -127,7 +146,8 @@ def elo_from_score(p):
 def analyze(path, new_override, base_override):
     text = open(path).read()
     games = [g for g in parse_games(text) if g['tags'].get('Result') in ('1-0', '0-1', '1/2-1/2')]
-    new, base = detect_engines(games, new_override, base_override)
+    side_new, side_base = sidecar_engines(path)
+    new, base = detect_engines(games, new_override or side_new, base_override or side_base)
 
     n = len(games)
     pts = sum(new_points(g, new) for g in games)
@@ -137,6 +157,14 @@ def analyze(path, new_override, base_override):
     cause_when_new_loses = Counter()
     cause_when_base_loses = Counter()
     cause_draw = Counter()
+    # same causes, split by the colour that lost rather than by engine
+    cause_by_loser_color = {'white': Counter(), 'black': Counter()}
+    # ... and by whether the loser was the side that moved first in the game. Time
+    # forfeits track this rather than colour: the first mover spends from a budget that
+    # is a fraction of its own remaining clock before its opponent does, so its clock
+    # sits below the opponent's at every ply and it hits the flag threshold first.
+    cause_by_loser_role = {'first': Counter(), 'second': Counter()}
+    first_movers = Counter()
     timeouts = Counter()
     plies = {'new_loss': [], 'new_win': [], 'draw': []}
     # conversion / throw diagnostics from evals (decisive games only)
@@ -153,6 +181,8 @@ def analyze(path, new_override, base_override):
         wdl[key] += 1
         new_color = 'white' if g['tags'].get('White') == new else 'black'
         color_wdl[new_color][key] += 1
+
+        first_movers[first_mover(g)] += 1
 
         fen = g['tags'].get('FEN', '?')
         byopen[fen][0] += p
@@ -172,6 +202,10 @@ def analyze(path, new_override, base_override):
             cause_draw[reason] += 1
             plies['draw'].append(ply)
         else:
+            loser_color = 'white' if r == '0-1' else 'black'
+            cause_by_loser_color[loser_color][reason] += 1
+            role = 'first' if loser_color == first_mover(g) else 'second'
+            cause_by_loser_role[role][reason] += 1
             if p == 0.0:
                 cause_when_new_loses[reason] += 1
                 plies['new_loss'].append(ply)
@@ -210,6 +244,9 @@ def analyze(path, new_override, base_override):
         'cause_new_loss': cause_when_new_loses,
         'cause_base_loss': cause_when_base_loses,
         'cause_draw': cause_draw,
+        'cause_by_loser_color': cause_by_loser_color,
+        'cause_by_loser_role': cause_by_loser_role,
+        'first_movers': first_movers,
         'timeouts': timeouts, 'plies': plies,
         'new_threw': new_threw, 'new_robbed': new_robbed,
         'max_swing_against': max_swing_against,
@@ -286,6 +323,32 @@ def report(a):
                  sum(a['cause_draw'].values())])
     P(md_table(['Cause', 'new WINS by', 'new LOSES by', 'draws by'], rows))
     P("\n*(\"new WINS by\" = base lost by that cause; \"new LOSES by\" = new lost by that cause.)*\n")
+
+    P("## WDL cause by colour\n")
+    white_loss = a['cause_by_loser_color']['white']
+    black_loss = a['cause_by_loser_color']['black']
+    causes = sorted(set(white_loss) | set(black_loss) | set(a['cause_draw']))
+    rows = [[c, white_loss.get(c, 0), black_loss.get(c, 0), a['cause_draw'].get(c, 0)]
+            for c in causes]
+    rows.append(['**total**', sum(white_loss.values()), sum(black_loss.values()),
+                 sum(a['cause_draw'].values())])
+    P(md_table(['Cause', 'white LOSES by', 'black LOSES by', 'draws by'], rows))
+    P("\n*Same games as above, split by the colour that lost instead of by engine.*\n")
+
+    P("## WDL cause by first mover\n")
+    fm = a['first_movers']
+    P(f"Openings: {fm['white']} with white to move, {fm['black']} with black to move.\n")
+    first_loss = a['cause_by_loser_role']['first']
+    second_loss = a['cause_by_loser_role']['second']
+    causes = sorted(set(first_loss) | set(second_loss) | set(a['cause_draw']))
+    rows = [[c, first_loss.get(c, 0), second_loss.get(c, 0), a['cause_draw'].get(c, 0)]
+            for c in causes]
+    rows.append(['**total**', sum(first_loss.values()), sum(second_loss.values()),
+                 sum(a['cause_draw'].values())])
+    P(md_table(['Cause', 'first mover LOSES by', 'second mover LOSES by', 'draws by'], rows))
+    P("\n*Time forfeits are expected to land almost entirely on the first mover: with a "
+      "budget of remaining/movesToGo it spends before its opponent every cycle, so its "
+      "clock is below the opponent's at every ply.*\n")
 
     P("## Timeouts / crashes\n")
     if a['timeouts']:

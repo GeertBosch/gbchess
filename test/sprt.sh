@@ -13,8 +13,8 @@ Required:
 
 Options:
   --new-cmd <cmd>            New engine command (default: build/gbchess)
-  --base-name <name>         Baseline engine name (default: baseline)
-  --new-name <name>          New engine name (default: gbchess-new)
+  --base-name <name>         Baseline engine name (default: derived from cmd + options)
+  --new-name <name>          New engine name (default: derived from cmd + options)
   --base-option <K=V>        UCI option for baseline engine (repeatable)
   --new-option <K=V>         UCI option for new engine (repeatable)
   --tc <time>                Time control (default: 8+0.08)
@@ -88,6 +88,22 @@ ensure_default_openings() {
     awk -F, 'NR>1 && NF>=2 { print $2 " ;" }' "$src" > "$file"
 }
 
+# Derive an engine name from what is actually being run: the binary's basename plus
+# a tag per non-default UCI option. Keeps labels honest when both sides are the same
+# binary with different options (e.g. gbchess vs gbchess-OwnBook-false).
+derive_name() {
+    local cmd=$1
+    shift
+    local name=${cmd##*/}
+    name=${name%% *}
+    local opt
+    for opt in "$@"; do
+        name+="-$(printf '%s' "$opt" | tr -c 'A-Za-z0-9' '-')"
+        name=${name%-}
+    done
+    printf '%s' "$name"
+}
+
 require_cmd() {
     local value=$1
     local arg_name=$2
@@ -101,9 +117,9 @@ require_cmd() {
 }
 
 BASE_CMD=
-BASE_NAME=baseline
+BASE_NAME=
 NEW_CMD=build/gbchess
-NEW_NAME=gbchess-new
+NEW_NAME=
 TC=8+0.08
 CONCURRENCY=$(($(cpu_count) - 2))
 GAMES=10000
@@ -171,6 +187,28 @@ for cmd in "$BASE_CMD" "$NEW_CMD"; do
 done
 
 mkdir -p build
+
+# Name the engines after what they actually are, unless the caller said otherwise.
+[ -n "$NEW_NAME" ] || NEW_NAME=$(derive_name "$NEW_CMD" "${NEW_OPTIONS[@]+"${NEW_OPTIONS[@]}"}")
+[ -n "$BASE_NAME" ] || BASE_NAME=$(derive_name "$BASE_CMD" "${BASE_OPTIONS[@]+"${BASE_OPTIONS[@]}"}")
+
+if [ "$NEW_NAME" = "$BASE_NAME" ]; then
+    if [ "$NEW_CMD" = "$BASE_CMD" ] && \
+       [ "${NEW_OPTIONS[*]+${NEW_OPTIONS[*]}}" = "${BASE_OPTIONS[*]+${BASE_OPTIONS[*]}}" ]; then
+        echo "Note: both sides are the same engine with the same options (A/A test)." >&2
+    fi
+    # fast-chess needs distinct names; only now is a new/base suffix truthful.
+    NEW_NAME+=-new
+    BASE_NAME+=-base
+fi
+
+# Record which name is the new engine: neither PGN order nor the Round tag identifies
+# it (fastchess writes games in completion order and picks colors per pairing), so the
+# summary tools read this sidecar instead of guessing from the names.
+{
+    echo "new=$NEW_NAME"
+    echo "base=$BASE_NAME"
+} > "${PGNOUT%.pgn}.engines"
 
 NEW_ENGINE=(-engine "name=$NEW_NAME" "cmd=$NEW_CMD")
 for opt in "${NEW_OPTIONS[@]+"${NEW_OPTIONS[@]}"}"; do

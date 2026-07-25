@@ -471,6 +471,12 @@ SPRT_NEW ?= build/gbchess
 SPRT_BASE ?= build/gbchess-base
 SPRT_STOCKFISH12 ?= stockfish-12
 SPRT_ARGS ?= --tc 20
+# Openings-focused run (make sprt-openings). Override SPRT_OPENINGS_BASE to compare
+# against a different binary, or set SPRT_OPENINGS_ARGS='--new-option OwnBook=false'
+# to measure the book itself against no book at all.
+SPRT_OPENINGS_BASE ?= $(SPRT_BASE)
+SPRT_OPENINGS_ARGS ?=
+SPRT_OPENINGS_REPORT_ARGS ?=
 
 sprt-base: build/gbchess
 	# Require a clean working tree so we can tag the current source files using git
@@ -486,4 +492,18 @@ sprt-self: build/gbchess
 sprt-sf12: build/gbchess
 	$(Q)./test/sprt.sh --new-cmd "$(SPRT_NEW)" --base-cmd "$(SPRT_STOCKFISH12)" --new-name gbchess --base-name stockfish-12 $(SPRT_ARGS)
 
-.PHONY: sprt-self sprt-sf12
+# Openings-focused run: every game starts from the initial position, so the book
+# picks the opening instead of a puzzle FEN. Writes build/sprt-openings-*.pgn plus
+# a matching .md report of how each line scored (see test/opening_summary.py).
+sprt-openings: build/gbchess
+	@[ -f book.csv ] || { echo "❌ book.csv not found: without a book every game from the start position is identical. Run 'make generate-book' first."; exit 1; }
+	$(Q)pgn=build/sprt-openings-$$(date +%Y%m%d-%H%M%S).pgn; \
+	./test/sprt.sh --new-cmd "$(SPRT_NEW)" --base-cmd "$(SPRT_OPENINGS_BASE)" \
+		--no-openings --pgnout "$$pgn" $(SPRT_ARGS) $(SPRT_OPENINGS_ARGS); \
+	status=$$?; \
+	[ -s "$$pgn" ] && ./test/opening_summary.py $(SPRT_OPENINGS_REPORT_ARGS) "$$pgn" \
+		| tee "$${pgn%.pgn}.md"; \
+	echo "📄 $${pgn%.pgn}.md"; \
+	exit $$status
+
+.PHONY: sprt-self sprt-sf12 sprt-openings
