@@ -21,6 +21,7 @@ lichess/lichess_*.csv*
 lichess_*
 lichess/Lichess Elite Database
 *.csv
+*.deps
 config.json
 !lichess/fixed_puzzles.csv
 !lichess/ci_mate123_4000.csv
