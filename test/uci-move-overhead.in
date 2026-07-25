@@ -1,0 +1,32 @@
+# Check that MoveOverhead is reserved from the clock before the per-move budget is computed.
+# Each case starts a new game: with nodestime enabled (the default) the clock is deliberately
+# converted to a node budget once per game and tracked from there, so that runs are reproducible
+# rather than following the arbiter's wall clock. Tests that want a fresh clock must say so.
+uci
+# The book answers instantly without searching, which would defeat a timing test
+setoption name OwnBook value false
+# Baseline: nothing reserved, so the budget is the full 3000 / 10 = 300ms
+ucinewgame
+position startpos
+setoption name MoveOverhead value 0
+go depth 20 nodes 0 wtime 3000 btime 3000 movestogo 10 wait
+expect time [0-9]+ exceeded 300
+# With 1000ms reserved the budget comes from (3000 - 1000) / 10 = 200ms
+ucinewgame
+position startpos
+setoption name MoveOverhead value 1000
+go depth 20 nodes 0 wtime 3000 btime 3000 movestogo 10 wait
+expect time [0-9]+ exceeded 200
+# A clock smaller than the reserve still budgets a millisecond: a budget of zero would
+# disable the time check and the search would never stop.
+ucinewgame
+position startpos
+go depth 20 nodes 0 wtime 5 btime 5 movestogo 10 wait
+expect time [0-9]+ exceeded 1
+# The budget never exceeds what is left, however large the increment
+ucinewgame
+position startpos
+setoption name MoveOverhead value 0
+go depth 20 nodes 0 wtime 100 btime 100 winc 60000 binc 60000 movestogo 10 wait
+expect time [0-9]+ exceeded 100
+expect-count 4 bestmove [a-h][1-8][a-h][1-8]

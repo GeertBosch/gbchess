@@ -26,6 +26,8 @@ class TimeControl {
     static constexpr int8_t kUseIncrementPercent = 80;  // Use 80% of increment time
     static constexpr int8_t kMinDefaultMovesToGo = 20;  // Assume at least 20 moves to go if unknown
     static constexpr int8_t kExpectedGameMoves = 50;    // Expected moves in a game
+    // Never budget zero: the search treats a limit of zero as "no limit" and would run forever.
+    static constexpr int64_t kMinMoveMillis = 1;
 
     int64_t whiteMillis;
     int64_t blackMillis;
@@ -92,9 +94,21 @@ public:
 
     void setFixedTimeMillis(uint32_t fixedMillis) { setFixedTimeMillis(fixedMillis, fixedMillis); }
 
-    int64_t computeMillisForMove(Color color, uint16_t fullmove) const {
+    /**
+     * Time budget for a single move. The overhead is time we are charged for but do not spend
+     * searching: process scheduling, I/O, and arbiter latency. Reserving it from the clock
+     * *before* dividing is what keeps the remaining time positive indefinitely: spending
+     * (R - overhead) / movesToGo leaves R' = (1 - 1/movesToGo) * (R - overhead), which decays
+     * geometrically and never reaches zero. Subtracting the overhead afterwards instead (i.e.
+     * not reserving it at all) gives R' = R * (1 - 1/movesToGo) - overhead, which converges on
+     * movesToGo * overhead and then falls linearly to a flag.
+     */
+    int64_t computeMillisForMove(Color color, uint16_t fullmove, int64_t overheadMillis = 0) const {
+        int64_t available =
+            std::max(kMinMoveMillis, getMillis(color) - std::max<int64_t>(0, overheadMillis));
+
         // Limit per move time to avoid overflow etc
-        if (fixedTime) return std::min(getMillis(color), kMaxIncrementMillis);
+        if (fixedTime) return std::min(available, kMaxIncrementMillis);
 
         int movesToGo = this->movesToGo;
         // If no moves to go is specified, estimate it based on expected game length and number of
@@ -103,9 +117,11 @@ public:
             movesToGo = kMinDefaultMovesToGo +
                 std::max(0, kExpectedGameMoves - kMinDefaultMovesToGo - fullmove);
 
-        int64_t baseMillis = getMillis(color) / movesToGo;
+        int64_t baseMillis = available / movesToGo;
         int64_t incrementMillis = getIncrementMillis(color);
         incrementMillis = incrementMillis * kUseIncrementPercent / 100;
-        return baseMillis + incrementMillis;
+        // Never plan to spend more than we have: with a large increment and a nearly empty
+        // clock, base + increment can otherwise exceed the remaining time.
+        return std::clamp(baseMillis + incrementMillis, kMinMoveMillis, available);
     }
 };

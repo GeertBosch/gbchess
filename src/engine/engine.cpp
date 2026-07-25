@@ -147,8 +147,8 @@ private:
     void performSearch(int depth, Position position, MoveVector moves) try {
         auto color = position.turn.activeColor();
         if (moves.size() % 2 == 1) color = !color;
-        maxMillis =
-            timeControl.computeMillisForMove(color, position.turn.fullmove() + moves.size() / 2);
+        maxMillis = timeControl.computeMillisForMove(
+            color, position.turn.fullmove() + moves.size() / 2, options::moveOverhead);
 
         // For maximum reproducibility we support using a node count as a clock, where we assume
         // a constant nodes-per-second rate, in practice this can be reasonably as evaluation is

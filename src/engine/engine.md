@@ -85,9 +85,18 @@ until `stop` is received.
 | `wait` | Block until the search is complete before returning (non-standard; useful for scripting). |
 
 **Time management:** When `wtime`/`btime` are given, the engine allocates time
-using the formula `time / movesToGo + 80% × increment`. If `movestogo` is not
+using the formula `(time − MoveOverhead) / movesToGo + 80% × increment`, clamped
+to at least 1ms and to at most the time actually remaining. If `movestogo` is not
 provided, the engine estimates moves remaining based on game length (assuming a
 50-move game, with a minimum of 20 moves to go).
+
+Reserving `MoveOverhead` *before* dividing is what keeps the clock alive: spending
+`(R − overhead) / movesToGo` leaves `R' = (1 − 1/movesToGo)(R − overhead)`, which
+decays geometrically and never reaches zero. Without the reserve the recurrence is
+`R' = R(1 − 1/movesToGo) − overhead`, which converges on `movesToGo × overhead` and
+then falls linearly until the engine forfeits on time. Because the budget is
+re-derived from the current clock every move, no assumption about the maximum game
+length is needed.
 
 **Examples:**
 ```
@@ -113,6 +122,10 @@ Set an engine option.
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `OwnBook` | `check` | `true` | Use the built-in opening book (`book.csv`). When `true` the engine may reply immediately with a book move without searching. |
+| `MoveOverhead` | `spin` | `10` | Milliseconds reserved per move for time the clock is charged but the search does not measure: process scheduling, I/O and arbiter latency. Applies to the virtual clock when `nodestime` is enabled, where the real per-move cost is invisible to the engine but still charged by the arbiter. |
+
+All search tuning options in `src/core/options.h` are exposed the same way; `uci`
+lists them with their defaults and ranges.
 
 **Example:**
 ```
