@@ -205,9 +205,15 @@ fi
 # Record which name is the new engine: neither PGN order nor the Round tag identifies
 # it (fastchess writes games in completion order and picks colors per pairing), so the
 # summary tools read this sidecar instead of guessing from the names.
+# The SPRT bounds go in too, so the summary can report the same LLR fast-chess does.
 {
     echo "new=$NEW_NAME"
     echo "base=$BASE_NAME"
+    echo "elo0=$ELO0"
+    echo "elo1=$ELO1"
+    echo "alpha=$ALPHA"
+    echo "beta=$BETA"
+    echo "tc=$TC"
 } > "${PGNOUT%.pgn}.engines"
 
 NEW_ENGINE=(-engine "name=$NEW_NAME" "cmd=$NEW_CMD")
