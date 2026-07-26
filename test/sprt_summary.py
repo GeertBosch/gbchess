@@ -411,8 +411,52 @@ def phi(x):
     return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
 
 
+def _regularize(count):
+    """fast-chess replaces an empty pentanomial bucket with a nominal 1e-3 so that a
+    hypothesis putting nonzero probability there doesn't produce an infinite LLR term."""
+    return count if count else 1e-3
+
+
+def _mle_normalized(scores, probs, mu_ref, t_star):
+    """MLE fit of a discrete distribution over `scores`, constrained to normalized mean
+    t_star = (mean - mu_ref) / stdev, given empirical probabilities `probs`.
+
+    Ported from fast-chess's SPRT::getLLR_normalized (app/src/matchmaking/sprt/sprt.cpp),
+    which implements Michel Van den Bergh's "Comments on normalized Elo" MLE
+    (https://www.cantate.be/Fishtest/normalized_elo_practical.pdf). The inner root-find
+    for theta is fast-chess's custom ITP bisection there; a plain bisection converges to
+    the same root of the same monotone equation, so it's used here instead.
+    """
+    n = len(scores)
+    p = [1.0 / n] * n
+    for _ in range(10):
+        mu = sum(a * pi for a, pi in zip(scores, p))
+        var = sum(pi * (a - mu) ** 2 for a, pi in zip(scores, p))
+        sigma = math.sqrt(var)
+        phi_vals = [a - mu_ref - 0.5 * t_star * sigma * (1.0 + ((a - mu) / sigma) ** 2)
+                    for a in scores]
+
+        theta_lo, theta_hi = -1.0 / max(phi_vals), -1.0 / min(phi_vals)
+        a_b, b_b = theta_lo, theta_hi
+        for _ in range(100):
+            mid = (a_b + b_b) / 2.0
+            f_mid = sum(ph * ph_i / (1.0 + mid * ph_i) for ph, ph_i in zip(probs, phi_vals))
+            if f_mid > 0:
+                a_b = mid
+            else:
+                b_b = mid
+        theta = (a_b + b_b) / 2.0
+
+        new_p = [ph / (1.0 + theta * ph_i) for ph, ph_i in zip(probs, phi_vals)]
+        max_diff = max(abs(a - b) for a, b in zip(new_p, p))
+        p = new_p
+        if max_diff < 1e-4:
+            break
+    return p
+
+
 def sprt_stats(penta, pairs, elo0, elo1, alpha, beta):
-    """Pentanomial SPRT statistics: Elo with a 95% interval, LOS, and the GSPRT LLR.
+    """Pentanomial SPRT statistics: Elo with a 95% interval, LOS, and the SPRT LLR.
 
     Pairs (the same opening played with both colours) are the independent observations;
     using them instead of individual games removes the correlation between the two games
@@ -435,16 +479,26 @@ def sprt_stats(penta, pairs, elo0, elo1, alpha, beta):
         elo_lo = elo_hi = elo
         los = 0.5
 
-    # Generalised SPRT, matching fast-chess: the bounds are normalized Elo, so convert them to
-    # score means through the observed pair spread, then LLR = pairs/2 * log(var0 / var1) where
-    # var_i is the variance under hypothesis i.
     sd = math.sqrt(var) if var > 0 else 0.0
     nelo = kNormalizedElo * (mean - 0.5) / sd if sd else 0.0
     nelo_err = kNormalizedElo * 1.96 * sigma / sd if sd else 0.0
-    s0 = 0.5 + elo0 * sd / kNormalizedElo
     s1 = 0.5 + elo1 * sd / kNormalizedElo
+
+    # Exact SPRT LLR, matching fast-chess's default "normalized" model: not a closed-form
+    # Gaussian formula but an MLE fit of two 5-point pentanomial distributions (one per
+    # hypothesis), each constrained to the hypothesis's normalized-Elo mean. The Gaussian
+    # shortcut this replaced was close but landed a few percent off, which is enough to
+    # disagree with fast-chess about whether the LLR has actually crossed a bound.
+    counts = [_regularize(penta.get(pts, 0)) for pts in (0.0, 0.5, 1.0, 1.5, 2.0)]
+    total = sum(counts)
+    probs = [c / total for c in counts]
+    scores = [0.0, 0.25, 0.5, 0.75, 1.0]
     if var > 0:
-        llr = pairs / 2 * math.log((var + (mean - s0) ** 2) / (var + (mean - s1) ** 2))
+        t0 = math.sqrt(2.0) * elo0 / (800.0 / math.log(10))
+        t1 = math.sqrt(2.0) * elo1 / (800.0 / math.log(10))
+        p0 = _mle_normalized(scores, probs, 0.5, t0)
+        p1 = _mle_normalized(scores, probs, 0.5, t1)
+        llr = total * sum(pr * (math.log(a) - math.log(b)) for pr, a, b in zip(probs, p1, p0))
     else:
         llr = 0.0
     upper = math.log((1 - beta) / alpha)
