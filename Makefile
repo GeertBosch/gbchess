@@ -401,6 +401,16 @@ build/uci.out: $(patsubst test/uci-%.in,build/uci-%.out,$(wildcard test/uci-*.in
 
 uci: build/uci.out
 
+# The uci-%.in scripts can't pass CLI flags (build/gbchess is invoked with only the
+# script as argument), so the --book flag is checked separately here.
+build/book-cli.out: build/gbchess book.csv
+	$(Q){ \
+		printf 'uci\nucinewgame\nquit\n' | ./build/gbchess --book definitely-missing.csv 2>&1 \
+			| grep -q 'info string WARNING: book file definitely-missing.csv could not be loaded' \
+		&& printf 'uci\nucinewgame\nquit\n' | ./build/gbchess --book book.csv 2>&1 \
+			| grep -q 'info string Loaded book book.csv'; \
+	} $(REDIR)
+
 build/magic.out: build/magic-test
 # To accept any changes on test failure, pipe the output to the `patch` command
 	$(Q) { (./build/magic-test --verbose | diff -u src/move/magic/magic_gen.h -) 2>&1 \
@@ -438,9 +448,9 @@ build/test-cpp.out: ${CPP_TESTS} ${NNUE_FILE}
 	} $(REDIR)
 
 test-cpp: build/test-cpp.out
-test: build/test-cpp.out build/fixed-puzzles.out build/searches.out build/evals.out build/uci.out build/magic.out
+test: build/test-cpp.out build/fixed-puzzles.out build/searches.out build/evals.out build/uci.out build/magic.out build/book-cli.out
 
-ci: build-ci build/test-cpp.out build/perft-test.out build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate-123.out build/mate-45.out build/puzzles.out dead-code
+ci: build-ci build/test-cpp.out build/perft-test.out build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate-123.out build/mate-45.out build/puzzles.out build/book-cli.out dead-code
 	@echo "\n✅ CI checks passed\n"
 
 install-hooks:
@@ -478,6 +488,13 @@ SPRT_OPENINGS_BASE ?= $(SPRT_NEW)
 SPRT_OPENINGS_ARGS ?= --new-option OwnBook=true --base-option OwnBook=false
 SPRT_OPENINGS_REPORT_ARGS ?=
 
+# Book A/B run (make sprt-book): one binary, two book files, so what is measured is
+# book quality rather than search code. BookFile is a --book CLI flag (not a UCI
+# option), so it goes in the command line rather than SPRT_..._ARGS.
+SPRT_BOOK_A ?= book.csv
+SPRT_BOOK_B ?= book-candidate.csv
+SPRT_BOOK_REPORT_ARGS ?=
+
 sprt-base: build/gbchess
 	# Require a clean working tree so we can tag the current source files using git
 	@git diff --quiet || { echo "❌ Working tree is not clean, please commit or stash changes before running this target"; exit 1; }
@@ -507,4 +524,23 @@ sprt-openings: build/gbchess
 	echo "📄 $${pgn%.pgn}.md"; \
 	exit $$status
 
-.PHONY: sprt-self sprt-sf12 sprt-openings
+# Book A vs book B, same binary, start position only. Engine names are derived from
+# the book file basenames since BookFile is a CLI flag and derive_name only tags
+# UCI options (--new-option/--base-option), not the executable's own arguments.
+sprt-book: build/gbchess
+	@[ -f $(SPRT_BOOK_A) ] || { echo "❌ $(SPRT_BOOK_A) not found"; exit 1; }
+	@[ -f $(SPRT_BOOK_B) ] || { echo "❌ $(SPRT_BOOK_B) not found: set SPRT_BOOK_B to a candidate book"; exit 1; }
+	$(Q)pgn=build/sprt-book-$$(date +%Y%m%d-%H%M%S).pgn; \
+	a=$$(basename "$(SPRT_BOOK_A)" .csv); b=$$(basename "$(SPRT_BOOK_B)" .csv); \
+	[ "$$a" = "$$b" ] && { a=$$a-new; b=$$b-base; }; \
+	./test/sprt.sh --new-cmd "$(SPRT_NEW)" --new-args "--book $(SPRT_BOOK_A)" \
+		--base-cmd "$(SPRT_NEW)" --base-args "--book $(SPRT_BOOK_B)" \
+		--new-name "gbchess-book-$$a" --base-name "gbchess-book-$$b" \
+		--no-openings --pgnout "$$pgn" $(SPRT_ARGS); \
+	status=$$?; \
+	[ -s "$$pgn" ] && ./test/opening_summary.py $(SPRT_BOOK_REPORT_ARGS) "$$pgn" \
+		| tee "$${pgn%.pgn}.md"; \
+	echo "📄 $${pgn%.pgn}.md"; \
+	exit $$status
+
+.PHONY: sprt-self sprt-sf12 sprt-openings sprt-book

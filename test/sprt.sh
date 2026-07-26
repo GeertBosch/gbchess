@@ -17,6 +17,8 @@ Options:
   --new-name <name>          New engine name (default: derived from cmd + options)
   --base-option <K=V>        UCI option for baseline engine (repeatable)
   --new-option <K=V>         UCI option for new engine (repeatable)
+  --base-args <ARGS>         Extra command-line arguments for baseline engine
+  --new-args <ARGS>          Extra command-line arguments for new engine
   --tc <time>                Time control (default: 8+0.08)
   --concurrency <n>          Parallel games (default: CPU count)
   --games <n>                Max games in total, rounded up to a pair (default: 10000)
@@ -127,8 +129,10 @@ require_cmd() {
 
 BASE_CMD=
 BASE_NAME=
+BASE_ARGS=
 NEW_CMD=build/gbchess
 NEW_NAME=
+NEW_ARGS=
 TC=8+0.08
 CONCURRENCY=$(($(cpu_count) - 2))
 GAMES=10000
@@ -149,8 +153,10 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --base-cmd) BASE_CMD=${2:-}; shift 2 ;;
         --base-name) BASE_NAME=${2:-}; shift 2 ;;
+        --base-args) BASE_ARGS=${2:-}; shift 2 ;;
         --new-cmd) NEW_CMD=${2:-}; shift 2 ;;
         --new-name) NEW_NAME=${2:-}; shift 2 ;;
+        --new-args) NEW_ARGS=${2:-}; shift 2 ;;
         --base-option) BASE_OPTIONS+=("${2:-}"); shift 2 ;;
         --new-option) NEW_OPTIONS+=("${2:-}"); shift 2 ;;
         --tc) TC=${2:-}; shift 2 ;;
@@ -226,11 +232,13 @@ fi
 } > "${PGNOUT%.pgn}.engines"
 
 NEW_ENGINE=(-engine "name=$NEW_NAME" "cmd=$NEW_CMD")
+[ -n "$NEW_ARGS" ] && NEW_ENGINE+=("args=$NEW_ARGS")
 for opt in "${NEW_OPTIONS[@]+"${NEW_OPTIONS[@]}"}"; do
     NEW_ENGINE+=("option.$opt")
 done
 
 BASE_ENGINE=(-engine "name=$BASE_NAME" "cmd=$BASE_CMD")
+[ -n "$BASE_ARGS" ] && BASE_ENGINE+=("args=$BASE_ARGS")
 for opt in "${BASE_OPTIONS[@]+"${BASE_OPTIONS[@]}"}"; do
     BASE_ENGINE+=("option.$opt")
 done

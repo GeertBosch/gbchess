@@ -1,0 +1,5 @@
+# Check that BookTemperature is advertised and settable via UCI
+uci
+expect option name BookTemperature type spin default 140 min 50 max 400
+setoption name BookTemperature value 50
+expect BookTemperature set to 50

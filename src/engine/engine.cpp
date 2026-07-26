@@ -80,7 +80,8 @@ using clock = steady_clock;
 
 class UCIRunner {
 public:
-    UCIRunner(std::ostream& out, std::ostream& log) : out(out), log(log) {
+    UCIRunner(std::ostream& out, std::ostream& log, std::string bookFile = "book.csv")
+        : bookFile(std::move(bookFile)), out(out), log(log) {
         if (debug) timeControl.setFixedTimeMillis(36'000'000);  // 10 hours per side in debug mode
     }
     ~UCIRunner() { wait(); }
@@ -92,6 +93,7 @@ private:
     static constexpr auto kDefaultTimeControl = TimeControl::infinite();  // No limits by default
 
     book::Book book;
+    std::string bookFile;  // Set at startup via --book; fixed for the process lifetime
     uint64_t bookMoveCount = 0;
     bool useOwnBook = true;
     Position position = fen::parsePosition(fen::initialPosition);
@@ -420,7 +422,14 @@ void UCIRunner::dispatch(const std::string& command,
         std::exit(0);
     } else if (command == "ucinewgame") {
         search::newGame();
-        if (!book) book = book::loadBook("book.csv");
+        if (!book) {
+            book = book::loadBook(bookFile);
+            if (!book)
+                respond("info string WARNING: book file " + bookFile + " could not be loaded");
+            else
+                respond("info string Loaded book " + bookFile);
+        }
+        book.setTemperature(options::bookTemperature / 100.0);
         // Reseed the opening book random generator
         uint64_t random = ++seeds;  // Non-zero random seed
         book.reseed(random);        // Use seed 0 for deterministic book moves in new game
@@ -508,8 +517,8 @@ void UCIRunner::execute(std::string line) {
 
 namespace {
 
-void enterUCI(std::istream& in, std::ostream& out, std::ostream& log) {
-    UCIRunner runner(out, log);
+void enterUCI(std::istream& in, std::ostream& out, std::ostream& log, std::string bookFile) {
+    UCIRunner runner(out, log, std::move(bookFile));
     std::flush(log);
     search::newGame();
     for (std::string line; std::getline(in, line);) {
@@ -520,22 +529,24 @@ void enterUCI(std::istream& in, std::ostream& out, std::ostream& log) {
 }
 
 void usage() {
-    // engine [uci_tests_script ...]
-    // engine --cmd [command1 command2 ...]
+    // engine [--book file] [uci_tests_script ...]
+    // engine [--book file] --cmd [command1 command2 ...]
     std::cerr
-        << "usage: " << cmdName << " [uci_tests_script ...]\n       " << cmdName
-        << " --cmd [command1 command2 ...]\n\n"
+        << "usage: " << cmdName << " [--book file] [uci_tests_script ...]\n       " << cmdName
+        << " [--book file] --cmd [command1 command2 ...]\n\n"
         << "If no arguments are given, the engine will read UCI commands from standard input.\n"
         << "If one or more file paths are given as arguments, the engine will read UCI commands "
            "from each file in order. This is useful for running UCI test scripts.\n"
         << "If the first argument is '--cmd', the engine will execute each of the remaining "
            "arguments as "
            "a UCI command. This is useful for debugging  without needing "
-           "to create a full test script.\n";
+           "to create a full test script.\n"
+        << "If '--book file' precedes the above, it selects the opening book file to load on "
+           "ucinewgame (default: book.csv).\n";
     std::exit(1);
 }
 
-void fromStream(std::istream& stream) {
+void fromStream(std::istream& stream, std::string bookFile) {
     // Get the /tmp directory from the environment, or use /tmp if not set
     const char* tmpDir = std::getenv("TMPDIR");
     if (!tmpDir) tmpDir = "/tmp";
@@ -544,27 +555,27 @@ void fromStream(std::istream& stream) {
     std::ofstream log(std::string(tmpDir) + "/engine-" + std::to_string(getpid()) + ".log");
     log << "Entering UCI for " << cmdName << " with PID " << getpid() << "\n";
 
-    enterUCI(stream, std::cout, log);
+    enterUCI(stream, std::cout, log, std::move(bookFile));
     log << "Exiting UCI for " << cmdName << " with PID " << getpid() << "\n";
     std::flush(log);
 }
 
-void fromFile(const char* filename) {
+void fromFile(const char* filename, const std::string& bookFile) {
     std::ifstream file(filename);
     if (file.is_open()) {
-        fromStream(file);
+        fromStream(file, bookFile);
     } else {
         std::cerr << "Failed to open file: " << filename << std::endl;
         std::exit(2);
     }
 }
 
-void fromArgs(int argc, char** argv) {
+void fromArgs(int argc, char** argv, int start, std::string bookFile) {
     std::stringstream ss;
-    if (argc < 3) usage();
-    for (int i = 2; i < argc; ++i) ss << argv[i] << "\n";
+    if (argc <= start) usage();
+    for (int i = start; i < argc; ++i) ss << argv[i] << "\n";
     std::istringstream iss(ss.str());
-    enterUCI(iss, std::cout, std::cout);
+    enterUCI(iss, std::cout, std::cout, std::move(bookFile));
 }
 
 }  // namespace
@@ -572,15 +583,22 @@ void fromArgs(int argc, char** argv) {
 int main(int argc, char** argv) {
     if (argc >= 1) cmdName = executableName(argv[0]);
 
-    if (argc == 1)
-        fromStream(std::cin);
-    else if (std::string(argv[1]) == "--cmd")
-        fromArgs(argc, argv);
-    else if (argv[1][0] == '-')
+    std::string bookFile = "book.csv";
+    int argi = 1;
+    if (argi + 1 < argc && std::string(argv[argi]) == "--book") {
+        bookFile = argv[argi + 1];
+        argi += 2;
+    }
+
+    if (argi == argc)
+        fromStream(std::cin, bookFile);
+    else if (std::string(argv[argi]) == "--cmd")
+        fromArgs(argc, argv, argi + 1, bookFile);
+    else if (argv[argi][0] == '-')
         usage();
 
     else
-        for (int i = 1; i < argc; i++) fromFile(argv[i]);
+        for (int i = argi; i < argc; i++) fromFile(argv[i], bookFile);
 
     return 0;
 }

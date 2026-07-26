@@ -129,6 +129,33 @@ make sprt-openings SPRT_ARGS='--elo0 0 --elo1 20'
 make sprt-openings SPRT_OPENINGS_BASE=build/gbchess-base SPRT_OPENINGS_ARGS=
 ```
 
+### Comparing two book files
+
+`make sprt-book` A/Bs two book *files* on the same binary, so it measures book quality
+rather than search code — needed to answer "is book B better than book A?", which
+`sprt-openings`'s on/off comparison can't. `BookFile` is chosen via the `--book` CLI flag
+(see `src/engine/engine.md`), not a UCI option, so it can't change mid-process; the
+engines run as separate processes here just like `sprt-openings`' book on/off pair.
+
+```bash
+cp book.csv book-candidate.csv   # or generate a candidate some other way
+make sprt-book SPRT_BOOK_B=book-candidate.csv
+```
+
+Engines are named after the book file basenames, e.g. `gbchess-book-book` vs
+`gbchess-book-book-candidate`. Knobs: `SPRT_BOOK_A`/`SPRT_BOOK_B` (default `book.csv` /
+`book-candidate.csv`), plus the usual `SPRT_ARGS`.
+
+### Tuning book selection temperature
+
+`BookTemperature` (a `setoption`-able UCI spin, unlike `BookFile`) controls how greedily
+the book picks among scored moves; both sides can keep the *same* book file and differ
+only in temperature:
+
+```bash
+make sprt-openings SPRT_OPENINGS_ARGS='--new-option BookTemperature=100 --base-option BookTemperature=140'
+```
+
 Rerun the report on an existing PGN at any time:
 
 ```bash

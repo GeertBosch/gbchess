@@ -10,7 +10,12 @@ and writes responses to standard output, following the
 gbchess                          # Read UCI commands from stdin
 gbchess <script.in> [...]        # Read UCI commands from one or more files
 gbchess --cmd <cmd1> [<cmd2> ...]  # Execute commands given directly as arguments
+gbchess --book <file> [...]      # Load the opening book from <file> instead of book.csv
 ```
+
+`--book <file>`, if given, must come first; it selects the opening book file loaded
+on `ucinewgame` (default: `book.csv`) and can precede any of the other invocation
+forms above.
 
 A log of all UCI traffic is written to `$TMPDIR/engine-<pid>.log`.
 
@@ -121,11 +126,16 @@ Set an engine option.
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `OwnBook` | `check` | `true` | Use the built-in opening book (`book.csv`). When `true` the engine may reply immediately with a book move without searching. |
+| `OwnBook` | `check` | `true` | Use the opening book loaded from the `--book` file (`book.csv` by default). When `true` the engine may reply immediately with a book move without searching. |
 | `MoveOverhead` | `spin` | `10` | Milliseconds reserved per move for time the clock is charged but the search does not measure: process scheduling, I/O and arbiter latency. Applies to the virtual clock when `nodestime` is enabled, where the real per-move cost is invisible to the engine but still charged by the arbiter. |
+| `BookTemperature` | `spin` | `140` | Book move-selection temperature as a percentage (140 = 1.4); higher favors variety over the top-scoring move, lower plays closer to the book's best-scoring line. Applied on every `ucinewgame`. |
 
 All search tuning options in `src/core/options.h` are exposed the same way; `uci`
 lists them with their defaults and ranges.
+
+The opening book *file* is chosen at process startup via `--book <file>` (see
+Invocation above), not via `setoption` — unlike search options, it can't be changed
+mid-process.
 
 **Example:**
 ```
