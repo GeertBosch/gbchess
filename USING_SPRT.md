@@ -127,13 +127,45 @@ Rerun the report on an existing PGN at any time:
 test/opening_summary.py build/sprt-openings-20260725-163721.pgn
 ```
 
+## Reading the result
+
+`test/sprt_summary.py` opens with a one-paragraph verdict, so a run can be judged without
+interpreting the SPRT numbers by hand. It works on a partial PGN too — run it while the match
+is still going:
+
+```bash
+test/sprt_summary.py build/sprt-20260725-220343.pgn
+```
+
+```
+**Inconclusive so far** — +2.8 Elo (95% confidence interval -1.3 to +6.9), 91% likely
+positive. After 3,532 games the test is 26% of the way to a decision (testing the null
+hypothesis of +0 against +5 normalized Elo, i.e. is the gain at least +1.8 Elo); at the
+current rate roughly 10,137 more games would accept it, about 3.0 hours of play at the
+observed pace.
+```
+
+The verdict is one of: accepted, rejected, probably a gain / regression but unproven, likely no
+meaningful change, or inconclusive — each with the Elo estimate, its 95% interval, and for an
+unfinished run an extrapolation of how many more games a decision needs and how long that is in
+wall-clock time. The pace comes from the `GameStartTime`/`GameEndTime` tags, so it already
+reflects the `--concurrency` and machine load the run actually had.
+
+The statistics come from the pentanomial pair counts (the same opening played with both
+colours), which is what makes the interval honest, and reproduce fast-chess's own `Elo`, `nElo`,
+`LOS` and `LLR` exactly. Note that fast-chess reads `elo0`/`elo1` as **normalized** Elo, so the
+default `--elo1 5` asks "is this worth at least ~2 ordinary Elo", not 5; the verdict spells out
+the logistic equivalent. Bounds are taken from the sidecar `test/sprt.sh` writes, or from
+`--elo0/--elo1/--alpha/--beta` for a PGN produced elsewhere.
+
 ## Time forfeits
 
-`test/sprt_summary.py` reports causes split both by engine and by first mover. Time forfeits
-belong in the second table: the per-move budget is a fraction of the engine's own remaining
-clock, so the side that moves first spends before its opponent in every cycle and reaches the
-flag threshold first. A run from the start position therefore puts every forfeit on white,
-which looks like a colour bug and is not one.
+`test/sprt_summary.py` reports causes split both by engine and by first mover. The second table
+is the one to read for time forfeits: an engine that budgets a fraction of its own remaining
+clock with nothing held back spends before its opponent in every cycle, so the side that moves
+first reaches the flag threshold first. Before `MoveOverhead` existed, a run from the start
+position put *every* forfeit on white, which looks like a colour bug and is not one. A skew like
+that now means the reserve is too small for the conditions.
 
 `MoveOverhead` (default 10ms) reserves the per-move cost the clock is charged but the search
 does not measure. Raise it if forfeits show up in a real-time run — under high `--concurrency`
