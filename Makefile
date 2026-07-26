@@ -137,7 +137,7 @@ build/gbchess: $(call calc_objs,${OPTOBJ},$(call prefix_src,${ENGINE_SRCS}))
 build/gbchess-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,${ENGINE_SRCS}))
 	$(call BUILDCMD,${CLANGPP} ${CCFLAGS} ${DEBUGFLAGS} ${LINKFLAGS} -o $@ $^ ${LIBS})
 
-BOOK_GEN_SRCS=book/book_gen.cpp book/pgn/pgn.cpp engine/fen/fen.cpp core/hash/hash.cpp ${MOVES_SRCS}
+BOOK_GEN_SRCS=book/book_gen.cpp book/book.cpp book/sprt_suite.cpp book/pgn/pgn.cpp engine/fen/fen.cpp core/hash/hash.cpp ${MOVES_SRCS}
 build/book-gen: $(call calc_objs,${OPTOBJ},$(call prefix_src,${BOOK_GEN_SRCS}))
 	$(call BUILDCMD,${GPP} ${CCFLAGS} -O2 ${LINKFLAGS} -o $@ $^ ${LIBS})
 build/book-gen-debug: $(call calc_objs,${DBGOBJ},$(call prefix_src,${BOOK_GEN_SRCS}))
@@ -503,8 +503,21 @@ sprt-base: build/gbchess
 	$(Q)cp build/gbchess build/gbchess-base
 	$(Q)echo "✅ Current commit tagged as sprt-base and engine saved as build/gbchess-base"
 
-sprt-self: build/gbchess
-	$(Q)./test/sprt.sh --new-cmd "$(SPRT_NEW)" --base-cmd "$(SPRT_BASE)" --new-name gbchess-new --base-name gbchess-base $(SPRT_ARGS)
+# Book-exit positions from book.csv (see src/book/sprt_suite.cpp): a diverse, roughly balanced
+# set of SPRT start positions, used in place of the ten-position fixed-puzzles fixture.
+build/book-openings.epd: build/book-gen book.csv
+	$(Q)./build/book-gen --sprt-suite book.csv build/book-openings.epd
+
+book-openings: build/book-openings.epd
+
+# sprt-self measures search strength starting from book-openings.epd, so OwnBook is off on both
+# sides by default -- otherwise the book would play on top of the suite position and confound
+# the measurement. Override to compare book-on play instead.
+SPRT_SELF_ARGS ?= --new-option OwnBook=false --base-option OwnBook=false
+
+sprt-self: build/gbchess build/book-openings.epd
+	$(Q)./test/sprt.sh --new-cmd "$(SPRT_NEW)" --base-cmd "$(SPRT_BASE)" --new-name gbchess-new --base-name gbchess-base \
+		--openings-file build/book-openings.epd $(SPRT_ARGS) $(SPRT_SELF_ARGS)
 
 sprt-sf12: build/gbchess
 	$(Q)./test/sprt.sh --new-cmd "$(SPRT_NEW)" --base-cmd "$(SPRT_STOCKFISH12)" --new-name gbchess --base-name stockfish-12 $(SPRT_ARGS)
@@ -543,4 +556,4 @@ sprt-book: build/gbchess
 	echo "📄 $${pgn%.pgn}.md"; \
 	exit $$status
 
-.PHONY: sprt-self sprt-sf12 sprt-openings sprt-book
+.PHONY: sprt-self sprt-sf12 sprt-openings sprt-book book-openings

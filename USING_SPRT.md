@@ -71,11 +71,24 @@ make sprt-self SPRT_BASE=build/gbchess-prev \
   SPRT_ARGS='--new-option OwnBook=false --base-option OwnBook=false'
 ```
 
+### Compare book-on play instead of search (sprt-self)
+
+`sprt-self` defaults to `OwnBook=false` on both sides via `SPRT_SELF_ARGS`, since it starts every
+game from a book-exit position (see below) and the point is to measure search strength, not the
+book. To measure with the book playing on top of those positions instead, override it:
+
+```bash
+make sprt-self SPRT_BASE=build/gbchess-prev SPRT_SELF_ARGS=
+```
+
 ## Openings behavior
 
-By default the script tries to use `build/sprt-openings.epd`.
+By default the script tries to use `build/book-openings.epd`: a diverse, roughly balanced set of
+positions at `book.csv`'s frontier (where the book runs out of well-supported continuations),
+generated with `build/book-gen --sprt-suite book.csv build/book-openings.epd` — run explicitly via
+`make book-openings`. `make sprt-self` builds it automatically as a prerequisite.
 
-- If it does not exist and `lichess/fixed_puzzles.csv` exists, the script auto-generates `build/sprt-openings.epd` from puzzle FENs.
+- If it does not exist and `book-gen`/`book.csv` are available, the script auto-generates it.
 - If no opening file can be found/generated, it runs from start position only.
 
 Override openings explicitly:

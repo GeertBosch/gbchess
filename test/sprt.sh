@@ -88,15 +88,18 @@ ensure_startpos_openings() {
     echo 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 ;' > "$file"
 }
 
+# Default suite: positions at book.csv's frontier (see book-gen --sprt-suite), a diverse,
+# roughly balanced set of start positions rather than the ten-position fixed-puzzles fixture.
 ensure_default_openings() {
     local file=$1
     [ -f "$file" ] && return
 
-    local src=lichess/fixed_puzzles.csv
-    [ -f "$src" ] || return
+    local book_gen=build/book-gen
+    local book_csv=book.csv
+    [ -x "$book_gen" ] && [ -f "$book_csv" ] || return
 
     mkdir -p "$(dirname "$file")"
-    awk -F, 'NR>1 && NF>=2 { print $2 " ;" }' "$src" > "$file"
+    "$book_gen" --sprt-suite "$book_csv" "$file" >/dev/null
 }
 
 # Derive an engine name from what is actually being run: the binary's basename plus
@@ -140,7 +143,7 @@ ELO0=0
 ELO1=5
 ALPHA=0.05
 BETA=0.05
-OPENINGS_FILE=build/sprt-openings.epd
+OPENINGS_FILE=build/book-openings.epd
 OPENINGS_FORMAT=epd
 OPENINGS_PLIES=8
 USE_OPENINGS=1

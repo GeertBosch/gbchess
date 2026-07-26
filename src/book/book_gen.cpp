@@ -19,6 +19,7 @@
 
 #include "book/eco.h"
 #include "book/pgn/pgn.h"
+#include "book/sprt_suite.h"
 #include "core/core.h"
 #include "core/hash/hash.h"
 #include "core/text_util.h"
@@ -634,7 +635,8 @@ size_t writeBookEPD(const std::string& epdFile,
 
 /** Print CLI usage for book generation */
 void usage(const char* cmd) {
-    std::cerr << "Usage: " << cmd << "<input1.pgn> [input2.pgn ...] <output.{csv|epd} ...>\n";
+    std::cerr << "Usage: " << cmd << " <input1.pgn> [input2.pgn ...] <output.{csv|epd} ...>\n";
+    std::cerr << "       " << cmd << " --sprt-suite <book.csv> <output.epd>\n";
 }
 /** Process multiple PGN files and aggregate statistics */
 BookStats processPGNFiles(const std::vector<std::string>& pgnFiles,
@@ -699,6 +701,11 @@ bool endsWith(const std::string& str, const std::string& suffix) {
 
 /** Generate a book CSV or EPD file from one or more PGN files */
 int main(int argc, char** argv) {
+    if (argc >= 2 && std::string(argv[1]) == "--sprt-suite") {
+        if (argc != 4) return usage(argv[0]), 1;
+        return sprt_suite::run(argv[2], argv[3]);
+    }
+
     // Non-empty means output that format to the specified file.
     std::string outputCSV;
     std::string outputEPD;
