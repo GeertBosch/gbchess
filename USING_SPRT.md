@@ -45,7 +45,10 @@ engine actually supports them.
 
 ## Common tuning examples
 
-Pass extra arguments through `SPRT_ARGS`.
+Pass extra arguments through `SPRT_ARGS`. `--games N` is a budget of N games in total: the
+script runs `N/2` fast-chess rounds of 2 games, so each opening is played once with each
+colour. (Passing the budget to fast-chess as `-games` would play `N` games *per round*, i.e.
+twice as many as asked.)
 
 ### Faster smoke SPRT
 
@@ -93,6 +96,10 @@ test/sprt.sh --base-cmd build/gbchess-prev --no-openings
 measuring overall Elo. Every game starts from the initial position (`--no-openings`),
 so the engines' own book — not a puzzle FEN — picks the opening.
 
+By default both sides are the *same* binary (`build/gbchess`) with `OwnBook=true` against
+`OwnBook=false`, so the run measures the book and not the code. The engines appear as
+`gbchess-OwnBook-true` and `gbchess-OwnBook-false`.
+
 ```bash
 make generate-book          # required: without book.csv every game is identical
 make sprt-openings
@@ -112,13 +119,14 @@ the position rather than of an engine. Pass `--by-engine` to also split by engin
 Knobs:
 
 ```bash
-make sprt-openings SPRT_OPENINGS_BASE=build/gbchess-prev
 make sprt-openings SPRT_ARGS='--tc 10+0.1 --games 20000'
 make sprt-openings SPRT_OPENINGS_REPORT_ARGS='--plies 10 --min-games 50 --by-engine'
 
-# Measure the book itself: same binary both sides, book only on one.
-make sprt-openings SPRT_OPENINGS_BASE=build/gbchess \
-  SPRT_OPENINGS_ARGS='--base-option OwnBook=false'
+# A book that works should be worth far more than 5 Elo, so wider bounds stop sooner.
+make sprt-openings SPRT_ARGS='--elo0 0 --elo1 20'
+
+# Compare two binaries from the start position instead of book vs no book.
+make sprt-openings SPRT_OPENINGS_BASE=build/gbchess-base SPRT_OPENINGS_ARGS=
 ```
 
 Rerun the report on an existing PGN at any time:

@@ -471,11 +471,11 @@ SPRT_NEW ?= build/gbchess
 SPRT_BASE ?= build/gbchess-base
 SPRT_STOCKFISH12 ?= stockfish-12
 SPRT_ARGS ?= --tc 20
-# Openings-focused run (make sprt-openings). Override SPRT_OPENINGS_BASE to compare
-# against a different binary, or set SPRT_OPENINGS_ARGS='--new-option OwnBook=false'
-# to measure the book itself against no book at all.
-SPRT_OPENINGS_BASE ?= $(SPRT_BASE)
-SPRT_OPENINGS_ARGS ?=
+# Openings-focused run (make sprt-openings): the same binary with its book on vs off,
+# so what is measured is the book and not the code. To compare two binaries instead,
+# set SPRT_OPENINGS_BASE=build/gbchess-base SPRT_OPENINGS_ARGS=
+SPRT_OPENINGS_BASE ?= $(SPRT_NEW)
+SPRT_OPENINGS_ARGS ?= --new-option OwnBook=true --base-option OwnBook=false
 SPRT_OPENINGS_REPORT_ARGS ?=
 
 sprt-base: build/gbchess
@@ -493,7 +493,8 @@ sprt-sf12: build/gbchess
 	$(Q)./test/sprt.sh --new-cmd "$(SPRT_NEW)" --base-cmd "$(SPRT_STOCKFISH12)" --new-name gbchess --base-name stockfish-12 $(SPRT_ARGS)
 
 # Openings-focused run: every game starts from the initial position, so the book
-# picks the opening instead of a puzzle FEN. Writes build/sprt-openings-*.pgn plus
+# picks the opening instead of a puzzle FEN. By default this is a book A/B on one
+# binary (OwnBook=true vs OwnBook=false). Writes build/sprt-openings-*.pgn plus
 # a matching .md report of how each line scored (see test/opening_summary.py).
 sprt-openings: build/gbchess
 	@[ -f book.csv ] || { echo "❌ book.csv not found: without a book every game from the start position is identical. Run 'make generate-book' first."; exit 1; }

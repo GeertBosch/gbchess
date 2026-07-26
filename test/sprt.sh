@@ -19,7 +19,7 @@ Options:
   --new-option <K=V>         UCI option for new engine (repeatable)
   --tc <time>                Time control (default: 8+0.08)
   --concurrency <n>          Parallel games (default: CPU count)
-  --games <n>                Max games (default: 10000)
+  --games <n>                Max games in total, rounded up to a pair (default: 10000)
   --elo0 <n>                 SPRT H0 Elo (default: 0)
   --elo1 <n>                 SPRT H1 Elo (default: 5)
   --alpha <x>                SPRT alpha (default: 0.05)
@@ -75,6 +75,15 @@ cpu_count() {
     fi
 
     echo 4
+}
+
+# Say "start position" explicitly rather than letting fast-chess fall back to it: with no
+# -openings block at all it warns about a missing book and an unknown opening format, which
+# reads like an error in a run that wants the start position on purpose.
+ensure_startpos_openings() {
+    local file=$1
+    mkdir -p "$(dirname "$file")"
+    echo 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1 ;' > "$file"
 }
 
 ensure_default_openings() {
@@ -226,12 +235,21 @@ for opt in "${BASE_OPTIONS[@]+"${BASE_OPTIONS[@]}"}"; do
     BASE_ENGINE+=("option.$opt")
 done
 
+# fast-chess counts -games per round and defaults to 2 rounds, so passing the game budget
+# as -games plays twice as many games as asked. Ask for rounds of 2 instead: that is the
+# pairing -repeat means, one round per opening with the colors swapped.
+if [ "$GAMES" -lt 2 ]; then
+    echo "--games must be at least 2 (one color-swapped pair)" >&2
+    exit 2
+fi
+ROUNDS=$(((GAMES + 1) / 2))
+
 CMD=(
     "$FAST_CHESS_BIN"
-    -repeat
     -recover
     -concurrency "$CONCURRENCY"
-    -games "$GAMES"
+    -rounds "$ROUNDS"
+    -games 2
     -each "proto=uci" "tc=$TC" 
     -sprt "elo0=$ELO0" "elo1=$ELO1" "alpha=$ALPHA" "beta=$BETA"
     "${NEW_ENGINE[@]}"
@@ -252,6 +270,10 @@ if [ "$USE_OPENINGS" -eq 1 ]; then
     else
         echo "No openings file found. Running from start position only." >&2
     fi
+else
+    STARTPOS_FILE=build/startpos.epd
+    ensure_startpos_openings "$STARTPOS_FILE"
+    CMD+=(-openings "file=$STARTPOS_FILE" format=epd order=random)
 fi
 
 echo "Running SPRT with:"
