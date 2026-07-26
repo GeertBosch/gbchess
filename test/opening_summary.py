@@ -203,14 +203,14 @@ def report(path, games, args, out=sys.stdout):
     P('### White score by first book exit (ply)\n')
     P(md_table(['exit ply', 'n', 'white %', 'median exit eval'], rows))
 
-    # --- Cause by colour --------------------------------------------------
+    # --- Cause by color --------------------------------------------------
     causes = defaultdict(lambda: [0, 0, 0])  # cause -> [white lost, black lost, drawn]
     for g in games:
         slot = 0 if g['points'] == 0.0 else (1 if g['points'] == 1.0 else 2)
         causes[g['cause']][slot] += 1
     rows = [[c, *v] for c, v in sorted(causes.items())]
     rows.append(['**total**', *[sum(v[i] for v in causes.values()) for i in range(3)]])
-    P('## Win/loss by cause and colour\n')
+    P('## Win/loss by cause and color\n')
     P(md_table(['cause', 'white LOSES by', 'black LOSES by', 'draws by'], rows))
 
     # --- Named openings ---------------------------------------------------

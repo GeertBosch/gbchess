@@ -47,7 +47,7 @@ engine actually supports them.
 
 Pass extra arguments through `SPRT_ARGS`. `--games N` is a budget of N games in total: the
 script runs `N/2` fast-chess rounds of 2 games, so each opening is played once with each
-colour. (Passing the budget to fast-chess as `-games` would play `N` games *per round*, i.e.
+color. (Passing the budget to fast-chess as `-games` would play `N` games *per round*, i.e.
 twice as many as asked.)
 
 ### Faster smoke SPRT
@@ -212,7 +212,7 @@ the logistic equivalent. Bounds are taken from the sidecar `test/sprt.sh` writes
 is the one to read for time forfeits: an engine that budgets a fraction of its own remaining
 clock with nothing held back spends before its opponent in every cycle, so the side that moves
 first reaches the flag threshold first. Before `MoveOverhead` existed, a run from the start
-position put *every* forfeit on white, which looks like a colour bug and is not one. A skew like
+position put *every* forfeit on white, which looks like a color bug and is not one. A skew like
 that now means the reserve is too small for the conditions.
 
 `MoveOverhead` (default 10ms) reserves the per-move cost the clock is charged but the search

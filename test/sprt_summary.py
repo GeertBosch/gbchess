@@ -15,7 +15,7 @@ logistic Elo, so the default elo1=5 asks for roughly 2 ordinary Elo.
 
 For each PGN it then prints: match summary, pentanomial, per-color and per-opening scores,
 the WDL cause breakdown (mate / 3-fold / fifty-move / insufficient material / stalemate /
-time forfeit / crash) by engine, then the decisive games split by colour and by first mover
+time forfeit / crash) by engine, then the decisive games split by color and by first mover
 as percentages against a 50/50 neutral baseline, conversion & "throw" diagnostics from the
 in-PGN engine evals, and game-length stats.
 
@@ -131,19 +131,19 @@ def parse_evals(moves_text):
 
 
 def color_split(games, new, base):
-    """Each engine's score with each colour.
+    """Each engine's score with each color.
 
     The difference column is an algebraic identity in any clean head-to-head, not a
     measurement: the games where new plays white are exactly the games where base plays
     black, so new_white + base_black = 100 and both differences equal twice the overall edge.
     That holds even when games are unpaired. It is printed because the score *levels* show
-    the opening set's colour bias, and because a disagreement between the two rows means the
+    the opening set's color bias, and because a disagreement between the two rows means the
     file is not a clean head-to-head at all.
     """
     out = {}
     for color in ('white', 'black'):
         tag = color.capitalize()
-        # Each engine's own games with this colour. Scoring base from its own games rather
+        # Each engine's own games with this color. Scoring base from its own games rather
         # than as new's complement is what gives the check something to catch: in a clean
         # head-to-head the two are the same games, so any disagreement means the file is not
         # one — concatenated matches, a third engine, or the wrong --new/--base names.
@@ -245,7 +245,7 @@ def format_duration(seconds):
 
 
 def first_mover(g):
-    """Colour that moved first: the FEN tag's side to move, else white (start position)."""
+    """color that moved first: the FEN tag's side to move, else white (start position)."""
     parts = g['tags'].get('FEN', '').split()
     return 'black' if len(parts) > 1 and parts[1] == 'b' else 'white'
 
@@ -284,10 +284,10 @@ def analyze(path, new_override, base_override, bounds=None):
     cause_when_new_loses = Counter()
     cause_when_base_loses = Counter()
     cause_draw = Counter()
-    # same causes, split by the colour that lost rather than by engine
+    # same causes, split by the color that lost rather than by engine
     cause_by_loser_color = {'white': Counter(), 'black': Counter()}
     # ... and by whether the loser was the side that moved first in the game. Time
-    # forfeits track this rather than colour: the first mover spends from a budget that
+    # forfeits track this rather than color: the first mover spends from a budget that
     # is a fraction of its own remaining clock before its opponent does, so its clock
     # sits below the opponent's at every ply and it hits the flag threshold first.
     cause_by_loser_role = {'first': Counter(), 'second': Counter()}
@@ -581,7 +581,7 @@ def report(a):
       f"(ratio {winish/lossish:.2f})" if lossish else "")
     P('')
 
-    P("## Each engine by colour\n")
+    P("## Each engine by color\n")
     cs = a['color_split']
     if cs:
         rows = [[c, f"{v[0]:.2f}%", f"{v[1]:.2f}%", f"{v[2]:+.2f}pp", v[3]]
@@ -591,7 +591,7 @@ def report(a):
         note = ("\n*In a clean head-to-head the two differences are the same number by "
                 "construction — the games where new has white are the games where base has "
                 "black — and both equal twice the overall edge. So this is a consistency "
-                "check on the file, not a measurement of colour strength; a per-colour "
+                "check on the file, not a measurement of color strength; a per-color "
                 "weakness cannot be seen this way. The score levels themselves reflect the "
                 "opening set: ")
         white_all = 100 * sum(1.0 if g['tags']['Result'] == '1-0' else
@@ -604,7 +604,7 @@ def report(a):
               f"clean head-to-head. This file is probably not one: matches concatenated, a "
               f"third engine present, or --new/--base naming the wrong players.\n")
     else:
-        P("Not enough games with each colour to split.\n")
+        P("Not enough games with each color to split.\n")
     P('')
 
     P("## WDL cause breakdown\n")
@@ -624,10 +624,10 @@ def report(a):
       "A dash marks a combination the rules make impossible: a draw by rule has no loser, and a "
       "mate or a flag is never a draw.)*\n")
 
-    P("## Decisive games by colour\n")
+    P("## Decisive games by color\n")
     P(md_table(['Cause', 'games', 'white lost', 'black lost'],
                split_rows(a['cause_by_loser_color']['white'], a['cause_by_loser_color']['black'])))
-    P("\n*Every game has one player of each colour, so 50% is the neutral split. Draws are "
+    P("\n*Every game has one player of each color, so 50% is the neutral split. Draws are "
       "excluded here; they are in the table above.*\n")
 
     P("## Decisive games by first mover\n")
@@ -636,7 +636,7 @@ def report(a):
     fm = a['first_movers']
     total_fm = fm['white'] + fm['black'] or 1
     P(f"\n*Every game has exactly one first mover, so 50% is the neutral split here too — the "
-      f"colour of that first mover ({100*fm['white']/total_fm:.0f}% white, "
+      f"color of that first mover ({100*fm['white']/total_fm:.0f}% white, "
       f"{100*fm['black']/total_fm:.0f}% black across the openings used) does not move that "
       f"baseline. A heavy skew of time forfeits toward the first mover means an engine is "
       f"budgeting a fraction of its own remaining clock with nothing reserved for per-move "
@@ -675,7 +675,7 @@ def report(a):
                      f"±{o['se']:.2f}", f"{o['balanced_pct']:.0f}%", note, o['fen']])
     P(md_table(['new %', 'games', 'median plies', 'std err', 'balanced pairs', 'note', 'FEN'],
                rows))
-    P("\n*\"Balanced pairs\" is how often the two colour-reversed games cancel out. At 100% the "
+    P("\n*\"Balanced pairs\" is how often the two color-reversed games cancel out. At 100% the "
       "opening cannot separate the engines at all — both sides find the same mate, or the "
       "position is a dead draw — so those games are pure filler. The standard error is per "
       "opening, from its own pairs.*\n")
