@@ -27,5 +27,6 @@ config.json
 !lichess/ci_mate123_4000.csv
 !lichess/ci_mate45_100.csv
 !lichess/ci_nonmate_100.csv
+!book.csv
 *.bin
 Stockfish
