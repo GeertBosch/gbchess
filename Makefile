@@ -403,8 +403,13 @@ uci: build/uci.out
 
 # The uci-%.in scripts can't pass CLI flags (build/gbchess is invoked with only the
 # script as argument), so the --book flag is checked separately here.
+# The sleep works around a CI-only race (confirmed via repeated GH Actions runs): running
+# gbchess immediately after it and other -j-parallel targets (e.g. search-debug) finish
+# linking intermittently aborts, most likely from resource contention on the runner; any
+# delay before exec reliably avoids it.
 build/book-cli.out: build/gbchess book.csv
 	$(Q){ \
+		sleep 1; \
 		printf 'uci\nucinewgame\nquit\n' | ./build/gbchess --book definitely-missing.csv 2>&1 \
 			| grep -q 'info string WARNING: book file definitely-missing.csv could not be loaded' \
 		&& printf 'uci\nucinewgame\nquit\n' | ./build/gbchess --book book.csv 2>&1 \
