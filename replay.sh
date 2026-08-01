@@ -16,7 +16,7 @@ usage() {
 }
 
 # Parse options
-start_move=1
+start_move=""
 end_move=""
 while getopts "m:" opt; do
     case $opt in
@@ -28,7 +28,7 @@ while getopts "m:" opt; do
                 if [ -n "${BASH_REMATCH[2]}" ]; then
                     end_move=${BASH_REMATCH[2]}
                 fi
-                if [ -n "$end_move" ] && [ $start_move -gt $end_move ]; then
+                if [ -n "$start_move" ] && [ -n "$end_move" ] && [ $start_move -gt $end_move ]; then
                     echo "Error: start move must be <= end move" >&2
                     usage
                 fi
@@ -73,39 +73,68 @@ egrep -v '"[0]?"' "$pgnfile" | while read line ; do
 done
 moves=$(build/pgn-test -v "$pgnfile" | awk '/^Moves: / { sub(/^Moves: /, ""); print $0 }')
 
+# A [FEN] tag sets up the starting position; without one the game starts from startpos. The FEN
+# also gives the side to move (black may move first) and the fullmove number to count moves from.
+fen=$(sed -n 's/^\[FEN "\(.*\)"\].*/\1/p' "$pgnfile" | head -1)
+first_black=0
+first_num=1
+if [ -n "$fen" ] ; then
+    setup="fen $fen"
+    [ "$(echo "$fen" | cut -d' ' -f2)" = "b" ] && first_black=1
+    fen_num=$(echo "$fen" | cut -d' ' -f6)
+    if [[ $fen_num =~ ^[0-9]+$ ]] && [ "$fen_num" -gt 0 ] ; then
+        first_num=$fen_num
+    fi
+else
+    setup="startpos"
+fi
+
 # Now output UCI commands for recreating the positions needing to be played by the side given:
 # For white:
 # position startpos moves e2e4
 # position startpos moves e2e4 e7e5 g1f3
 # etc
-position=startpos
 (
 echo "ucinewgame"
-# For white, j is 0,2,4,... ; for black, j is 1,3,5,...
 n=$(echo $moves | wc -w)
-if [ -z "$end_move" ]; then
-    end_move=$(( (n + 1) / 2 ))
+
+# Ply index i counts the moves of the game as listed in the PGN, so i=0 is the first move played
+# from the setup position, which is black's move when first_black is 1. The move number of ply i
+# is first_num + (i + first_black) / 2, and ply i is white's move iff (i + first_black) is even.
+if [ -z "$start_move" ]; then
+    start_move=$first_num
 fi
-for j in $(seq $((side - 1)) 2 $n) ; do
-    # Show move number and UCI moves for white and black
-    num=$((j / 2 + 1))
+if [ -z "$end_move" ]; then
+    end_move=$((first_num + (n - 1 + first_black) / 2))
+fi
+
+# For white, i is the ply index of the first white move; for black that of the first black move.
+for i in $(seq $(( ((side - 1) - first_black + 2) % 2 )) 2 $((n - 1))) ; do
+    num=$((first_num + (i + first_black) / 2))
 
     # Skip if outside requested range
     if [ $num -lt $start_move ]; then
         continue
     fi
-    if [ -n "$end_move" ] && [ $num -gt $end_move ]; then
+    if [ $num -gt $end_move ]; then
         continue
     fi
 
-    move_uci=$(echo $moves | cut -d' ' -f$((num * 2 - 1))-$((num * 2)))
+    # Show move number and UCI moves for white and black. When black moves first, the first move
+    # number has no white move, so only black's move is shown.
+    white_ply=$((2 * (num - first_num) - first_black))
+    black_ply=$((white_ply + 1))
+    if [ $white_ply -lt 0 ] ; then
+        move_uci=$(echo $moves | cut -d' ' -f$((black_ply + 1)))
+    else
+        move_uci=$(echo $moves | cut -d' ' -f$((white_ply + 1))-$((black_ply + 1)))
+    fi
     echo "# $num. $move_uci"
 
-    if [ $j -eq 0 ] ; then
-        position="startpos"
+    if [ $i -eq 0 ] ; then
+        echo "position $setup"
     else
-        position="startpos moves $(echo $moves | cut -d' ' -f1-$j)"
-        echo "position $position"
+        echo "position $setup moves $(echo $moves | cut -d' ' -f1-$i)"
     fi
     # During the last iteration, save the search state
     if [ $num -eq $end_move ] ; then
