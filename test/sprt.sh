@@ -20,6 +20,8 @@ Options:
   --base-args <ARGS>         Extra command-line arguments for baseline engine
   --new-args <ARGS>          Extra command-line arguments for new engine
   --tc <time>                Time control (default: 8+0.08)
+  --new-tc <time>            Time control override for the new engine (default: --tc)
+  --base-tc <time>           Time control override for the baseline engine (default: --tc)
   --concurrency <n>          Parallel games (default: CPU count)
   --games <n>                Max games in total, rounded up to a pair (default: 10000)
   --elo0 <n>                 SPRT H0 Elo (default: 0)
@@ -137,6 +139,8 @@ NEW_CMD=build/gbchess
 NEW_NAME=
 NEW_ARGS=
 TC=8+0.08
+NEW_TC=
+BASE_TC=
 CONCURRENCY=$(($(cpu_count) - 2))
 GAMES=10000
 ELO0=0
@@ -163,6 +167,8 @@ while [ $# -gt 0 ]; do
         --base-option) BASE_OPTIONS+=("${2:-}"); shift 2 ;;
         --new-option) NEW_OPTIONS+=("${2:-}"); shift 2 ;;
         --tc) TC=${2:-}; shift 2 ;;
+        --new-tc) NEW_TC=${2:-}; shift 2 ;;
+        --base-tc) BASE_TC=${2:-}; shift 2 ;;
         --concurrency) CONCURRENCY=${2:-}; shift 2 ;;
         --games) GAMES=${2:-}; shift 2 ;;
         --elo0) ELO0=${2:-}; shift 2 ;;
@@ -234,13 +240,16 @@ fi
     echo "tc=$TC"
 } > "${PGNOUT%.pgn}.engines"
 
-NEW_ENGINE=(-engine "name=$NEW_NAME" "cmd=$NEW_CMD")
+# tc is set per-engine rather than via `-each`: fast-chess's `-each tc=` always wins over a
+# per-engine `tc=` regardless of argument order, so `-each` never gets a tc and both engines
+# get an explicit one here (falling back to the shared --tc when no override was given).
+NEW_ENGINE=(-engine "name=$NEW_NAME" "cmd=$NEW_CMD" "tc=${NEW_TC:-$TC}")
 [ -n "$NEW_ARGS" ] && NEW_ENGINE+=("args=$NEW_ARGS")
 for opt in "${NEW_OPTIONS[@]+"${NEW_OPTIONS[@]}"}"; do
     NEW_ENGINE+=("option.$opt")
 done
 
-BASE_ENGINE=(-engine "name=$BASE_NAME" "cmd=$BASE_CMD")
+BASE_ENGINE=(-engine "name=$BASE_NAME" "cmd=$BASE_CMD" "tc=${BASE_TC:-$TC}")
 [ -n "$BASE_ARGS" ] && BASE_ENGINE+=("args=$BASE_ARGS")
 for opt in "${BASE_OPTIONS[@]+"${BASE_OPTIONS[@]}"}"; do
     BASE_ENGINE+=("option.$opt")
@@ -261,7 +270,7 @@ CMD=(
     -concurrency "$CONCURRENCY"
     -rounds "$ROUNDS"
     -games 2
-    -each "proto=uci" "tc=$TC" 
+    -each "proto=uci"
     -sprt "elo0=$ELO0" "elo1=$ELO1" "alpha=$ALPHA" "beta=$BETA"
     "${NEW_ENGINE[@]}"
     "${BASE_ENGINE[@]}"
