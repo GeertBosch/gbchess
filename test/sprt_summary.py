@@ -256,6 +256,20 @@ def first_mover(g):
     return 'black' if len(parts) > 1 and parts[1] == 'b' else 'white'
 
 
+def move_label(g, ply, san):
+    """Format san as e.g. '32. Ke1' (white) or '32... Ke1' (black), where ply is the 1-based
+    half-move count of the whole game (as produced by parse_evals/analyze), honoring the
+    game's FEN tag for games that don't start at move 1 or start with black to move.
+    """
+    parts = g['tags'].get('FEN', '').split()
+    first_black = len(parts) > 1 and parts[1] == 'b'
+    first_num = int(parts[5]) if len(parts) > 5 and parts[5].isdigit() and int(parts[5]) > 0 else 1
+    i = ply - 1
+    num = first_num + (i + first_black) // 2
+    white = (i + first_black) % 2 == 0
+    return f"{num}. {san}" if white else f"{num}... {san}"
+
+
 def new_points(g, new):
     r = g['tags'].get('Result')
     if r == '1/2-1/2':
@@ -864,7 +878,8 @@ def swing_table(candidates, top_n=5):
     for c in top:
         g = c['game']
         fen = fen_after_ply(pgn_test_bin, eval_test_bin, g, c['ply'])
-        rows.append([g.get('num', '?'), fmt_cp(c['cp']), c['san'], g['tags'].get('White', '?'),
+        rows.append([g.get('num', '?'), fmt_cp(c['cp']), move_label(g, c['ply'], c['san']),
+                     g['tags'].get('White', '?'),
                      g['tags'].get('Black', '?'), g['tags'].get('Result', '?'),
                      fen or '(could not reconstruct)'])
     return md_table(['game', 'eval', 'move', 'White', 'Black', 'Result', 'FEN'], rows)
