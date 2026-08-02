@@ -1,7 +1,9 @@
 #!/bin/bash
 usage() {
-    echo "usage: $0 [-m[X][-[Y]]] <w|b|white|black> pgnfile [goopts...]\n" >&2
+    echo "usage: $0 [-m[X][-[Y]]] [--game N] <w|b|white|black> pgnfile [goopts...]\n" >&2
     echo "  -mX-Y: limit replay to moves X through Y (inclusive)" >&2
+    echo "  --game N: replay the Nth game (1-based) in a PGN file with multiple games" >&2
+    echo "            (default: 1)" >&2
     echo "goopts: additional options to pass to the engine, such as:" >&2
     echo "        depth <n>: set the search depth to <n>" >&2
     echo "        movetime <n>: set the maximum time to search to <n> ms per move" >&2
@@ -18,6 +20,33 @@ usage() {
 # Parse options
 start_move=""
 end_move=""
+game=1
+
+# getopts doesn't handle long options, so pull --game out of the argument list first.
+args=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --game)
+            game=$2
+            shift 2
+            ;;
+        --game=*)
+            game=${1#--game=}
+            shift
+            ;;
+        *)
+            args+=("$1")
+            shift
+            ;;
+    esac
+done
+set -- "${args[@]}"
+
+if ! [[ $game =~ ^[0-9]+$ ]] || [ "$game" -lt 1 ]; then
+    echo "Error: --game must be a positive integer" >&2
+    usage
+fi
+
 while getopts "m:" opt; do
     case $opt in
         m)
@@ -67,15 +96,24 @@ if [ ! -f "$pgnfile" ] ; then
     exit 2
 fi
 
+# Extract just the requested game (1-based) from a possibly multi-game PGN file: each game
+# starts with an [Event tag, so lines belong to game N once the Nth such tag has been seen
+# and until the next one appears.
+gametext=$(awk -v g="$game" '/^\[Event / { n++ } n == g { print }' "$pgnfile")
+if [ -z "$gametext" ] ; then
+    echo "Error: game $game not found in $pgnfile" >&2
+    exit 2
+fi
+
 # Include the original PGN as comments, omitting empty and zero tags
-egrep -v '"[0]?"' "$pgnfile" | while read line ; do
+echo "$gametext" | egrep -v '"[0]?"' | while read line ; do
     echo "# $line"
 done
-moves=$(build/pgn-test -v "$pgnfile" | awk '/^Moves: / { sub(/^Moves: /, ""); print $0 }')
+moves=$(echo "$gametext" | build/pgn-test -v - | awk '/^Moves: / { sub(/^Moves: /, ""); print $0 }')
 
 # A [FEN] tag sets up the starting position; without one the game starts from startpos. The FEN
 # also gives the side to move (black may move first) and the fullmove number to count moves from.
-fen=$(sed -n 's/^\[FEN "\(.*\)"\].*/\1/p' "$pgnfile" | head -1)
+fen=$(echo "$gametext" | sed -n 's/^\[FEN "\(.*\)"\].*/\1/p' | head -1)
 first_black=0
 first_num=1
 if [ -n "$fen" ] ; then
