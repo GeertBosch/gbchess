@@ -13,13 +13,19 @@ struct PrincipalVariation {
     // True iff this score depends on a repetition / fifty-move draw along the line. Such scores
     // are path-dependent (not a fact about the position) and must not be stored as a TT bound.
     bool drawDependent = false;
+    // True iff a time/node cutoff hit before this node (or a descendant it adopted a score from)
+    // finished searching a move, so `score` (still its default Score::min() sentinel in that
+    // case) is not a real evaluation. Callers must not adopt an aborted child's score as their
+    // own, must not store it in the TT, and must propagate the flag rather than let the sentinel
+    // get silently negated into a fake Score::max() ("mate") value by an ancestor.
+    bool aborted = false;
 
     PrincipalVariation() = default;
     PrincipalVariation(Move move, Score score) : score(score) {
         if (move) moves.push_back(move);
     }
     PrincipalVariation(Move move, PrincipalVariation pv)
-        : score(pv.score), drawDependent(pv.drawDependent) {
+        : score(pv.score), drawDependent(pv.drawDependent), aborted(pv.aborted) {
         if (move) moves.push_back(move);
         moves.insert(moves.end(), pv.moves.begin(), pv.moves.end());
     }
@@ -41,6 +47,7 @@ struct PrincipalVariation {
     PrincipalVariation operator-() const {
         PrincipalVariation result(-score, moves);
         result.drawDependent = drawDependent;
+        result.aborted = aborted;
         return result;
     }
     bool operator<(const PrincipalVariation& other) const {

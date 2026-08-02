@@ -1098,7 +1098,15 @@ PrincipalVariation alphaBeta(Position& position,
 
     for (auto move : moveList) {
         ++moveCount;
-        if (timecheck && timecheck()) return pv;  // Check for time cutoff
+        if (timecheck && timecheck()) {
+            // pv may still be its default (score Score::min(), no move) if we're aborting before
+            // ever assigning it below. That sentinel must never be mistaken for a real score by
+            // the caller: negating it there would produce a bogus Score::max() ("mate") that
+            // looks like a genuine winning line. Mark it so callers propagate the abort instead
+            // of adopting it.
+            pv.aborted = true;
+            return pv;  // Check for time cutoff
+        }
 
         // Conservative move-level futility pruning for late quiet moves at shallow depth.
         const auto curAlpha = std::max(alpha, pv.score);
@@ -1174,6 +1182,14 @@ PrincipalVariation alphaBeta(Position& position,
 
         unmakeMove(position, undo);
 
+        if (newVar.aborted) {
+            // This move's value was never actually determined (the recursive search hit a time
+            // cutoff before completing it); it must not be adopted as our score, only its abort
+            // status propagated. Keep whatever pv we already have from earlier, fully-searched
+            // moves at this node.
+            pv.aborted = true;
+            return pv;
+        }
         if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
         if (betaCutoff(pv.score,
                        beta,
@@ -1188,6 +1204,10 @@ PrincipalVariation alphaBeta(Position& position,
     }
 
     if (moveList.empty() && !isInCheck(position)) pv.score = Score();  // Stalemate
+
+    // An aborted node hasn't seen every move, so its score is only a partial lower bound at
+    // best and must not be stored as if it were a resolved bound for this depth.
+    if (pv.aborted) return pv;
 
     if (pv.drawDependent)
         transpositionTable.insertMoveOnly(hash, pv.front());
@@ -1255,7 +1275,10 @@ PrincipalVariation toplevelAlphaBeta(
 
     int currmovenumber = 0;
     for (auto move : moveList) {
-        if (currmoveInfo(info, depthleft, move, ++currmovenumber)) return pv;
+        if (currmoveInfo(info, depthleft, move, ++currmovenumber)) {
+            pv.aborted = true;
+            return pv;
+        }
 
         auto newPosition = moves::applyMove(position, move);
         Hash newHash(newPosition);
@@ -1275,6 +1298,12 @@ PrincipalVariation toplevelAlphaBeta(
                 newVar =
                     -alphaBeta(newPosition, newHash, -beta, -curAlpha, newDepth, timecheck, move);
         }
+        if (newVar.aborted) {
+            // See the matching check in alphaBeta: an aborted move's score was never actually
+            // determined and must not be adopted as pv, only the abort propagated.
+            pv.aborted = true;
+            return pv;
+        }
         if (newVar.score > pv.score || !pv.front()) pv = {move, newVar};
         if (betaCutoff(pv.score,
                        beta,
@@ -1287,6 +1316,11 @@ PrincipalVariation toplevelAlphaBeta(
                        Move()))
             return pv;
     }
+
+    // An aborted node hasn't seen every root move, so its score is only a partial lower bound
+    // and must not be stored as if it were a resolved bound for this depth.
+    if (pv.aborted) return pv;
+
     if (pv.drawDependent)
         transpositionTable.insertMoveOnly(hash, pv.front());
     else
@@ -1316,6 +1350,10 @@ PrincipalVariation aspirationWindows(Position position,
         auto beta = expected + Score::fromCP(*betaIt);
 
         newpv = toplevelAlphaBeta(position, alpha, beta, maxdepth, info);
+        // A cutoff mid-search means this depth was never actually resolved (whatever partial
+        // progress newpv holds isn't comparable to the previous depth's fully-searched result),
+        // so stop re-probing with other windows and fall back to `pv` below.
+        if (newpv.aborted) break;
 
         if (newpv.score <= alpha)
             ++alphaIt;
@@ -1326,10 +1364,9 @@ PrincipalVariation aspirationWindows(Position position,
 
         newpv = {};
     }
-    if (!newpv) newpv = toplevelAlphaBeta(position, maxdepth, info);
+    if (!newpv.aborted && !newpv) newpv = toplevelAlphaBeta(position, maxdepth, info);
 
-
-    return newpv ? newpv : pv;
+    return (newpv && !newpv.aborted) ? newpv : pv;
 }
 
 PrincipalVariation iterativeDeepening(Position& position, int maxdepth, InfoFn info) {
