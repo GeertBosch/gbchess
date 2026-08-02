@@ -29,6 +29,7 @@ are reported from the NEW engine's perspective unless stated otherwise.
 """
 import argparse
 import math
+import os
 import re
 import shutil
 import statistics as st
@@ -198,8 +199,9 @@ def warnings_for(stats, games):
     out = []
     total = sum(s['games'] for s in stats) or 1
     dead = [s for s in stats if s['balanced_pct'] >= 95]
-    if dead:
-        share = 100 * sum(s['games'] for s in dead) / total
+    # Warn if more than 10% of games come from openings carrying no information
+    share = 100 * sum(s['games'] for s in dead) / total
+    if share > 10:
         out.append(f"**{len(dead)} of {len(stats)} openings carry no information** "
                    f"({share:.0f}% of games): every pair comes out balanced, so they cannot "
                    f"separate the engines however long the run continues. Drop them from the "
@@ -631,15 +633,15 @@ def md_table(headers, rows):
 def report(a):
     L = []
     P = L.append
-    P(f"# SPRT summary: `{a['path']}`\n")
+    P(f"# SPRT summary: `{os.path.relpath(a['path'])}`\n")
     P(f"**{a['new']}** (new) vs **{a['base']}** (base) — all numbers from new's perspective.\n")
     P(verdict(a['sprt'], a['rate']))
     if a['sprt']:
         s = a['sprt']
-        P(f"<sub>Log-likelihood ratio (LLR) {s['llr']:+.2f} within its stopping bounds "
+        P(f"Log-likelihood ratio (LLR) {s['llr']:+.2f} within its stopping bounds "
           f"({s['lower']:.2f}, {s['upper']:.2f}); likelihood of superiority (LOS) "
           f"{100*s['los']:.1f}%; normalized Elo {s['nelo']:+.2f} +/- {s['nelo_err']:.2f}; "
-          f"{s['pairs']} paired games.</sub>\n")
+          f"{s['pairs']} paired games.\n")
 
     warn = warnings_for(a['openings'], a['games'])
     if warn:
@@ -737,8 +739,8 @@ def report(a):
     P("## Eval-based diagnostics (decisive games)\n")
     swings = a['max_swing_against']
     P(md_table(
-        ['new threw (won eval, no win)', 'new robbed (lost eval, no loss)',
-         'median loser swing (cp)', 'p90 loser swing (cp)'],
+        ['new threw<br>(won eval, no win)', 'new robbed<br>(lost eval, no loss)',
+         'median loser<br>swing (cp)', 'p90 loser<br>swing (cp)'],
         [[a['new_threw'], a['new_robbed'],
           int(st.median(swings)) if swings else 0,
           int(sorted(swings)[int(0.9*len(swings))]) if swings else 0]]))
@@ -759,14 +761,14 @@ def report(a):
     rows = []
     for o in sorted(a['openings'], key=lambda o: o['score']):
         if o['balanced_pct'] >= 95:
-            note = 'no information: every pair balanced'
+            note = 'no information:<br>every pair balanced'
         elif o['median_plies'] <= 10:
             note = 'decided in the opening'
         else:
             note = ''
         rows.append([f"{o['score']:.1f}", o['games'], f"{o['median_plies']:.0f}",
                      f"±{o['se']:.2f}", f"{o['balanced_pct']:.0f}%", note, o['fen']])
-    P(md_table(['new %', 'games', 'median plies', 'std err', 'balanced pairs', 'note', 'FEN'],
+    P(md_table(['new %', 'games', 'med ply', 'std err', 'bal pairs', 'note', 'FEN'],
                rows))
     P("\n*\"Balanced pairs\" is how often the two color-reversed games cancel out. At 100% the "
       "opening cannot separate the engines at all — both sides find the same mate, or the "
