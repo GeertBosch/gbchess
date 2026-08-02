@@ -1183,11 +1183,17 @@ PrincipalVariation alphaBeta(Position& position,
         unmakeMove(position, undo);
 
         if (newVar.aborted) {
-            // This move's value was never actually determined (the recursive search hit a time
-            // cutoff before completing it); it must not be adopted as our score, only its abort
-            // status propagated. Keep whatever pv we already have from earlier, fully-searched
-            // moves at this node.
+            // The recursive search hit a time cutoff before finishing. If it never completed even
+            // one move, newVar is still the untouched Score::min() sentinel and must not be
+            // adopted (that sentinel would get silently negated into a fake Score::max() "mate"
+            // by an ancestor). But if it did complete at least one move before the cutoff, its
+            // score is real, already-searched information and should be used like any other
+            // result -- discarding it would throw away legitimate work on every timeout, not just
+            // the corrupt sentinel case.
             pv.aborted = true;
+            if (newVar) {
+                if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
+            }
             return pv;
         }
         if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
@@ -1299,9 +1305,14 @@ PrincipalVariation toplevelAlphaBeta(
                     -alphaBeta(newPosition, newHash, -beta, -curAlpha, newDepth, timecheck, move);
         }
         if (newVar.aborted) {
-            // See the matching check in alphaBeta: an aborted move's score was never actually
-            // determined and must not be adopted as pv, only the abort propagated.
+            // See the matching check in alphaBeta: only refuse to adopt newVar when it's still
+            // the untouched sentinel (no move completed before the cutoff). A newVar that
+            // completed at least one move carries a real, already-searched score and should be
+            // used like any other result.
             pv.aborted = true;
+            if (newVar) {
+                if (newVar.score > pv.score || !pv.front()) pv = {move, newVar};
+            }
             return pv;
         }
         if (newVar.score > pv.score || !pv.front()) pv = {move, newVar};
@@ -1350,9 +1361,10 @@ PrincipalVariation aspirationWindows(Position position,
         auto beta = expected + Score::fromCP(*betaIt);
 
         newpv = toplevelAlphaBeta(position, alpha, beta, maxdepth, info);
-        // A cutoff mid-search means this depth was never actually resolved (whatever partial
-        // progress newpv holds isn't comparable to the previous depth's fully-searched result),
-        // so stop re-probing with other windows and fall back to `pv` below.
+        // A cutoff mid-search means this window was never fully resolved, so stop re-probing
+        // with other windows. newpv may still hold a real, already-searched root move (see the
+        // matching check in toplevelAlphaBeta) -- the fallback below only discards it if it
+        // turned out to be the untouched sentinel.
         if (newpv.aborted) break;
 
         if (newpv.score <= alpha)
@@ -1366,7 +1378,7 @@ PrincipalVariation aspirationWindows(Position position,
     }
     if (!newpv.aborted && !newpv) newpv = toplevelAlphaBeta(position, maxdepth, info);
 
-    return (newpv && !newpv.aborted) ? newpv : pv;
+    return newpv ? newpv : pv;
 }
 
 PrincipalVariation iterativeDeepening(Position& position, int maxdepth, InfoFn info) {
