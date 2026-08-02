@@ -370,14 +370,21 @@ def analyze(path, new_override, base_override, bounds=None):
         # (ply, san, cp) for new's own moves, ply being the 1-based half-move count of the
         # whole game so it can be replayed from the start to reconstruct the position later.
         new_evals = [(i + 1, san, cp) for i, (mv, san, cp) in enumerate(evals) if mv == new_side]
-        if new_evals:
-            if max(cp for _, _, cp in new_evals) >= 200 and p < 1.0:
+        # Mate scores (|cp| >= 30000, see parse_evals) are excluded here: engines have been
+        # observed to emit a spurious mate score for a single move deep into a game (almost
+        # certainly stale/poisoned TT state carried over from the game's history, not a real
+        # blunder-scale misjudgment) that doesn't match a fresh search of the same position.
+        # Those used to dominate this table with "predicted mate but lost/drew" entries that
+        # are not real throws/robberies.
+        non_mate_evals = [(ply, san, cp) for ply, san, cp in new_evals if abs(cp) < 30000]
+        if non_mate_evals:
+            if max(cp for _, _, cp in non_mate_evals) >= 200 and p < 1.0:
                 new_threw += 1
-                ply, san, cp = max(new_evals, key=lambda t: t[2])
+                ply, san, cp = max(non_mate_evals, key=lambda t: t[2])
                 threw_games.append({'game': g, 'ply': ply, 'san': san, 'cp': cp})
-            if min(cp for _, _, cp in new_evals) <= -200 and p > 0.0:
+            if min(cp for _, _, cp in non_mate_evals) <= -200 and p > 0.0:
                 new_robbed += 1
-                ply, san, cp = min(new_evals, key=lambda t: t[2])
+                ply, san, cp = min(non_mate_evals, key=lambda t: t[2])
                 robbed_games.append({'game': g, 'ply': ply, 'san': san, 'cp': cp})
         # biggest swing against the eventual loser (consecutive same-side evals),
         # ignoring transitions into/out of mate scores (|cp| >= 30000) which are not
