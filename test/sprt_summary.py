@@ -2,6 +2,7 @@
 """Summarize fastchess SPRT PGN output for human + LLM analysis.
 
 Usage:
+    tools/sprt_summary.py                                  # most recent build/sprt-*.pgn
     tools/sprt_summary.py build/sprt-YYYYMMDD-HHMMSS.pgn [more.pgn ...]
     tools/sprt_summary.py --new gbchess-new --base gbchess-base FILE.pgn
 
@@ -29,10 +30,13 @@ are reported from the NEW engine's perspective unless stated otherwise.
 import argparse
 import math
 import re
+import shutil
 import statistics as st
+import subprocess
 import sys
 from collections import Counter, defaultdict
 from datetime import datetime
+from pathlib import Path
 
 TAG = re.compile(r'\[(\w+)\s+"([^"]*)"\]')
 # A move with an engine comment, e.g.  Qd5 {-0.55/9 0.479s}  or  Nf7# {+M1/2 0.001s, White mates}
@@ -42,15 +46,16 @@ SCORE = re.compile(r'([+-]?)(M)?(\d+(?:\.\d+)?)/(\d+)')  # sign, mate?, value, d
 
 def parse_games(text):
     games = []
-    for block in re.split(r'(?=\[Event )', text):
-        block = block.strip()
+    starts = [m.start() for m in re.finditer(r'(?=\[Event )', text)] + [len(text)]
+    for start, end in zip(starts, starts[1:]):
+        block = text[start:end].strip()
         if not block:
             continue
         tags = dict(TAG.findall(block))
         # Move section is after the blank line that follows the header.
         parts = block.split('\n\n', 1)
         moves_text = parts[1] if len(parts) > 1 else ''
-        games.append({'tags': tags, 'moves_text': moves_text})
+        games.append({'tags': tags, 'moves_text': moves_text, 'num': len(games) + 1})
     return games
 
 
@@ -104,7 +109,8 @@ def final_reason(moves_text, result):
 
 
 def parse_evals(moves_text):
-    """Return list of (mover, cp) where mover in {'W','B'} and cp is from mover POV.
+    """Return list of (mover, san, cp): mover in {'W','B'}, san is the move played, and cp
+    is the eval from mover's POV after that move.
 
     Mate scores map to +/-100000 minus distance so they sort correctly.
     Side to move alternates W,B,... starting from whoever moves first. We infer the
@@ -115,7 +121,7 @@ def parse_evals(moves_text):
     evals = []
     mover = 'B' if first_black else 'W'
     for mc in MOVE_COMMENT.finditer(moves_text):
-        comment = mc.group(1) is not None and mc.group(2) or ''
+        san, comment = mc.group(1), mc.group(2) or ''
         s = SCORE.search(comment)
         if s:
             sign, mate, val, depth = s.groups()
@@ -125,7 +131,7 @@ def parse_evals(moves_text):
             else:
                 cp = int(round(float(val) * 100))
                 cp = -cp if sign == '-' else cp
-            evals.append((mover, cp))
+            evals.append((mover, san, cp))
         mover = 'B' if mover == 'W' else 'W'
     return evals
 
@@ -298,6 +304,8 @@ def analyze(path, new_override, base_override, bounds=None):
     new_threw = 0    # new had a winning eval (>= +200) yet did not win
     new_robbed = 0   # new had a losing eval (<= -200) yet did not lose (opponent threw)
     max_swing_against = []  # biggest single-move eval drop suffered by the loser
+    threw_games = []   # candidates for new_threw, with the move/eval at the peak
+    robbed_games = []  # candidates for new_robbed, with the move/eval at the trough
 
     byopen = defaultdict(lambda: [0.0, 0])
 
@@ -343,18 +351,24 @@ def analyze(path, new_override, base_override, bounds=None):
         # eval diagnostics
         evals = parse_evals(g['moves_text'])
         new_side = 'W' if new_color == 'white' else 'B'
-        new_evals = [cp for (mv, cp) in evals if mv == new_side]
+        # (ply, san, cp) for new's own moves, ply being the 1-based half-move count of the
+        # whole game so it can be replayed from the start to reconstruct the position later.
+        new_evals = [(i + 1, san, cp) for i, (mv, san, cp) in enumerate(evals) if mv == new_side]
         if new_evals:
-            if max(new_evals) >= 200 and p < 1.0:
+            if max(cp for _, _, cp in new_evals) >= 200 and p < 1.0:
                 new_threw += 1
-            if min(new_evals) <= -200 and p > 0.0:
+                ply, san, cp = max(new_evals, key=lambda t: t[2])
+                threw_games.append({'game': g, 'ply': ply, 'san': san, 'cp': cp})
+            if min(cp for _, _, cp in new_evals) <= -200 and p > 0.0:
                 new_robbed += 1
+                ply, san, cp = min(new_evals, key=lambda t: t[2])
+                robbed_games.append({'game': g, 'ply': ply, 'san': san, 'cp': cp})
         # biggest swing against the eventual loser (consecutive same-side evals),
         # ignoring transitions into/out of mate scores (|cp| >= 30000) which are not
         # comparable cp deltas.
         if r != '1/2-1/2':
             loser_side = 'W' if r == '0-1' else 'B'
-            loser_evals = [cp for (mv, cp) in evals if mv == loser_side]
+            loser_evals = [cp for (mv, san, cp) in evals if mv == loser_side]
             worst = 0
             for a, b in zip(loser_evals, loser_evals[1:]):
                 if abs(a) >= 30000 or abs(b) >= 30000:
@@ -377,6 +391,7 @@ def analyze(path, new_override, base_override, bounds=None):
         'timeouts': timeouts, 'plies': plies,
         'new_threw': new_threw, 'new_robbed': new_robbed,
         'max_swing_against': max_swing_against,
+        'threw_games': threw_games, 'robbed_games': robbed_games,
         'byopen': byopen, 'games': games, 'rate': wall_clock_rate(games),
         'color_split': color_split(games, new, base),
         'openings': opening_stats(games, new),
@@ -716,6 +731,16 @@ def report(a):
     P("\n*threw/robbed use a +/-200cp self-eval threshold; swing = biggest single-move "
       "self-eval drop suffered by the losing side.*\n")
 
+    P("## Top 5 new-threw positions (winning eval, game not won)\n")
+    P(swing_table(a['threw_games']))
+    P("\n*Ranked by |eval| at the game's best self-evaluated moment for new. Game is the "
+      "1-based game number in the PGN file. FEN is the position right after the listed move.*\n")
+
+    P("## Top 5 new-robbed positions (losing eval, game not lost)\n")
+    P(swing_table(a['robbed_games']))
+    P("\n*Ranked by |eval| at the game's worst self-evaluated moment for new. Game is the "
+      "1-based game number in the PGN file. FEN is the position right after the listed move.*\n")
+
     P("## Openings (new score %, worst first)\n")
     rows = []
     for o in sorted(a['openings'], key=lambda o: o['score']):
@@ -771,9 +796,106 @@ def delta_table(analyses):
     return '\n'.join(L)
 
 
+STARTPOS = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+
+
+def fmt_cp(cp):
+    """Render a parse_evals cp value as pawns, or M<n> for a mate score."""
+    if abs(cp) >= 90000:
+        dist = 100000 - abs(cp)
+        return f"{'+' if cp > 0 else '-'}M{dist}"
+    return f"{cp/100:+.2f}"
+
+
+def find_tool(name):
+    """Locate a build/<name> helper binary; None if it hasn't been built."""
+    path = Path.cwd() / 'build' / name
+    return path if path.is_file() else None
+
+
+def game_pgn_text(g):
+    """Reconstruct a minimal single-game PGN (tags + movetext) for feeding to pgn-test."""
+    return '\n'.join(f'[{k} "{v}"]' for k, v in g['tags'].items()) + '\n\n' + g['moves_text']
+
+
+def uci_moves_for_game(pgn_test_bin, g):
+    """Run `pgn-test -v` on a single game and return its verified UCI move list, or None.
+
+    Reuses the engine's own SAN legality/disambiguation logic (via pgn::verify) instead of
+    reimplementing SAN parsing in Python.
+    """
+    try:
+        out = subprocess.run([str(pgn_test_bin), '-v', '-'], input=game_pgn_text(g),
+                             text=True, capture_output=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    m = re.search(r'^Moves: (.*)$', out, re.MULTILINE)
+    return m.group(1).split() if m else None
+
+
+def fen_after_ply(pgn_test_bin, eval_test_bin, g, ply):
+    """FEN of the position right after the `ply`-th half-move (1-based) of game g."""
+    moves = uci_moves_for_game(pgn_test_bin, g)
+    if not moves or ply > len(moves):
+        return None
+    start_fen = g['tags'].get('FEN') or STARTPOS
+    try:
+        out = subprocess.run([str(eval_test_bin), start_fen, *moves[:ply]],
+                             text=True, capture_output=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    m = re.search(r'^New position: (.*)$', out, re.MULTILINE)
+    return m.group(1).strip() if m else None
+
+
+def swing_table(candidates, top_n=5):
+    """Top `top_n` candidates (from threw_games/robbed_games) ranked by eval magnitude,
+    each with the move played and the FEN right after it. Requires build/pgn-test and
+    build/eval-test; returns a one-line note instead of a table if they aren't built.
+    """
+    pgn_test_bin, eval_test_bin = find_tool('pgn-test'), find_tool('eval-test')
+    if not candidates:
+        return "No games in this category.\n"
+    if not pgn_test_bin or not eval_test_bin:
+        return ("*Build `build/pgn-test` and `build/eval-test` to see the FEN positions "
+                "here (`make -j build/pgn-test build/eval-test`).*\n")
+    top = sorted(candidates, key=lambda c: abs(c['cp']), reverse=True)[:top_n]
+    rows = []
+    for c in top:
+        g = c['game']
+        fen = fen_after_ply(pgn_test_bin, eval_test_bin, g, c['ply'])
+        rows.append([g.get('num', '?'), fmt_cp(c['cp']), c['san'], g['tags'].get('White', '?'),
+                     g['tags'].get('Black', '?'), g['tags'].get('Result', '?'),
+                     fen or '(could not reconstruct)'])
+    return md_table(['game', 'eval', 'move', 'White', 'Black', 'Result', 'FEN'], rows)
+
+
+def default_pgn():
+    """Return the most recently modified build/sprt-*.pgn, or None if there is none.
+
+    test/sprt.sh writes PGNs to build/ (next to the engine executables it builds),
+    relative to wherever it's run from, so we look there relative to the current
+    working directory rather than relative to this script's location.
+    """
+    build_dir = Path.cwd() / 'build'
+    candidates = build_dir.glob('sprt-*.pgn')
+    return max(candidates, key=lambda p: p.stat().st_mtime, default=None)
+
+
+def emit(text):
+    """Print the report, rendering it through mdcat when stdout is a terminal and mdcat is
+    available, so the Markdown formatting displays nicely. Falls back to plain print otherwise.
+    """
+    if sys.stdout.isatty() and shutil.which('mdcat'):
+        subprocess.run(['mdcat'], input=text, text=True)
+    else:
+        print(text, end='')
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('pgns', nargs='+')
+    ap.add_argument('pgns', nargs='*',
+                     help='PGN file(s) to analyze (default: most recent build/sprt-*.pgn)')
     ap.add_argument('--new')
     ap.add_argument('--base')
     ap.add_argument('--elo0', type=float, help='SPRT H0 (default: from the run, else 0)')
@@ -781,16 +903,25 @@ def main():
     ap.add_argument('--alpha', type=float, help='SPRT alpha (default: from the run, else 0.05)')
     ap.add_argument('--beta', type=float, help='SPRT beta (default: from the run, else 0.05)')
     args = ap.parse_args()
+    pgns = args.pgns
+    if not pgns:
+        latest = default_pgn()
+        if latest is None:
+            ap.error('no PGN given and no build/sprt-*.pgn files found')
+        print(f'No PGN given; using most recent: {latest}\n')
+        pgns = [str(latest)]
     analyses = []
-    for p in args.pgns:
+    text = ''
+    for p in pgns:
         a = analyze(p, args.new, args.base,
                     {'elo0': args.elo0, 'elo1': args.elo1,
                      'alpha': args.alpha, 'beta': args.beta})
         analyses.append(a)
-        print(report(a))
-        print('\n---\n')
+        text += report(a) + '\n'
+        text += '\n---\n' + '\n'
     if len(analyses) > 1:
-        print(delta_table(analyses))
+        text += delta_table(analyses) + '\n'
+    emit(text)
 
 
 if __name__ == '__main__':
