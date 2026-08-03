@@ -525,7 +525,7 @@ sprt-self: build/gbchess build/book-openings.epd
 		--openings-file build/book-openings.epd $(SPRT_ARGS) $(SPRT_SELF_ARGS)
 
 sprt-sf12: build/gbchess
-	$(Q)./test/sprt.sh --new-cmd "$(SPRT_NEW)" --base-cmd "$(SPRT_STOCKFISH12)" --new-name gbchess --base-name stockfish-12 $(SPRT_ARGS)
+	$(Q)./test/sprt.sh --new-cmd "$(SPRT_NEW)" --base-cmd "$(SPRT_STOCKFISH12)" --new-name gbchess --base-name stockfish-12 $(SPRT_ARGS) --base-option nodestime=150 --new-option nodestime=150
 
 # Openings-focused run: every game starts from the initial position, so the book
 # picks the opening instead of a puzzle FEN. By default this is a book A/B on one
