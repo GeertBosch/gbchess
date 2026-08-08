@@ -109,6 +109,15 @@ def final_reason(moves_text, result):
     return 'other'
 
 
+def game_cause(g):
+    """How a game ended: mate / time forfeit / repetition / fifty-move / insufficient-material
+    / stalemate / adjudication / other. Time forfeit comes from the Termination tag (fast-chess
+    doesn't annotate it in the move comments); everything else is read off the final comment."""
+    if g['tags'].get('Termination', '') == 'time forfeit':
+        return 'time forfeit'
+    return final_reason(g['moves_text'], g['tags'].get('Result'))
+
+
 def parse_evals(moves_text):
     """Return list of (mover, san, cp): mover in {'W','B'}, san is the move played, and cp
     is the eval from mover's POV after that move.
@@ -339,10 +348,8 @@ def analyze(path, new_override, base_override, bounds=None):
         byopen[fen][0] += p
         byopen[fen][1] += 1
 
-        term = g['tags'].get('Termination', '')
-        reason = final_reason(g['moves_text'], r)
-        if term == 'time forfeit':
-            reason = 'time forfeit'
+        reason = game_cause(g)
+        if reason == 'time forfeit':
             loser_color = 'white' if r == '0-1' else 'black' if r == '1-0' else None
             if loser_color:
                 loser = g['tags'].get('White' if loser_color == 'white' else 'Black')
@@ -872,9 +879,14 @@ def fen_after_ply(pgn_test_bin, eval_test_bin, g, ply):
 
 
 def swing_table(candidates, top_n=5):
-    """Top `top_n` candidates (from threw_games/robbed_games) ranked by eval magnitude,
-    each with the move played and the FEN right after it. Requires build/pgn-test and
+    """Top `top_n` candidates (from threw_games/robbed_games), each with the move played, the
+    cause of the eventual result, and the FEN right after it. Requires build/pgn-test and
     build/eval-test; returns a one-line note instead of a table if they aren't built.
+
+    Ranked with decisive reversals (new threw/was robbed of an actual win/loss) ahead of games
+    that ended in a draw: a decisive reversal is the stronger signal that the eval and the
+    outcome disagreed, while a draw after a big swing is often just the game settling back down
+    rather than a missed win or a survived loss. Within each group, ranked by |eval|.
     """
     pgn_test_bin, eval_test_bin = find_tool('pgn-test'), find_tool('eval-test')
     if not candidates:
@@ -882,16 +894,17 @@ def swing_table(candidates, top_n=5):
     if not pgn_test_bin or not eval_test_bin:
         return ("*Build `build/pgn-test` and `build/eval-test` to see the FEN positions "
                 "here (`make -j build/pgn-test build/eval-test`).*\n")
-    top = sorted(candidates, key=lambda c: abs(c['cp']), reverse=True)[:top_n]
+    top = sorted(candidates,
+                 key=lambda c: (c['game']['tags'].get('Result') == '1/2-1/2', -abs(c['cp'])))[:top_n]
     rows = []
     for c in top:
         g = c['game']
         fen = fen_after_ply(pgn_test_bin, eval_test_bin, g, c['ply'])
         rows.append([g.get('num', '?'), fmt_cp(c['cp']), move_label(g, c['ply'], c['san']),
                      g['tags'].get('White', '?'),
-                     g['tags'].get('Black', '?'), g['tags'].get('Result', '?'),
+                     g['tags'].get('Black', '?'), g['tags'].get('Result', '?'), game_cause(g),
                      fen or '(could not reconstruct)'])
-    return md_table(['game', 'eval', 'move', 'White', 'Black', 'Result', 'FEN'], rows)
+    return md_table(['game', 'eval', 'move', 'White', 'Black', 'Result', 'Cause', 'FEN'], rows)
 
 
 def default_pgn():
