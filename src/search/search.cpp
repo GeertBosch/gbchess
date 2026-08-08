@@ -1183,17 +1183,11 @@ PrincipalVariation alphaBeta(Position& position,
         unmakeMove(position, undo);
 
         if (newVar.aborted) {
-            // The recursive search hit a time cutoff before finishing. If it never completed even
-            // one move, newVar is still the untouched Score::min() sentinel and must not be
-            // adopted (that sentinel would get silently negated into a fake Score::max() "mate"
-            // by an ancestor). But if it did complete at least one move before the cutoff, its
-            // score is real, already-searched information and should be used like any other
-            // result -- discarding it would throw away legitimate work on every timeout, not just
-            // the corrupt sentinel case.
+            // The recursive search hit a time cutoff before finishing. newVar's score, even if it
+            // completed one or more moves, only reflects the replies searched before the cutoff --
+            // an as-yet-unsearched refutation could still be lurking, so it must not be trusted as
+            // a real bound. Discard it and fall back to this node's last fully-resolved move.
             pv.aborted = true;
-            if (newVar) {
-                if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
-            }
             return pv;
         }
         if (newVar.score > pv.score || pv.moves.empty()) pv = {move, newVar};
@@ -1305,14 +1299,10 @@ PrincipalVariation toplevelAlphaBeta(
                     -alphaBeta(newPosition, newHash, -beta, -curAlpha, newDepth, timecheck, move);
         }
         if (newVar.aborted) {
-            // See the matching check in alphaBeta: only refuse to adopt newVar when it's still
-            // the untouched sentinel (no move completed before the cutoff). A newVar that
-            // completed at least one move carries a real, already-searched score and should be
-            // used like any other result.
+            // See the matching check in alphaBeta: newVar's score only reflects replies searched
+            // before the cutoff and must not be trusted as a real bound, even if it completed one
+            // or more moves. Discard it and fall back to the root's last fully-resolved move.
             pv.aborted = true;
-            if (newVar) {
-                if (newVar.score > pv.score || !pv.front()) pv = {move, newVar};
-            }
             return pv;
         }
         if (newVar.score > pv.score || !pv.front()) pv = {move, newVar};
