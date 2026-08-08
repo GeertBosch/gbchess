@@ -336,6 +336,14 @@ std::string parseScore(const std::string& info) {
     return {};
 }
 
+/** Parse an integer-valued UCI info field (e.g. "depth", "seldepth", "nodes"). */
+std::string parseInfoField(const std::string& info, const std::string& key) {
+    auto parts = split(info, ' ');
+    for (size_t i = 0; i + 1 < parts.size(); ++i)
+        if (parts[i] == key) return parts[i + 1];
+    return {};
+}
+
 std::string parsePV(const std::string& info) {
     std::string pv;
     auto parts = split(info, ' ');
@@ -413,6 +421,9 @@ PuzzleError reportPuzzleError(
 
     auto gotScore = parseScore(engine.info());
     auto gotPV = parsePV(engine.info());
+    auto gotDepth = parseInfoField(engine.info(), "depth");
+    auto gotSeldepth = parseInfoField(engine.info(), "seldepth");
+    auto gotNodes = parseInfoField(engine.info(), "nodes");
     if (!startsWith(gotPV, got + " "))
         gotPV = {};
     else
@@ -433,6 +444,9 @@ PuzzleError reportPuzzleError(
     if (!puzzle.url.empty()) out << "    url " << puzzle.url << "\n";
     out << "    expected " << ctx.expected << "\n"
         << "    got " << got << "\n";
+    if (!gotDepth.empty())
+        out << "    depth " << gotDepth << " seldepth " << gotSeldepth << " nodes " << gotNodes
+            << "\n";
     return error;
 }
 
