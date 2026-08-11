@@ -13,8 +13,12 @@ DEBUGFLAGS=-DDEBUG -O0 -g
 OPTOBJ=build/opt
 DBGOBJ=build/dbg
 COMPILE_COMMANDS=build/compile_commands.json
+# The SF12 network gbchess itself evaluates with.
 NNUE_URL=https://raw.githubusercontent.com/official-stockfish/networks/refs/heads/master/nn-82215d0fd0df.nnue
 NNUE_FILE=$(notdir ${NNUE_URL})
+# The default Big network of Stockfish 16.1, only read by the SF16 format unit test so far.
+SF16_NNUE_URL=https://raw.githubusercontent.com/official-stockfish/networks/refs/heads/master/nn-b1a57edbea57.nnue
+SF16_NNUE_FILE=$(notdir ${SF16_NNUE_URL})
 
 Q := @
 VOPT :=
@@ -182,6 +186,7 @@ $(eval $(call test_rules,move/move_gen,move/move_gen.cpp ${MOVES_SRCS} engine/fe
 $(eval $(call test_rules,move/move_table,move/move_table.cpp engine/fen/fen.cpp))
 $(eval $(call test_rules,move/magic/magic,move/magic/magic.cpp ${MOVES_SRCS} engine/fen/fen.cpp))
 $(eval $(call test_rules,eval/nnue/nnue,${NNUE_SRCS} engine/fen/fen.cpp))
+$(eval $(call test_rules,eval/nnue/sf16,eval/nnue/sf16.cpp))
 $(eval $(call test_rules,search/elo,))
 $(eval $(call test_rules,book/pgn/pgn,${MOVES_SRCS} book/pgn/pgn.cpp engine/fen/fen.cpp))
 $(eval $(call test_rules,book/book,${BOOK_SRCS} ${MOVES_SRCS} core/hash/hash.cpp))
@@ -338,6 +343,9 @@ puzzles: build/puzzles.out
 ${NNUE_FILE}: | check-download-prereqs
 	$(Q)curl -fsSL -O ${NNUE_URL}
 
+${SF16_NNUE_FILE}: | check-download-prereqs
+	$(Q)curl -fsSL -O ${SF16_NNUE_URL}
+
 lichess/lichess_%_evals.csv: make-evals.sh ${PUZZLES} | check-eval-prereqs
 	mkdir -p $(dir $@) && ./$< $(@:lichess/lichess_%_evals.csv=%) > $@
 
@@ -423,7 +431,7 @@ build/magic.out: build/magic-test
 	|| (echo "\n*** To accept these changes, pipe this output to the patch command ***" && false) \
 	} $(REDIR)
 
-build/test-cpp.out: ${CPP_TESTS} ${NNUE_FILE}
+build/test-cpp.out: ${CPP_TESTS} ${NNUE_FILE} ${SF16_NNUE_FILE}
 	$(Q){ \
 		(cd build && echo Symlinking NNUE files && ln -fs ../*.nnue .); \
 		[ -f book.csv ] && (cd build && echo Symlinking book files && ln -fs ../book.csv .) || true; \
