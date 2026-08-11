@@ -471,15 +471,26 @@ install-hooks:
 	$(Q)chmod +x .githooks/pre-push
 	@echo "✅ Installed git hooks from .githooks"
 
-# Generate compile_commands.json for clangd
-$(COMPILE_COMMANDS):
+# The list of source files, refreshed only when a source file is actually added or removed.
+# compile_commands.json enumerates the sources, so it goes stale as soon as one is added: clangd
+# then never indexes the new file, and the dead-code target reports everything only that file
+# references as unused. Depending on this stamp rather than on the sources themselves keeps a mere
+# edit from invalidating every dead-code result.
+SOURCE_LIST=build/.sources
+${SOURCE_LIST}: force
+	$(Q)mkdir -p build
+	$(Q)echo "${ALLSRCS}" | cmp -s - $@ || echo "${ALLSRCS}" > $@
+
+# Generate compile_commands.json for clangd. Use CURDIR rather than PWD, as PWD comes from the
+# environment and so names the invoking shell's directory, not the one make is building in.
+$(COMPILE_COMMANDS): ${SOURCE_LIST}
 	$(Q)mkdir -p build
 	$(Q)echo '[' > $@
 	$(Q)first=true; \
-	for src in $(wildcard src/*.cpp src/*/*.cpp src/*/*/*.cpp); do \
+	for src in ${ALLSRCS}; do \
 		[ "$$first" = true ] && first=false || echo ',' >> $@; \
 		echo '  {' >> $@; \
-		echo "    \"directory\": \"$(PWD)\"," >> $@; \
+		echo "    \"directory\": \"$(CURDIR)\"," >> $@; \
 		echo "    \"command\": \"$(CLANGPP) $(CCFLAGS) -Isrc -c $$src\"," >> $@; \
 		echo "    \"file\": \"$$src\"" >> $@; \
 		printf '  }' >> $@; \
@@ -488,7 +499,7 @@ $(COMPILE_COMMANDS):
 	$(Q)echo ']' >> $@
 	$(call BUILDCMD, true)
 
-.PHONY: ci install-hooks generate-book check-prereqs check-download-prereqs check-dead-code-prereqs check-eval-prereqs
+.PHONY: ci install-hooks generate-book force check-prereqs check-download-prereqs check-dead-code-prereqs check-eval-prereqs
 
 SPRT_NEW ?= build/gbchess
 SPRT_BASE ?= build/gbchess-base
