@@ -1,24 +1,32 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <istream>
 #include <string>
+#include <vector>
 
 /**
  * Support for the Stockfish 16.1 NNUE file format.
  *
  * This is a separate, passive implementation living next to the SF12 format support in nnue.h:
  * the two formats share nothing but the general shape of their file header, and gbchess itself
- * still evaluates with the SF12 network. Only the top-level file header is decoded here.
+ * still evaluates with the SF12 network. This reads a network file into memory in the exact
+ * layout the file uses; nothing here knows how to index features or propagate a position.
  *
- * The file layout starts with, all integers little endian:
+ * The file layout is, all integers little endian:
  *
  *     uint32  version              format version, kVersion below
  *     uint32  hash                 architecture hash, identifying the network topology
  *     uint32  descriptionLength    length in bytes of the description that follows
  *     char[]  description          human readable provenance string, not NUL terminated
+ *     uint32  transformerHash      structure hash of the feature transformer
+ *     leb128  transformer parameters, three separately compressed blocks
+ *     ...                          eight layer stacks, each a structure hash and raw parameters
  *
- * after which the feature transformer and network parameters follow, which we do not read yet.
+ * and nothing else: trailing bytes make the file malformed. See Network below for the details
+ * of the parameter blocks.
  */
 namespace nnue::sf16 {
 
@@ -56,10 +64,32 @@ struct Architecture {
     static constexpr uint32_t kFeatureSetHash = 0x7f234cb8u;
     /** Hash seed of the input slice feeding the first affine layer, likewise arbitrary. */
     static constexpr uint32_t kInputSliceHash = 0xec42e90du;
+    /** HalfKAv2_hm input features: 64 king squares times 704 piece-square states, mirrored. */
+    static constexpr uint32_t kInputDimensions = 64 * 704 / 2;
+    /** Number of PSQT buckets the feature transformer carries alongside the accumulator. */
+    static constexpr uint32_t kPSQTBuckets = 8;
+    /** Number of layer stacks, one of which evaluates a position depending on its piece count. */
+    static constexpr uint32_t kLayerStacks = 8;
+    /**
+     * Granularity to which affine layer inputs are padded in the file. Stockfish sizes its weight
+     * arrays for the widest SIMD register it might use and serializes the padding columns along
+     * with the real ones, so the file holds padded rows even though the padding is always zero.
+     */
+    static constexpr uint32_t kPaddingWidth = 32;
 
     uint32_t l1;  // accumulator values per perspective, so 2 * l1 in total
     uint32_t l2;  // outputs of the first affine layer, less the extra output Stockfish appends
     uint32_t l3;  // outputs of the second affine layer
+    /**
+     * Number of input features. This does not take part in any hash, as the feature set
+     * contributes a fixed constant, so tests may shrink it to build small synthetic networks.
+     */
+    uint32_t inputDimensions = kInputDimensions;
+
+    /** Round up to a multiple of kPaddingWidth, as Stockfish pads affine layer inputs. */
+    static constexpr uint32_t padded(uint32_t dimensions) {
+        return (dimensions + kPaddingWidth - 1) / kPaddingWidth * kPaddingWidth;
+    }
 
     /** Hash of the feature transformer: the feature set mixed with the accumulator size. */
     constexpr uint32_t featureTransformerHash() const { return kFeatureSetHash ^ (2 * l1); }
@@ -83,6 +113,10 @@ constexpr Architecture kBigArchitecture = {2560, 15, 32};
 
 static_assert(kBigArchitecture.hash() == 0x1c103072u,
               "SF16.1 Big architecture hash must match the published network");
+static_assert(kBigArchitecture.featureTransformerHash() == 0x7f2358b8u,
+              "SF16.1 Big feature transformer hash must match the published network");
+static_assert(kBigArchitecture.networkHash() == 0x633368cau,
+              "SF16.1 Big layer stack hash must match the published network");
 
 /** The top-level header of an SF16.1 NNUE file. */
 struct FileHeader {
@@ -102,10 +136,97 @@ struct FileHeader {
 };
 
 /**
- * Read and validate the top-level header of an SF16.1 NNUE file for the Big architecture.
+ * Read and validate the top-level header of an SF16.1 NNUE file for the given architecture.
  * Throws std::runtime_error if the stream ends early or the header does not describe such a
  * network, leaving the stream position unspecified in that case.
  */
-FileHeader readFileHeader(std::istream& in);
+FileHeader readFileHeader(std::istream& in, const Architecture& arch = kBigArchitecture);
+
+/** The magic string introducing a signed LEB128 compressed parameter block. */
+constexpr char kLeb128Magic[] = "COMPRESSED_LEB128";
+
+/**
+ * Read `count` signed values compressed with signed LEB128 from a block that starts with
+ * kLeb128Magic and a little endian uint32 giving the size of the compressed data that follows.
+ * The block must hold exactly `count` values: both a short and an overlong block are an error.
+ * Throws std::runtime_error on any malformed input. Instantiated for int16_t and int32_t.
+ */
+template <typename Int>
+void readLeb128(std::istream& in, Int* out, size_t count);
+
+/**
+ * The feature transformer, holding one accumulator row per input feature.
+ *
+ * Its parameters are the only compressed ones in the file, each array its own LEB128 block, and
+ * they dominate the size of a network: the weights alone are inputDimensions * l1 values.
+ */
+struct FeatureTransformer {
+    /** One bias per accumulator value, l1 of them. */
+    std::vector<int16_t> biases;
+    /** Accumulator contribution of each feature, row major: weights[feature * l1 + i]. */
+    std::vector<int16_t> weights;
+    /** Per feature PSQT contributions, row major: psqtWeights[feature * kPSQTBuckets + bucket]. */
+    std::vector<int32_t> psqtWeights;
+};
+
+/**
+ * One fully connected layer, holding its parameters in the order the file stores them: a bias per
+ * output, then the weight matrix row by row with one row per output.
+ *
+ * Rows are padded out to `paddedInputs` columns; the columns beyond `inputs` are read as they
+ * appear in the file and are zero in practice. This is the portable ordering the file is written
+ * in. Stockfish permutes these weights while reading to suit the SIMD kernel it will run, which we
+ * deliberately do not do: a plain row major matrix is what a scalar reference evaluation wants.
+ */
+struct AffineLayer {
+    uint32_t inputs = 0;        // number of meaningful input values
+    uint32_t paddedInputs = 0;  // columns per row as stored, inputs rounded up for SIMD
+    uint32_t outputs = 0;       // number of outputs, and so of rows and biases
+
+    std::vector<int32_t> biases;
+    std::vector<int8_t> weights;
+
+    /** Weight applied to input `j` when computing output `i`. */
+    int8_t weight(uint32_t i, uint32_t j) const { return weights[i * paddedInputs + j]; }
+};
+
+/**
+ * One of the eight layer stacks, which Stockfish selects between by piece count.
+ *
+ * The stack maps the l1 transformed features to a single value. The first layer produces l2 + 1
+ * outputs, of which the last bypasses the rest of the stack and is added to its result; the other
+ * l2 outputs are fed to the second layer both squared-and-clipped and merely clipped, hence its
+ * 2 * l2 inputs. The clipping activations in between hold no parameters and appear nowhere in the
+ * file, so a stack is exactly these three layers.
+ */
+struct LayerStack {
+    AffineLayer fc0;  // l1 -> l2 + 1
+    AffineLayer fc1;  // 2 * l2 -> l3
+    AffineLayer fc2;  // l3 -> 1
+};
+
+/**
+ * A complete network: every learned parameter of a network file, and nothing derived from them.
+ *
+ * This is large, around 116MB for the Big network, all of it in heap allocated vectors. Copying
+ * one is never what a caller wants, so a Network only moves.
+ */
+struct Network {
+    Network() = default;
+    /** Declaring this leaves a Network movable while deleting both of its copy operations. */
+    Network(Network&&) = default;
+
+    Architecture arch = kBigArchitecture;
+    FileHeader header;
+    FeatureTransformer transformer;
+    std::array<LayerStack, Architecture::kLayerStacks> stacks;
+};
+
+/**
+ * Read a complete SF16.1 network file, validating its header, the structure hashes of the feature
+ * transformer and of every layer stack, and that the file ends right after the last stack.
+ * Throws std::runtime_error on anything unexpected, including trailing bytes.
+ */
+Network readNetwork(std::istream& in, const Architecture& arch = kBigArchitecture);
 
 }  // namespace nnue::sf16
