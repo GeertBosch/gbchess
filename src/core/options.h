@@ -59,7 +59,7 @@ inline void UCIOptionInfo::set(const std::string& s) const {
  * Self-register into UCIOptionInfo::registry() on construction.
  */
 //                                                           default  min    max
-inline UCIOption defaultDepth{"DefaultDepth", 15, 1, 100};
+inline UCIOption defaultDepth{"DefaultDepth", 20, 1, 100};
 inline UCIOption iterativeDeepening{"IterativeDeepening", true};
 inline UCIOption lateMoveReductions{"LateMoveReductions", true};
 inline UCIOption staticExchangeEvaluation{"StaticExchangeEvaluation", true};
@@ -74,7 +74,7 @@ inline UCIOption checksMinDepthLeft{"ChecksMinDepthLeft", 1, 0, 20};  // == quie
 inline UCIOption checksMaxPiecesLeft{"ChecksMaxPiecesLeft", 12, 2, 32};
 inline UCIOption quiescenceDepth{"QuiescenceDepth", 3, 0, 30};
 inline UCIOption currmoveMinDepthLeft{"CurrmoveMinDepthLeft", 1, 0, 20};
-inline UCIOption transpositionTableMB{"Hash", 16, 0, 65536};  // Zero means not enabled
+inline UCIOption transpositionTableMB{"Hash", 256, 0, 65536};  // Zero means not enabled
 inline UCIOption useNNUE{"UseNNUE", true};
 inline UCIOption incrementalEvaluation{"IncrementalEvaluation", true};
 inline UCIOption PVS{"PVS", true};

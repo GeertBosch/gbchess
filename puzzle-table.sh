@@ -1,8 +1,6 @@
 #!/bin/bash
 # Runs puzzle-test for multiple engines and prints a Markdown table.
-# Usage: puzzle-table.sh [--depth N[,N...]] [--nodes N[,N...]] [--movetime N[,N...]]
-#                        <engine1> [-opt...] [<engine2> [-opt...] ...]
-#
+USAGE="Usage: $0 [--depth N[,N...]] [--nodes N[,N...]] [--movetime N[,N...]]  <engine1> [-opt...] [<engine2> [-opt...] ...]"
 # Each option accepts a single value or a comma-separated list of values.
 # Exactly one option may carry a list; the table has one row per list entry.
 # Fixed single values repeat on every row and appear as key columns.
@@ -14,7 +12,7 @@ CSV="${CSV:-lichess/ci_nonmate_100.csv}"
 
 die()   { echo "Error: $*" >&2; exit 1; }
 usage() {
-    echo "Usage: $0 [--depth N[,N...]] [--nodes N[,N...]] [--movetime N[,N...]] <engine1> [-opt...] [...]" >&2
+    echo "$USAGE" >&2
     exit 1
 }
 
@@ -83,6 +81,14 @@ done
 [[ -n "$current_cmd" ]] && cmds+=("$current_cmd")
 [[ ${#cmds[@]} -eq 0 ]] && usage
 
+# Total puzzle count (CSV has a header row)
+total_puzzles=$(( $(wc -l < "$CSV") - 1 ))
+
+# Tracks engines that have already solved all puzzles; once set, the engine
+# is skipped on subsequent rows and its cell is left blank.
+declare -a solved=()
+for ((i=0; i<${#cmds[@]}; i++)); do solved[$i]=0; done
+
 # Build display labels: basename of engine + any options
 declare -a labels=()
 for cmd in "${cmds[@]}"; do
@@ -133,7 +139,14 @@ for ((row=0; row<num_rows; row++)); do
         printf "| %s " "$val"
     fi
 
-    for cmd in "${cmds[@]}"; do
+    for ((i=0; i<${#cmds[@]}; i++)); do
+        cmd="${cmds[$i]}"
+
+        if [[ "${solved[$i]}" -eq 1 ]]; then
+            printf "| "
+            continue
+        fi
+
         # shellcheck disable=SC2086
         result=$($PUZZLE_TEST $go_opts $cmd "$CSV" 2>/dev/null \
                  | grep -E '[0-9]+ rating$' | tr -d ,) || true
@@ -142,7 +155,12 @@ for ((row=0; row<num_rows; row++)); do
         else
             correct=$(awk '{print $3}'      <<< "$result")
             rating=$( awk '{print $(NF-1)}' <<< "$result")
-            printf "| %s / %s " "$correct" "$rating"
+            if [[ "$correct" -eq "$total_puzzles" ]]; then
+                solved[$i]=1
+                printf "| **%s** / %s " "$correct" "$rating"
+            else
+                printf "| %s / %s " "$correct" "$rating"
+            fi
         fi
     done
     printf "|\n"
