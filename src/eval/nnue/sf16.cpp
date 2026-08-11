@@ -93,7 +93,9 @@ Int decodeLeb128(BlockReader& block) {
 
         // The value ends here. Its sign lives in bit 6 of the final byte, unless that byte
         // carried the topmost bits of the result, in which case the sign is already in place.
-        if (shift + 7 < kBits && (byte & 0x40)) value |= Unsigned(~Unsigned(0) << (shift + 7));
+        // Build the mask in uint64_t: for narrow Int, ~Unsigned(0) promotes to a negative int
+        // and shifting that is undefined.
+        if (shift + 7 < kBits && (byte & 0x40)) value |= Unsigned(~uint64_t(0) << (shift + 7));
 
         return Int(value);
     }
