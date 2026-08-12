@@ -467,7 +467,9 @@ build/test-cpp.out: ${CPP_TESTS} ${NNUE_FILE} ${SF16_NNUE_FILE}
 
 # The sanitizers only report on code that actually runs, and the unit tests above run the
 # optimized binaries, which carry no instrumentation. Run the debug binaries as well so ASan
-# and UBSan get to see the same cases.
+# and UBSan get to see the same cases. Iterate this list rather than globbing build/*-debug:
+# other targets leave debug builds of tools like perft-simple there, which take arguments and
+# fail when run as if they were tests.
 DBG_TESTS=$(patsubst %-test,%-debug,$(CPP_TESTS))
 
 build/test-debug.out: ${DBG_TESTS} ${NNUE_FILE} ${SF16_NNUE_FILE}
@@ -475,8 +477,7 @@ build/test-debug.out: ${DBG_TESTS} ${NNUE_FILE} ${SF16_NNUE_FILE}
 		(cd build && echo Symlinking NNUE files && ln -fs ../*.nnue .); \
 		[ -f book.csv ] && (cd build && echo Symlinking book files && ln -fs ../book.csv .) || true; \
 		echo "Running sanitizer instrumented unit test executables..."; \
-		(cd build && failed=0; for file in *-debug; do \
-			case $$file in gbchess-debug|book-gen-debug|perft-debug) continue;; esac; \
+		(cd build && failed=0; for file in $(notdir ${DBG_TESTS}); do \
 			/bin/echo -n Run $$file ; \
 			if ./$$file < /dev/null > /dev/null 2>&1; then \
 				echo " passed"; \
