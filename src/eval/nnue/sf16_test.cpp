@@ -1,6 +1,10 @@
 #include <algorithm>
+#include <array>
+#include <chrono>
+#include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <numeric>
 #include <set>
 #include <sstream>
@@ -395,6 +399,9 @@ int64_t sum(const std::vector<Int>& values) {
     return std::accumulate(values.begin(), values.end(), int64_t(0));
 }
 
+/** Defined with the transform tests below, but only a real network file can drive it. */
+void testGoldenTransforms(const nnue::sf16::Network& network);
+
 void testNetworkFile(const std::string& filename) {
     std::ifstream file(filename, std::ios::binary);
     if (!file) throw std::runtime_error("Cannot open NNUE file: " + filename);
@@ -460,6 +467,9 @@ void testNetworkFile(const std::string& filename) {
     }
     assert(network.stacks.back().fc1.weight(31, 30) == 64);
     assert(network.stacks.back().fc1.weight(31, 31) == 28);
+
+    // With a real transformer in hand, check it against Stockfish 16.1 itself.
+    testGoldenTransforms(network);
 
     // The header alone still has to be rejected when cut short, as before.
     file.clear();
@@ -664,6 +674,241 @@ void testFeatureRanges() {
     }
 }
 
+// ---------------------------------------------------------------------------------------------
+// Feature transform
+// ---------------------------------------------------------------------------------------------
+
+using nnue::sf16::Accumulator;
+using nnue::sf16::refresh;
+using nnue::sf16::transform;
+
+/** FNV-1a-64 over bytes, the hash the Stockfish reference below was made to print. */
+uint64_t fnv1a64(const std::vector<uint8_t>& bytes) {
+    uint64_t hash = 0xcbf29ce484222325ull;
+    for (auto byte : bytes) {
+        hash ^= byte;
+        hash *= 0x100000001b3ull;
+    }
+    return hash;
+}
+
+/** A feature transformer small enough to work out its arithmetic by hand: three features, l1 4. */
+nnue::sf16::FeatureTransformer handTransformer() {
+    nnue::sf16::FeatureTransformer transformer;
+    transformer.biases = {1, 2, 3, 4};
+    transformer.weights = {
+        10,  20,  30,  40,   // feature 0
+        -1,  -2,  -3,  -4,   // feature 1
+        100, 100, 100, 100,  // feature 2
+    };
+    transformer.psqtWeights = {
+        1,  2,  3,  4,  5,  6,  7,  8,   // feature 0
+        0,  0,  0,  0,  0,  0,  0,  0,   // feature 1
+        10, 20, 30, 40, 50, 60, 70, 80,  // feature 2
+    };
+    return transformer;
+}
+
+/**
+ * Fresh accumulation reads both parameter arrays feature major, so a feature's contribution is a
+ * contiguous run of each. Getting that stride wrong is the mistake the whole phase guards against,
+ * and here it is pinned without needing a network file at all.
+ */
+void testFreshAccumulation() {
+    auto transformer = handTransformer();
+
+    // An empty position accumulates nothing, leaving the biases as they are.
+    assert(refresh(transformer, {}).values == std::vector<int16_t>({1, 2, 3, 4}));
+    assert((refresh(transformer, {}).psqt == std::array<int32_t, 8>{}));
+
+    nnue::sf16::ActiveFeatures features;
+    features.add(0);
+    features.add(2);
+    auto accumulator = refresh(transformer, features);
+    assert(accumulator.values == std::vector<int16_t>({111, 122, 133, 144}));
+    assert((accumulator.psqt == std::array<int32_t, 8>({11, 22, 33, 44, 55, 66, 77, 88})));
+
+    // Accumulation is a plain sum, so the same feature twice counts twice and order is immaterial.
+    nnue::sf16::ActiveFeatures twice;
+    twice.add(1);
+    twice.add(1);
+    assert(refresh(transformer, twice).values == std::vector<int16_t>({-1, -2, -3, -4}));
+
+    nnue::sf16::ActiveFeatures reversed;
+    reversed.add(2);
+    reversed.add(0);
+    assert(refresh(transformer, reversed).values == accumulator.values);
+}
+
+/** The clipping, the pairing of the two halves, the side to move ordering and the PSQT halving. */
+void testTransformArithmetic() {
+    // Two entries per half, so each perspective produces two output bytes.
+    Accumulator white, black;
+    white.values = {200, -5, 100, 64};    // halves (200, -5) and (100, 64)
+    black.values = {130, 300, 127, -3};   // halves (130, 300) and (127, -3)
+    white.psqt = {10, -3, 7, 0, 5, 5, 5, 5};
+    black.psqt = {4, 4, 4, 4, 4, 4, 4, 4};
+
+    // White's bytes are 127 * 100 / 128 == 99 and 0, anything paired with a clipped away value
+    // being zero; black's are 127 * 127 / 128 == 126, the largest byte the transform can produce,
+    // and 0. Whichever side is to move contributes the first half of the output.
+    auto forWhite = transform(white, black, Color::w, 0);
+    auto forBlack = transform(white, black, Color::b, 0);
+    assert(forWhite.features == std::vector<uint8_t>({99, 0, 126, 0}));
+    assert(forBlack.features == std::vector<uint8_t>({126, 0, 99, 0}));
+
+    // The PSQT term is the difference of the two perspectives, halved, truncating towards zero.
+    assert(transform(white, black, Color::w, 0).psqt == 3);    // (10 - 4) / 2
+    assert(transform(white, black, Color::w, 1).psqt == -3);   // (-3 - 4) / 2, not -4
+    assert(transform(white, black, Color::w, 2).psqt == 1);    // (7 - 4) / 2
+    assert(transform(white, black, Color::b, 1).psqt == 3);    // (4 - -3) / 2
+    assert(transform(white, black, Color::b, 3).psqt == 2);    // (4 - 0) / 2
+
+    // Only the PSQT term depends on the bucket; the transformed bytes never do.
+    for (uint32_t bucket = 0; bucket < nnue::sf16::Architecture::kPSQTBuckets; ++bucket)
+        assert(transform(white, black, Color::b, bucket).features == forBlack.features);
+}
+
+/**
+ * What Stockfish 16.1 itself computes for a position, as its exact internal integers.
+ *
+ * Produced by a throwaway patch to a Stockfish 16.1 checkout (tag sf_16.1, commit e67cc97) adding
+ * a UCI command that runs the Big feature transformer over the current position and prints these
+ * numbers, rather than the centipawn score its "eval" command formats. The patch is deliberately
+ * not committed here and CI does not need Stockfish: only these few numbers are the oracle.
+ *
+ * Both a SIMD (x86-64-avx2) and a scalar (general-64) build of that patch were checked to produce
+ * these values, so they pin the arithmetic rather than one vectorization of it.
+ */
+struct GoldenTransform {
+    const char* fen;
+    uint64_t hash;   // FNV-1a-64 over all l1 output bytes
+    uint32_t sum;    // their plain sum, which localizes a mismatch to ordering rather than values
+    uint8_t bytes[4];  // output[0], [l1/2 - 1], [l1/2] and [l1 - 1], straddling the perspectives
+    int32_t psqt[nnue::sf16::Architecture::kPSQTBuckets];
+};
+
+const GoldenTransform kGoldenTransforms[] = {
+    // An ordinary opening. Both kings stand on e1 and e8, so neither perspective is mirrored, and
+    // the position is symmetric under swapping colors, which is exactly what changing perspective
+    // does: the two accumulators match and the PSQT term is zero in every bucket.
+    {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+     0xd9464fb8181c219dull,
+     6526,
+     {0, 0, 0, 0},
+     {0, 0, 0, 0, 0, 0, 0, 0}},
+
+    // A few moves later, with black to move, which swaps the halves of the output.
+    {"r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 4 4",
+     0x0b8d73ce1682dfc8ull,
+     6125,
+     {0, 0, 0, 0},
+     {239, -665, -815, -926, -782, -830, -810, -737}},
+
+    // A middlegame with white castled queenside, putting its king on c1: white's perspective is
+    // horizontally mirrored while black's, with its king on g8, is not.
+    {"r4rk1/pp2ppbp/2np1np1/q1p5/4P3/2N1BP2/PPPQN1PP/2KR1B1R w - - 4 12",
+     0x4a3fe0812f6eb663ull,
+     7606,
+     {0, 0, 4, 0},
+     {33629, 8521, 8525, 7929, 8115, 8187, 8886, 9477}},
+
+    // The same position with the colors swapped and the ranks flipped, so black is to move and it
+    // is black's perspective that is mirrored. The feature set is built so that this is the same
+    // position seen from the other side, and Stockfish indeed produces the identical output above.
+    {"2kr1b1r/pppqn1pp/2n1bp2/4p3/Q1P5/2NP1NP1/PP2PPBP/R4RK1 b - - 4 12",
+     0x4a3fe0812f6eb663ull,
+     7606,
+     {0, 0, 4, 0},
+     {33629, 8521, 8525, 7929, 8115, 8187, 8886, 9477}},
+
+    // A sparse endgame: three pieces, so only three accumulator rows are added to the biases.
+    {"8/5k2/8/8/3P4/8/5K2/8 w - - 0 1",
+     0x8da28a7c6a1c5cdcull,
+     4251,
+     {0, 0, 0, 0},
+     {-1517, 2663, 3032, 3040, 3099, 3289, 3343, 3238}},
+
+    // A sparse endgame with black to move and both kings on files a to d, so both perspectives
+    // are mirrored at once.
+    {"8/2k5/2p5/8/1P6/8/3K4/6R1 b - - 0 1",
+     0x629d8f967636f771ull,
+     5196,
+     {0, 0, 23, 0},
+     {-10498, -17386, -19216, -18475, -18007, -17765, -18174, -18107}},
+
+    // Lopsided material, which drives the PSQT term far from zero in every bucket.
+    {"4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1",
+     0x8845d602eb113a61ull,
+     8570,
+     {53, 0, 0, 0},
+     {21181, 35303, 38419, 36846, 35936, 35404, 36196, 35787}},
+};
+
+/** Plain sum of transformed bytes, which no single byte of the output can dominate. */
+uint32_t byteSum(const std::vector<uint8_t>& bytes) {
+    return uint32_t(std::accumulate(bytes.begin(), bytes.end(), uint64_t(0)));
+}
+
+/**
+ * The cross implementation checkpoint: every transformed byte and every PSQT value must match
+ * Stockfish 16.1 exactly. Between them these cover the file decoding, the transformer's parameter
+ * layout, feature indexing, king mirroring, the piece perspective mapping, fresh accumulation,
+ * clipping, the pairwise product, the side to move ordering and the PSQT arithmetic.
+ */
+void testGoldenTransforms(const nnue::sf16::Network& network) {
+    auto l1 = network.arch.l1;
+
+    for (const auto& golden : kGoldenTransforms) {
+        auto position = fen::parsePosition(golden.fen);
+        auto white = refresh(network.transformer, position, Color::w);
+        auto black = refresh(network.transformer, position, Color::b);
+        assert(white.values.size() == l1 && black.values.size() == l1);
+
+        for (uint32_t bucket = 0; bucket < nnue::sf16::Architecture::kPSQTBuckets; ++bucket) {
+            auto transformed = transform(white, black, position.active(), bucket);
+            assert(transformed.features.size() == l1);
+
+            // Report before asserting: a mismatch here is worth seeing in full.
+            auto hash = fnv1a64(transformed.features);
+            if (hash != golden.hash || byteSum(transformed.features) != golden.sum)
+                std::cerr << golden.fen << "\n  expected hash " << std::hex << golden.hash
+                          << " got " << hash << std::dec << ", expected sum " << golden.sum
+                          << " got " << byteSum(transformed.features) << "\n";
+
+            assert(hash == golden.hash && "transformed bytes must match Stockfish 16.1 exactly");
+            assert(byteSum(transformed.features) == golden.sum);
+            assert(transformed.features[0] == golden.bytes[0]);
+            assert(transformed.features[l1 / 2 - 1] == golden.bytes[1]);
+            assert(transformed.features[l1 / 2] == golden.bytes[2]);
+            assert(transformed.features[l1 - 1] == golden.bytes[3]);
+
+            if (transformed.psqt != golden.psqt[bucket])
+                std::cerr << golden.fen << " bucket " << bucket << ": expected PSQT "
+                          << golden.psqt[bucket] << ", got " << transformed.psqt << "\n";
+            assert(transformed.psqt == golden.psqt[bucket]);
+
+            // The convenience overload refreshes both perspectives itself, and must not differ.
+            auto direct = transform(network.transformer, position, bucket);
+            assert(direct.features == transformed.features && direct.psqt == transformed.psqt);
+        }
+    }
+    std::cout << "  " << std::size(kGoldenTransforms)
+              << " positions transform bit identically to Stockfish 16.1\n";
+
+    // Not a check, just a note on what a deliberately plain scalar refresh costs today.
+    auto position = fen::parsePosition(kGoldenTransforms[2].fen);
+    constexpr int kRepeats = 100;
+    int64_t total = 0;
+    auto start = std::chrono::steady_clock::now();
+    for (int i = 0; i < kRepeats; ++i) total += transform(network.transformer, position, 0).psqt;
+    auto elapsed = std::chrono::steady_clock::now() - start;
+    assert(total == kRepeats * int64_t(kGoldenTransforms[2].psqt[0]) && "the work was really done");
+    std::cout << "  fresh transform of a 30 piece position: "
+              << std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count() / kRepeats
+              << " us\n";
+}
+
 /** A position without a king of the perspective's color cannot be described at all. */
 void testMissingKing() {
     Position position;
@@ -695,6 +940,9 @@ int main(int argc, char* argv[]) try {
     testMirrorInvariance();
     testFeatureRanges();
     testMissingKing();
+
+    testFreshAccumulation();
+    testTransformArithmetic();
 
     if (argc <= 1)
         testNetworkFile(kBigNetworkFile);

@@ -296,4 +296,74 @@ ActiveFeatures activeFeatures(const Position& position, Color perspective) {
     return features;
 }
 
+Accumulator refresh(const FeatureTransformer& transformer, const ActiveFeatures& features) {
+    auto l1 = transformer.biases.size();
+    dassert(l1 && transformer.weights.size() % l1 == 0);
+
+    Accumulator accumulator;
+    accumulator.values = transformer.biases;
+
+    for (auto feature : features) {
+        dassert((size_t(feature) + 1) * l1 <= transformer.weights.size());
+        const auto* weights = transformer.weights.data() + size_t(feature) * l1;
+
+        // Accumulator entries stay 16 bit, wrapping around rather than saturating if a position
+        // ever managed to overflow one. That is what Stockfish's packed 16 bit adds do, and it is
+        // the behavior the network was trained against, so we must not widen the sum here.
+        for (size_t i = 0; i < l1; ++i)
+            accumulator.values[i] = int16_t(uint16_t(accumulator.values[i]) + uint16_t(weights[i]));
+
+        const auto* psqt =
+            transformer.psqtWeights.data() + size_t(feature) * Architecture::kPSQTBuckets;
+        for (size_t bucket = 0; bucket < Architecture::kPSQTBuckets; ++bucket)
+            accumulator.psqt[bucket] += psqt[bucket];
+    }
+
+    return accumulator;
+}
+
+Accumulator refresh(const FeatureTransformer& transformer, const Position& position,
+                    Color perspective) {
+    return refresh(transformer, activeFeatures(position, perspective));
+}
+
+Transformed transform(const Accumulator& white, const Accumulator& black, Color sideToMove,
+                      uint32_t bucket) {
+    dassert(bucket < Architecture::kPSQTBuckets);
+    dassert(white.values.size() == black.values.size());
+
+    // The side to move comes first, and is the only asymmetry between the two perspectives.
+    const Accumulator* perspectives[2] = {&white, &black};
+    if (sideToMove == Color::b) std::swap(perspectives[0], perspectives[1]);
+
+    auto l1 = perspectives[0]->values.size();
+    dassert(l1 % 2 == 0);
+    auto half = l1 / 2;
+
+    Transformed transformed;
+    transformed.psqt = (perspectives[0]->psqt[bucket] - perspectives[1]->psqt[bucket]) / 2;
+    transformed.features.resize(l1);
+
+    for (size_t p = 0; p < 2; ++p) {
+        const auto& values = perspectives[p]->values;
+        for (size_t j = 0; j < half; ++j) {
+            // Pairwise multiplication of the two halves, each clipped to a byte first. The product
+            // of two clipped values needs 14 bits, so scaling it back down by 128 leaves a byte.
+            int first = std::clamp<int>(values[j], 0, 127);
+            int second = std::clamp<int>(values[j + half], 0, 127);
+            transformed.features[p * half + j] = uint8_t(first * second / 128);
+        }
+    }
+
+    return transformed;
+}
+
+Transformed transform(const FeatureTransformer& transformer, const Position& position,
+                      uint32_t bucket) {
+    return transform(refresh(transformer, position, Color::w),
+                     refresh(transformer, position, Color::b),
+                     position.active(),
+                     bucket);
+}
+
 }  // namespace nnue::sf16

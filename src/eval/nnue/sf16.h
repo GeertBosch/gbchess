@@ -300,4 +300,62 @@ uint16_t featureIndex(Square square, Piece piece, Square kingSquare, Color persp
  */
 ActiveFeatures activeFeatures(const Position& position, Color perspective);
 
+/**
+ * The feature transformer's accumulated state for one perspective: the transformer's biases plus
+ * the rows its active features select.
+ *
+ * Stockfish maintains this incrementally as it walks the search tree, adding and subtracting rows
+ * as pieces move. We only ever build one from scratch, which is what Stockfish itself falls back
+ * to whenever the perspective's own king moves and every feature index changes at once.
+ */
+struct Accumulator {
+    /** One value per accumulator entry, arch.l1 of them. */
+    std::vector<int16_t> values;
+    /** PSQT contribution of the active features, which the transformer carries alongside. */
+    std::array<int32_t, Architecture::kPSQTBuckets> psqt = {};
+};
+
+/**
+ * Accumulate `features` into a fresh accumulator, starting from the transformer's biases.
+ *
+ * Both parameter arrays are feature major, so one feature contributes a contiguous run of each:
+ * l1 accumulator values, and kPSQTBuckets PSQT values.
+ */
+Accumulator refresh(const FeatureTransformer& transformer, const ActiveFeatures& features);
+
+/** Accumulate the features `position` sets from `perspective`, as refresh() above. */
+Accumulator refresh(const FeatureTransformer& transformer, const Position& position,
+                    Color perspective);
+
+/**
+ * The transformer's output: the values the layer stacks are evaluated on, and the PSQT term that
+ * is added to their result.
+ *
+ * A perspective's l1 accumulator values are read as two halves, whose entries are clipped to a
+ * byte and multiplied together pairwise, so each perspective contributes l1 / 2 output bytes. The
+ * side to move comes first, which is the only place the network learns whose turn it is: the two
+ * perspectives are otherwise built by identical rules.
+ */
+struct Transformed {
+    /** Clipped and paired accumulator values, arch.l1 of them: side to move, then the opponent. */
+    std::vector<uint8_t> features;
+    /** Difference between the perspectives' PSQT accumulators in the requested bucket. */
+    int32_t psqt = 0;
+};
+
+/**
+ * Transform the accumulators of both perspectives, seen from `sideToMove`, reading the PSQT
+ * accumulators in `bucket`.
+ *
+ * The bucket is the caller's to pick. Stockfish derives it from the piece count, but that is a
+ * property of how a position is evaluated rather than of the transformer, and passing it in lets
+ * one position exercise all eight.
+ */
+Transformed transform(const Accumulator& white, const Accumulator& black, Color sideToMove,
+                      uint32_t bucket);
+
+/** Refresh both perspectives of `position` and transform them, as transform() above. */
+Transformed transform(const FeatureTransformer& transformer, const Position& position,
+                      uint32_t bucket);
+
 }  // namespace nnue::sf16
