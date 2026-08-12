@@ -7,13 +7,16 @@
 #include <string>
 #include <vector>
 
+#include "core/core.h"
+
 /**
- * Support for the Stockfish 16.1 NNUE file format.
+ * Support for the Stockfish 16.1 NNUE file format and its HalfKAv2_hm feature set.
  *
  * This is a separate, passive implementation living next to the SF12 format support in nnue.h:
  * the two formats share nothing but the general shape of their file header, and gbchess itself
  * still evaluates with the SF12 network. This reads a network file into memory in the exact
- * layout the file uses; nothing here knows how to index features or propagate a position.
+ * layout the file uses, and turns a position into the feature indices that address it; nothing
+ * here propagates a position through the network.
  *
  * The file layout is, all integers little endian:
  *
@@ -228,5 +231,73 @@ struct Network {
  * Throws std::runtime_error on anything unexpected, including trailing bytes.
  */
 Network readNetwork(std::istream& in, const Architecture& arch = kBigArchitecture);
+
+/**
+ * The HalfKAv2_hm feature set, which selects the rows of the feature transformer a position sets.
+ *
+ * A feature is a (king bucket, piece category, square) triple seen from one side, so a position
+ * has two feature lists, one per perspective, each holding exactly one feature per piece on the
+ * board. Everything is expressed relative to the perspective side: its own pieces get the first
+ * of the two categories of their type, and its own pawns always advance up the board.
+ *
+ * A square is oriented before it is used, by up to two flips:
+ *
+ *   - for black, ranks are flipped, so that black's own back rank becomes rank 1;
+ *   - for either side, files are flipped when its own king would otherwise stand on files a to d,
+ *     normalizing that king onto files e to h.
+ *
+ * That second flip is the "hm", horizontal mirroring, and it is what lets 64 possible king squares
+ * address only 32 king buckets, halving the feature space. A position and its mirror image
+ * therefore produce identical features.
+ *
+ * Unlike SF12's HalfKP, which drops both kings before building its features, HalfKAv2_hm gives
+ * kings a piece category of their own, shared by both colors, and so counts them among the active
+ * features: a bare king and king position still has two of them.
+ */
+
+/** Piece categories a square can be in: two per non-king piece type, plus one shared by kings. */
+constexpr uint16_t kPieceCategories = 2 * (kNumPieceTypes - 1) + 1;  // 11
+/** Feature indices spanned by one king bucket, one per piece category per square. */
+constexpr uint16_t kBucketStride = kPieceCategories * kNumSquares;  // 704
+/** King buckets, being the 64 king squares halved by the horizontal mirroring. */
+constexpr uint16_t kKingBuckets = kNumSquares / 2;  // 32
+
+static_assert(kKingBuckets * kBucketStride == Architecture::kInputDimensions,
+              "the feature space must address the network's inputs exactly");
+
+/**
+ * The active features of a position from one perspective, in board order.
+ *
+ * Every piece contributes exactly one feature and a board holds at most 32 pieces, so this is a
+ * fixed size array rather than a heap allocation.
+ */
+struct ActiveFeatures {
+    /** Pieces that fit on a board, and so features that can be active at once. */
+    static constexpr size_t kMaxSize = 32;
+
+    std::array<uint16_t, kMaxSize> indices = {};
+    uint8_t size = 0;
+
+    void add(uint16_t index) {
+        assert(size < kMaxSize);
+        indices[size++] = index;
+    }
+
+    const uint16_t* begin() const { return indices.data(); }
+    const uint16_t* end() const { return indices.data() + size; }
+};
+
+/**
+ * Index of the feature for `piece` on `square`, seen from `perspective` whose king is on
+ * `kingSquare`. The king square picks both the bucket and the orientation, so it is needed even
+ * for the feature of the king itself.
+ */
+uint16_t featureIndex(Square square, Piece piece, Square kingSquare, Color perspective);
+
+/**
+ * The features of `position` that are active from `perspective`.
+ * Throws std::runtime_error if the position has no king of that color.
+ */
+ActiveFeatures activeFeatures(const Position& position, Color perspective);
 
 }  // namespace nnue::sf16

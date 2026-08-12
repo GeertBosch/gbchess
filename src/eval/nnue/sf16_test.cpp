@@ -1,6 +1,8 @@
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <numeric>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -8,6 +10,7 @@
 #include <vector>
 
 #include "core/core.h"
+#include "engine/fen/fen.h"
 #include "eval/nnue/sf16.h"
 
 // A network is far too large to copy by accident, so it may only be moved.
@@ -467,6 +470,215 @@ void testNetworkFile(const std::string& filename) {
     expectRejected("truncated " + filename, prefix);
 }
 
+// ---------------------------------------------------------------------------------------------
+// HalfKAv2_hm features
+// ---------------------------------------------------------------------------------------------
+
+using nnue::sf16::activeFeatures;
+using nnue::sf16::featureIndex;
+using nnue::sf16::kBucketStride;
+using nnue::sf16::kKingBuckets;
+using nnue::sf16::kPieceCategories;
+
+/** Feature indices of a position, sorted, so that tests can compare them as sets. */
+std::vector<uint16_t> featuresOf(const std::string& fen, Color perspective) {
+    auto features = activeFeatures(fen::parsePosition(fen), perspective);
+    std::vector<uint16_t> sorted(features.begin(), features.end());
+    std::sort(sorted.begin(), sorted.end());
+    return sorted;
+}
+
+/** The bucket a king lands in, being the part of its own feature index above the bucket stride. */
+uint16_t bucketOf(Square king, Color perspective) {
+    return featureIndex(king, addColor(PieceType::KING, perspective), king, perspective) /
+           kBucketStride;
+}
+
+/** The piece category of a feature index, between the king bucket and the oriented square. */
+uint16_t categoryOf(Piece piece, Color perspective) {
+    // Put the king on e1 or e8, which needs no mirroring, and the piece on the square that then
+    // orients to a1, so that the square contributes nothing to the index.
+    auto king = perspective == Color::w ? e1 : e8;
+    auto square = perspective == Color::w ? a1 : a8;
+    return featureIndex(square, piece, king, perspective) % kBucketStride / kNumSquares;
+}
+
+/** A king that has not moved is in the last bucket, where the hand computed cases below live. */
+constexpr uint16_t kHomeBucket = 31 * kBucketStride;             // 21824
+constexpr uint16_t kKingCategory = kHomeBucket + 10 * kNumSquares;  // kings of either color
+
+/** Kings are active features in HalfKAv2_hm, unlike in the HalfKP feature set of SF12. */
+void testKingsOnly() {
+    // White king on e1 and black king on e8: neither side mirrors, and both are in bucket 31.
+    const std::string kings = "4k3/8/8/8/8/8/8/4K3 w - - 0 1";
+
+    auto white = featuresOf(kings, Color::w);
+    assert(white.size() == 2 && "a bare king and king position still has two features");
+    assert(white[0] == kKingCategory + e1);
+    assert(white[1] == kKingCategory + e8);
+
+    // Black sees the board upside down, so its own king is again on e1 and white's on e8: the
+    // position is symmetric and the two perspectives agree feature for feature.
+    assert(featuresOf(kings, Color::b) == white);
+}
+
+/** One pawn beside the kings, checked index by index from the feature set's definition. */
+void testPawnAndKings() {
+    const std::string position = "4k3/8/8/8/8/8/4P3/4K3 w - - 0 1";  // white pawn on e2
+
+    // White's own pawns are category 0, and nothing is mirrored, so the pawn keeps square e2.
+    assert(featuresOf(position, Color::w) ==
+           (std::vector<uint16_t>{uint16_t(kHomeBucket + 0 * kNumSquares + e2),
+                                  uint16_t(kKingCategory + e1),
+                                  uint16_t(kKingCategory + e8)}));
+
+    // To black the same pawn is an enemy pawn, category 1, and the rank flip moves it to e7.
+    assert(featuresOf(position, Color::b) ==
+           (std::vector<uint16_t>{uint16_t(kHomeBucket + 1 * kNumSquares + e7),
+                                  uint16_t(kKingCategory + e1),
+                                  uint16_t(kKingCategory + e8)}));
+}
+
+/** A fuller hand computed case, exercising both the orientation and the friend/enemy mapping. */
+void testHandComputedIndices() {
+    const std::string position = "3qk3/8/8/8/8/8/4P3/4K3 w - - 0 1";  // adds a black queen on d8
+
+    // From white the queen is an enemy queen, category 9, on the square it stands on.
+    assert(featuresOf(position, Color::w) ==
+           (std::vector<uint16_t>{uint16_t(kHomeBucket + 0 * kNumSquares + e2),
+                                  uint16_t(kHomeBucket + 9 * kNumSquares + d8),
+                                  uint16_t(kKingCategory + e1),
+                                  uint16_t(kKingCategory + e8)}));
+
+    // From black it is its own queen, category 8, and the rank flip moves d8 to d1.
+    assert(featuresOf(position, Color::b) ==
+           (std::vector<uint16_t>{uint16_t(kHomeBucket + 1 * kNumSquares + e7),
+                                  uint16_t(kHomeBucket + 8 * kNumSquares + d1),
+                                  uint16_t(kKingCategory + e1),
+                                  uint16_t(kKingCategory + e8)}));
+}
+
+/** Categories pair up by piece type, the perspective side's own first, with kings sharing one. */
+void testPieceCategories() {
+    for (auto pieceType : {PieceType::PAWN,
+                           PieceType::KNIGHT,
+                           PieceType::BISHOP,
+                           PieceType::ROOK,
+                           PieceType::QUEEN}) {
+        auto white = addColor(pieceType, Color::w), black = addColor(pieceType, Color::b);
+        assert(categoryOf(white, Color::w) == 2 * index(pieceType));
+        assert(categoryOf(black, Color::w) == 2 * index(pieceType) + 1);
+
+        // Ownership is relative to the perspective, so from black the two swap.
+        assert(categoryOf(black, Color::b) == 2 * index(pieceType));
+        assert(categoryOf(white, Color::b) == 2 * index(pieceType) + 1);
+    }
+
+    // Both kings fall in the last category, whichever side is looking.
+    for (auto perspective : {Color::w, Color::b})
+        for (auto king : {Piece::K, Piece::k})
+            assert(categoryOf(king, perspective) == kPieceCategories - 1);
+}
+
+/** The horizontal mirroring, which is what halves 64 king squares to 32 buckets. */
+void testKingBuckets() {
+    std::set<uint16_t> whiteBuckets;
+    for (Square king : squares) {
+        whiteBuckets.insert(bucketOf(king, Color::w));
+        assert(bucketOf(king, Color::w) < kKingBuckets);
+
+        // A king on files a to d shares its bucket with its mirror image on files h to e.
+        assert(bucketOf(king, Color::w) == bucketOf(Square(king ^ 7), Color::w));
+        assert(bucketOf(king, Color::b) == bucketOf(Square(king ^ 7), Color::b));
+
+        // Black's board is upside down, so its buckets are white's with the ranks flipped.
+        assert(bucketOf(king, Color::b) == bucketOf(Square(king ^ 56), Color::w));
+    }
+    assert(whiteBuckets.size() == kKingBuckets && "every bucket is reachable");
+
+    // Spot checks either side of the mirroring boundary, on the layout the network is trained in:
+    // buckets run four to a rank, from 0 at h8 down to 31 at e1.
+    assert(bucketOf(h8, Color::w) == 0);
+    assert(bucketOf(e8, Color::w) == 3);
+    assert(bucketOf(h1, Color::w) == 28);
+    assert(bucketOf(e1, Color::w) == 31);
+    assert(bucketOf(a1, Color::w) == 28 && "a1 mirrors onto h1");
+    assert(bucketOf(d1, Color::w) == 31 && "d1 mirrors onto e1");
+
+    // Black's unmoved king matches white's, on either side of the boundary.
+    assert(bucketOf(e8, Color::b) == 31);
+    assert(bucketOf(d8, Color::b) == 31);
+    assert(bucketOf(a8, Color::b) == 28);
+    assert(bucketOf(h8, Color::b) == 28);
+}
+
+/** Mirror a board horizontally, which the feature set is built not to distinguish. */
+Position mirrored(const Position& position) {
+    Position result = position;
+    for (Square square : squares) result.board[Square(square ^ 7)] = position.board[square];
+    return result;
+}
+
+/** A position and its mirror image set exactly the same features, from either perspective. */
+void testMirrorInvariance() {
+    for (const auto* fen : {"3k4/8/8/8/8/8/8/R2K4 w - - 0 1",     // white king left of the boundary
+                            "8/2p5/8/8/8/8/5P2/2K2k2 w - - 0 1",  // both kings left of it
+                            "7k/8/8/8/8/8/8/7K w - - 0 1",        // both on the h file
+                            fen::initialPosition}) {
+        auto position = fen::parsePosition(fen);
+        for (auto perspective : {Color::w, Color::b}) {
+            auto features = activeFeatures(position, perspective);
+            auto image = activeFeatures(mirrored(position), perspective);
+            std::vector<uint16_t> a(features.begin(), features.end());
+            std::vector<uint16_t> b(image.begin(), image.end());
+            std::sort(a.begin(), a.end());
+            std::sort(b.begin(), b.end());
+            assert(a == b && "mirrored positions share their features");
+        }
+    }
+}
+
+/** Whole board cases: the right number of features, all of them addressing the network. */
+void testFeatureRanges() {
+    auto initial = featuresOf(fen::initialPosition, Color::w);
+    assert(initial.size() == 32 && "every piece contributes exactly one feature");
+
+    // The starting position is symmetric under swapping colors and flipping ranks, which is
+    // precisely what changing perspective does, so both sides see the same features.
+    assert(featuresOf(fen::initialPosition, Color::b) == initial);
+
+    for (const auto* fen : {fen::initialPosition,
+                            "4k3/8/8/8/8/8/8/4K3 w - - 0 1",
+                            "3k4/8/8/8/8/8/8/R2K4 w - - 0 1",
+                            "8/2p5/8/8/8/8/5P2/2K2k2 w - - 0 1",
+                            "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4",
+                            "8/PPPPPPPk/8/8/8/8/pppppppK/8 w - - 0 1"}) {
+        auto position = fen::parsePosition(fen);
+        for (auto perspective : {Color::w, Color::b}) {
+            auto features = activeFeatures(position, perspective);
+            assert(features.size <= nnue::sf16::ActiveFeatures::kMaxSize);
+            for (auto index : features)
+                assert(index < nnue::sf16::Architecture::kInputDimensions &&
+                       "every feature must address a row of the transformer");
+        }
+    }
+}
+
+/** A position without a king of the perspective's color cannot be described at all. */
+void testMissingKing() {
+    Position position;
+    position.board[e2] = Piece::P;
+    position.board[e8] = Piece::k;
+    try {
+        activeFeatures(position, Color::w);
+    } catch (const std::runtime_error& e) {
+        std::cout << "Rejected position without a white king: " << e.what() << "\n";
+        assert(activeFeatures(position, Color::b).size == 2 && "black is still fine");
+        return;
+    }
+    assert(false && "position without a white king accepted");
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) try {
@@ -474,6 +686,15 @@ int main(int argc, char* argv[]) try {
     testMalformedHeaders();
     testLeb128();
     testSyntheticNetwork();
+
+    testKingsOnly();
+    testPawnAndKings();
+    testHandComputedIndices();
+    testPieceCategories();
+    testKingBuckets();
+    testMirrorInvariance();
+    testFeatureRanges();
+    testMissingKing();
 
     if (argc <= 1)
         testNetworkFile(kBigNetworkFile);

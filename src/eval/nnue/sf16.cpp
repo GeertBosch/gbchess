@@ -232,4 +232,68 @@ Network readNetwork(std::istream& in, const Architecture& arch) {
     return network;
 }
 
+namespace {
+
+/**
+ * Piece category of `piece` seen from `perspective`, in units of squares. The five non-king types
+ * take two categories each, the perspective side's own first, and both kings share the last one.
+ */
+constexpr uint16_t pieceCategory(Piece piece, Color perspective) {
+    if (type(piece) == PieceType::KING) return kPieceCategories - 1;
+
+    return uint16_t(2 * index(type(piece)) + (color(piece) != perspective));
+}
+
+/**
+ * Orient `square` for `perspective`, whose own king stands on `kingSquare`. Squares are rank
+ * major, so flipping all ranks is xor 56 and flipping all files is xor 7.
+ */
+constexpr Square orient(Square square, Square kingSquare, Color perspective) {
+    int flip = perspective == Color::w ? 0 : kNumSquares - kNumFiles;  // black plays up the board
+    if (file(kingSquare) < kNumFiles / 2) flip ^= kNumFiles - 1;       // mirror onto files e to h
+
+    return Square(square ^ flip);
+}
+
+/**
+ * Bucket of an already oriented king square, which by construction lies on files e to h. Buckets
+ * run four to a rank from 0 at h8 to 31 at e1, so a king that has not moved is in the last one.
+ */
+constexpr uint16_t kingBucket(Square orientedKing) {
+    dassert(file(orientedKing) >= kNumFiles / 2);
+
+    return uint16_t((kNumRanks - 1 - rank(orientedKing)) * (kNumFiles / 2) +
+                    (kNumFiles - 1 - file(orientedKing)));
+}
+
+/** The square of `color`'s king, which a position described by this feature set must have. */
+Square kingSquare(const Board& board, Color color) {
+    auto king = addColor(PieceType::KING, color);
+    for (Square square : squares)
+        if (board[square] == king) return square;
+
+    throw std::runtime_error("Position has no " + to_string(color) + " king");
+}
+
+}  // namespace
+
+uint16_t featureIndex(Square square, Piece piece, Square king, Color perspective) {
+    auto bucket = kingBucket(orient(king, king, perspective));
+
+    return uint16_t(bucket * kBucketStride + pieceCategory(piece, perspective) * kNumSquares +
+                    orient(square, king, perspective));
+}
+
+ActiveFeatures activeFeatures(const Position& position, Color perspective) {
+    const auto& board = position.board;
+    auto king = kingSquare(board, perspective);
+
+    ActiveFeatures features;
+    for (Square square : squares)
+        if (board[square] != Piece::_)
+            features.add(featureIndex(square, board[square], king, perspective));
+
+    return features;
+}
+
 }  // namespace nnue::sf16
