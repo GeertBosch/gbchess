@@ -61,7 +61,12 @@ ifeq ($(_system_type),Darwin)
     arch=$(shell uname -m)
     CLANGPP:=/usr/bin/clang++
     CCFLAGS:=${CCFLAGS} -isysroot ${sdk} -mmacosx-version-min=11.0 -target darwin17.0.0 -arch ${arch} -stdlib=libc++
-    DEBUGFLAGS:=${DEBUGFLAGS} -fsanitize=address
+    # UBSan catches the undefined behavior clang cannot warn about statically. The GCC-only
+    # -Wshift-negative-value break of 2026-08-11 is the motivating case: clang's own
+    # -Wshift-negative-value fires only when the shift amount is a constant, so a shift by a
+    # loop variable slipped through every local build and failed only on CI's real gcc.
+    # -fno-sanitize-recover makes a finding abort the test instead of merely printing to stderr.
+    DEBUGFLAGS:=${DEBUGFLAGS} -fsanitize=address,undefined -fno-sanitize-recover=undefined
     LINKFLAGS:=${LINKFLAGS} -Wl,-syslibroot,${sdk},-dead_strip_dylibs -mmacosx-version-min=11.0 -target darwin17.0.0 -arch ${arch}
 endif
 
@@ -460,10 +465,46 @@ build/test-cpp.out: ${CPP_TESTS} ${NNUE_FILE} ${SF16_NNUE_FILE}
 		fi); \
 	} $(REDIR)
 
-test-cpp: build/test-cpp.out
-test: build/test-cpp.out build/fixed-puzzles.out build/searches.out build/evals.out build/uci.out build/magic.out build/book-cli.out
+# The sanitizers only report on code that actually runs, and the unit tests above run the
+# optimized binaries, which carry no instrumentation. Run the debug binaries as well so ASan
+# and UBSan get to see the same cases.
+DBG_TESTS=$(patsubst %-test,%-debug,$(CPP_TESTS))
 
-ci: build-ci build/test-cpp.out build/perft-test.out build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate-123.out build/mate-45.out build/puzzles.out build/book-cli.out dead-code
+build/test-debug.out: ${DBG_TESTS} ${NNUE_FILE} ${SF16_NNUE_FILE}
+	$(Q){ \
+		(cd build && echo Symlinking NNUE files && ln -fs ../*.nnue .); \
+		[ -f book.csv ] && (cd build && echo Symlinking book files && ln -fs ../book.csv .) || true; \
+		echo "Running sanitizer instrumented unit test executables..."; \
+		(cd build && failed=0; for file in *-debug; do \
+			case $$file in gbchess-debug|book-gen-debug|perft-debug) continue;; esac; \
+			/bin/echo -n Run $$file ; \
+			if ./$$file < /dev/null > /dev/null 2>&1; then \
+				echo " passed"; \
+			else \
+				echo " FAILED"; \
+				./$$file < /dev/null || true; \
+				failed=1; \
+			fi; \
+		done; \
+		if [ $$failed -ne 0 ]; then \
+			echo "\n❌ $$failed sanitizer instrumented unit tests failed!\n"; \
+			exit 1; \
+		fi); \
+	} $(REDIR)
+
+test-cpp: build/test-cpp.out
+test-debug: build/test-debug.out
+test: build/test-cpp.out build/test-debug.out build/fixed-puzzles.out build/searches.out build/evals.out build/uci.out build/magic.out build/book-cli.out
+
+# Only macOS builds the debug objects with sanitizers (see DEBUGFLAGS above), so only there is
+# there anything to gain from running them in the gate the pre-push hook uses. On CI the same
+# undefined behavior is caught at compile time instead, by the real gcc that builds the
+# optimized objects there.
+ifeq ($(_system_type),Darwin)
+    CI_SANITIZED=build/test-debug.out
+endif
+
+ci: build-ci ${CI_SANITIZED} build/test-cpp.out build/perft-test.out build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate-123.out build/mate-45.out build/puzzles.out build/book-cli.out dead-code
 	@echo "\n✅ CI checks passed\n"
 
 install-hooks:

@@ -286,6 +286,16 @@ size_t countPawnMovesAndCaptures(const Board& board, const SearchState& state) {
     return count;
 }
 
+/**
+ * The square of the given side's king. Real positions always have one, but unit tests build
+ * boards from a handful of pieces, and dereferencing the empty set would take ctz of zero,
+ * which is undefined. Such a board has no king to expose, so any square will do.
+ */
+Square kingSquareOf(const Board& board, Color color) {
+    auto kings = find(board, addColor(PieceType::KING, color));
+    return kings.empty() ? Square::a1 : *kings.begin();
+}
+
 }  // namespace
 
 namespace moves {
@@ -293,7 +303,7 @@ SearchState::SearchState(const Board& board, Turn turn)
     : occupancy(Occupancy(board, turn.activeColor())),
       pawns(find(board, addColor(PieceType::PAWN, turn.activeColor()))),
       turn(turn),
-      kingSquare(*find(board, addColor(PieceType::KING, turn.activeColor())).begin()),
+      kingSquare(kingSquareOf(board, turn.activeColor())),
       inCheck(isAttacked(board, kingSquare, occupancy)),
       pinned(pinnedPieces(board, occupancy, kingSquare)) {}
 
