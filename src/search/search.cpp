@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <optional>
 #include <ostream>
@@ -17,6 +18,7 @@
 #include "engine/fen/fen.h"
 #include "eval/eval.h"
 #include "eval/nnue/nnue.h"
+#include "eval/nnue/sf16.h"
 #include "move/move.h"
 #include "move/move_gen.h"
 #include "pv.h"
@@ -89,7 +91,30 @@ timepoint searchStartTime = {};
 /** Function to call regularly, abandon the search on a true result. */
 using TimecheckFn = std::function<bool()>;
 
-std::optional<nnue::NNUE> network = nnue::loadNNUE("nn-82215d0fd0df.nnue", nnue::kQuiet);
+/**
+ * The two evaluation networks, each loaded on first use rather than at static initialization.
+ *
+ * The SF16.1 Big network is ~116 MB on the heap, so an engine that never selects it should never
+ * pay for it; and a network that fails to load should say so when it is asked for, not from a
+ * static initializer that runs before main() can report anything. Both are function-local statics,
+ * so each file is read exactly once and the read is thread safe.
+ */
+const nnue::NNUE& sf12Network() {
+    static const nnue::NNUE net = nnue::loadNNUE("nn-82215d0fd0df.nnue", nnue::kQuiet);
+    return net;
+}
+
+const nnue::sf16::Network& sf16Network() {
+    static const nnue::sf16::Network net = [] {
+        // A string-valued UCI option would be nicer than a hardcoded name, but UCIOption holds an
+        // int; the SF12 name above is hardcoded the same way. See SF16_NNUE_PLAN.md, phase 8.
+        const char* filename = "nn-b1a57edbea57.nnue";
+        std::ifstream file(filename, std::ios::binary);
+        if (!file) throw std::runtime_error("Cannot open NNUE file: " + std::string(filename));
+        return nnue::sf16::readNetwork(file);
+    }();
+    return net;
+}
 
 std::string pct(uint64_t some, uint64_t all) {
     return all ? " " + std::to_string((some * 100) / all) + "%" : "";
@@ -687,6 +712,13 @@ int quietMoveScore(const Position& position, Move move, Move lastMove) {
 }
 }  // namespace
 
+Score staticEval(const Position& position) {
+    Score white = !options::useNNUE  ? evaluateBoard(position.board)
+                  : options::useSF16 ? Score::fromCP(nnue::sf16::evaluate(sf16Network(), position))
+                                     : Score::fromCP(nnue::evaluate(position, sf12Network()));
+    return position.active() == Color::b ? -white : white;
+}
+
 std::string lookupPosition(Position position) {
     auto hash = Hash(position);
     auto* entry = transpositionTable.findEntry(hash);
@@ -795,9 +827,9 @@ std::pair<moves::UndoPosition, Score> makeMoveWithEval(Position& position, Move 
     if (options::useNNUE) {
         // Use NNUE evaluation, which is more accurate than the piece-square evaluation
         undo = makeMove(position, change, move);
-        eval = Score::fromCP(nnue::evaluate(position, *network));
-        // Note that we evaluated the board after the move, so our evaluation is the inverse
-        if (position.active() == Color::w) eval = -eval;
+        // staticEval is relative to the side to move, which after the move is the opponent of the
+        // side that just moved, and the eval this returns belongs to the mover.
+        eval = -staticEval(position);
     } else if (options::incrementalEvaluation) {
         // Incremental evaluation of the piece-square evaluation
         eval += evaluateMove(position.board, position.active(), change, evalTable);
@@ -869,10 +901,7 @@ Score quiesce(
 Score quiesce(Position& position, Score alpha, Score beta, int depthleft) {
     ++quiescenceCount;
     ++evalCount;
-    Score stand_pat = options::useNNUE ? Score::fromCP(nnue::evaluate(position, *network))
-                                       : evaluateBoard(position.board);
-
-    if (position.active() == Color::b) stand_pat = -stand_pat;
+    Score stand_pat = staticEval(position);
     return quiesce(position, alpha, beta, depthleft, stand_pat, 0);
 }
 
@@ -935,11 +964,10 @@ bool tryNullMovePruning(Position& position, Hash hash, Score alpha, Score beta, 
     if (beta.cp() - alpha.cp() > 1) return false;
 
     // Get quick evaluation for pruning decisions
-    Score staticEval = Score::fromCP(nnue::evaluate(position, *network));
-    if (position.active() == Color::b) staticEval = -staticEval;
+    Score eval = staticEval(position);
     ++evalCount;
 
-    if (staticEval < beta) return false;
+    if (eval < beta) return false;
 
     ++nullMoveAttempts;
 
@@ -1054,16 +1082,15 @@ PrincipalVariation alphaBeta(Position& position,
     // This is also called "reverse futility pruning" or "static null move pruning"
     const bool isPVNode = beta.cp() - alpha.cp() > 1;
 
-    Score staticEval;
+    Score cachedEval;
     bool haveStaticEval = false;
     auto getStaticEval = [&]() {
         if (!haveStaticEval) {
-            staticEval = Score::fromCP(nnue::evaluate(position, *network));
-            if (position.active() == Color::b) staticEval = -staticEval;
+            cachedEval = staticEval(position);
             ++evalCount;
             haveStaticEval = true;
         }
-        return staticEval;
+        return cachedEval;
     };
 
     if (options::reverseFutilityPruning && !isPVNode &&
@@ -1074,7 +1101,7 @@ PrincipalVariation alphaBeta(Position& position,
 
         if (getStaticEval() - futilityMargin >= beta) {
             ++futilityPruned;
-            return {{}, staticEval};
+            return {{}, cachedEval};
         }
     }
 

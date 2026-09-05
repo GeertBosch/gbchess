@@ -76,6 +76,10 @@ inline UCIOption quiescenceDepth{"QuiescenceDepth", 3, 0, 30};
 inline UCIOption currmoveMinDepthLeft{"CurrmoveMinDepthLeft", 1, 0, 20};
 inline UCIOption transpositionTableMB{"Hash", 256, 0, 65536};  // Zero means not enabled
 inline UCIOption useNNUE{"UseNNUE", true};
+// Selects the Stockfish 16.1 network (nn-b1a57edbea57.nnue) over the SF12 one when UseNNUE is
+// on. Off by default: the SF16 evaluation is exact but not yet incremental, so it costs far more
+// per node than the SF12 path it would replace. See SF16_NNUE_PLAN.md, phases 9 through 11.
+inline UCIOption useSF16{"UseSF16", false};
 inline UCIOption incrementalEvaluation{"IncrementalEvaluation", true};
 inline UCIOption PVS{"PVS", true};
 inline UCIOption reverseFutilityPruning{"ReverseFutilityPruning", true};

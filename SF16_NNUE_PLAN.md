@@ -13,16 +13,16 @@ this plan covers everything from the layer stacks down to a network that actuall
 | 4 | `fab95fd` | Fresh accumulation, the 2560-byte feature transform, PSQT |
 | 5 | `8e5bd76` | The `nndump` oracle re-established at Stockfish tag `sf_16.1` |
 | 6 | `6111394` | Layer stack propagation, every intermediate golden |
-| 7 | this commit | Bucket selection, whole-network evaluation, centipawn scale |
+| 7 | `f0405d8` | Bucket selection, whole-network evaluation, centipawn scale |
+| 8 | this commit | Engine integration behind `UseSF16`, one `staticEval`, measured |
 
 `src/eval/nnue/sf16.h` today ends at `evaluate(...)`, and everything down to it is an **exact
 oracle**: seven positions are verified bit-for-bit against a patched Stockfish 16.1, across all
 eight buckets, from the transformed bytes through every layer intermediate to the final `Value`
-and centipawn score. `sf16.cpp` is a complete, standalone, scalar SF16.1 evaluation that nothing
-in the engine calls yet.
+and centipawn score. `sf16.cpp` is a complete, standalone, scalar SF16.1 evaluation, and as of
+phase 8 the engine plays with it when `UseSF16` is set.
 
-Not yet implemented, in dependency order: engine integration, incremental accumulators, SIMD,
-strength validation.
+Not yet implemented, in dependency order: incremental accumulators, SIMD, strength validation.
 
 The whole port keeps the file's **canonical row-major ordering**. Stockfish scrambles affine
 weights at load time to suit its SIMD kernels; gbchess does not, so the scalar reference stays
@@ -255,7 +255,62 @@ symmetry — a position and its color-swapped mirror must evaluate to opposite s
 
 ---
 
-## Phase 8 — Engine integration, correct but slow
+## Phase 8 — Engine integration, correct but slow — **done**
+
+`UseSF16=true` plays. The search's four evaluation expressions collapsed into one exported
+`search::staticEval(const Position&)`, both networks now load on first use rather than at static
+initialization, `eval/nnue/sf16.cpp` joined `NNUE_SRCS`, and `make -j` is green. What the plan
+below described is what was built, with five notes:
+
+- **The collapsed helper honours `UseNNUE` everywhere, which is a behavior change.** Two of the
+  four sites ignored the option before, so `UseNNUE=false` did not turn the network off; it does
+  now, falling back to `evaluateBoard` at all four. The default is unchanged (`true`), so nothing
+  regresses by default, but a `UseNNUE=false` search is a different search than it was.
+- **`staticEval` is exported from `search.h`, not file-local.** Phase 9 needs exactly one place to
+  hang the accumulator stack, and a test needs to reach it; the doc comment on the declaration is
+  where the sign convention and the option precedence are written down. `makeMoveWithEval`'s NNUE
+  branch is the one caller that negates the result, because it evaluates *after* the move and
+  returns a score belonging to the side that just moved.
+- **Both loaders are function-local statics.** The SF16.1 Big net is ~116 MB, so an engine that
+  never selects it never reads it; and a missing file now throws where a caller can see it rather
+  than out of a static initializer that runs before `main`. The SF12 filename was already
+  hardcoded, so the SF16 one is too — a string-valued `UCIOption` remains a separate change.
+- **The golden test is Stockfish's own centipawns, through the option.** `testStaticEval` in
+  `search_test.cpp` pins three positions to the values `sf16-test --verbose` prints (9, 9 and 574
+  cp for White), covering both a White-to-move and a Black-to-move position, plus the piece-square
+  fallback and the color-swap symmetry. The failure this guards against is a sign error, not an
+  arithmetic one. Note the symmetry claim holds for SF16 only: HalfKAv2_hm mirrors its features, so
+  its perspectives are the same computation, while SF12's HalfKP evaluation of a color-swapped pair
+  differs by tens of centipawns (−1269 vs −1228 on the endgame FEN).
+- **Debug builds are fine.** `UseSF16` defaults off, but `testStaticEval` switches it on for three
+  positions, so `search-debug` now loads the Big net under ASan+UBSan. That costs a few seconds;
+  `sf16-debug` already paid the same price. `make -j` from clean is ~1m27s.
+
+### Measured, in real time, no nodestime
+
+`build/gbchess`, `-O2`, i9-9900K, `go depth 8`, `OwnBook=false`, one process per position. Node
+counts differ between the two because a different evaluation prunes differently, so nodes/second
+is the comparison, not time:
+
+| Position | SF12 nodes | SF12 nps | SF16 nodes | SF16 nps | ratio |
+|---|---|---|---|---|---|
+| startpos | 104317 | 322962 | 112094 | 83714 | 3.9x |
+| kiwipete | 549377 | 244602 | 264068 | 75685 | 3.2x |
+| `8/2k5/2p5/8/1P6/8/3K4/6R1 b` | 132468 | 481701 | 113947 | 131275 | 3.7x |
+
+**SF16.1 is ~3.5x slower per node than SF12 today.** About 0.24 s of each SF16 time column is the
+one-off network load; excluding it the ratio is ~3.0x. This is the number phases 9 and 10 must
+beat, and it is the reason `UseSF16` ships off: nothing about the port is worth SPRT-ing until a
+node costs something like what an SF12 node costs. The phase-6 microbenchmarks decompose it — a
+fresh transform of a 30-piece position is 9 us and one layer stack is 5.3 us, so ~14 us of the
+budget per evaluated node is the network, and two thirds of that is the full refresh phase 9
+removes.
+
+Self-play at depth 6 from the start position, `UseSF16=true`, plays a normal game — 1.e4 c5 2.Nf3
+Nc6 3.Nc3 e5 4.Bc4 d6 5.O-O h6 6.Nd5 Nf6 7.Bb5 a6 8.Bxc6+ bxc6 9.Nxf6+ Qxf6 10.c3 Bg4 11.Qa4 Kd7
+12.d4 Bxf3 — with castling, captures and evaluations that stay in a sane band.
+
+*Original plan follows.*
 
 Deliberately before any optimization: get the network playing, exactly, and *measure* it. This
 is the phase that turns an oracle-verified library into an engine feature.

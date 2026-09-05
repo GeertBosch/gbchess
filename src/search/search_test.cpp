@@ -476,12 +476,85 @@ void testNullMoveHash() {
     if (debug) std::cout << "Null move hash test passed!\n";
 }
 
+/**
+ * Save and restore the evaluation-selecting options, so a test may switch networks and put things
+ * back however it leaves. Both are plain ints, so this needs nothing cleverer than a copy.
+ */
+struct SavedEvalOptions {
+    int useNNUE = options::useNNUE;
+    int useSF16 = options::useSF16;
+    ~SavedEvalOptions() {
+        options::useNNUE.value = useNNUE;
+        options::useSF16.value = useSF16;
+    }
+};
+
+/**
+ * The search's evaluation entry point, over each of the three evaluations it can select.
+ *
+ * The centipawn numbers for SF16 are White-relative values from the phase-7 oracle, printed by
+ * `sf16-test --verbose <fen>`; they are Stockfish 16.1's own, so this pins the whole path from a
+ * UCI option through a lazily loaded 116 MB network down to the Score the search sees. What could
+ * plausibly go wrong here is a sign, not an arithmetic error, which is why the table deliberately
+ * holds both a White-to-move and a Black-to-move position.
+ */
+void testStaticEval() {
+    struct Golden {
+        const char* fen;
+        int whiteCP;  // sf16::evaluate, which is relative to White
+    };
+    static const Golden golden[] = {
+        {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 9},
+        {"r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 4 4", 9},
+        {"8/2k5/2p5/8/1P6/8/3K4/6R1 b - - 0 1", 574},
+    };
+
+    SavedEvalOptions saved;
+
+    // The option means what it says: with UseNNUE off, no network runs, whatever UseSF16 holds.
+    for (int sf16 : {0, 1}) {
+        options::useNNUE.value = 0;
+        options::useSF16.value = sf16;
+        for (auto& entry : golden) {
+            auto position = fen::parsePosition(entry.fen);
+            Score expected = evaluateBoard(position.board);
+            if (position.active() == Color::b) expected = -expected;
+            assert(search::staticEval(position) == expected);
+        }
+    }
+
+    // With UseSF16 on, the search sees Stockfish 16.1's own numbers, negated for Black to move.
+    options::useNNUE.value = 1;
+    options::useSF16.value = 1;
+    for (auto& [fen, cp] : golden) {
+        auto position = fen::parsePosition(fen);
+        Score expected = Score::fromCP(position.active() == Color::b ? -cp : cp);
+        assert(search::staticEval(position) == expected);
+    }
+
+    // The score is relative to the side to move, so a color-swapped position keeps it rather than
+    // negating it. An implementation that negated one level too late passes the golden table above
+    // and fails this. Only SF16 is asserted: HalfKAv2_hm mirrors its features, so its two
+    // perspectives are the same computation, while SF12's HalfKP evaluation of this pair differs
+    // by tens of centipawns and has no symmetry to check.
+    {
+        options::useNNUE.value = 1;
+        options::useSF16.value = 1;
+        auto position = fen::parsePosition("8/2k5/2p5/8/1P6/8/3K4/6R1 b - - 0 1");
+        auto swapped = fen::parsePosition("6r1/3k4/8/1p6/8/2P5/2K5/8 w - - 0 1");
+        assert(search::staticEval(position) == search::staticEval(swapped));
+    }
+
+    if (debug) std::cout << "Static evaluation test passed!\n";
+}
+
 void testBasicSearch() {
     testMissingPV();
     testCheckMated();
     testMateInOne();
     testMateInTwo();
     testNullMoveHash();
+    testStaticEval();
     if (debug) std::cout << "Basic search test passed!\n";
 }
 

@@ -121,6 +121,21 @@ std::string lookupPosition(Position position);
 bool invalidatePosition(Position position);
 
 /**
+ * The static evaluation of `position`, in centipawns relative to the side to move.
+ *
+ * The search's single entry into evaluation, and deliberately the only one. It used to be four
+ * separate expressions, two of them gated on options::useNNUE with a piece-square fallback and two
+ * of them calling the network unconditionally, so UseNNUE=false did not in fact turn the network
+ * off; this honours the option at every site rather than preserving that inconsistency.
+ *
+ * Which evaluation runs is a runtime choice: the piece-square tables when UseNNUE is off, the
+ * Stockfish 16.1 network when UseSF16 is on, and the SF12 network otherwise. Both networks report
+ * a White-relative score, so only the negation for the side to move is shared between them. The
+ * networks load on first use, so an engine that never asks for one never reads its file.
+ */
+Score staticEval(const Position& position);
+
+/**
  * Search all tactical moves necessary to achieve a quiet position and return the best score
  */
 Score quiesce(Position& position, int depthleft);
