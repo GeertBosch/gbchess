@@ -136,6 +136,25 @@ bool invalidatePosition(Position position);
 Score staticEval(const Position& position);
 
 /**
+ * Load the evaluation network the current options select, if it is not loaded already.
+ *
+ * Reading a network is a cost of how the engine is configured, not of the move it is about to
+ * play, and the SF16.1 Big network is ~116 MB and takes about a quarter of a second. Left to
+ * happen on first use, that quarter second lands inside the first search of a process and is
+ * charged to that move's clock: under any real time control the first `go` spends its whole
+ * budget loading, searches no nodes at all, and has no move to return.
+ *
+ * Loading stays lazy in the *option* -- an engine that never selects a network never reads its
+ * file -- but the laziness must end somewhere outside a search. Call this whenever the selected
+ * network may have changed and no clock is running: at startup, and after an option is set.
+ *
+ * A network that cannot be read is not reported here. The failure surfaces where it already did,
+ * on the search that asks for the network, which is a place the engine turns into a UCI response
+ * rather than a terminated process.
+ */
+void warmEvaluation();
+
+/**
  * Search all tactical moves necessary to achieve a quiet position and return the best score
  */
 Score quiesce(Position& position, int depthleft);

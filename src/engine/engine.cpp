@@ -207,6 +207,9 @@ private:
         for (auto& info : options::UCIOptionInfo::registry()) {
             if (name != info.name) continue;
             info.set(value);
+            // UseNNUE and UseSF16 select which network evaluates, so this is the last moment
+            // before a search at which a newly selected one can be read off the clock.
+            search::warmEvaluation();
             respond("info string " + name + " set to " + value);
             return;
         }
@@ -521,6 +524,9 @@ void enterUCI(std::istream& in, std::ostream& out, std::ostream& log, std::strin
     UCIRunner runner(out, log, std::move(bookFile));
     std::flush(log);
     search::newGame();
+    // Read the selected network before any command can start a clock. A GUI is free to send `go`
+    // as its very first command, so waiting for `isready` or `ucinewgame` would not be enough.
+    search::warmEvaluation();
     for (std::string line; std::getline(in, line);) {
         log << "UCI: " << line << "\n";
         std::flush(log);

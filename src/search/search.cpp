@@ -736,6 +736,21 @@ int quietMoveScore(const Position& position, Move move, Move lastMove) {
 }
 }  // namespace
 
+void warmEvaluation() {
+    if (!options::useNNUE) return;
+
+    try {
+        if (options::useSF16)
+            sf16Network();
+        else
+            sf12Network();
+    } catch (const std::exception&) {
+        // Deliberately swallowed; see the declaration. A function-local static whose initializer
+        // throws is not marked initialized, so the search's own call retries the read and throws
+        // again, where the engine already turns that into an "error in search" response.
+    }
+}
+
 Score staticEval(const Position& position) {
     Score white = !options::useNNUE  ? evaluateBoard(position.board)
                   : options::useSF16 ? Score::fromCP(evaluateSF16(position))

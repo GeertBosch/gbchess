@@ -435,6 +435,34 @@ Two, at different altitudes, plus the assertion inside `push` that both of them 
 The Makefile change is one line: `sf16-test` now links `${MOVES_SRCS}`, because a walk over legal
 moves needs a move generator. `sf16.cpp` itself still depends on nothing but `core/core.h`.
 
+### Found by defaulting `UseSF16` on: the network load was on the clock
+
+Flipping the default to `true` and running `make -j` fails four UCI tests, all with the same
+signature — `nodes 0`, an elapsed time of 200 ms to 2 s, and `bestmove 0000`. The cause is not the
+evaluation but *when* it is loaded: phase 8 made both networks function-local statics read on first
+use, and first use is inside the first search of a process. Reading 116 MB takes ~250 ms on an idle
+machine and ~2 s under a parallel build, and all of it is charged to that move's budget, so the
+first `go` under any real time control spends its whole clock loading, searches nothing, and has no
+move to return. SF12 hid this: its network loads in 15 ms.
+
+`search::warmEvaluation()` now reads whichever network the options select, and the UCI layer calls
+it at startup — before any command can start a clock, since a GUI may send `go` first — and after
+any `setoption`, which is where the selection can change. Loading stays lazy in the *option*: with
+`UseNNUE=false` nothing is read at all. A network that fails to read is not reported there; the
+function-local static is left uninitialized, so the search retries and throws where the engine
+already turns that into an `info string error in search` rather than a terminated process. With the
+fix, `make -j` passes with `UseSF16` defaulted on, over three consecutive runs.
+
+**One latent robustness gap remains, and it is in the root loop rather than in the evaluation.**
+`toplevelAlphaBeta` runs the soft time check *before* searching each root move, the first included,
+and on abort returns an empty `PrincipalVariation`, which the engine prints as `bestmove 0000` — an
+illegal UCI response. Any budget that expires before root move one completes reaches it, whatever
+the evaluation; SF16 makes a node ~1.7x dearer and so widens the window. It shows up as an
+occasional `uci-move-overhead` failure on the 1 ms-budget case under a loaded machine (once in four
+`make -j` runs here, never on an idle one, and never reproducible under synthetic CPU load). The
+fix belongs to time management, not to this port: the root must complete at least one move before
+it may honour an abort. Worth closing before phase 11 puts the network on a clock in anger.
+
 *Original plan follows.*
 
 The single largest speedup available, and the one with a clean correctness invariant.
