@@ -116,6 +116,30 @@ const nnue::sf16::Network& sf16Network() {
     return net;
 }
 
+/**
+ * The SF16.1 accumulators of the positions on the path from the root to the node being searched.
+ *
+ * Active only while a search that evaluates with that network is running: computeBestMove resets
+ * it and clears it again on the way out, and every other caller of staticEval, a test or the UCI
+ * layer included, finds it inactive and gets a fresh evaluation. Keeping it here rather than in
+ * the search's arguments is what lets makeMove and unmakeMove stay the only places that touch it.
+ */
+nnue::sf16::AccumulatorStack accumulators;
+
+/**
+ * The SF16.1 evaluation of `position`, from the accumulator stack when a search maintains one.
+ *
+ * The stack must describe `position` itself, which is why every one of the search's makeMove and
+ * unmakeMove pairs goes through the two helpers below rather than calling moves:: directly, and
+ * why the root, which builds its children with applyMove instead, pushes each of them by hand.
+ */
+int32_t evaluateSF16(const Position& position) {
+    const auto& network = sf16Network();
+    if (!accumulators.active()) return nnue::sf16::evaluate(network, position);
+
+    return nnue::sf16::evaluate(network, position, accumulators.top());
+}
+
 std::string pct(uint64_t some, uint64_t all) {
     return all ? " " + std::to_string((some * 100) / all) + "%" : "";
 }
@@ -714,7 +738,7 @@ int quietMoveScore(const Position& position, Move move, Move lastMove) {
 
 Score staticEval(const Position& position) {
     Score white = !options::useNNUE  ? evaluateBoard(position.board)
-                  : options::useSF16 ? Score::fromCP(nnue::sf16::evaluate(sf16Network(), position))
+                  : options::useSF16 ? Score::fromCP(evaluateSF16(position))
                                      : Score::fromCP(nnue::evaluate(position, sf12Network()));
     return position.active() == Color::b ? -white : white;
 }
@@ -818,6 +842,41 @@ void sortMoves(
     sortMoves(position, Move(), hash, begin, end, lastMove, depth);
 }
 
+/**
+ * Make `move` on `position` and push the accumulators of the position that results.
+ *
+ * The move's effect on the pieces has to be read off the board before makeMove overwrites it,
+ * which is why this takes a prepared BoardChange rather than the move alone: a BoardChange names
+ * every square the move touches but not the piece that moves, and that piece stands on
+ * `first.from` only until the move is made. While the stack is inactive this is makeMove itself.
+ */
+moves::UndoPosition makeMoveTracked(Position& position, BoardChange change, Move move) {
+    if (!accumulators.active()) return moves::makeMove(position, change, move);
+
+    auto changes = nnue::sf16::pieceChanges(position.board, change);
+    auto undo = moves::makeMove(position, change, move);
+    accumulators.push(sf16Network().transformer, position, changes);
+
+    return undo;
+}
+
+/** Make `move`, preparing the board change it needs first, as makeMoveTracked above. */
+moves::UndoPosition makeMoveTracked(Position& position, Move move) {
+    return makeMoveTracked(position, moves::prepareMove(position.board, move), move);
+}
+
+/**
+ * Unmake what makeMoveTracked made, uncovering the accumulators of the position it restores.
+ *
+ * Popping rather than undoing the delta is deliberate: a perspective whose king moved was
+ * refreshed and has no delta to undo, and the entry the search comes back to is the one it built
+ * on the way down, so it is exact by construction rather than by a second piece of arithmetic.
+ */
+void unmakeMoveTracked(Position& position, moves::UndoPosition undo) {
+    accumulators.pop();
+    moves::unmakeMove(position, undo);
+}
+
 std::pair<moves::UndoPosition, Score> makeMoveWithEval(Position& position, Move move, Score eval) {
     using namespace moves;
     BoardChange change = prepareMove(position.board, move);
@@ -826,18 +885,18 @@ std::pair<moves::UndoPosition, Score> makeMoveWithEval(Position& position, Move 
 
     if (options::useNNUE) {
         // Use NNUE evaluation, which is more accurate than the piece-square evaluation
-        undo = makeMove(position, change, move);
+        undo = makeMoveTracked(position, change, move);
         // staticEval is relative to the side to move, which after the move is the opponent of the
         // side that just moved, and the eval this returns belongs to the mover.
         eval = -staticEval(position);
     } else if (options::incrementalEvaluation) {
         // Incremental evaluation of the piece-square evaluation
         eval += evaluateMove(position.board, position.active(), change, evalTable);
-        undo = makeMove(position, change, move);
+        undo = makeMoveTracked(position, change, move);
         dassert(-eval == evaluateBoard(position.board, position.active(), evalTable));
     } else {
         // Use non-incremental piece-square evaluation, the simplest approach
-        undo = makeMove(position, change, move);
+        undo = makeMoveTracked(position, change, move);
         eval = evaluateBoard(position.board, !position.active(), evalTable);
     }
     return {undo, eval};
@@ -889,7 +948,7 @@ Score quiesce(
         // Compute the change to the board and evaluation that results from the move
         auto [undo, newEval] = makeMoveWithEval(position, move, standPat);
         auto score = -quiesce(position, -beta, -alpha, depthleft - 1, -newEval, qply + 1);
-        unmakeMove(position, undo);
+        unmakeMoveTracked(position, undo);
 
         if (score >= beta) return ttInsert({move, beta});
         if (score > alpha) alpha = score, bestMove = move;
@@ -1165,7 +1224,7 @@ PrincipalVariation alphaBeta(Position& position,
         auto mask = moves::castlingMask(move.from, move.to);
         newHash.applyMove(position.turn, mwp, mask, position.board);
 
-        auto undo = moves::makeMove(position, move);
+        auto undo = makeMoveTracked(position, move);
         dassert(newHash == Hash(position));
 
         // Apply Late Move Reduction (LMR)
@@ -1207,7 +1266,7 @@ PrincipalVariation alphaBeta(Position& position,
                     -alphaBeta(position, newHash, -beta, -curAlpha, fullDepth, timecheck, move);
         }
 
-        unmakeMove(position, undo);
+        unmakeMoveTracked(position, undo);
 
         if (newVar.aborted) {
             // The recursive search hit a time cutoff before finishing. newVar's score, even if it
@@ -1310,6 +1369,11 @@ PrincipalVariation toplevelAlphaBeta(
         auto newPosition = moves::applyMove(position, move);
         Hash newHash(newPosition);
 
+        // The root builds each child as a fresh Position rather than making and unmaking a move,
+        // so there is no board change to derive a delta from. There are only as many root moves
+        // as the position has, so accumulating each child from scratch is not worth avoiding.
+        if (accumulators.active()) accumulators.push(sf16Network().transformer, newPosition);
+
         const auto curAlpha = std::max(alpha, pv.score);
         auto newDepth = Depth{depth.current + 1, depth.left - 1};
         PrincipalVariation newVar;
@@ -1325,6 +1389,8 @@ PrincipalVariation toplevelAlphaBeta(
                 newVar =
                     -alphaBeta(newPosition, newHash, -beta, -curAlpha, newDepth, timecheck, move);
         }
+        accumulators.pop();
+
         if (newVar.aborted) {
             // See the matching check in alphaBeta: newVar's score only reflects replies searched
             // before the cutoff and must not be trusted as a real bound, even if it completed one
@@ -1559,6 +1625,15 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
     for (auto move : moves)
         repetitions.enter(drawState, Hash(position = moves::applyMove(position, move)));
     repetitions.setRoot();  // Everything entered above is pre-root game history.
+
+    // The accumulator stack follows the search from here down, and only for the network that has
+    // one. Clearing it on the way out, however the search ends, is what lets staticEval treat an
+    // inactive stack as "nobody is maintaining accumulators for me" rather than as a stale root.
+    struct AccumulatorScope {
+        ~AccumulatorScope() { accumulators.clear(); }
+    } accumulatorScope;
+    if (options::useNNUE && options::useSF16)
+        accumulators.reset(sf16Network().transformer, position);
 
     auto pv = options::iterativeDeepening ? iterativeDeepening(position, maxdepth, info)
                                           : toplevelAlphaBeta(position, maxdepth, info);

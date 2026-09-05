@@ -14,7 +14,8 @@ this plan covers everything from the layer stacks down to a network that actuall
 | 5 | `8e5bd76` | The `nndump` oracle re-established at Stockfish tag `sf_16.1` |
 | 6 | `6111394` | Layer stack propagation, every intermediate golden |
 | 7 | `f0405d8` | Bucket selection, whole-network evaluation, centipawn scale |
-| 8 | this commit | Engine integration behind `UseSF16`, one `staticEval`, measured |
+| 8 | `d44864f` | Engine integration behind `UseSF16`, one `staticEval`, measured |
+| 9 | this commit | Incremental accumulators, an accumulator stack under make/unmake |
 
 `src/eval/nnue/sf16.h` today ends at `evaluate(...)`, and everything down to it is an **exact
 oracle**: seven positions are verified bit-for-bit against a patched Stockfish 16.1, across all
@@ -22,7 +23,7 @@ eight buckets, from the transformed bytes through every layer intermediate to th
 and centipawn score. `sf16.cpp` is a complete, standalone, scalar SF16.1 evaluation, and as of
 phase 8 the engine plays with it when `UseSF16` is set.
 
-Not yet implemented, in dependency order: incremental accumulators, SIMD, strength validation.
+Not yet implemented, in dependency order: SIMD, strength validation.
 
 The whole port keeps the file's **canonical row-major ordering**. Stockfish scrambles affine
 weights at load time to suit its SIMD kernels; gbchess does not, so the scalar reference stays
@@ -350,7 +351,91 @@ is green; a documented nodes/second figure exists for both networks in real time
 
 ---
 
-## Phase 9 — Incremental accumulators
+## Phase 9 — Incremental accumulators — **done**
+
+The search now carries both perspectives' accumulators down the tree instead of rebuilding them
+at every evaluated node. Node counts at depth 8 are **identical to phase 8's** on all three
+measured positions, so nothing about the evaluation changed; only what it costs did. `sf16.h`
+gained `Accumulators`, `refreshBoth`, `PieceChanges`, `pieceChanges` and `AccumulatorStack`, plus
+`evaluateValue`/`evaluate` overloads that read accumulators a caller already has; `search.cpp`
+gained `makeMoveTracked`, `unmakeMoveTracked` and one file-local stack. What the plan below
+described is what was built, with six notes:
+
+- **The update rule needs no dirty-piece record, exactly as phase 7 predicted.** `pieceChanges`
+  derives what a move removes from the board and what it adds from a `BoardChange` and the
+  pre-move board alone, and it branches on the *shape* of the change rather than on `MoveKind`:
+  a no-op second half is a plain move, a second half starting where the first half landed is a
+  promotion or an en passant capture, and a second half starting anywhere else is castling. There
+  is no `switch` over move kinds to keep in step with `MovesTable::compoundMove`.
+- **`refreshBoth` is not an overload of `refresh`.** A `refresh(transformer, position)` returning
+  `Accumulators` and the existing `refresh(transformer, features)` returning `Accumulator` are
+  ambiguous for any call written `refresh(t, {})`, which an existing test was, and they differ in
+  return type by one letter. The name says which one it is.
+- **The invariant lives in `push`, not in the tests.** A debug build asserts at every pushed
+  position that the incrementally updated pair equals `refreshBoth` of that position, so it holds
+  for every caller rather than for the ones a test remembered to check. That is what makes the
+  two tests below cheap to write: they only have to *reach* positions.
+- **An empty stack is an inactive stack**, and `push`/`pop` are no-ops on one. That is the whole
+  of how a search with `UseSF16` off, a test calling `staticEval` directly, and the UCI layer pay
+  nothing: `evaluateSF16` falls back to a fresh evaluation when the stack is inactive, and
+  `computeBestMove` activates it, under an RAII scope that clears it however the search ends.
+- **The root pushes a fresh accumulation rather than a delta**, because `toplevelAlphaBeta` builds
+  each child with `applyMove` into a new `Position` and has no `BoardChange` to derive one from.
+  There are only as many root moves as the position has, so this is not worth restructuring.
+- **The null move needs no work at all**, which is worth stating because it looks like it should.
+  It changes `position.turn` and not the board, and the side to move enters the evaluation at
+  `transform`, which reads it from the position when the accumulators are read rather than when
+  they are built.
+
+### Measured, in real time, no nodestime
+
+`build/gbchess`, `-O2`, i9-9900K, `go depth 8`, `OwnBook=false`, one process per position. Node
+counts differ between the two networks because a different evaluation prunes differently, and the
+SF16 counts are bit-for-bit the ones phase 8 recorded.
+
+| Position | SF12 nodes | SF12 nps | SF16 nodes | SF16 nps, phase 8 | SF16 nps, phase 9 | ratio |
+|---|---|---|---|---|---|---|
+| startpos | 104317 | 316112 | 112094 | 83714 | 137201 | 2.3x |
+| kiwipete | 549377 | 244276 | 264068 | 75685 | 128001 | 1.9x |
+| `8/2k5/2p5/8/1P6/8/3K4/6R1 b` | 132468 | 474795 | 113947 | 131275 | 132189 | 3.6x |
+
+Each SF16 time column still carries a 248 ms one-off network load and each SF12 one a 15 ms load,
+both measured at `go depth 1`. Excluding them, SF16 runs at 197k, 145k and 186k nps against SF12's
+331k, 246k and 502k, so **the ratio is 1.7x on both middlegame positions, down from phase 8's
+3.0x**, and the network now costs about 5 us of the budget per evaluated node rather than 14.
+
+**The endgame barely moved, and that is the shape of the result rather than a disappointment.**
+That position has five pieces. A fresh refresh of it copies 2560 biases and adds five feature
+rows; an incremental update copies 2560 accumulator values and adds at most three. The copy is
+the floor, so the saving is proportional to how many pieces a refresh would have had to add, and
+two of the five pieces are kings whose every move forces a refresh anyway. The win is a
+middlegame win, which is where the nodes are.
+
+`sf16-test` reports what one move costs against building the same position from scratch, both
+perspectives together: **922 ns incrementally against 8344 ns fresh** on the kiwipete capture
+`Nxg6`, a 9x reduction in the accumulator half of a node.
+
+### Tests
+
+Two, at different altitudes, plus the assertion inside `push` that both of them trip over:
+
+- `sf16_test.cpp` names the pieces every kind of move moves — quiet, double push, capture, both
+  castlings for both colors, en passant for both colors, promotion and promotion capture — as
+  sorted sets like `{"Pe7", "rd8"} -> {"Rd8"}`, so a compound move that is decomposed wrongly
+  fails on the decomposition rather than on a number 2560 additions later. It then walks every
+  legal move to depth 2 from four positions, 4114 in all, checking at each that the stack equals
+  a fresh refresh, that `evaluate` through the stack equals `evaluate` from scratch, and — after
+  the moves made from a position have been unmade — that its accumulators are still intact.
+- `search_test.cpp` runs two shallow searches with `UseSF16` on. Those assert nothing about
+  accumulators themselves; their point is to reach positions through the *search's* own make and
+  unmake wiring — the root, the main loop, quiescence, the null move — so that the assertion in
+  `push` sees them. That costs about six seconds of `search-debug`, where every push refreshes
+  both perspectives to compare against.
+
+The Makefile change is one line: `sf16-test` now links `${MOVES_SRCS}`, because a walk over legal
+moves needs a move generator. `sf16.cpp` itself still depends on nothing but `core/core.h`.
+
+*Original plan follows.*
 
 The single largest speedup available, and the one with a clean correctness invariant.
 

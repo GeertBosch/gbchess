@@ -548,6 +548,49 @@ void testStaticEval() {
     if (debug) std::cout << "Static evaluation test passed!\n";
 }
 
+/**
+ * A search that evaluates with the SF16.1 network, and so maintains an accumulator stack.
+ *
+ * The real check is inside the stack rather than here: a debug build asserts, at every position
+ * pushed, that the incrementally updated accumulators equal a fresh refresh of that position. So
+ * running a search is what exercises the search's own make and unmake wiring -- the root, the main
+ * loop, quiescence and the null move -- as opposed to the arithmetic that sf16_test pins over a
+ * walk of its own. An optimized build gets no assertion out of this and only checks that the
+ * search still finds these moves, which it would not if the accumulators drifted.
+ *
+ * The positions are deliberately small and the depths shallow: in a debug build every push
+ * refreshes both perspectives just to have something to compare against, which costs a couple of
+ * orders of magnitude more than the update being checked.
+ */
+void testIncrementalSearch() {
+    struct Search {
+        const char* fen;
+        int depth;
+        const char* best;
+    };
+    static const Search searches[] = {
+        // An endgame, where a king moves often and so refreshes a perspective often.
+        {"8/2k5/2p5/8/1P6/8/3K4/6R1 b - - 0 1", 4, "c7b6"},
+        // A promotion race, which is how a search reaches the compound moves through makeMove.
+        {"8/PPPk4/8/8/8/8/4Kppp/8 w - - 0 1", 3, "c7c8q"},
+    };
+
+    SavedEvalOptions saved;
+    options::useNNUE.value = 1;
+    options::useSF16.value = 1;
+
+    for (auto& [fen, depth, best] : searches) {
+        search::newGame();  // Each search stands on its own, whatever ran before it.
+        auto pv = search::computeBestMove(fen::parsePosition(fen), depth);
+        if (to_string(pv.front()) != best)
+            std::cerr << fen << ": expected " << best << ", got " << to_string(pv.front()) << "\n";
+        assert(to_string(pv.front()) == best);
+    }
+    search::newGame();
+
+    if (debug) std::cout << "Incremental accumulator search test passed!\n";
+}
+
 void testBasicSearch() {
     testMissingPV();
     testCheckMated();
@@ -555,6 +598,7 @@ void testBasicSearch() {
     testMateInTwo();
     testNullMoveHash();
     testStaticEval();
+    testIncrementalSearch();
     if (debug) std::cout << "Basic search test passed!\n";
 }
 

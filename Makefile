@@ -191,7 +191,7 @@ $(eval $(call test_rules,move/move_gen,move/move_gen.cpp ${MOVES_SRCS} engine/fe
 $(eval $(call test_rules,move/move_table,move/move_table.cpp engine/fen/fen.cpp))
 $(eval $(call test_rules,move/magic/magic,move/magic/magic.cpp ${MOVES_SRCS} engine/fen/fen.cpp))
 $(eval $(call test_rules,eval/nnue/nnue,${NNUE_SRCS} engine/fen/fen.cpp))
-$(eval $(call test_rules,eval/nnue/sf16,eval/nnue/sf16.cpp engine/fen/fen.cpp))
+$(eval $(call test_rules,eval/nnue/sf16,eval/nnue/sf16.cpp ${MOVES_SRCS} engine/fen/fen.cpp))
 $(eval $(call test_rules,search/elo,))
 $(eval $(call test_rules,book/pgn/pgn,${MOVES_SRCS} book/pgn/pgn.cpp engine/fen/fen.cpp))
 $(eval $(call test_rules,book/book,${BOOK_SRCS} ${MOVES_SRCS} core/hash/hash.cpp))

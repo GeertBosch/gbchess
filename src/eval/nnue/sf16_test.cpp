@@ -17,6 +17,8 @@
 #include "engine/fen/fen.h"
 #include "eval/eval.h"
 #include "eval/nnue/sf16.h"
+#include "move/move.h"
+#include "move/move_gen.h"
 
 // A network is far too large to copy by accident, so it may only be moved.
 static_assert(!std::is_copy_constructible_v<nnue::sf16::Network>);
@@ -406,6 +408,7 @@ void testGoldenPropagations(const nnue::sf16::Network& network);
 void testGoldenEvaluations(const nnue::sf16::Network& network);
 void testColorSymmetry(const nnue::sf16::Network& network);
 void testEvaluationClamp(const nnue::sf16::Network& network);
+void testIncrementalAccumulators(const nnue::sf16::Network& network);
 
 void testNetworkFile(const std::string& filename) {
     std::ifstream file(filename, std::ios::binary);
@@ -479,6 +482,7 @@ void testNetworkFile(const std::string& filename) {
     testGoldenEvaluations(network);
     testColorSymmetry(network);
     testEvaluationClamp(network);
+    testIncrementalAccumulators(network);
 
     // The header alone still has to be rejected when cut short, as before.
     file.clear();
@@ -1542,6 +1546,183 @@ void testEvaluationClamp(const nnue::sf16::Network& network) {
     assert(Score::fromCP(evaluate(network, position)) < Score::mateIn(99));
     std::cout << "  a hopeless position clamps at " << kMaxEvaluation << " cp, from " << unclamped
               << "\n";
+}
+
+// ---------------------------------------------------------------------------------------------
+// Incremental accumulators
+// ---------------------------------------------------------------------------------------------
+
+using nnue::sf16::AccumulatorStack;
+using nnue::sf16::PieceChanges;
+using nnue::sf16::pieceChanges;
+
+/** A placement written the way the cases below name one, so that they compare as sets. */
+std::string to_string(const PieceChanges::Placement& placement) {
+    return std::string(1, pieceChars[index(placement.piece)]) + to_string(placement.square);
+}
+
+/** The removals and arrivals of a change, sorted, so that their order here is not a test. */
+std::vector<std::string> placementsOf(const PieceChanges& changes, bool removed) {
+    std::vector<std::string> names;
+    auto count = removed ? changes.removedCount : changes.addedCount;
+    for (uint8_t i = 0; i < count; ++i)
+        names.push_back(to_string(removed ? changes.removed[i] : changes.added[i]));
+
+    std::sort(names.begin(), names.end());
+    return names;
+}
+
+/**
+ * Check what one move takes off the board and what it puts back, naming pieces as "Pe2".
+ *
+ * This is the whole of what an incremental update needs to know about a move, and it is derived
+ * from a BoardChange rather than from the move kind, so every kind of compound move is a case
+ * worth writing out: the derivation has no branch on MoveKind to read.
+ */
+void expectChanges(const std::string& fen, Move move, std::vector<std::string> removed,
+                   std::vector<std::string> added) {
+    auto position = fen::parsePosition(fen);
+    auto change = moves::prepareMove(position.board, move);
+    auto changes = pieceChanges(position.board, change);
+
+    std::sort(removed.begin(), removed.end());
+    std::sort(added.begin(), added.end());
+    if (placementsOf(changes, true) != removed || placementsOf(changes, false) != added) {
+        std::cerr << fen << " " << to_string(move) << ": removed";
+        for (const auto& name : placementsOf(changes, true)) std::cerr << " " << name;
+        std::cerr << ", added";
+        for (const auto& name : placementsOf(changes, false)) std::cerr << " " << name;
+        std::cerr << "\n";
+    }
+    assert(placementsOf(changes, true) == removed);
+    assert(placementsOf(changes, false) == added);
+}
+
+/** Every kind of move, in terms of the pieces it moves rather than of its kind. */
+void testPieceChanges() {
+    const std::string start = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    expectChanges(start, {g1, f3, MoveKind::Quiet_Move}, {"Ng1"}, {"Nf3"});
+    expectChanges(start, {e2, e4, MoveKind::Double_Push}, {"Pe2"}, {"Pe4"});
+
+    // Kiwipete: captures on both sides, and castling either way.
+    const std::string kiwi = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1";
+    expectChanges(kiwi, {e5, g6, MoveKind::Capture}, {"Ne5", "pg6"}, {"Ng6"});
+    expectChanges(kiwi, {e1, g1, MoveKind::O_O}, {"Ke1", "Rh1"}, {"Kg1", "Rf1"});
+    expectChanges(kiwi, {e1, c1, MoveKind::O_O_O}, {"Ke1", "Ra1"}, {"Kc1", "Rd1"});
+    expectChanges(kiwi, {e8, g8, MoveKind::O_O}, {"ke8", "rh8"}, {"kg8", "rf8"});
+
+    // En passant takes a pawn off a square the capturing pawn never comes to rest on.
+    const std::string ep = "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1";
+    expectChanges(ep, {e5, d6, MoveKind::En_Passant}, {"Pe5", "pd5"}, {"Pd6"});
+    const std::string epBlack = "4k3/8/8/8/4pP2/8/8/4K3 b - f3 0 1";
+    expectChanges(epBlack, {e4, f3, MoveKind::En_Passant}, {"pe4", "Pf4"}, {"pf3"});
+
+    // A promotion lands a piece that never left, capture or no capture.
+    const std::string promo = "3r1n2/4P3/8/8/8/8/8/k3K3 w - - 0 1";
+    expectChanges(promo, {e7, e8, MoveKind::Queen_Promotion}, {"Pe7"}, {"Qe8"});
+    expectChanges(promo, {e7, d8, MoveKind::Rook_Promotion_Capture}, {"Pe7", "rd8"}, {"Rd8"});
+    expectChanges(promo, {e7, f8, MoveKind::Knight_Promotion_Capture}, {"Pe7", "nf8"}, {"Nf8"});
+
+    std::cout << "  every kind of move names the pieces it moves\n";
+}
+
+/**
+ * Walk every legal move to `depth`, keeping `stack` in step, and check it at every position.
+ *
+ * Two claims, and they are not the same one. First, an incrementally maintained accumulator equals
+ * a fresh one, which is what makes the evaluation below it unchanged. Second, it still does after
+ * the moves made from it have been unmade, which is what makes a stack the right shape for a
+ * search: the entry a node comes back to must be the one it built on the way down.
+ */
+size_t walkPositions(const nnue::sf16::Network& network, Position& position,
+                     AccumulatorStack& stack, int depth) {
+    const auto& transformer = network.transformer;
+    assert(stack.top() == refreshBoth(transformer, position));
+    assert(evaluate(network, position, stack.top()) == evaluate(network, position));
+
+    size_t nodes = 1;
+    if (depth) {
+        for (auto move : moves::allLegalMovesAndCaptures(position.turn, position.board)) {
+            auto change = moves::prepareMove(position.board, move);
+            auto changes = pieceChanges(position.board, change);
+            auto undo = moves::makeMove(position, change, move);
+
+            stack.push(transformer, position, changes);
+            nodes += walkPositions(network, position, stack, depth - 1);
+            stack.pop();
+
+            moves::unmakeMove(position, undo);
+        }
+    }
+
+    assert(stack.top() == refreshBoth(transformer, position) &&
+           "unmaking the moves made from a position must uncover its accumulators intact");
+    return nodes;
+}
+
+void testIncrementalAccumulators(const nnue::sf16::Network& network) {
+    testPieceChanges();
+
+    // An inactive stack is what every caller outside a search sees, and it must cost nothing.
+    AccumulatorStack stack;
+    assert(!stack.active() && stack.size() == 0);
+    stack.pop();
+    assert(!stack.active() && "popping an inactive stack does nothing");
+
+    // Positions chosen for the moves they allow: castling and captures, en passant on both sides,
+    // and promotions, all of which are the compound moves an update rule can get wrong.
+    const std::string fens[] = {
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+        "8/PPPk4/8/8/8/8/4Kppp/8 w - - 0 1",
+        "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+    };
+
+    size_t nodes = 0;
+    for (const auto& fen : fens) {
+        auto position = fen::parsePosition(fen);
+        stack.reset(network.transformer, position);
+        assert(stack.active() && stack.size() == 1);
+        nodes += walkPositions(network, position, stack, 2);
+        assert(stack.size() == 1 && "the walk must leave the root, and only the root, behind");
+    }
+    std::cout << "  " << nodes
+              << " positions keep their accumulators exactly through make/unmake\n";
+
+    stack.clear();
+    assert(!stack.active() && "a cleared stack is inactive again");
+
+    // Not a check, just the number phase 9 exists for: what carrying an accumulator across one
+    // move costs against building it from scratch, both for the same position. A debug build
+    // refreshes inside every push to check it, so there the two would be timing the same work.
+    if (debug) return;
+
+    auto position = fen::parsePosition(fens[0]);
+    auto change = moves::prepareMove(position.board, Move{e5, g6, MoveKind::Capture});
+    auto changes = pieceChanges(position.board, change);
+    stack.reset(network.transformer, position);
+    moves::makeMove(position, change, Move{e5, g6, MoveKind::Capture});
+
+    constexpr int kRepeats = 1000;
+    auto start = std::chrono::steady_clock::now();
+    for (int i = 0; i < kRepeats; ++i) {
+        stack.push(network.transformer, position, changes);
+        stack.pop();
+    }
+    auto incremental = std::chrono::steady_clock::now() - start;
+
+    start = std::chrono::steady_clock::now();
+    for (int i = 0; i < kRepeats; ++i) {
+        stack.push(network.transformer, position);
+        stack.pop();
+    }
+    auto fresh = std::chrono::steady_clock::now() - start;
+
+    auto nanos = [](auto elapsed) {
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count() / kRepeats;
+    };
+    std::cout << "  both perspectives of a capture: " << nanos(incremental)
+              << " ns incrementally against " << nanos(fresh) << " ns from scratch\n";
 }
 
 /** Print, rather than check, what the network makes of a position: the --verbose mode. */

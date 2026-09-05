@@ -328,6 +328,140 @@ Accumulator refresh(const FeatureTransformer& transformer, const Position& posit
                     Color perspective);
 
 /**
+ * Both perspectives' accumulators, which together are everything an evaluation reads of a board.
+ */
+struct Accumulators {
+    Accumulator white, black;
+
+    Accumulator& operator[](Color perspective) { return perspective == Color::w ? white : black; }
+};
+
+/**
+ * Refresh both perspectives of `position`, as refresh() above.
+ *
+ * Not an overload of refresh(): a call taking a Position and one taking an ActiveFeatures would
+ * differ only in an argument that is often written `{}`, and they return different types.
+ */
+Accumulators refreshBoth(const FeatureTransformer& transformer, const Position& position);
+
+inline bool operator==(const Accumulator& left, const Accumulator& right) {
+    return left.values == right.values && left.psqt == right.psqt;
+}
+
+inline bool operator==(const Accumulators& left, const Accumulators& right) {
+    return left.white == right.white && left.black == right.black;
+}
+
+/**
+ * The net effect of one move on where the pieces stand: what leaves the board and what arrives.
+ *
+ * A feature is a (piece, square) pair, so this is exactly the list of transformer rows a move
+ * subtracts from an accumulator and the list it adds, up to the perspective that turns them into
+ * indices. Writing the move out this way is what lets the update rule below ignore move kinds
+ * entirely: a capture is a second removal, castling is a second arrival, en passant removes a pawn
+ * from a square the mover never comes to rest on, and a promotion lands a piece that never left.
+ */
+struct PieceChanges {
+    struct Placement {
+        Square square = Square(0);
+        Piece piece = Piece::_;
+    };
+
+    /** At most three: the moving piece, a captured piece and castling's rook. */
+    std::array<Placement, 3> removed = {};
+    /** At most two: the moving piece at its destination and castling's rook at its own. */
+    std::array<Placement, 2> added = {};
+    uint8_t removedCount = 0;
+    uint8_t addedCount = 0;
+
+    void remove(Square square, Piece piece) {
+        assert(removedCount < removed.size());
+        removed[removedCount++] = {square, piece};
+    }
+
+    void add(Square square, Piece piece) {
+        assert(addedCount < added.size());
+        added[addedCount++] = {square, piece};
+    }
+
+    /**
+     * Whether `color`'s own king left a square, and so whether that perspective must be rebuilt
+     * from scratch rather than updated: every one of its feature indices, the king bucket and the
+     * mirroring flip alike, is expressed relative to where that king stands.
+     */
+    bool movedKing(Color color) const;
+};
+
+/**
+ * The pieces that `change` moves, read off `board` as it stands before makeMove applies it.
+ *
+ * The moving piece is the one thing a BoardChange does not name, so this has to see the board
+ * first; everything else it derives from the change alone. `change.first` is the simple half of
+ * the move, capture included, and `change.second` is the compound half that castling, promotion
+ * and en passant need, a no-op for every other move.
+ */
+PieceChanges pieceChanges(const Board& board, const BoardChange& change);
+
+/**
+ * The accumulators of every position along a search path, maintained incrementally.
+ *
+ * A search that keeps one of these pays for a full refresh at its root and whenever a king moves,
+ * and for at most three feature rows per perspective on every other move. Entries form a stack
+ * rather than a single running accumulator because unmakeMove has to uncover the accumulators of
+ * the position it restores exactly as they were, and because a perspective whose king moved has
+ * no delta to undo at all.
+ *
+ * A stack with nothing on it is *inactive*: push() and pop() do nothing, top() has nothing to
+ * return, and so an engine that evaluates with another network, or any caller outside a search,
+ * pays nothing for the existence of this one. reset() is what makes a stack active.
+ */
+class AccumulatorStack {
+public:
+    /** Whether a search is maintaining this stack; see the class comment. */
+    bool active() const { return count != 0; }
+
+    /** Positions currently on the stack, being the root plus one per move made from it. */
+    size_t size() const { return count; }
+
+    /** Accumulate `position` from scratch as the only entry, making the stack active. */
+    void reset(const FeatureTransformer& transformer, const Position& position);
+
+    /** Make the stack inactive again, releasing the memory its entries hold. */
+    void clear();
+
+    /** The accumulators of the position pushed last. The stack must be active. */
+    const Accumulators& top() const;
+
+    /**
+     * Push the accumulators of `position`, the position that results from applying the move that
+     * `changes` describes to the position currently on top. Does nothing while inactive.
+     *
+     * A debug build checks the result against a fresh refresh of `position`. That equality is the
+     * entire correctness argument for the incremental update, it catches every class of indexing
+     * and delta error this can make, and it costs nothing in an optimized build.
+     */
+    void push(const FeatureTransformer& transformer, const Position& position,
+              const PieceChanges& changes);
+
+    /** Push a fresh accumulation of `position`, for a caller with no PieceChanges to offer. */
+    void push(const FeatureTransformer& transformer, const Position& position);
+
+    /** Uncover the entry below the top one. Does nothing while inactive. */
+    void pop();
+
+private:
+    /** The next entry, which is a recycled one whenever the stack has been this deep before. */
+    Accumulators& grow();
+
+    /**
+     * Entries 0 to count - 1 are live. The vector is never shrunk by pop(), so the accumulator
+     * a popped entry allocated is reused by the next push rather than freed and allocated again.
+     */
+    std::vector<Accumulators> entries;
+    size_t count = 0;
+};
+
+/**
  * The transformer's output: the values the layer stacks are evaluated on, and the PSQT term that
  * is added to their result.
  *
@@ -502,11 +636,25 @@ int32_t evaluateValue(const Network& network, const Position& position,
                       Evaluation* trace = nullptr);
 
 /**
+ * Evaluate `position` from accumulators already computed for it, as evaluateValue() above.
+ *
+ * The accumulators must be the ones belonging to `position` itself. Everything below them reads
+ * the board only through them, so a stale pair does not evaluate this position approximately: it
+ * evaluates the position it was built from, and says nothing at all about this one.
+ */
+int32_t evaluateValue(const Network& network, const Position& position,
+                      const Accumulators& accumulators, Evaluation* trace = nullptr);
+
+/**
  * Evaluate `position` in centipawns, positive when White stands better.
  *
  * That is the convention the SF12 evaluation next door already returns, so the sign here is the
  * one gbchess's search expects. The result is clamped to kMaxEvaluation.
  */
 int32_t evaluate(const Network& network, const Position& position);
+
+/** Evaluate `position` in centipawns from accumulators already computed for it, as above. */
+int32_t evaluate(const Network& network, const Position& position,
+                 const Accumulators& accumulators);
 
 }  // namespace nnue::sf16

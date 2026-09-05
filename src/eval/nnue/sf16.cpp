@@ -275,6 +275,51 @@ Square kingSquare(const Board& board, Color color) {
     throw std::runtime_error("Position has no " + to_string(color) + " king");
 }
 
+/**
+ * Add or subtract one feature's transformer row and PSQT contribution, in place.
+ *
+ * Accumulator entries stay 16 bit, wrapping around rather than saturating if a position ever
+ * managed to overflow one. That is what Stockfish's packed 16 bit adds do, and it is the behavior
+ * the network was trained against, so we must not widen the sum here. It is also why subtracting
+ * a row undoes adding it exactly, which is what makes an incremental update sound at all.
+ */
+template <bool kAdd>
+void applyFeature(Accumulator& accumulator, const FeatureTransformer& transformer,
+                  uint16_t feature) {
+    auto l1 = accumulator.values.size();
+    dassert((size_t(feature) + 1) * l1 <= transformer.weights.size());
+    const auto* weights = transformer.weights.data() + size_t(feature) * l1;
+
+    for (size_t i = 0; i < l1; ++i) {
+        auto value = uint16_t(accumulator.values[i]);
+        accumulator.values[i] = int16_t(kAdd ? uint16_t(value + uint16_t(weights[i]))
+                                             : uint16_t(value - uint16_t(weights[i])));
+    }
+
+    const auto* psqt =
+        transformer.psqtWeights.data() + size_t(feature) * Architecture::kPSQTBuckets;
+    for (size_t bucket = 0; bucket < Architecture::kPSQTBuckets; ++bucket)
+        if constexpr (kAdd)
+            accumulator.psqt[bucket] += psqt[bucket];
+        else
+            accumulator.psqt[bucket] -= psqt[bucket];
+}
+
+/**
+ * Rebuild `accumulator` from the transformer's biases and `features`, reusing whatever storage it
+ * already holds. A stack that refreshes a perspective every time a king moves does that often
+ * enough for the allocation a fresh Accumulator would need to be worth not making.
+ */
+void accumulate(Accumulator& accumulator, const FeatureTransformer& transformer,
+                const ActiveFeatures& features) {
+    dassert(transformer.biases.size() &&
+            transformer.weights.size() % transformer.biases.size() == 0);
+
+    accumulator.values.assign(transformer.biases.begin(), transformer.biases.end());
+    accumulator.psqt = {};
+    for (auto feature : features) applyFeature<true>(accumulator, transformer, feature);
+}
+
 }  // namespace
 
 uint16_t featureIndex(Square square, Piece piece, Square king, Color perspective) {
@@ -297,34 +342,160 @@ ActiveFeatures activeFeatures(const Position& position, Color perspective) {
 }
 
 Accumulator refresh(const FeatureTransformer& transformer, const ActiveFeatures& features) {
-    auto l1 = transformer.biases.size();
-    dassert(l1 && transformer.weights.size() % l1 == 0);
-
     Accumulator accumulator;
-    accumulator.values = transformer.biases;
-
-    for (auto feature : features) {
-        dassert((size_t(feature) + 1) * l1 <= transformer.weights.size());
-        const auto* weights = transformer.weights.data() + size_t(feature) * l1;
-
-        // Accumulator entries stay 16 bit, wrapping around rather than saturating if a position
-        // ever managed to overflow one. That is what Stockfish's packed 16 bit adds do, and it is
-        // the behavior the network was trained against, so we must not widen the sum here.
-        for (size_t i = 0; i < l1; ++i)
-            accumulator.values[i] = int16_t(uint16_t(accumulator.values[i]) + uint16_t(weights[i]));
-
-        const auto* psqt =
-            transformer.psqtWeights.data() + size_t(feature) * Architecture::kPSQTBuckets;
-        for (size_t bucket = 0; bucket < Architecture::kPSQTBuckets; ++bucket)
-            accumulator.psqt[bucket] += psqt[bucket];
-    }
-
+    accumulate(accumulator, transformer, features);
     return accumulator;
 }
 
 Accumulator refresh(const FeatureTransformer& transformer, const Position& position,
                     Color perspective) {
     return refresh(transformer, activeFeatures(position, perspective));
+}
+
+namespace {
+
+/** Rebuild one perspective of `position` in place, as refresh() does but without allocating. */
+void refreshInto(Accumulator& accumulator, const FeatureTransformer& transformer,
+                 const Position& position, Color perspective) {
+    accumulate(accumulator, transformer, activeFeatures(position, perspective));
+}
+
+/**
+ * Carry `accumulator` across one move, for a perspective whose own king did not move and so
+ * stands on `king` both before and after it.
+ *
+ * Removals come first only for readability; the rows commute, as int16 addition does.
+ */
+void updatePerspective(Accumulator& accumulator, const FeatureTransformer& transformer,
+                       const PieceChanges& changes, Square king, Color perspective) {
+    for (uint8_t i = 0; i < changes.removedCount; ++i)
+        applyFeature<false>(
+            accumulator,
+            transformer,
+            featureIndex(changes.removed[i].square, changes.removed[i].piece, king, perspective));
+
+    for (uint8_t i = 0; i < changes.addedCount; ++i)
+        applyFeature<true>(
+            accumulator,
+            transformer,
+            featureIndex(changes.added[i].square, changes.added[i].piece, king, perspective));
+}
+
+/** Pieces standing on `board`, which is also the number of features either perspective sets. */
+uint32_t countPieces(const Board& board) {
+    uint32_t pieces = 0;
+    for (auto piece : board) pieces += piece != Piece::_;
+    return pieces;
+}
+
+}  // namespace
+
+Accumulators refreshBoth(const FeatureTransformer& transformer, const Position& position) {
+    Accumulators accumulators;
+    refreshInto(accumulators.white, transformer, position, Color::w);
+    refreshInto(accumulators.black, transformer, position, Color::b);
+    return accumulators;
+}
+
+bool PieceChanges::movedKing(Color color) const {
+    auto king = addColor(PieceType::KING, color);
+    for (uint8_t i = 0; i < removedCount; ++i)
+        if (removed[i].piece == king) return true;
+
+    return false;
+}
+
+PieceChanges pieceChanges(const Board& board, const BoardChange& change) {
+    PieceChanges changes;
+    auto moving = board[change.first.from];
+    dassert(moving != Piece::_ && "a move moves a piece");
+
+    changes.remove(change.first.from, moving);
+    if (change.captured != Piece::_) changes.remove(change.first.to, change.captured);
+
+    // For every plain move the second half is a no-op standing on the square the first half landed
+    // on, and the moving piece simply comes to rest there.
+    if (change.second.from == change.second.to && change.promo == 0) {
+        changes.add(change.first.to, moving);
+        return changes;
+    }
+
+    if (change.second.from != change.first.to) {
+        // Castling, whose second half moves a rook the first half did not touch, so the board
+        // still shows it. The king stays where the first half put it.
+        changes.add(change.first.to, moving);
+        auto rook = board[change.second.from];
+        changes.remove(change.second.from, rook);
+        changes.add(change.second.to, Piece(index(rook) + change.promo));
+    } else {
+        // Promotion and en passant, whose second half moves the moving piece on from where the
+        // first half left it: it never comes to rest on first.to, and may change type on the way.
+        changes.add(change.second.to, Piece(index(moving) + change.promo));
+    }
+
+    return changes;
+}
+
+Accumulators& AccumulatorStack::grow() {
+    if (count == entries.size()) entries.emplace_back();
+    return entries[count++];
+}
+
+void AccumulatorStack::reset(const FeatureTransformer& transformer, const Position& position) {
+    count = 0;
+    grow();
+    refreshInto(entries[0].white, transformer, position, Color::w);
+    refreshInto(entries[0].black, transformer, position, Color::b);
+}
+
+void AccumulatorStack::clear() {
+    entries.clear();
+    entries.shrink_to_fit();
+    count = 0;
+}
+
+const Accumulators& AccumulatorStack::top() const {
+    dassert(active() && "an inactive stack has no top");
+    return entries[count - 1];
+}
+
+void AccumulatorStack::push(const FeatureTransformer& transformer, const Position& position) {
+    if (!active()) return;
+
+    grow();
+    refreshInto(entries[count - 1].white, transformer, position, Color::w);
+    refreshInto(entries[count - 1].black, transformer, position, Color::b);
+}
+
+void AccumulatorStack::push(const FeatureTransformer& transformer, const Position& position,
+                            const PieceChanges& changes) {
+    if (!active()) return;
+
+    // grow() may reallocate the vector, so nothing may hold a reference across it. Copying the
+    // entry below reuses the storage a popped entry left behind rather than allocating again.
+    grow();
+    entries[count - 1] = entries[count - 2];
+    auto& top = entries[count - 1];
+
+    for (auto perspective : {Color::w, Color::b})
+        if (changes.movedKing(perspective))
+            refreshInto(top[perspective], transformer, position, perspective);
+        else
+            updatePerspective(top[perspective],
+                              transformer,
+                              changes,
+                              kingSquare(position.board, perspective),
+                              perspective);
+
+    dassert(top == refreshBoth(transformer, position) &&
+            "an incrementally updated accumulator must equal a fresh one");
+}
+
+void AccumulatorStack::pop() {
+    if (!active()) return;
+
+    dassert(count > 1 && "the bottom entry belongs to the stack's root, not to a move");
+    --count;
 }
 
 Transformed transform(const Accumulator& white, const Accumulator& black, Color sideToMove,
@@ -441,27 +612,21 @@ uint32_t materialBucket(uint32_t pieceCount) {
 }
 
 uint32_t materialBucket(const Position& position) {
-    uint32_t pieces = 0;
-    for (auto piece : position.board) pieces += piece != Piece::_;
-    return materialBucket(pieces);
+    return materialBucket(countPieces(position.board));
 }
 
-int32_t evaluateValue(const Network& network, const Position& position, Evaluation* trace) {
-    auto white = activeFeatures(position, Color::w);
-    auto black = activeFeatures(position, Color::b);
-    dassert(white.size == black.size && "both perspectives see the same pieces");
-
+int32_t evaluateValue(const Network& network, const Position& position,
+                      const Accumulators& accumulators, Evaluation* trace) {
     Evaluation scratch;
     Evaluation& e = trace ? *trace : scratch;
 
-    // Every piece contributes exactly one feature, so the features have already counted the board.
-    e.pieceCount = white.size;
+    // Every piece contributes exactly one feature to either perspective, so this is also the
+    // number of rows the accumulators handed in are the sum of.
+    e.pieceCount = countPieces(position.board);
     e.bucket = materialBucket(e.pieceCount);
 
-    auto transformed = transform(refresh(network.transformer, white),
-                                 refresh(network.transformer, black),
-                                 position.active(),
-                                 e.bucket);
+    auto transformed =
+        transform(accumulators.white, accumulators.black, position.active(), e.bucket);
     e.psqt = transformed.psqt;
     e.positional = propagate(network.stacks[e.bucket], transformed.features);
 
@@ -472,14 +637,23 @@ int32_t evaluateValue(const Network& network, const Position& position, Evaluati
     return e.value;
 }
 
-int32_t evaluate(const Network& network, const Position& position) {
+int32_t evaluateValue(const Network& network, const Position& position, Evaluation* trace) {
+    return evaluateValue(network, position, refreshBoth(network.transformer, position), trace);
+}
+
+int32_t evaluate(const Network& network, const Position& position,
+                 const Accumulators& accumulators) {
     // Into centipawns, then out of the side to move's frame and into White's, which is what the
     // SF12 evaluation next door returns. Truncation toward zero makes the order of the two
     // immaterial. The clamp only fires on a position no search needs a precise number for.
-    auto cp = evaluateValue(network, position) * 100 / kNormalizeToPawnValue;
+    auto cp = evaluateValue(network, position, accumulators) * 100 / kNormalizeToPawnValue;
     if (position.active() == Color::b) cp = -cp;
 
     return std::clamp(cp, -kMaxEvaluation, kMaxEvaluation);
+}
+
+int32_t evaluate(const Network& network, const Position& position) {
+    return evaluate(network, position, refreshBoth(network.transformer, position));
 }
 
 }  // namespace nnue::sf16
