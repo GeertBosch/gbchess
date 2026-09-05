@@ -436,4 +436,77 @@ struct Propagation {
 int32_t propagate(const LayerStack& stack, const std::vector<uint8_t>& features,
                   Propagation* trace = nullptr);
 
+
+/**
+ * Scale between the network's own Value units and centipawns: Stockfish's NormalizeToPawnValue.
+ *
+ * A Value is not a centipawn. What makes "one pawn" come out near 100 is a constant the network's
+ * training fixes and SF16.1 keeps in uci.cpp, where it is 356 for this network. gbchess's search
+ * margins were tuned against the SF12 evaluation's own scale, so this is the number to revisit
+ * when they are, and it is deliberately one named constant rather than a literal in an expression.
+ */
+constexpr int32_t kNormalizeToPawnValue = 356;
+
+/**
+ * Largest centipawn magnitude evaluate() reports.
+ *
+ * Score is an int16_t that asserts a magnitude of at most 9999 and reserves the band above 9900
+ * for mate scores; a network looking at a hopelessly won position can name a larger number than
+ * that. Clamping here keeps a legitimate blowout from aborting a debug build or, worse, quietly
+ * reading as a mate the search would then believe.
+ */
+constexpr int32_t kMaxEvaluation = 9000;
+
+/**
+ * The layer stack Stockfish selects for a position holding `pieceCount` pieces.
+ *
+ * One number selects both the layer stack and the PSQT bucket: they are two halves of a single
+ * bucketed evaluation rather than two things chosen independently. HalfKAv2_hm counts kings among
+ * its features, so an ActiveFeatures::size is exactly the count this wants and no separate walk
+ * over the board is needed on the evaluation path.
+ */
+uint32_t materialBucket(uint32_t pieceCount);
+
+/** The bucket of `position`, counting the pieces on its board. */
+uint32_t materialBucket(const Position& position);
+
+/**
+ * Everything an evaluation computes on its way to a value.
+ *
+ * As with Propagation, the traced and untraced calls run the same code, so a test may check what
+ * one reports about the other. Unlike Propagation this is small enough to be worth printing.
+ */
+struct Evaluation {
+    /** Pieces on the board, which is also the number of active features per perspective. */
+    uint32_t pieceCount = 0;
+    /** The layer stack and PSQT bucket that count selects. */
+    uint32_t bucket = 0;
+    /** The transformer's PSQT term in that bucket. */
+    int32_t psqt = 0;
+    /** The selected layer stack's output. */
+    int32_t positional = 0;
+    /** Their sum in the network's output units, relative to the side to move. */
+    int32_t value = 0;
+};
+
+/**
+ * Evaluate `position` with `network`, in Stockfish's internal Value units.
+ *
+ * The result is relative to the side to move, as it is in Stockfish: the transform puts the side
+ * to move's perspective first, and nothing below that point knows which color it is looking at. A
+ * position and its color swapped image therefore evaluate to the same number, not opposite ones.
+ *
+ * If `trace` is given it receives the bucket and the two terms the value is made of.
+ */
+int32_t evaluateValue(const Network& network, const Position& position,
+                      Evaluation* trace = nullptr);
+
+/**
+ * Evaluate `position` in centipawns, positive when White stands better.
+ *
+ * That is the convention the SF12 evaluation next door already returns, so the sign here is the
+ * one gbchess's search expects. The result is clamped to kMaxEvaluation.
+ */
+int32_t evaluate(const Network& network, const Position& position);
+
 }  // namespace nnue::sf16

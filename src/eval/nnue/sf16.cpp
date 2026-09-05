@@ -431,4 +431,55 @@ int32_t propagate(const LayerStack& stack, const std::vector<uint8_t>& features,
     return p.output;
 }
 
+
+uint32_t materialBucket(uint32_t pieceCount) {
+    dassert(pieceCount >= 2 && "a position holds at least the two kings");
+    // Stockfish's own (pieceCount - 1) / 4. Only a board that is not a chess position can leave
+    // the eight stacks, and the assert above is gone in an optimized build, so clamp rather than
+    // index past them; the arithmetic is unsigned, so an impossible count of zero clamps too.
+    return std::min((pieceCount - 1) / 4, Architecture::kLayerStacks - 1);
+}
+
+uint32_t materialBucket(const Position& position) {
+    uint32_t pieces = 0;
+    for (auto piece : position.board) pieces += piece != Piece::_;
+    return materialBucket(pieces);
+}
+
+int32_t evaluateValue(const Network& network, const Position& position, Evaluation* trace) {
+    auto white = activeFeatures(position, Color::w);
+    auto black = activeFeatures(position, Color::b);
+    dassert(white.size == black.size && "both perspectives see the same pieces");
+
+    Evaluation scratch;
+    Evaluation& e = trace ? *trace : scratch;
+
+    // Every piece contributes exactly one feature, so the features have already counted the board.
+    e.pieceCount = white.size;
+    e.bucket = materialBucket(e.pieceCount);
+
+    auto transformed = transform(refresh(network.transformer, white),
+                                 refresh(network.transformer, black),
+                                 position.active(),
+                                 e.bucket);
+    e.psqt = transformed.psqt;
+    e.positional = propagate(network.stacks[e.bucket], transformed.features);
+
+    // The two terms are in the same units and simply add; the division is what makes their sum a
+    // Value. Stockfish truncates toward zero here, and a rounding of our own would be visible.
+    e.value = (e.psqt + e.positional) / kOutputScale;
+
+    return e.value;
+}
+
+int32_t evaluate(const Network& network, const Position& position) {
+    // Into centipawns, then out of the side to move's frame and into White's, which is what the
+    // SF12 evaluation next door returns. Truncation toward zero makes the order of the two
+    // immaterial. The clamp only fires on a position no search needs a precise number for.
+    auto cp = evaluateValue(network, position) * 100 / kNormalizeToPawnValue;
+    if (position.active() == Color::b) cp = -cp;
+
+    return std::clamp(cp, -kMaxEvaluation, kMaxEvaluation);
+}
+
 }  // namespace nnue::sf16

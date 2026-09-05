@@ -15,6 +15,7 @@
 
 #include "core/core.h"
 #include "engine/fen/fen.h"
+#include "eval/eval.h"
 #include "eval/nnue/sf16.h"
 
 // A network is far too large to copy by accident, so it may only be moved.
@@ -402,6 +403,9 @@ int64_t sum(const std::vector<Int>& values) {
 /** Defined with the transform tests below, but only a real network file can drive it. */
 void testGoldenTransforms(const nnue::sf16::Network& network);
 void testGoldenPropagations(const nnue::sf16::Network& network);
+void testGoldenEvaluations(const nnue::sf16::Network& network);
+void testColorSymmetry(const nnue::sf16::Network& network);
+void testEvaluationClamp(const nnue::sf16::Network& network);
 
 void testNetworkFile(const std::string& filename) {
     std::ifstream file(filename, std::ios::binary);
@@ -472,6 +476,9 @@ void testNetworkFile(const std::string& filename) {
     // With a real transformer in hand, check it against Stockfish 16.1 itself.
     testGoldenTransforms(network);
     testGoldenPropagations(network);
+    testGoldenEvaluations(network);
+    testColorSymmetry(network);
+    testEvaluationClamp(network);
 
     // The header alone still has to be rejected when cut short, as before.
     file.clear();
@@ -1358,6 +1365,201 @@ void testGoldenPropagations(const nnue::sf16::Network& network) {
               << " ns\n";
 }
 
+// ---------------------------------------------------------------------------------------------
+// Whole network evaluation
+// ---------------------------------------------------------------------------------------------
+
+using nnue::sf16::Evaluation;
+using nnue::sf16::evaluate;
+using nnue::sf16::evaluateValue;
+using nnue::sf16::kMaxEvaluation;
+using nnue::sf16::kNormalizeToPawnValue;
+using nnue::sf16::kOutputScale;
+using nnue::sf16::materialBucket;
+
+/** Bucket selection alone, which no golden data is needed to check. */
+void testMaterialBuckets() {
+    // (pieceCount - 1) / 4, so a bucket spans four counts and the boundaries are exactly where an
+    // off by one moves: two kings alone are bucket 0, and a full board is bucket 7.
+    const struct {
+        uint32_t pieces;
+        uint32_t bucket;
+    } kCases[] = {{2, 0},  {3, 0},  {4, 0},  {5, 1},  {8, 1},  {9, 2},
+                  {12, 2}, {13, 3}, {16, 3}, {17, 4}, {20, 4}, {21, 5},
+                  {24, 5}, {25, 6}, {28, 6}, {29, 7}, {32, 7}};
+    for (const auto& c : kCases) assert(materialBucket(c.pieces) == c.bucket);
+
+    // The same over real boards, which is where a piece count that forgot the kings would show.
+    assert(materialBucket(fen::parsePosition(fen::initialPosition)) == 7);
+    assert(materialBucket(fen::parsePosition("4k3/8/8/8/8/8/8/4K3 w - - 0 1")) == 0);
+    assert(materialBucket(fen::parsePosition("4k3/4p3/8/8/8/8/4P3/4K3 w - - 0 1")) == 0);
+    assert(materialBucket(fen::parsePosition("4k3/3ppp2/8/8/8/8/4P3/4K3 w - - 0 1")) == 1);
+    assert(materialBucket(fen::parsePosition("rnbqkbnr/8/8/8/8/8/8/RNBQKBNR w KQkq - 0 1")) == 3);
+}
+
+/**
+ * What Stockfish 16.1 finally says about the golden positions, from its nndump.
+ *
+ * The eight values per position are all eight buckets, not just the one the position selects: the
+ * combination (psqt + positional) / OutputScale is the same arithmetic in every bucket, and the
+ * seven a position never picks are exactly where a sign or a rounding of our own would survive.
+ * Both columns are relative to the side to move, as Stockfish's own are.
+ */
+struct GoldenEvaluation {
+    uint32_t pieceCount;
+    uint32_t bucket;  // the layer stack that piece count selects
+    int32_t value[nnue::sf16::Architecture::kLayerStacks];
+    int32_t cp[nnue::sf16::Architecture::kLayerStacks];
+};
+
+/** One row per position of kGoldenTransforms, in that order. */
+const GoldenEvaluation kGoldenEvaluations[std::size(kGoldenTransforms)] = {
+    // rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+    {32, 7, {-94, 312, 96, 36, 101, 26, 30, 35}, {-26, 87, 26, 10, 28, 7, 8, 9}},
+
+    // r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 4 4
+    {32, 7, {-1114, 239, -41, -62, -47, -45, -24, -33}, {-312, 67, -11, -17, -13, -12, -6, -9}},
+
+    // r4rk1/pp2ppbp/2np1np1/q1p5/4P3/2N1BP2/PPPQN1PP/2KR1B1R w - - 4 12
+    {30, 7, {28, 796, 798, 733, 898, 1010, 980, 892}, {7, 223, 224, 205, 252, 283, 275, 250}},
+
+    // The same position with the colors swapped: black is to move, and every value is identical,
+    // because a value is what the side to move thinks of it.
+    // 2kr1b1r/pppqn1pp/2n1bp2/4p3/Q1P5/2NP1NP1/PP2PPBP/R4RK1 b - - 4 12
+    {30, 7, {28, 796, 798, 733, 898, 1010, 980, 892}, {7, 223, 224, 205, 252, 283, 275, 250}},
+
+    // 8/5k2/8/8/3P4/8/5K2/8 w - - 0 1
+    {3, 0, {17, 549, 228, 172, 442, 74, 510, 736}, {4, 154, 64, 48, 124, 20, 143, 206}},
+
+    // 8/2k5/2p5/8/1P6/8/3K4/6R1 b - - 0 1
+    {5,
+     1,
+     {-2907, -2044, -1960, -1497, -1024, -1013, -1268, -1059},
+     {-816, -574, -550, -420, -287, -284, -356, -297}},
+
+    // 4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1
+    {4,
+     0,
+     {2968, 2766, 3147, 2152, 2007, 1697, 1193, 1714},
+     {833, 776, 883, 604, 563, 476, 335, 481}},
+};
+
+/**
+ * The phase 7 checkpoint: the value and the centipawn score Stockfish 16.1 itself reports.
+ *
+ * The intermediates were already pinned by the phases above, so what is new here is the piece
+ * count, the bucket it selects, the addition of the two terms, and the two divisions. Every one
+ * of those is a place where a plausible variant - rounding to nearest, a bucket off by one, a
+ * White relative value - produces numbers that look entirely reasonable and are wrong.
+ */
+void testGoldenEvaluations(const nnue::sf16::Network& network) {
+    for (size_t index = 0; index < std::size(kGoldenTransforms); ++index) {
+        const char* fen = kGoldenTransforms[index].fen;
+        const auto& golden = kGoldenEvaluations[index];
+        auto position = fen::parsePosition(fen);
+
+        assert(materialBucket(golden.pieceCount) == golden.bucket);
+        assert(materialBucket(position) == golden.bucket);
+
+        for (uint32_t bucket = 0; bucket < nnue::sf16::Architecture::kLayerStacks; ++bucket) {
+            auto transformed = transform(network.transformer, position, bucket);
+            auto positional = propagate(network.stacks[bucket], transformed.features);
+            auto value = (transformed.psqt + positional) / kOutputScale;
+            if (value != golden.value[bucket])
+                std::cerr << fen << " bucket " << bucket << ": expected value "
+                          << golden.value[bucket] << ", got " << value << "\n";
+
+            assert(value == golden.value[bucket]);
+            assert(value * 100 / kNormalizeToPawnValue == golden.cp[bucket]);
+        }
+
+        // And what the network actually says, through the single stack the position selects.
+        Evaluation trace;
+        auto value = evaluateValue(network, position, &trace);
+        assert(value == golden.value[golden.bucket]);
+        assert(trace.pieceCount == golden.pieceCount);
+        assert(trace.bucket == golden.bucket);
+        assert(trace.value == value);
+        assert(trace.psqt == kGoldenTransforms[index].psqt[golden.bucket]);
+        assert(trace.positional == kGoldenPropagations[index][golden.bucket].output);
+
+        // Tracing must not have changed the computation, as with propagate().
+        assert(evaluateValue(network, position) == value);
+
+        // In centipawns the score leaves the side to move's frame for White's, and only there.
+        auto cp = golden.cp[golden.bucket];
+        if (position.active() == Color::b) cp = -cp;
+        assert(evaluate(network, position) == cp);
+    }
+
+    std::cout << "  " << std::size(kGoldenTransforms)
+              << " positions evaluate to Stockfish 16.1's exact Value in all "
+              << nnue::sf16::Architecture::kLayerStacks << " buckets\n";
+}
+
+/** The same position with the colors exchanged: ranks flipped and every piece recolored. */
+Position colorSwapped(const Position& position) {
+    Position result;
+    for (Square square : squares) {
+        auto piece = position.board[square];
+        if (piece != Piece::_)
+            result.board[Square(square ^ 56)] = addColor(type(piece), !color(piece));
+    }
+    result.turn = Turn(!position.active());
+    return result;
+}
+
+/**
+ * Swapping the colors of a position leaves the value alone and negates the score.
+ *
+ * Those are two different claims and both are load bearing. The value is the side to move's, and
+ * a color swap swaps who that is, so it cannot change; the centipawn score is White's, so it must
+ * change sign. An implementation that negated in the wrong place would satisfy one and not both.
+ */
+void testColorSymmetry(const nnue::sf16::Network& network) {
+    for (const auto& golden : kGoldenTransforms) {
+        auto position = fen::parsePosition(golden.fen);
+        auto swapped = colorSwapped(position);
+        assert(materialBucket(swapped) == materialBucket(position));
+        assert(evaluateValue(network, swapped) == evaluateValue(network, position));
+        assert(evaluate(network, swapped) == -evaluate(network, position));
+    }
+    std::cout << "  color swapped positions keep their value and negate their score\n";
+}
+
+/** A position lost beyond what a Score can hold, which is what the clamp exists for. */
+void testEvaluationClamp(const nnue::sf16::Network& network) {
+    auto position = fen::parsePosition("4k3/8/8/8/8/QQQQQQQQ/QQQQQQQQ/RRRRKRRR w - - 0 1");
+    Evaluation trace;
+    evaluateValue(network, position, &trace);
+
+    auto unclamped = trace.value * 100 / kNormalizeToPawnValue;
+    assert(unclamped > kMaxEvaluation && "the clamp needs something to clamp to be a test");
+    assert(evaluate(network, position) == kMaxEvaluation);
+    assert(evaluate(network, colorSwapped(position)) == -kMaxEvaluation);
+
+    // What comes out is a Score the search can hold, and it stays clear of the mate band.
+    assert(Score::fromCP(evaluate(network, position)) < Score::mateIn(99));
+    std::cout << "  a hopeless position clamps at " << kMaxEvaluation << " cp, from " << unclamped
+              << "\n";
+}
+
+/** Print, rather than check, what the network makes of a position: the --verbose mode. */
+void printEvaluations(const std::string& filename, const std::vector<std::string>& fens) {
+    std::ifstream file(filename, std::ios::binary);
+    if (!file) throw std::runtime_error("Cannot open NNUE file: " + filename);
+    auto network = nnue::sf16::readNetwork(file);
+
+    for (const auto& fen : fens) {
+        auto position = fen::parsePosition(fen);
+        Evaluation trace;
+        evaluateValue(network, position, &trace);
+        std::cout << fen << "\n  " << trace.pieceCount << " pieces, bucket " << trace.bucket
+                  << ": psqt " << trace.psqt << " + positional " << trace.positional << " = value "
+                  << trace.value << ", " << evaluate(network, position) << " cp for white\n";
+    }
+}
+
 /** A position without a king of the perspective's color cannot be described at all. */
 void testMissingKing() {
     Position position;
@@ -1395,11 +1597,25 @@ int main(int argc, char* argv[]) try {
     testAffineForward();
     testActivations();
     testSyntheticStack();
+    testMaterialBuckets();
 
-    if (argc <= 1)
-        testNetworkFile(kBigNetworkFile);
-    else
-        while (++argv, --argc) testNetworkFile(*argv);
+    // Remaining arguments name network files, except that "--verbose <fen>" asks for one
+    // position to be evaluated and printed rather than checked, which is how an arbitrary
+    // position is compared against Stockfish by hand.
+    std::vector<std::string> files, fens;
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg != "--verbose")
+            files.push_back(arg);
+        else if (++i < argc)
+            fens.push_back(argv[i]);
+        else
+            throw std::runtime_error("--verbose needs a FEN");
+    }
+    if (files.empty()) files.push_back(kBigNetworkFile);
+
+    for (const auto& file : files) testNetworkFile(file);
+    if (!fens.empty()) printEvaluations(files.front(), fens);
 
     std::cout << "All SF16 NNUE tests passed!\n";
     return 0;

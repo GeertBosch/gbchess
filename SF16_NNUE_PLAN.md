@@ -11,15 +11,18 @@ this plan covers everything from the layer stacks down to a network that actuall
 | 2 | `be454eb` | Full parameter load of `nn-b1a57edbea57.nnue`, landing exactly at EOF |
 | 3 | `3ca380a` | HalfKAv2_hm feature indexing, king buckets, horizontal mirroring |
 | 4 | `fab95fd` | Fresh accumulation, the 2560-byte feature transform, PSQT |
+| 5 | `8e5bd76` | The `nndump` oracle re-established at Stockfish tag `sf_16.1` |
+| 6 | `6111394` | Layer stack propagation, every intermediate golden |
+| 7 | this commit | Bucket selection, whole-network evaluation, centipawn scale |
 
-`src/eval/nnue/sf16.h` today ends at `Transformed transform(...)`. That boundary is an **exact
+`src/eval/nnue/sf16.h` today ends at `evaluate(...)`, and everything down to it is an **exact
 oracle**: seven positions are verified bit-for-bit against a patched Stockfish 16.1, across all
-eight PSQT buckets, by `testGoldenTransforms` in `sf16_test.cpp`. Everything below is a pure
-function of `Transformed` plus the loaded `LayerStack`s, so each phase below can be verified
-against Stockfish independently of the ones before it.
+eight buckets, from the transformed bytes through every layer intermediate to the final `Value`
+and centipawn score. `sf16.cpp` is a complete, standalone, scalar SF16.1 evaluation that nothing
+in the engine calls yet.
 
-Not yet implemented, in dependency order: layer stack propagation, bucket selection and score
-scaling, engine integration, incremental accumulators, SIMD, strength validation.
+Not yet implemented, in dependency order: engine integration, incremental accumulators, SIMD,
+strength validation.
 
 The whole port keeps the file's **canonical row-major ordering**. Stockfish scrambles affine
 weights at load time to suit its SIMD kernels; gbchess does not, so the scalar reference stays
@@ -163,7 +166,47 @@ Two details that are easy to get subtly wrong and that the golden data will catc
 
 ---
 
-## Phase 7 — Whole-network evaluation
+## Phase 7 — Whole-network evaluation — **done**
+
+All seven golden positions produce Stockfish 16.1's exact `Value` and centipawn score, in all
+eight buckets rather than only the one each position selects. `sf16.h` gained `materialBucket`
+(over a piece count and over a `Position`), the `Evaluation` trace, `evaluateValue` and
+`evaluate`, plus `kNormalizeToPawnValue = 356` and `kMaxEvaluation = 9000`. What the plan below
+described is what was built, with four notes:
+
+- **`evaluateValue` takes an optional `Evaluation*` trace**, the same idiom as phase 6's
+  `Propagation*`: one implementation, traced or not, so the golden test pins the bucket, the
+  PSQT term and the positional term without a second code path to keep in step.
+- **The oracle already had the numbers.** `nndump` prints `pieces N  bucket B` per position and
+  `value` / `cp` per bucket, so the whole golden table came out of the existing
+  `dump-avx2.txt`; no new Stockfish run was needed. Every one of the 56 values matched on the
+  first run of the new test.
+- **The golden table is all eight buckets, not just the selected one.** The combination
+  `(psqt + positional) / OutputScale` and the centipawn division are the same arithmetic
+  everywhere, and a rounding of our own or a sign error would show first in the buckets a
+  position never picks. Both columns are side-to-move relative, as Stockfish's own are.
+- **Color symmetry is two claims, and the test makes both.** A color-swapped position keeps its
+  `Value` — the value belongs to the side to move, and the swap swaps who that is — and negates
+  its centipawn score. An implementation that negated in the wrong place satisfies one and not
+  the other. The golden pair at indices 2 and 3 is exactly such a swap and Stockfish reports
+  identical values for it, which is where the convention was read off rather than assumed.
+
+The clamp is not decorative: `4k3/8/8/8/8/QQQQQQQQ/QQQQQQQQ/RRRRKRRR w` evaluates to 19573 cp,
+which `Score` cannot hold, and the test asserts it clamps to 9000 and stays below
+`Score::mateIn(99)`.
+
+`--verbose <fen>` on `sf16-test` prints the breakdown for an arbitrary position, repeatable, and
+loads the network once:
+
+    build/sf16-test --verbose "8/2k5/2p5/8/1P6/8/3K4/6R1 b - - 0 1"
+    8/2k5/2p5/8/1P6/8/3K4/6R1 b - - 0 1
+      5 pieces, bucket 1: psqt -17386 + positional -15331 = value -2044, 574 cp for white
+
+**One warning for later phases:** the checked-in sources are *not* formatted by clang-format 20,
+which is what is on this machine; running it over `sf16_test.cpp` rewrites 1300 lines it should
+not touch. Format new code by hand to match its neighbours.
+
+*Original plan follows.*
 
 Wires the transform to the stacks and produces a score.
 
@@ -225,9 +268,18 @@ is the phase that turns an oracle-verified library into an engine feature.
   that is a separate, optional change, not a blocker — hardcode the filename next to the SF12
   one for now.
 - **Refactor first.** `search.cpp` calls `nnue::evaluate(position, *network)` at four sites
-  (lines ~795, ~872, ~938, ~1061). Collapse them into one `Score staticEval(const Position&)`
+  (798, 872, 938, 1061 as of phase 7). Collapse them into one `Score staticEval(const Position&)`
   helper before adding a second network. Phase 9 needs exactly one place to hook the
   accumulator stack, and four divergent call sites is how that goes wrong.
+- **The four sites are not interchangeable, which makes that refactor a decision and not a
+  rename.** Checked at phase 7: 798 and 872 are gated on `options::useNNUE` and fall back to
+  `evaluateBoard`, while 938 and 1061 call the network unconditionally, so `UseNNUE=false` does
+  not actually turn the network off today. All four then negate for the side to move, because
+  `nnue::evaluate` hands back a White-relative score and the search wants a side-to-move one.
+  Decide deliberately what the collapsed helper does when the option is off; do not preserve
+  the current inconsistency by accident.
+- **The sign convention needs no changes at those sites.** Phase 7's `sf16::evaluate` returns
+  White-relative centipawns exactly as SF12's does, which was the point of matching it.
 - **Measure honestly.** Expect this to be *slower per node* than SF12: a full refresh is
   2560 int16 adds per active feature, ~32 features per position, versus SF12's 256-wide
   accumulator. The phase-4 test already prints "fresh transform of a 30 piece position: N us" —
@@ -248,16 +300,27 @@ is green; a documented nodes/second figure exists for both networks in real time
 The single largest speedup available, and the one with a clean correctness invariant.
 
 - **Where state lives:** an accumulator stack indexed by search ply, pushed in `makeMove` and
-  popped in `unmakeMove`. `makeMoveWithEval` already evaluates *after* every move, including in
-  quiescence, so the stack must survive `unmakeMove` intact.
+  popped in `unmakeMove`, and it must survive `unmakeMove` intact.
+- **Correction, checked at phase 7:** `makeMoveWithEval` (search.cpp:789) is *not* on every move.
+  It has a single caller, in quiescence at line 858; the main search makes moves with plain
+  `makeMove` and evaluates lazily through `getStaticEval`. So the accumulator stack must hang off
+  every `makeMove`/`unmakeMove` pair, not off `makeMoveWithEval`, or the quiescence path will be
+  the only one that is ever correct.
 - **Update rule:** for each perspective, if that perspective's **own king moved**, refresh from
   scratch — HalfKAv2_hm indices all depend on the king bucket and the mirroring flip, and
   Stockfish itself refreshes on any own-king move. Otherwise apply deltas: subtract the moved
   piece's old feature row, add its new one, subtract a captured piece's row. Castling moves the
   king, so it always takes the refresh path.
-- **What describes the delta:** `moves::BoardChange` / `prepareMove` already carry what changed;
-  check whether they name the captured piece and its square, or whether a small dirty-piece
-  record needs adding alongside them.
+- **What describes the delta: `BoardChange` is already sufficient, checked at phase 7.** No
+  dirty-piece record needs adding. `prepareMove` (move.cpp:78) fills in `captured` (the piece)
+  and `first = {move.from, compound.to}`, and because `captured = board[compound.to]`, `first.to`
+  *is* the square the captured piece stood on — including for en passant, where `compoundMove`
+  sets `to` to the captured pawn's own square and uses `second` to walk the capturing pawn on to
+  its real destination. `second` likewise carries the rook in castling and the square in a
+  promotion, and `promo` is an index delta on the piece.
+  The one thing `BoardChange` does *not* name is the **moving** piece: `makeMove` recovers it as
+  `board[change.first.from]` before the board is touched. Compute the feature delta there, on the
+  pre-move board, or reconstruct it after the fact from `first.to` and `promo`.
 - **The invariant, as a test:** in debug builds, assert at every node that the incrementally
   maintained accumulator equals a fresh `refresh()` of the same position, for both perspectives.
   This single assertion catches essentially every class of bug this phase can introduce, and it
@@ -278,8 +341,12 @@ obviously correct and needs the scalar path kept as an oracle.
   If a permuted layout is needed for the affine kernels, build it at load time into a *separate*
   runtime structure, and keep a test asserting that both paths produce identical output for the
   golden positions. This preserves the ladder's founding design choice.
-- `AGENTS.md` asks for well-known x86 SSE2 APIs implemented in standard C++ where possible.
-  The obvious targets, in expected payoff order: the feature-transformer delta adds (16-wide
+- `AGENTS.md` (line 80) asks for well-known x86 SSE2 APIs implemented in standard C++ where
+  possible, and that abstraction already exists in the tree: `core/sse2.h` selects `<emmintrin.h>`
+  or the portable `core/sse2emul.h` and declares `constexpr bool haveSSE2 = true` either way.
+  Only `square_set.cpp` uses it today and neither NNUE does. Use it rather than raw intrinsics,
+  and run the golden tests under `-DSSE2EMUL` as well, so the emulated path stays exact.
+- The obvious targets, in expected payoff order: the feature-transformer delta adds (16-wide
   int16), the clip-and-pairwise-multiply in `transform`, and the `fc_0` affine forward (2560
   int8 MACs per output). `fc_1` and `fc_2` are tiny and not worth vectorizing.
 - Stockfish's sparse-input affine trick for `fc_0` exploits the many zero bytes in the
@@ -301,7 +368,8 @@ scalar and optimized paths agree exactly on the golden positions.
 - Watch for the known first-mover time-forfeit artifact in real-time SPRT runs
   (`first-mover-time-forfeits`); a slower evaluation makes that failure mode more likely, and a
   forfeit is not an evaluation result. Use `test/sprt_summary.py` to separate the two.
-- `book.csv` is tracked as of `c405f31`, so start positions vary; but note that `sprt-self`
+- `book.csv` is tracked as of `c405f31` (confirmed at phase 7: it is in `git ls-files`, and
+  `.gitignore` un-ignores it with `!book.csv`), so start positions vary; but note that `sprt-self`
   replays the fixed 10-puzzle endgame fixture, which is a narrow sample for an evaluation
   change. Prefer a book-driven run for the cutover decision.
 - Retune what the evaluation feeds: the aspiration windows, futility margins and reverse
