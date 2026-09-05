@@ -28,7 +28,28 @@ alongside the canonical one.
 
 ---
 
-## Phase 5 — Prerequisite: re-establish the oracle
+## Phase 5 — Prerequisite: re-establish the oracle — **done**
+
+Landed at `/Users/bosch/Stockfish-16.1` (tag `sf_16.1`, `e67cc97`), outside the gbchess tree so
+`make clean` cannot reach it. `gbchess-oracle/README.md` there records how to rebuild and
+regenerate; `gbchess-oracle/nndump.patch` is the uncommitted patch, and `dump-avx2.txt` /
+`dump-scalar.txt` are the seven golden FENs dumped by both binaries — byte identical, so the
+SIMD and scalar paths agree on every number. The feature transform half of those dumps
+reproduces all seven committed phase-4 hashes, sums, boundary bytes and PSQT values across all
+eight buckets (`gbchess-oracle/check.py` re-verifies this against `sf16_test.cpp`), and the
+per-bucket psqt/positional pairs match Stockfish's own `eval` trace table. Phase 6 can start.
+
+**One constant differs from what this plan assumed:** `NormalizeToPawnValue` is **356**, not 328,
+and it lives in `uci.cpp` (not `uci.h`) at line 48. Everything else below is confirmed at the tag:
+`WeightScaleBits = 6`, `OutputScale = 16`, ClippedReLU `clamp(x >> 6, 0, 127)`, SqrClippedReLU
+`min(127, (x*x) >> 19)` (written `>> (2 * WeightScaleBits + 7)`), the forward-skip term
+`fc_0_out[15] * (600 * 16) / (127 * 64)`, and the bucket `(pieceCount - 1) / 4`.
+
+One detail the dump made concrete: `ac_sqr_0` and `ac_0` are both 16 wide, but only their first
+15 outputs are used — `ac_0_out[0]` is memcpy'd over `ac_sqr_0_out[15]`, so `fc_1`'s input is
+exactly the 30 values the plan describes, padded to 32 with zeros.
+
+*Original notes, kept for the record:*
 
 **The Stockfish 16.1 clone is gone from this machine.** `/Users/bosch/Stockfish` is the *SF12*
 checkout (`42cea7e7`, "Instrumentation fo gbchess purposes"); there is no `sqr_clipped_relu.h`
@@ -62,6 +83,7 @@ checked in `nnue_common.h`, `layers/*.h`, `nnue_architecture.h` and `evaluate_nn
 `WeightScaleBits = 6`, `OutputScale = 16`, ClippedReLU `clamp(x >> 6, 0, 127)`, SqrClippedReLU
 `min(127, (x*x) >> 19)`, the forward-skip term `fc_0_out[15] * (600 * 16) / (127 * 64)`, the
 bucket `(pieceCount - 1) / 4`, and `NormalizeToPawnValue` in `uci.h` for the centipawn scale.
+(It is in `uci.cpp`, and it is 356 — see above.)
 If any differs, the plan's arithmetic changes, not its shape.
 
 **Done when:** `nndump` prints all five groups for the seven phase-4 golden FENs, and the
@@ -137,7 +159,7 @@ int32_t evaluate(const Network& network, const Position& position);
   negating when Black is to move; match that so the four call sites in `search.cpp` need no
   sign changes.
 - **Scale:** Stockfish `Value` units are not gbchess centipawns. Start from the principled
-  conversion `cp = v * 100 / NormalizeToPawnValue` (328 at the tag) and treat it as tunable,
+  conversion `cp = v * 100 / NormalizeToPawnValue` (**356** at the tag) and treat it as tunable,
   the way SF12's `kScale = 0.0300682` in `nnue.cpp:307` is.
 - **Clamp before `Score`:** `Score` is an `int16_t` that *asserts* `-9999 <= cp <= 9999`, and
   mate scores live in the top band via `Score::mateIn`. An NNUE evaluation of a won position
