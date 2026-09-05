@@ -366,4 +366,69 @@ Transformed transform(const FeatureTransformer& transformer, const Position& pos
                      bucket);
 }
 
+std::vector<int32_t> affineForward(const AffineLayer& layer, const std::vector<uint8_t>& input) {
+    dassert(input.size() == layer.inputs);
+    dassert(layer.biases.size() == layer.outputs);
+    dassert(layer.weights.size() == size_t(layer.outputs) * layer.paddedInputs);
+
+    std::vector<int32_t> output(layer.outputs);
+    for (uint32_t i = 0; i < layer.outputs; ++i) {
+        int32_t sum = layer.biases[i];
+        for (uint32_t j = 0; j < layer.inputs; ++j) sum += int32_t(layer.weight(i, j)) * input[j];
+        output[i] = sum;
+    }
+
+    return output;
+}
+
+uint8_t clippedReLU(int32_t value) {
+    return uint8_t(std::clamp(value >> kWeightScaleBits, 0, 127));
+}
+
+uint8_t sqrClippedReLU(int32_t value) {
+    // The square needs 64 bits: a layer output well within int32 range squares out of it.
+    auto square = int64_t(value) * value;
+    return uint8_t(std::min<int64_t>(127, square >> (2 * kWeightScaleBits + 7)));
+}
+
+int32_t propagate(const LayerStack& stack, const std::vector<uint8_t>& features,
+                  Propagation* trace) {
+    // The forward skip is fc0's last output, so the activations see one output fewer than fc0 has.
+    dassert(stack.fc0.outputs > 1);
+    auto activated = stack.fc0.outputs - 1;
+    dassert(stack.fc1.inputs == 2 * activated);
+    dassert(stack.fc2.inputs == stack.fc1.outputs);
+    dassert(stack.fc2.outputs == 1);
+
+    Propagation scratch;
+    Propagation& p = trace ? *trace : scratch;
+
+    p.fc0 = affineForward(stack.fc0, features);
+
+    // The same fc0 outputs twice over: squared and clipped first, then merely clipped. Feeding
+    // the second layer both is how the network gets a nonlinearity that is not piecewise linear.
+    p.fc1Input.resize(2 * activated);
+    for (uint32_t i = 0; i < activated; ++i) {
+        p.fc1Input[i] = sqrClippedReLU(p.fc0[i]);
+        p.fc1Input[activated + i] = clippedReLU(p.fc0[i]);
+    }
+
+    p.fc1 = affineForward(stack.fc1, p.fc1Input);
+
+    p.fc2Input.resize(stack.fc1.outputs);
+    for (uint32_t i = 0; i < stack.fc1.outputs; ++i) p.fc2Input[i] = clippedReLU(p.fc1[i]);
+
+    p.fc2 = affineForward(stack.fc2, p.fc2Input)[0];
+
+    // fc0's last output bypasses the stack, and so is still in the layers' fixed point, where 1.0
+    // is 127 << kWeightScaleBits. The result's own scale puts 1.0 at 600 * kOutputScale. Stockfish
+    // scales it in 32 bits, which a trained network keeps far from overflowing but an untrained or
+    // corrupt one need not; widening the product changes no value this can actually see.
+    p.forwardSkip = int32_t(int64_t(p.fc0[activated]) * (600 * kOutputScale) /
+                            (127 * (1 << kWeightScaleBits)));
+    p.output = p.fc2 + p.forwardSkip;
+
+    return p.output;
+}
+
 }  // namespace nnue::sf16

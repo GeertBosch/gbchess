@@ -91,7 +91,39 @@ If any differs, the plan's arithmetic changes, not its shape.
 
 ---
 
-## Phase 6 — Layer stack propagation
+## Phase 6 — Layer stack propagation — **done**
+
+All seven golden positions propagate bit-identically through all eight layer stacks, every
+intermediate checked, not just the final int32. `sf16.h` gained `affineForward`, `clippedReLU`,
+`sqrClippedReLU`, the `Propagation` trace and `propagate`; `kWeightScaleBits` and `kOutputScale`
+are the two constants they need. The plan below is what was built, with three notes:
+
+- **`propagate` takes an optional `Propagation*` trace** rather than being one function per
+  intermediate. The traced and untraced calls are the same code — the trace only decides where
+  the intermediates are written — so the golden test can pin every layer without a second
+  implementation to keep in step.
+- **The golden table is digests, not five thousand numbers.** Per position and bucket it commits
+  an FNV-1a-64 hash and a sum of each of `fc0`, `fc1Input`, `fc1` and `fc2Input`, `fc0[0]` and
+  `fc0[15]` exactly, and `fc2`, the forward skip and the output exactly. The hash catches a
+  changed value and the sum catches a reordering, which is the idiom phase 4 established.
+- **The forward-skip rescale is done in 64 bits.** Stockfish scales `fc_0_out[15]` in `int32`,
+  where a value above ~223k would overflow; trained networks stay four orders of magnitude
+  below that, so widening the product changes nothing this can see and keeps UBSan quiet in the
+  debug builds.
+
+Confirmed against the SF16.1 source at the tag rather than from the notes below: `>> 6` clipped
+ReLU clamped to `[0, 127]`, `min(127, (x*x) >> 19)` with the sign discarded by the squaring, and
+row-major `i * PaddedInputDimensions + j` weights — Stockfish's scrambling is behind
+`USE_SSSE3`, so the file order and the `general-64` order are the same thing. The oracle dump
+re-verifies all of it: a script recomputed all 56 blocks' activations, rescales and sums from
+`fc_0_out` alone and reproduced the dump exactly before a line of C++ was written.
+
+**Measured, as the baseline phases 9 and 10 must beat** (`sf16-test`, `-O2`, i9-9900K): a fresh
+transform of a 30-piece position is 9 us, and propagation through one layer stack is 5.3 us. So
+a full scalar evaluation is ~14 us per node today, which is what phase 8 will measure honestly
+in real time.
+
+*Original plan follows.*
 
 The first phase that computes something new. Purely arithmetic: `Transformed::features` in,
 one int32 out. No position, no search, no engine.

@@ -358,4 +358,82 @@ Transformed transform(const Accumulator& white, const Accumulator& black, Color 
 Transformed transform(const FeatureTransformer& transformer, const Position& position,
                       uint32_t bucket);
 
+/**
+ * Fixed point scale of the affine layers: within a layer stack, 1.0 is 127 << kWeightScaleBits.
+ *
+ * Both activations shift by this to bring a layer's int32 output back into the byte range that
+ * the next layer's int8 weights expect, which is what lets the three layers chain at all.
+ */
+constexpr int kWeightScaleBits = 6;
+
+/**
+ * Scale of the network's output, in which one pawn is nominally 600 * kOutputScale.
+ *
+ * Phase 6 needs it only to rescale the forward skip term below; dividing a whole evaluation by
+ * it is the business of the layer above this one.
+ */
+constexpr int32_t kOutputScale = 16;
+
+/**
+ * Affine forward pass: one output per row, its bias plus the row's weighted sum of the input.
+ *
+ * The sum runs over `layer.inputs`, not the padded row width. The padding columns are zero in
+ * every real network, so reading them too would give the same answer while quietly accepting a
+ * layout that has drifted; summing only the meaningful columns does not.
+ *
+ * Inputs are unsigned bytes and weights are signed, every layer of a stack being fed by an
+ * activation. The products fit an int32 accumulator by a wide margin: even 2560 inputs at the
+ * extreme 127 * 127 leave the sum below 2^26.
+ */
+std::vector<int32_t> affineForward(const AffineLayer& layer, const std::vector<uint8_t>& input);
+
+/** Stockfish's ClippedReLU: shift back into byte range, saturating at 127 and at zero. */
+uint8_t clippedReLU(int32_t value);
+
+/**
+ * Stockfish's SqrClippedReLU: the square, shifted down by 2 * kWeightScaleBits + 7 and capped.
+ *
+ * The extra 7 bits stand in for a division by 127 that the trainer compensates for. Squaring
+ * discards the sign, so unlike the plain clipped ReLU this activation passes a negative input
+ * through as a positive value rather than flooring it at zero.
+ */
+uint8_t sqrClippedReLU(int32_t value);
+
+/**
+ * Every intermediate of one propagation through a layer stack, in the order they are computed.
+ *
+ * Only the golden tests need these. Matching a stack's final output alone would let two
+ * compensating errors - a transposed weight matrix and a mirrored input, say - cancel out and
+ * pass; checking every value in between pins each layer separately.
+ */
+struct Propagation {
+    /** fc0's outputs, l2 + 1 of them; the last is the forward skip and feeds no activation. */
+    std::vector<int32_t> fc0;
+    /** fc1's input: the first l2 of fc0 squared and clipped, then the same l2 merely clipped. */
+    std::vector<uint8_t> fc1Input;
+    /** fc1's outputs, l3 of them. */
+    std::vector<int32_t> fc1;
+    /** fc2's input: fc1's outputs clipped. */
+    std::vector<uint8_t> fc2Input;
+    /** fc2's single output. */
+    int32_t fc2 = 0;
+    /** fc0's last output, rescaled from the layers' fixed point into the network's own. */
+    int32_t forwardSkip = 0;
+    /** The stack's result, being fc2 plus the forward skip. */
+    int32_t output = 0;
+};
+
+/**
+ * Propagate transformed features through one layer stack, yielding its raw output.
+ *
+ * `features` are the bytes transform() produced, l1 of them. The result is in the network's
+ * output units, which a caller turns into a score by adding the PSQT term and dividing by
+ * kOutputScale; this function knows nothing of positions, buckets or centipawns.
+ *
+ * If `trace` is given it receives every intermediate. The traced and untraced calls run the
+ * same code, so a test may trust what one reports about the other.
+ */
+int32_t propagate(const LayerStack& stack, const std::vector<uint8_t>& features,
+                  Propagation* trace = nullptr);
+
 }  // namespace nnue::sf16
