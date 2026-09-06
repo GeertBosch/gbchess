@@ -3,8 +3,6 @@ FIXED_PUZZLES=lichess/fixed_puzzles.csv
 CI_MATE123_PUZZLES=lichess/ci_mate123_4000.csv
 CI_MATE45_PUZZLES=lichess/ci_mate45_100.csv
 CI_NONMATE_PUZZLES=lichess/ci_nonmate_100.csv
-PHASES=opening middlegame endgame
-EVALS=$(foreach phase,${PHASES},lichess/lichess_${phase}_evals.csv)
 CCFLAGS=-std=c++17 -Werror -Wall -Wextra
 CLANGPP=clang++
 GPP=g++
@@ -13,12 +11,9 @@ DEBUGFLAGS=-DDEBUG -O0 -g
 OPTOBJ=build/opt
 DBGOBJ=build/dbg
 COMPILE_COMMANDS=build/compile_commands.json
-# The SF12 network gbchess itself evaluates with.
-NNUE_URL=https://raw.githubusercontent.com/official-stockfish/networks/refs/heads/master/nn-82215d0fd0df.nnue
+# The default Big network of Stockfish 16.1, which gbchess evaluates with.
+NNUE_URL=https://raw.githubusercontent.com/official-stockfish/networks/refs/heads/master/nn-b1a57edbea57.nnue
 NNUE_FILE=$(notdir ${NNUE_URL})
-# The default Big network of Stockfish 16.1, only read by the SF16 format unit test so far.
-SF16_NNUE_URL=https://raw.githubusercontent.com/official-stockfish/networks/refs/heads/master/nn-b1a57edbea57.nnue
-SF16_NNUE_FILE=$(notdir ${SF16_NNUE_URL})
 
 Q := @
 VOPT :=
@@ -127,7 +122,7 @@ ${DBGOBJ}/%-debug: ${DBGOBJ}/%_test.o
 	@echo "  ✅ build/$(notdir $@) built"
 
 # Test dependency definitions
-NNUE_SRCS=eval/nnue/nnue.cpp eval/nnue/nnue_stats.cpp eval/nnue/sf16.cpp core/square_set/square_set.cpp
+NNUE_SRCS=eval/nnue/nnue.cpp core/square_set/square_set.cpp
 MOVES_SRCS=move/move.cpp move/move_table.cpp move/move_gen.cpp move/magic/magic.cpp core/square_set/square_set.cpp core/hash/hash.cpp
 EVAL_SRCS=eval/eval.cpp core/hash/hash.cpp ${NNUE_SRCS} ${MOVES_SRCS}
 BOOK_SRCS=book/book.cpp book/pgn/pgn.cpp engine/fen/fen.cpp
@@ -190,8 +185,7 @@ $(eval $(call test_rules,move/move,move/move.cpp ${MOVES_SRCS} engine/fen/fen.cp
 $(eval $(call test_rules,move/move_gen,move/move_gen.cpp ${MOVES_SRCS} engine/fen/fen.cpp))
 $(eval $(call test_rules,move/move_table,move/move_table.cpp engine/fen/fen.cpp))
 $(eval $(call test_rules,move/magic/magic,move/magic/magic.cpp ${MOVES_SRCS} engine/fen/fen.cpp))
-$(eval $(call test_rules,eval/nnue/nnue,${NNUE_SRCS} engine/fen/fen.cpp))
-$(eval $(call test_rules,eval/nnue/sf16,eval/nnue/sf16.cpp ${MOVES_SRCS} engine/fen/fen.cpp))
+$(eval $(call test_rules,eval/nnue/nnue,eval/nnue/nnue.cpp ${MOVES_SRCS} engine/fen/fen.cpp))
 $(eval $(call test_rules,search/elo,))
 $(eval $(call test_rules,book/pgn/pgn,${MOVES_SRCS} book/pgn/pgn.cpp engine/fen/fen.cpp))
 $(eval $(call test_rules,book/book,${BOOK_SRCS} ${MOVES_SRCS} core/hash/hash.cpp))
@@ -238,9 +232,6 @@ check-dead-code-prereqs:
 		echo "❌ Missing clangd command required by dead-code target."; \
 		exit 1; \
 	}
-
-check-eval-prereqs:
-	$(Q)./make-evals.sh --check
 
 clean:
 	rm -fr build
@@ -331,7 +322,16 @@ ${PUZZLES}.zst: | check-download-prereqs
 	$(Q)mkdir -p $(dir ${PUZZLES}) && cd $(dir ${PUZZLES}) \
 		&& curl -fsSL -O https://database.lichess.org/$(notdir ${PUZZLES}).zst
 
-# UCI-based puzzle tests: run puzzle-test against the engine binary
+# UCI-based puzzle tests: run puzzle-test against the engine binary.
+#
+# A mate is a fact rather than an opinion, so an unsolved mate puzzle fails the run on its own,
+# with nothing to pass here and no number to lower: both mate suites are always solved in full.
+# The non-mate suite is a matter of judgement, so it is held to its rating within a tolerance,
+# and fails in both directions -- a suite that got better says so and names the number to raise,
+# so an improvement cannot pass unremarked and then silently regress. The rating is per suite
+# and per depth -- the same puzzles at another depth are another measurement -- which is why it
+# lives here and not in the test. It is finer than a solved count: solving a different puzzle of
+# the same difficulty moves it.
 build/mate-123.out: build/puzzle-test build/gbchess ${CI_MATE123_PUZZLES} ${NNUE_FILE}
 	$(Q)./build/puzzle-test $(VOPT) --depth 7 ./build/gbchess ${CI_MATE123_PUZZLES} $(REDIR)
 
@@ -339,7 +339,8 @@ build/mate-45.out: build/puzzle-test build/gbchess ${CI_MATE45_PUZZLES} ${NNUE_F
 	$(Q)./build/puzzle-test $(VOPT) --depth 11 ./build/gbchess ${CI_MATE45_PUZZLES} $(REDIR)
 
 build/puzzles.out: build/puzzle-test build/gbchess ${CI_NONMATE_PUZZLES} ${NNUE_FILE}
-	$(Q)./build/puzzle-test $(VOPT) --depth 7 ./build/gbchess ${CI_NONMATE_PUZZLES} $(REDIR)
+	$(Q)./build/puzzle-test $(VOPT) --depth 7 --expect-rating 2350 \
+		./build/gbchess ${CI_NONMATE_PUZZLES} $(REDIR)
 
 mate-123: build/mate-123.out
 mate-45: build/mate-45.out
@@ -347,15 +348,6 @@ puzzles: build/puzzles.out
 
 ${NNUE_FILE}: | check-download-prereqs
 	$(Q)curl -fsSL -O ${NNUE_URL}
-
-${SF16_NNUE_FILE}: | check-download-prereqs
-	$(Q)curl -fsSL -O ${SF16_NNUE_URL}
-
-lichess/lichess_%_evals.csv: make-evals.sh ${PUZZLES} | check-eval-prereqs
-	mkdir -p $(dir $@) && ./$< $(@:lichess/lichess_%_evals.csv=%) > $@
-
-build/evals.out: build/eval-test ${EVALS}
-	$(Q)./build/eval-test ${EVALS} $(REDIR)
 
 # Find unused declarations per file via clangd references.
 # Each source/header gets its own artifact for incremental and parallel builds.
@@ -436,7 +428,7 @@ build/magic.out: build/magic-test
 	|| (echo "\n*** To accept these changes, pipe this output to the patch command ***" && false) \
 	} $(REDIR)
 
-build/test-cpp.out: ${CPP_TESTS} ${NNUE_FILE} ${SF16_NNUE_FILE}
+build/test-cpp.out: ${CPP_TESTS} ${NNUE_FILE}
 	$(Q){ \
 		(cd build && echo Symlinking NNUE files && ln -fs ../*.nnue .); \
 		[ -f book.csv ] && (cd build && echo Symlinking book files && ln -fs ../book.csv .) || true; \
@@ -472,7 +464,7 @@ build/test-cpp.out: ${CPP_TESTS} ${NNUE_FILE} ${SF16_NNUE_FILE}
 # fail when run as if they were tests.
 DBG_TESTS=$(patsubst %-test,%-debug,$(CPP_TESTS))
 
-build/test-debug.out: ${DBG_TESTS} ${NNUE_FILE} ${SF16_NNUE_FILE}
+build/test-debug.out: ${DBG_TESTS} ${NNUE_FILE}
 	$(Q){ \
 		(cd build && echo Symlinking NNUE files && ln -fs ../*.nnue .); \
 		[ -f book.csv ] && (cd build && echo Symlinking book files && ln -fs ../book.csv .) || true; \
@@ -493,25 +485,25 @@ build/test-debug.out: ${DBG_TESTS} ${NNUE_FILE} ${SF16_NNUE_FILE}
 		fi); \
 	} $(REDIR)
 
-# The SF16 evaluation's SIMD goes through core/sse2.h, which on a machine without SSE2 resolves to
-# the portable emulation in core/sse2emul.h instead of the hardware's own. Build the SF16 tests
+# The evaluation's SIMD goes through core/sse2.h, which on a machine without SSE2 resolves to
+# the portable emulation in core/sse2emul.h instead of the hardware's own. Build the NNUE tests
 # against that emulation as well, so the golden values stay exact on the path an ARM build takes.
 # Not named *-test: build/test-cpp.out insists that those correspond one to one with *_test.cpp.
-SF16_EMUL_SRCS=$(call prefix_src,eval/nnue/sf16_test.cpp eval/nnue/sf16.cpp ${MOVES_SRCS} engine/fen/fen.cpp)
-build/sf16-sse2emul: ${SF16_EMUL_SRCS}
+NNUE_EMUL_SRCS=$(call prefix_src,eval/nnue/nnue_test.cpp eval/nnue/nnue.cpp ${MOVES_SRCS} engine/fen/fen.cpp)
+build/nnue-sse2emul: ${NNUE_EMUL_SRCS}
 	$(Q)mkdir -p build
 	$(call BUILDCMD,${GPP} ${CCFLAGS} -O2 -DSSE2EMUL -Isrc ${LINKFLAGS} -o $@ $^ ${LIBS})
 
-build/sf16-sse2emul.out: build/sf16-sse2emul ${SF16_NNUE_FILE}
+build/nnue-sse2emul.out: build/nnue-sse2emul ${NNUE_FILE}
 	$(Q){ \
 		(cd build && echo Symlinking NNUE files && ln -fs ../*.nnue .); \
-		(cd build && ./sf16-sse2emul); \
+		(cd build && ./nnue-sse2emul); \
 	} $(REDIR)
 
 test-cpp: build/test-cpp.out
 test-debug: build/test-debug.out
-test-sse2emul: build/sf16-sse2emul.out
-test: build/test-cpp.out build/test-debug.out build/sf16-sse2emul.out build/fixed-puzzles.out build/searches.out build/evals.out build/uci.out build/magic.out build/book-cli.out
+test-sse2emul: build/nnue-sse2emul.out
+test: build/test-cpp.out build/test-debug.out build/nnue-sse2emul.out build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/book-cli.out
 
 # Only macOS builds the debug objects with sanitizers (see DEBUGFLAGS above), so only there is
 # there anything to gain from running them in the gate the pre-push hook uses. On CI the same
@@ -521,7 +513,7 @@ ifeq ($(_system_type),Darwin)
     CI_SANITIZED=build/test-debug.out
 endif
 
-ci: build-ci ${CI_SANITIZED} build/test-cpp.out build/sf16-sse2emul.out build/perft-test.out build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate-123.out build/mate-45.out build/puzzles.out build/book-cli.out dead-code
+ci: build-ci ${CI_SANITIZED} build/test-cpp.out build/nnue-sse2emul.out build/perft-test.out build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate-123.out build/mate-45.out build/puzzles.out build/book-cli.out dead-code
 	@echo "\n✅ CI checks passed\n"
 
 install-hooks:
@@ -557,7 +549,7 @@ $(COMPILE_COMMANDS): ${SOURCE_LIST}
 	$(Q)echo ']' >> $@
 	$(call BUILDCMD, true)
 
-.PHONY: ci install-hooks generate-book force check-prereqs check-download-prereqs check-dead-code-prereqs check-eval-prereqs
+.PHONY: ci install-hooks generate-book force check-prereqs check-download-prereqs check-dead-code-prereqs
 
 SPRT_NEW ?= build/gbchess
 SPRT_BASE ?= build/gbchess-base

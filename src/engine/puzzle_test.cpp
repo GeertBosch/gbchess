@@ -34,6 +34,15 @@ std::atomic<int> engineCounter{0};
 
 constexpr size_t kMaxUCILineLength = 4096;  // Many engines use 1 KB buffers, so this is plenty
 
+/**
+ * Half-width of the accepted --expect-rating band, in rating points.
+ *
+ * At a fixed depth against a fixed binary the rating is exactly repeatable -- measured over
+ * repeated runs of all three suites, every run gives the same number -- so this only has to
+ * cover rounding in the reported integer, not run-to-run noise.
+ */
+constexpr int kDefaultRatingTolerance = 5;
+
 int getNumCPUs() {
     long n = sysconf(_SC_NPROCESSORS_ONLN);
     return (n > 0) ? (int)n : 1;
@@ -54,6 +63,9 @@ int getNumCPUs() {
         << "  --setoption N V   Send 'setoption name N value V' to the engine at startup\n"
         << "  --puzzle N        Only run puzzles whose label contains this string\n"
         << "  --theme T         Only run puzzles with this theme tag\n"
+        << "  --expect-rating N Require a puzzle rating of N, within --rating-tolerance\n"
+        << "  --rating-tolerance N  Half-width of the accepted rating band (default "
+        << kDefaultRatingTolerance << ")\n"
         << "  engine-cmd        UCI engine to test (e.g. ./build/engine or stockfish)\n"
         << "  engine-opts       Options starting with '-' forwarded to the engine command\n"
         << "  puzzle-file.csv   Lichess CSV format; read from stdin if omitted\n";
@@ -92,6 +104,8 @@ struct Options {
     int numJobs = 1;
     bool firstOnly = false;
     bool minimize = false;
+    int expectRating = -1;  // negative = not checked
+    int ratingTolerance = kDefaultRatingTolerance;
 };
 
 struct RunOptions {
@@ -707,9 +721,58 @@ public:
     }
 
     std::string summary() const {
-        return stats.str() + ", " + std::to_string(static_cast<int>(puzzleRating())) + " rating";
+        return stats.str() + ", " + std::to_string(rating()) + " rating";
     }
+
+    int rating() const { return static_cast<int>(puzzleRating()); }
+    uint64_t mateErrors() const { return stats.counts[MATE_ERROR]; }
 };
+
+// ─── Expectations ────────────────────────────────────────────────────────────
+
+/**
+ * Hold the run to what is expected of it.
+ *
+ * Two different kinds of expectation. A mate is a fact rather than a judgement, so a mate puzzle
+ * the search fails to solve is a bug in the search: it fails the run wherever it turns up, with
+ * no flag to enable it and no number to lower. That is what the MATE_ERROR classification is
+ * for, and until now it was counted and printed but never acted on.
+ *
+ * A rating is a judgement, and --expect-rating ratchets it in both directions -- a suite that
+ * only fails when it gets worse can improve unnoticed and then silently regress back, which is
+ * how ci_nonmate_100 went from 93 to 98 solved unremarked -- so an unexpectedly good result
+ * fails too, naming the number to raise. The rating expectation lives in the Makefile rule that
+ * runs the suite, being per suite and per depth: the same puzzles at another depth are another
+ * measurement.
+ */
+bool checkExpectations(const PuzzlePipeline& pipeline, const Options& opts) {
+    bool ok = true;
+
+    if (pipeline.mateErrors()) {
+        std::cerr << "❌ " << pipeline.mateErrors()
+                  << " mate puzzles not solved; a mate is not a matter of opinion, so every one "
+                     "of them must be.\n"
+                  << "The per-puzzle failures above say which and how.\n";
+        ok = false;
+    }
+
+    if (opts.expectRating >= 0) {
+        int low = opts.expectRating - opts.ratingTolerance;
+        int high = opts.expectRating + opts.ratingTolerance;
+        if (pipeline.rating() < low || pipeline.rating() > high) {
+            bool better = pipeline.rating() > high;
+            std::cerr << "❌ Puzzle rating " << pipeline.rating() << " is outside the accepted "
+                      << low << " to " << high << ".\n"
+                      << (better ? "The suite got better: raise --expect-rating to "
+                                 : "The suite regressed; the per-puzzle failures above say how. "
+                                   "If the loss is intended, lower --expect-rating to ")
+                      << pipeline.rating() << " in the Makefile rule that runs this suite.\n";
+            ok = false;
+        }
+    }
+
+    return ok;
+}
 
 // ─── CSV driver ──────────────────────────────────────────────────────────────
 
@@ -758,7 +821,7 @@ bool testFromStream(std::istream& input, const Options& opts) {
     pipeline.drainAll();
 
     std::cout << pipeline.summary() << "\n";
-    return ok;
+    return checkExpectations(pipeline, opts) && ok;
 }
 
 // ─── Self-tests ─────────────────────────────────────────────────────────────
@@ -932,6 +995,14 @@ Options parseOptions(int argc, char* argv[]) {
         } else if (arg == "--theme") {
             if (++i >= argc) usage("--theme requires an argument");
             opts.theme = argv[i];
+        } else if (arg == "--expect-rating") {
+            if (++i >= argc) usage("--expect-rating requires an argument");
+            opts.expectRating = parsePositiveInt(std::string(argv[i]));
+            if (opts.expectRating <= 0) usage("--expect-rating must be positive");
+        } else if (arg == "--rating-tolerance") {
+            if (++i >= argc) usage("--rating-tolerance requires an argument");
+            opts.ratingTolerance = parsePositiveInt(std::string(argv[i]));
+            if (opts.ratingTolerance < 0) usage("--rating-tolerance must not be negative");
         } else if (arg == "--help" || arg == "-h") {
             usage(0);
         } else if (startsWith(arg, "-")) {

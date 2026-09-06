@@ -128,10 +128,10 @@ bool invalidatePosition(Position position);
  * of them calling the network unconditionally, so UseNNUE=false did not in fact turn the network
  * off; this honours the option at every site rather than preserving that inconsistency.
  *
- * Which evaluation runs is a runtime choice: the piece-square tables when UseNNUE is off, the
- * Stockfish 16.1 network when UseSF16 is on, and the SF12 network otherwise. Both networks report
- * a White-relative score, so only the negation for the side to move is shared between them. The
- * networks load on first use, so an engine that never asks for one never reads its file.
+ * Which evaluation runs is a runtime choice: the network when UseNNUE is on, the piece-square
+ * tables when it is off. Both report a White-relative score, so the negation for the side to
+ * move is shared between them. The network loads on first use, so an engine that never asks for
+ * it never reads its file.
  */
 Score staticEval(const Position& position);
 
@@ -139,10 +139,10 @@ Score staticEval(const Position& position);
  * Load the evaluation network the current options select, if it is not loaded already.
  *
  * Reading a network is a cost of how the engine is configured, not of the move it is about to
- * play, and the SF16.1 Big network is ~116 MB and takes about a quarter of a second. Left to
- * happen on first use, that quarter second lands inside the first search of a process and is
- * charged to that move's clock: under any real time control the first `go` spends its whole
- * budget loading, searches no nodes at all, and has no move to return.
+ * play, and the Stockfish 16.1 Big network is ~116 MB and takes about a quarter of a
+ * second. Left to happen on first use, that quarter second lands inside the first search
+ * of a process and is charged to that move's clock: under any real time control the first
+ * `go` spends its whole budget loading, searches no nodes at all, and has no move to return.
  *
  * Loading stays lazy in the *option* -- an engine that never selects a network never reads its
  * file -- but the laziness must end somewhere outside a search. Call this whenever the selected

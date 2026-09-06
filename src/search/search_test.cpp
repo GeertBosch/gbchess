@@ -18,7 +18,6 @@
 #include "elo.h"
 #include "engine/fen/fen.h"
 #include "eval/eval.h"
-#include "eval/nnue/nnue_stats.h"
 #include "move/move.h"
 #include "move/move_gen.h"
 #include "pv.h"
@@ -341,7 +340,6 @@ void testFromStream(std::istream& input, int depth) {
     auto colRating = find(columns, "Rating");
     auto puzzleRating = ELO(kExpectedPuzzleRating);
     PuzzleStats stats;
-    nnue::resetTimingStats();
 
     while (input) {
         std::getline(input, line);
@@ -372,8 +370,6 @@ void testFromStream(std::istream& input, int depth) {
     std::cout << stats() << ", " << puzzleRating() << " rating\n";
     assert(stats[MATE_ERROR] == 0);
     assert(puzzleRating() >= kExpectedPuzzleRating - ELO::K);
-
-    if (verbose) nnue::printTimingStats();
 }
 
 void testFromFile(const std::string& filename, int depth) {
@@ -477,23 +473,19 @@ void testNullMoveHash() {
 }
 
 /**
- * Save and restore the evaluation-selecting options, so a test may switch networks and put things
- * back however it leaves. Both are plain ints, so this needs nothing cleverer than a copy.
+ * Save and restore the evaluation-selecting option, so a test may turn the network off and put
+ * things back however it leaves. It is a plain int, so this needs nothing cleverer than a copy.
  */
 struct SavedEvalOptions {
     int useNNUE = options::useNNUE;
-    int useSF16 = options::useSF16;
-    ~SavedEvalOptions() {
-        options::useNNUE.value = useNNUE;
-        options::useSF16.value = useSF16;
-    }
+    ~SavedEvalOptions() { options::useNNUE.value = useNNUE; }
 };
 
 /**
- * The search's evaluation entry point, over each of the three evaluations it can select.
+ * The search's evaluation entry point, over both evaluations it can select.
  *
- * The centipawn numbers for SF16 are White-relative values from the phase-7 oracle, printed by
- * `sf16-test --verbose <fen>`; they are Stockfish 16.1's own, so this pins the whole path from a
+ * The centipawn numbers are White-relative values from the phase-7 oracle, printed by
+ * `nnue-test --verbose <fen>`; they are Stockfish 16.1's own, so this pins the whole path from a
  * UCI option through a lazily loaded 116 MB network down to the Score the search sees. What could
  * plausibly go wrong here is a sign, not an arithmetic error, which is why the table deliberately
  * holds both a White-to-move and a Black-to-move position.
@@ -501,7 +493,7 @@ struct SavedEvalOptions {
 void testStaticEval() {
     struct Golden {
         const char* fen;
-        int whiteCP;  // sf16::evaluate, which is relative to White
+        int whiteCP;  // nnue::evaluate, which is relative to White
     };
     static const Golden golden[] = {
         {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 9},
@@ -511,21 +503,17 @@ void testStaticEval() {
 
     SavedEvalOptions saved;
 
-    // The option means what it says: with UseNNUE off, no network runs, whatever UseSF16 holds.
-    for (int sf16 : {0, 1}) {
-        options::useNNUE.value = 0;
-        options::useSF16.value = sf16;
-        for (auto& entry : golden) {
-            auto position = fen::parsePosition(entry.fen);
-            Score expected = evaluateBoard(position.board);
-            if (position.active() == Color::b) expected = -expected;
-            assert(search::staticEval(position) == expected);
-        }
+    // The option means what it says: with UseNNUE off, no network runs.
+    options::useNNUE.value = 0;
+    for (auto& entry : golden) {
+        auto position = fen::parsePosition(entry.fen);
+        Score expected = evaluateBoard(position.board);
+        if (position.active() == Color::b) expected = -expected;
+        assert(search::staticEval(position) == expected);
     }
 
-    // With UseSF16 on, the search sees Stockfish 16.1's own numbers, negated for Black to move.
+    // With it on, the search sees Stockfish 16.1's own numbers, negated for Black to move.
     options::useNNUE.value = 1;
-    options::useSF16.value = 1;
     for (auto& [fen, cp] : golden) {
         auto position = fen::parsePosition(fen);
         Score expected = Score::fromCP(position.active() == Color::b ? -cp : cp);
@@ -534,12 +522,10 @@ void testStaticEval() {
 
     // The score is relative to the side to move, so a color-swapped position keeps it rather than
     // negating it. An implementation that negated one level too late passes the golden table above
-    // and fails this. Only SF16 is asserted: HalfKAv2_hm mirrors its features, so its two
-    // perspectives are the same computation, while SF12's HalfKP evaluation of this pair differs
-    // by tens of centipawns and has no symmetry to check.
+    // and fails this. HalfKAv2_hm mirrors its features, so the two perspectives are the same
+    // computation and the pair is exactly equal rather than merely close.
     {
         options::useNNUE.value = 1;
-        options::useSF16.value = 1;
         auto position = fen::parsePosition("8/2k5/2p5/8/1P6/8/3K4/6R1 b - - 0 1");
         auto swapped = fen::parsePosition("6r1/3k4/8/1p6/8/2P5/2K5/8 w - - 0 1");
         assert(search::staticEval(position) == search::staticEval(swapped));
@@ -549,12 +535,12 @@ void testStaticEval() {
 }
 
 /**
- * A search that evaluates with the SF16.1 network, and so maintains an accumulator stack.
+ * A search that evaluates with the network, and so maintains an accumulator stack.
  *
  * The real check is inside the stack rather than here: a debug build asserts, at every position
  * pushed, that the incrementally updated accumulators equal a fresh refresh of that position. So
  * running a search is what exercises the search's own make and unmake wiring -- the root, the main
- * loop, quiescence and the null move -- as opposed to the arithmetic that sf16_test pins over a
+ * loop, quiescence and the null move -- as opposed to the arithmetic that nnue_test pins over a
  * walk of its own. An optimized build gets no assertion out of this and only checks that the
  * search still finds these moves, which it would not if the accumulators drifted.
  *
@@ -577,7 +563,6 @@ void testIncrementalSearch() {
 
     SavedEvalOptions saved;
     options::useNNUE.value = 1;
-    options::useSF16.value = 1;
 
     for (auto& [fen, depth, best] : searches) {
         search::newGame();  // Each search stands on its own, whatever ran before it.
@@ -697,12 +682,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (depth) {
-        nnue::resetTimingStats();
         printEvalRate([&]() { printBestMove(position, depth, moves); });
-        if (verbose && nnue::g_totalEvaluations) {
-            nnue::printTimingStats();
-            nnue::analyzeComputationalComplexity();
-        }
         if (debug) printEvalRate([&]() { printAnalysis(position, depth, moves); });
     }
     return 0;

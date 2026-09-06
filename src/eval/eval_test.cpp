@@ -12,14 +12,11 @@
 #include "move/move.h"
 #include "move/move_gen.h"
 #include "nnue/nnue.h"
-#include "nnue/nnue_stats.h"
 
 #include "eval.h"
 
 namespace {
 std::string cmdName = "eval-test";
-
-uint64_t numEvals = 0;
 
 void usage(std::string cmdName, std::string errmsg) {
     std::cerr << "Error: " << errmsg << "\n\n";
@@ -221,57 +218,6 @@ int parseMoves(Position& position, int* argc, char** argv[]) {
     return moves;
 }
 
-std::string computeStatistics(const std::vector<float>& diffs) {
-    if (diffs.empty()) return "No data";
-    double sum = 0;
-    double sum2 = 0;
-    for (auto diff : diffs) {
-        sum += diff;
-        sum2 += diff * diff;
-    }
-    double mean = sum / diffs.size();
-    double variance = sum2 / diffs.size() - mean * mean;
-    double stddev = std::sqrt(variance);
-    assert(stddev < 0.1 && "Standard deviation is too high, check your data");
-    assert(std::abs(mean) < 0.1 && "Mean is too far off, check your data");
-    return "Mean: " + std::to_string(mean) + ", Standard Deviation: " + std::to_string(stddev);
-}
-
-void testFromStream(nnue::NNUE& network, std::ifstream& stream) {
-    using namespace std::chrono;
-    std::string line;
-    std::getline(stream, line);
-    auto columns = split(line, ',');
-    auto cpCol = find(columns, "cp");
-    auto fenCol = find(columns, "fen");
-
-    std::vector<float> diffs;
-
-    if (debug) std::cout << "Expected,Score,Diff,Phase,FEN\n";
-    nnue::resetTimingStats();
-
-    auto startTime = high_resolution_clock::now();
-    while (std::getline(stream, line)) {
-        columns = split(line, ',');
-        if (columns.size() < 2) continue;
-        int expected = 100.0f * std::stof(columns[cpCol]);
-        auto fen = columns[fenCol];
-        auto position = fen::parsePosition(fen);
-        auto score = nnue::evaluate(position, network);
-        ++numEvals;
-        auto diff = expected - score;
-        diffs.push_back(diff * 0.01);
-        if (debug) std::cout << expected << "," << score << "," << diff << "," << fen << "\n";
-    }
-    auto endTime = high_resolution_clock::now();
-    auto duration = duration_cast<microseconds>(endTime - startTime).count();
-    auto rate = numEvals ? static_cast<double>(numEvals) * 1'000'000 / duration : 0;
-    std::cout << "Processed " << numEvals << " evaluations in " << duration * 0.001 << " ms, "
-              << rate << " evals/sec\n";
-    std::cout << "Error stats: " << computeStatistics(diffs) << "\n";
-    if (!debug) nnue::printTimingStats();
-}
-
 bool parseFEN(Position& position, int* argc, char** argv[]) {
     if (*argc < 1) return false;
     position = fen::parsePosition(**argv);
@@ -280,19 +226,6 @@ bool parseFEN(Position& position, int* argc, char** argv[]) {
     return true;
 }
 
-int testFromFiles(nnue::NNUE& network, int argc, char* argv[]) {
-    for (; argc; --argc, ++argv) {
-        std::string name = *argv;
-        std::ifstream stream(name);
-        if (!stream) {
-            std::cerr << "Error: could not open file " << name << std::endl;
-            return 1;
-        }
-        std::cout << "Testing " << name << std::endl;
-        testFromStream(network, stream);
-    }
-    return 0;
-}
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -306,13 +239,18 @@ int main(int argc, char* argv[]) {
     testStaticExchangeEvaluation();
     testMVVLVA();
 
-    std::optional<nnue::NNUE> network;
-    if (options::useNNUE)
-        network.emplace(nnue::loadNNUE("nn-82215d0fd0df.nnue", nnue::kNormal));
-    else
+    std::optional<nnue::Network> network;
+    if (options::useNNUE) {
+        const char* filename = "nn-b1a57edbea57.nnue";
+        std::ifstream file(filename, std::ios::binary);
+        if (!file) {
+            std::cerr << "Error: could not open NNUE file " << filename << "\n";
+            return 1;
+        }
+        network.emplace(nnue::readNetwork(file));
+    } else {
         std::cout << "\n*** Skipping NNUE evaluation as it is disabled in options. ***\n";
-
-    if (argc && !fen::maybeFEN(*argv)) return network ? testFromFiles(*network, argc, argv) : 0;
+    }
 
     // Default FEN string to analyze
     auto position = fen::parsePosition("6k1/4Q3/5K2/8/8/8/8/8 w - - 0 1");
@@ -335,14 +273,8 @@ int main(int argc, char* argv[]) {
     std::cout << "Quiescence Evaluation: " << std::string(quiesceEval) << std::endl;
 
     if (network) {
-        auto nnueEval = nnue::evaluate(position, *network);
+        auto nnueEval = nnue::evaluate(*network, position);
         std::cout << "NNUE Evaluation: " << nnueEval << " cp\n";
-
-        // Display NNUE timing statistics
-        nnue::printTimingStats();
-
-        // Display computational complexity analysis
-        nnue::analyzeComputationalComplexity();
     }
 
     printAvailableMovesAndCaptures(position);

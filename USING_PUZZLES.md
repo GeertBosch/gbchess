@@ -47,6 +47,27 @@ failures as well as an ELO score derived from the rating of the puzzles:
 The "too deep" outcome is not an error, as the search depth given was less than the length of the
 correct solution in plies.
 
+### What the CI suites are held to
+
+A run fails if any *mate* puzzle goes unsolved, in any suite and without asking for the check: a
+mate is a fact rather than a judgement, so there is no flag to pass and no number to lower. That
+is what the "mate errors" count has always reported; until phase 11 of the NNUE work nothing
+acted on it, and a run could report 82 unsolved mates and still exit zero.
+
+The non-mate suite is a matter of judgement, so it is held to its rating instead:
+
+    build/puzzle-test --depth 7 --expect-rating 2350 ./build/gbchess lichess/ci_nonmate_100.csv
+
+`--expect-rating N` fails the run when the rating leaves `N +/- --rating-tolerance` (5 by
+default) **in either direction**. Scoring better than expected is a failure too, with a message
+naming the number to raise in the `Makefile` rule; otherwise a suite can improve unremarked and
+later regress back to where it was, which is how `ci_nonmate_100` went from 93 to 98 solved
+without anyone noticing. At a fixed depth against a fixed binary the rating is exactly
+repeatable, so the tolerance covers rounding rather than run-to-run noise.
+
+The expectation belongs to the suite *and its depth* -- the same puzzles searched deeper are a
+different measurement -- which is why each `Makefile` rule carries its own.
+
 ### Evaluation errors
 
 Here the engine consider its solution as better than the correct solution. This can be the result of

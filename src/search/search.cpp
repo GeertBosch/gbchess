@@ -18,7 +18,6 @@
 #include "engine/fen/fen.h"
 #include "eval/eval.h"
 #include "eval/nnue/nnue.h"
-#include "eval/nnue/sf16.h"
 #include "move/move.h"
 #include "move/move_gen.h"
 #include "pv.h"
@@ -92,52 +91,47 @@ timepoint searchStartTime = {};
 using TimecheckFn = std::function<bool()>;
 
 /**
- * The two evaluation networks, each loaded on first use rather than at static initialization.
+ * The evaluation network, loaded on first use rather than at static initialization.
  *
- * The SF16.1 Big network is ~116 MB on the heap, so an engine that never selects it should never
- * pay for it; and a network that fails to load should say so when it is asked for, not from a
- * static initializer that runs before main() can report anything. Both are function-local statics,
- * so each file is read exactly once and the read is thread safe.
+ * The network is ~116 MB on the heap, so an engine that never evaluates should never pay for it;
+ * and a network that fails to load should say so when it is asked for, not from a static
+ * initializer that runs before main() can report anything. It is a function-local static, so the
+ * file is read exactly once and the read is thread safe.
  */
-const nnue::NNUE& sf12Network() {
-    static const nnue::NNUE net = nnue::loadNNUE("nn-82215d0fd0df.nnue", nnue::kQuiet);
-    return net;
-}
-
-const nnue::sf16::Network& sf16Network() {
-    static const nnue::sf16::Network net = [] {
+const nnue::Network& evaluationNetwork() {
+    static const nnue::Network net = [] {
         // A string-valued UCI option would be nicer than a hardcoded name, but UCIOption holds an
-        // int; the SF12 name above is hardcoded the same way. See SF16_NNUE_PLAN.md, phase 8.
+        // int. See SF16_NNUE_PLAN.md, phase 8.
         const char* filename = "nn-b1a57edbea57.nnue";
         std::ifstream file(filename, std::ios::binary);
         if (!file) throw std::runtime_error("Cannot open NNUE file: " + std::string(filename));
-        return nnue::sf16::readNetwork(file);
+        return nnue::readNetwork(file);
     }();
     return net;
 }
 
 /**
- * The SF16.1 accumulators of the positions on the path from the root to the node being searched.
+ * The accumulators of the positions on the path from the root to the node being searched.
  *
  * Active only while a search that evaluates with that network is running: computeBestMove resets
  * it and clears it again on the way out, and every other caller of staticEval, a test or the UCI
  * layer included, finds it inactive and gets a fresh evaluation. Keeping it here rather than in
  * the search's arguments is what lets makeMove and unmakeMove stay the only places that touch it.
  */
-nnue::sf16::AccumulatorStack accumulators;
+nnue::AccumulatorStack accumulators;
 
 /**
- * The SF16.1 evaluation of `position`, from the accumulator stack when a search maintains one.
+ * The evaluation of `position`, from the accumulator stack when a search maintains one.
  *
  * The stack must describe `position` itself, which is why every one of the search's makeMove and
  * unmakeMove pairs goes through the two helpers below rather than calling moves:: directly, and
  * why the root, which builds its children with applyMove instead, pushes each of them by hand.
  */
-int32_t evaluateSF16(const Position& position) {
-    const auto& network = sf16Network();
-    if (!accumulators.active()) return nnue::sf16::evaluate(network, position);
+int32_t evaluateNetwork(const Position& position) {
+    const auto& network = evaluationNetwork();
+    if (!accumulators.active()) return nnue::evaluate(network, position);
 
-    return nnue::sf16::evaluate(network, position, accumulators.top());
+    return nnue::evaluate(network, position, accumulators.top());
 }
 
 std::string pct(uint64_t some, uint64_t all) {
@@ -740,10 +734,7 @@ void warmEvaluation() {
     if (!options::useNNUE) return;
 
     try {
-        if (options::useSF16)
-            sf16Network();
-        else
-            sf12Network();
+        evaluationNetwork();
     } catch (const std::exception&) {
         // Deliberately swallowed; see the declaration. A function-local static whose initializer
         // throws is not marked initialized, so the search's own call retries the read and throws
@@ -752,9 +743,8 @@ void warmEvaluation() {
 }
 
 Score staticEval(const Position& position) {
-    Score white = !options::useNNUE  ? evaluateBoard(position.board)
-                  : options::useSF16 ? Score::fromCP(evaluateSF16(position))
-                                     : Score::fromCP(nnue::evaluate(position, sf12Network()));
+    Score white = options::useNNUE ? Score::fromCP(evaluateNetwork(position))
+                                   : evaluateBoard(position.board);
     return position.active() == Color::b ? -white : white;
 }
 
@@ -868,9 +858,9 @@ void sortMoves(
 moves::UndoPosition makeMoveTracked(Position& position, BoardChange change, Move move) {
     if (!accumulators.active()) return moves::makeMove(position, change, move);
 
-    auto changes = nnue::sf16::pieceChanges(position.board, change);
+    auto changes = nnue::pieceChanges(position.board, change);
     auto undo = moves::makeMove(position, change, move);
-    accumulators.push(sf16Network().transformer, position, changes);
+    accumulators.push(evaluationNetwork().transformer, position, changes);
 
     return undo;
 }
@@ -1387,7 +1377,7 @@ PrincipalVariation toplevelAlphaBeta(
         // The root builds each child as a fresh Position rather than making and unmaking a move,
         // so there is no board change to derive a delta from. There are only as many root moves
         // as the position has, so accumulating each child from scratch is not worth avoiding.
-        if (accumulators.active()) accumulators.push(sf16Network().transformer, newPosition);
+        if (accumulators.active()) accumulators.push(evaluationNetwork().transformer, newPosition);
 
         const auto curAlpha = std::max(alpha, pv.score);
         auto newDepth = Depth{depth.current + 1, depth.left - 1};
@@ -1647,8 +1637,7 @@ PrincipalVariation computeBestMove(Position position, int maxdepth, MoveVector m
     struct AccumulatorScope {
         ~AccumulatorScope() { accumulators.clear(); }
     } accumulatorScope;
-    if (options::useNNUE && options::useSF16)
-        accumulators.reset(sf16Network().transformer, position);
+    if (options::useNNUE) accumulators.reset(evaluationNetwork().transformer, position);
 
     auto pv = options::iterativeDeepening ? iterativeDeepening(position, maxdepth, info)
                                           : toplevelAlphaBeta(position, maxdepth, info);

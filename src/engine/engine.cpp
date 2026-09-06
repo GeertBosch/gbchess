@@ -118,6 +118,21 @@ private:
     }
 
     /**
+     * Nodes the clock may not cut a search short of, so that one is always found.
+     *
+     * A search that is stopped before it has finished its first root move has no move to return
+     * and answers "bestmove 0000", which is not a legal move and loses the game on the spot. A
+     * position has at most 218 legal moves, so a floor well above that leaves room to look at
+     * every one of them and then some. It costs a few microseconds at the node rates the engine
+     * actually runs at, which is why the floor can be this generous: overshooting a 1 ms budget
+     * by that much is nothing next to forfeiting.
+     *
+     * The floor applies to the *clock* only. An explicit "go nodes N" is the caller saying what
+     * it wants and is honoured exactly, however small N is; puzzle-test relies on that.
+     */
+    static constexpr int64_t kMinSearchNodes = 1000;
+
+    /**
      * Checks if the search should stop due to time or node limits being exceeded. Accepts a limit
      * argument in the range 0 .. 100 indicating the percentage of the hard limit to check against.
      * Returns true if the search should stop, false otherwise.
@@ -130,7 +145,8 @@ private:
         auto elapsedRealtime = duration_cast<milliseconds>(clock::now() - startTime).count();
         auto elapsedNodestime = options::nodestime ? nodes / options::nodestime : 0;
         auto elapsed = options::nodestime ? elapsedNodestime : elapsedRealtime;
-        bool timeExceeded = maxMillis && elapsed * 100 > maxMillis * limit;
+        bool timeExceeded =
+            maxMillis && elapsed * 100 > maxMillis * limit && nodes >= kMinSearchNodes;
 
         if (!nodesExceeded && !timeExceeded) return stopping;  // Happy path, nothing exceeded
         if (stopping.exchange(true)) return true;              // Already stopping, just return
@@ -207,8 +223,8 @@ private:
         for (auto& info : options::UCIOptionInfo::registry()) {
             if (name != info.name) continue;
             info.set(value);
-            // UseNNUE and UseSF16 select which network evaluates, so this is the last moment
-            // before a search at which a newly selected one can be read off the clock.
+            // UseNNUE decides whether the network evaluates at all, so this is the last moment
+            // before a search at which it can be read off the clock.
             search::warmEvaluation();
             respond("info string " + name + " set to " + value);
             return;

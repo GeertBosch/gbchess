@@ -17,17 +17,14 @@ this plan covers everything from the layer stacks down to a network that actuall
 | 8 | `d44864f` | Engine integration behind `UseSF16`, one `staticEval`, measured |
 | 9 | `a018b22` | Incremental accumulators, an accumulator stack under make/unmake |
 | 10 | `42ae86a` | Sparse fc0 over transposed weights, a fused update, no allocation |
-| 11 | | Strength validation, cutover, and the removal of the SF12 evaluation |
+| 11 | | +250.6 Elo measured in real time; SF12 deleted, `sf16.*` renamed to `nnue.*` |
 
-`src/eval/nnue/sf16.h` ends at `evaluate(...)`, and everything down to it is an **exact
-oracle**: seven positions are verified bit-for-bit against a patched Stockfish 16.1, across all
-eight buckets, from the transformed bytes through every layer intermediate to the final `Value`
-and centipawn score. `sf16.cpp` is a complete, standalone SF16.1 evaluation -- scalar
-through phase 9, with the sparse and SSE2 kernels of phase 10 checked against that scalar path --
-and since phase 8 the engine plays with it when `UseSF16` is set.
-
-Not yet implemented: strength validation. Phase 11 is the last one, and it ends with the SF12
-evaluation deleted and `sf16.*` renamed to `nnue.*`, so nothing after it refers to two networks.
+**The ladder is complete.** `src/eval/nnue/nnue.h` ends at `evaluate(...)`, and everything down
+to it is an **exact oracle**: seven positions are verified bit-for-bit against a patched
+Stockfish 16.1, across all eight buckets, from the transformed bytes through every layer
+intermediate to the final `Value` and centipawn score. `nnue.cpp` is a complete, standalone
+Stockfish 16.1 evaluation -- scalar through phase 9, with the sparse and SSE2 kernels of phase 10
+checked against that scalar path -- and since phase 11 it is the only evaluation the engine has.
 
 The whole port keeps the file's **canonical row-major ordering**. Stockfish scrambles affine
 weights at load time to suit its SIMD kernels; gbchess does not, so the scalar reference stays
@@ -557,10 +554,75 @@ bar should have been raised.
 - Land the expectation numbers from the SF16.1 engine, i.e. after step 3, so the ratchet records
   the new strength rather than immediately failing on it.
 
-**Done when:** a passing real-time SPRT is recorded here with its time control, node rates and
-forfeit count; no `sf12`/`sf16` identifier survives outside `sprt-sf12`; `make -j` and `make ci`
-are green; the docs describe the engine as it is; and the puzzle suites fail in both directions
-against a recorded expectation.
+### The result
+
+**Step 2, the measurement that licenses the rest.** `make sprt-self` with one binary on both
+sides, `UseSF16` on against off, `OwnBook=false` on both, from `build/book-openings.epd` (480
+book-exit positions), **8+0.08 in real time, not nodestime**, concurrency 8 to match the physical
+cores of the i9-9900K rather than its 16 hyperthreads:
+
+    Elo: 250.57 +/- 37.51, nElo: 328.45 +/- 35.21, LOS: 100.00%
+    Games: 374, W 267, L 36, D 71 (80.88%), Ptnml(0-2): [0, 10, 33, 47, 97]
+    LLR: 2.96 (-2.94, 2.94) [0.00, 5.00] -- H1 accepted, 15m35s
+
+**Forfeit count: zero.** All 304 decisive games ended in mate, and the first-mover split was
+51%/49%, so the artifact of `first-mover-time-forfeits` did not appear -- `MoveOverhead` reserves
+per move now, which is the fix that memory called for. `test/sprt_summary.py` did note that 33 of
+188 openings are uninformative (every pair balanced), which inflates normalized Elo somewhat; the
+raw Elo and the pentanomial spread do not depend on that.
+
+**Node rates**, `go movetime 3000` on a middlegame position, same binary: the SF12 path reached
+depth 9 at 323k nps, the Stockfish 16.1 path depth 10 at 402k nps. The new evaluation is faster
+in real time as well as better per node, so the measurement was never a trade of one against the
+other.
+
+The centipawn-scale retune stayed a non-goal: the network won by 250 Elo while being judged with
+margins tuned for the evaluation it replaced. Retuning `options.h` against the new scale is now a
+separate change with its own SPRT, and `kNormalizeToPawnValue` in `nnue.h` names the constant to
+start from.
+
+**Two decisions taken while cutting over, both authorized above.**
+
+*The `evals` target is deleted rather than repointed.* Its CSVs are not ground truth: `make-evals.sh`
+generated the `cp` column by piping positions through a *Stockfish 12* binary, so `build/evals.out`
+was an oracle test that gbchess reproduced Stockfish 12's own NNUE to within 0.1 pawns -- which is
+why the band was so tight. Against the new network it measures only how far two different networks
+disagree (1.2 to 3.0 pawns of stddev by phase), which is a fact about Stockfish rather than a
+regression signal. The exact seven-position oracle in `nnue_test.cpp` is a strictly stronger check
+of the same thing, so `make-evals.sh`, the `EVALS` CSV rules, `check-eval-prereqs` and the CSV
+comparison in `eval_test.cpp` all go.
+
+*`nnue_stats` is deleted rather than moved.* Its seven counters were incremented only from the
+SF12 `nnue.cpp`, and re-instrumenting the survivor would mean three `high_resolution_clock` reads
+inside a 1.1 us evaluation -- taxing the hot path to report what phase 10 measured better without
+it. The module and its six call sites in `eval_test.cpp` and `search_test.cpp` are gone.
+
+**Step 5 landed slightly differently from the sketch above,** and better. Mate suites get no
+ratchet at all: an unsolved mate puzzle fails the run on its own, in any suite, with no flag to
+pass and no number to lower, because a mate is a fact rather than a judgement. `MATE_ERROR`
+already classified exactly this and nothing ever acted on it -- a run could report 82 unsolved
+mates and exit zero, as `--nodes 200` on `ci_mate45_100` demonstrates. Only the non-mate suite is
+a judgement, so only it carries a number: `--expect-rating 2350` with `--rating-tolerance`
+defaulting to 5. All three suites are exactly repeatable at fixed depth against a fixed binary
+(measured over repeated runs: 2717, 2562 and 2350 every time), so the band covers rounding rather
+than noise.
+
+**One engine change the cutover forced.** `uci-move-overhead` began failing intermittently:
+`bestmove 0000`, which is not a legal move and loses the game on the spot. Its third case gives
+the engine a 5 ms clock, which the allocator clamps to a 1 ms budget, and the heavier evaluation
+no longer finishes a single root move inside it -- so the search was cut short with no move to
+return. `Engine::timecheck` now refuses to stop on the *clock* before `kMinSearchNodes` (1000)
+nodes have been searched: a position has at most 218 legal moves, so that leaves room to look at
+every one and then some, and it costs microseconds at the node rates the engine actually reaches.
+An explicit `go nodes N` is untouched and still honoured exactly however small N is, which
+`puzzle-test --nodes` depends on. This was latent before the cutover rather than caused by it --
+the old evaluation simply fit inside 1 ms.
+
+**Done:** the real-time SPRT above passed at +250.6 Elo with zero forfeits; no `sf12`/`sf16`
+identifier survives outside `sprt-sf12` and the two pointers to this plan file's own name;
+`make -j` and `make ci` are green, and the changed files also compile clean under real GCC 15
+rather than the Apple clang that `GPP=g++` resolves to locally; the docs describe the engine as
+it is; and the puzzle suites fail in both directions against a recorded expectation.
 
 ---
 

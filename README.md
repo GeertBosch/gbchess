@@ -51,13 +51,6 @@ make check-prereqs
 make check-download-prereqs
 ```
 
-For evaluation CSV generation (`make-evals.sh` / `build/evals.out`), Stockfish 12 is required.
-If it is not on your PATH, point to it explicitly:
-
-```bash
-STOCKFISH12=/path/to/stockfish-12 make build/evals.out
-```
-
 If your environment has a custom `clang++` that cannot compile standard C++17 headers, force GNU C++
 for both optimized and debug targets:
 
