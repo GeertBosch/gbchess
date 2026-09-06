@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <type_traits>
 
+#include "core/sse2.h"
 #include "eval/nnue/sf16.h"
 
 namespace nnue::sf16 {
@@ -207,6 +208,7 @@ LayerStack readLayerStack(std::istream& in, const Architecture& arch, const std:
     stack.fc0 = readAffineLayer(in, arch.l1, arch.l2 + 1, what + " fc0");
     stack.fc1 = readAffineLayer(in, 2 * arch.l2, arch.l3, what + " fc1");
     stack.fc2 = readAffineLayer(in, arch.l3, 1, what + " fc2");
+    stack.fc0Columns = transpose(stack.fc0);
 
     return stack;
 }
@@ -276,33 +278,28 @@ Square kingSquare(const Board& board, Color color) {
 }
 
 /**
- * Add or subtract one feature's transformer row and PSQT contribution, in place.
+ * Add one feature's transformer row and PSQT contribution to `accumulator`, in place.
  *
  * Accumulator entries stay 16 bit, wrapping around rather than saturating if a position ever
  * managed to overflow one. That is what Stockfish's packed 16 bit adds do, and it is the behavior
  * the network was trained against, so we must not widen the sum here. It is also why subtracting
  * a row undoes adding it exactly, which is what makes an incremental update sound at all.
  */
-template <bool kAdd>
-void applyFeature(Accumulator& accumulator, const FeatureTransformer& transformer,
-                  uint16_t feature) {
+void addFeature(Accumulator& accumulator, const FeatureTransformer& transformer,
+                uint16_t feature) {
     auto l1 = accumulator.values.size();
     dassert((size_t(feature) + 1) * l1 <= transformer.weights.size());
     const auto* weights = transformer.weights.data() + size_t(feature) * l1;
 
     for (size_t i = 0; i < l1; ++i) {
         auto value = uint16_t(accumulator.values[i]);
-        accumulator.values[i] = int16_t(kAdd ? uint16_t(value + uint16_t(weights[i]))
-                                             : uint16_t(value - uint16_t(weights[i])));
+        accumulator.values[i] = int16_t(uint16_t(value + uint16_t(weights[i])));
     }
 
     const auto* psqt =
         transformer.psqtWeights.data() + size_t(feature) * Architecture::kPSQTBuckets;
     for (size_t bucket = 0; bucket < Architecture::kPSQTBuckets; ++bucket)
-        if constexpr (kAdd)
-            accumulator.psqt[bucket] += psqt[bucket];
-        else
-            accumulator.psqt[bucket] -= psqt[bucket];
+        accumulator.psqt[bucket] += psqt[bucket];
 }
 
 /**
@@ -317,7 +314,7 @@ void accumulate(Accumulator& accumulator, const FeatureTransformer& transformer,
 
     accumulator.values.assign(transformer.biases.begin(), transformer.biases.end());
     accumulator.psqt = {};
-    for (auto feature : features) applyFeature<true>(accumulator, transformer, feature);
+    for (auto feature : features) addFeature(accumulator, transformer, feature);
 }
 
 }  // namespace
@@ -361,24 +358,93 @@ void refreshInto(Accumulator& accumulator, const FeatureTransformer& transformer
 }
 
 /**
- * Carry `accumulator` across one move, for a perspective whose own king did not move and so
- * stands on `king` both before and after it.
+ * Write `src` plus the `added` rows less the `removed` rows into `dst`, over `count` values.
+ *
+ * One pass over the accumulator rather than one pass per row, which is the whole point of writing
+ * it this way. A move touches at most five rows and an accumulator is 5KB, so applying the rows
+ * one after another reads and writes that 5KB once per row; reading each row once and writing the
+ * result once does the same arithmetic with a fraction of the memory traffic.
+ *
+ * The row counts are compile time constants so that the body is one straight line a compiler
+ * vectorizes as it stands, which is why the caller dispatches on the shape of the move rather
+ * than passing counts. Arithmetic stays 16 bit and wraps, as addFeature explains.
+ */
+template <size_t kAdded, size_t kRemoved>
+void combineRows(int16_t* __restrict dst, const int16_t* __restrict src,
+                 const int16_t* const* added, const int16_t* const* removed, size_t count) {
+    for (size_t i = 0; i < count; ++i) {
+        auto value = uint16_t(src[i]);
+        for (size_t a = 0; a < kAdded; ++a) value = uint16_t(value + uint16_t(added[a][i]));
+        for (size_t r = 0; r < kRemoved; ++r) value = uint16_t(value - uint16_t(removed[r][i]));
+        dst[i] = int16_t(value);
+    }
+}
+
+/**
+ * Carry `src` across one move into `dst`, for a perspective whose own king did not move and so
+ * stands on `king` both before and after it. `dst` may hold anything: every value is written.
  *
  * Removals come first only for readability; the rows commute, as int16 addition does.
  */
-void updatePerspective(Accumulator& accumulator, const FeatureTransformer& transformer,
-                       const PieceChanges& changes, Square king, Color perspective) {
-    for (uint8_t i = 0; i < changes.removedCount; ++i)
-        applyFeature<false>(
-            accumulator,
-            transformer,
-            featureIndex(changes.removed[i].square, changes.removed[i].piece, king, perspective));
+void updatePerspective(Accumulator& dst, const Accumulator& src,
+                       const FeatureTransformer& transformer, const PieceChanges& changes,
+                       Square king, Color perspective) {
+    auto l1 = src.values.size();
+    dassert(l1 && transformer.weights.size() % l1 == 0);
 
-    for (uint8_t i = 0; i < changes.addedCount; ++i)
-        applyFeature<true>(
-            accumulator,
-            transformer,
-            featureIndex(changes.added[i].square, changes.added[i].piece, king, perspective));
+    // Resolve the features into the rows they select before touching an accumulator, so that the
+    // loop below is arithmetic and nothing else.
+    const int16_t* added[std::tuple_size_v<decltype(changes.added)>];
+    const int16_t* removed[std::tuple_size_v<decltype(changes.removed)>];
+    auto row = [&](const PieceChanges::Placement& placement) {
+        auto feature = featureIndex(placement.square, placement.piece, king, perspective);
+        dassert((size_t(feature) + 1) * l1 <= transformer.weights.size());
+        return transformer.weights.data() + size_t(feature) * l1;
+    };
+    auto psqtRow = [&](const PieceChanges::Placement& placement) {
+        auto feature = featureIndex(placement.square, placement.piece, king, perspective);
+        return transformer.psqtWeights.data() + size_t(feature) * Architecture::kPSQTBuckets;
+    };
+
+    for (uint8_t i = 0; i < changes.addedCount; ++i) added[i] = row(changes.added[i]);
+    for (uint8_t i = 0; i < changes.removedCount; ++i) removed[i] = row(changes.removed[i]);
+
+    dst.psqt = src.psqt;
+    for (uint8_t i = 0; i < changes.addedCount; ++i) {
+        const auto* psqt = psqtRow(changes.added[i]);
+        for (size_t bucket = 0; bucket < Architecture::kPSQTBuckets; ++bucket)
+            dst.psqt[bucket] += psqt[bucket];
+    }
+    for (uint8_t i = 0; i < changes.removedCount; ++i) {
+        const auto* psqt = psqtRow(changes.removed[i]);
+        for (size_t bucket = 0; bucket < Architecture::kPSQTBuckets; ++bucket)
+            dst.psqt[bucket] -= psqt[bucket];
+    }
+
+    dst.values.resize(l1);
+    int16_t* out = dst.values.data();
+    const int16_t* in = src.values.data();
+
+    // The shapes a legal move can have: a quiet move adds one row and removes one, a capture or
+    // an en passant removes a second, and castling - which only reaches here from the perspective
+    // whose king did not castle - moves a rook as well.
+    switch (changes.addedCount * 4 + changes.removedCount) {
+    case 1 * 4 + 1: combineRows<1, 1>(out, in, added, removed, l1); break;
+    case 1 * 4 + 2: combineRows<1, 2>(out, in, added, removed, l1); break;
+    case 2 * 4 + 1: combineRows<2, 1>(out, in, added, removed, l1); break;
+    case 2 * 4 + 2: combineRows<2, 2>(out, in, added, removed, l1); break;
+    default:
+        // Nothing a chess move does, but the arithmetic is defined for any shape and a wrong
+        // answer here would be a silent one.
+        dst.values.assign(src.values.begin(), src.values.end());
+        for (uint8_t i = 0; i < changes.removedCount; ++i)
+            for (size_t j = 0; j < l1; ++j)
+                dst.values[j] = int16_t(uint16_t(dst.values[j]) - uint16_t(removed[i][j]));
+        for (uint8_t i = 0; i < changes.addedCount; ++i)
+            for (size_t j = 0; j < l1; ++j)
+                dst.values[j] = int16_t(uint16_t(dst.values[j]) + uint16_t(added[i][j]));
+        break;
+    }
 }
 
 /** Pieces standing on `board`, which is also the number of features either perspective sets. */
@@ -471,17 +537,19 @@ void AccumulatorStack::push(const FeatureTransformer& transformer, const Positio
                             const PieceChanges& changes) {
     if (!active()) return;
 
-    // grow() may reallocate the vector, so nothing may hold a reference across it. Copying the
-    // entry below reuses the storage a popped entry left behind rather than allocating again.
+    // grow() may reallocate the vector, so nothing may hold a reference across it. The new entry
+    // is a recycled one whose values are all overwritten below, and reusing the storage it holds
+    // is what keeps a push free of allocation.
     grow();
-    entries[count - 1] = entries[count - 2];
     auto& top = entries[count - 1];
+    const auto& below = entries[count - 2];
 
     for (auto perspective : {Color::w, Color::b})
         if (changes.movedKing(perspective))
             refreshInto(top[perspective], transformer, position, perspective);
         else
             updatePerspective(top[perspective],
+                              below[perspective],
                               transformer,
                               changes,
                               kingSquare(position.board, perspective),
@@ -498,8 +566,31 @@ void AccumulatorStack::pop() {
     --count;
 }
 
-Transformed transform(const Accumulator& white, const Accumulator& black, Color sideToMove,
-                      uint32_t bucket) {
+namespace {
+
+/**
+ * Clip both halves of one perspective's `count` accumulator values and multiply them pairwise.
+ *
+ * Written over three restrict qualified pointers rather than over the accumulator: that is what
+ * lets a compiler see that the halves and the output cannot overlap, drop the runtime alias check
+ * it would otherwise emit around the loop, and vectorize the whole thing.
+ */
+void transformHalf(const int16_t* __restrict first, const int16_t* __restrict second,
+                   uint8_t* __restrict output, size_t count) {
+    for (size_t j = 0; j < count; ++j) {
+        // Both clips land in [0, 127], so their product needs 14 bits and the whole step stays in
+        // int16 - which is what lets a vectorized loop keep 8 values per register instead of
+        // widening to 4. Shifting the product down by 7 leaves the byte the network wants.
+        int16_t a = std::clamp<int16_t>(first[j], 0, 127);
+        int16_t b = std::clamp<int16_t>(second[j], 0, 127);
+        output[j] = uint8_t(int16_t(a * b) >> 7);
+    }
+}
+
+}  // namespace
+
+void transform(const Accumulator& white, const Accumulator& black, Color sideToMove,
+               uint32_t bucket, Transformed& transformed) {
     dassert(bucket < Architecture::kPSQTBuckets);
     dassert(white.values.size() == black.values.size());
 
@@ -511,20 +602,19 @@ Transformed transform(const Accumulator& white, const Accumulator& black, Color 
     dassert(l1 % 2 == 0);
     auto half = l1 / 2;
 
-    Transformed transformed;
     transformed.psqt = (perspectives[0]->psqt[bucket] - perspectives[1]->psqt[bucket]) / 2;
     transformed.features.resize(l1);
 
     for (size_t p = 0; p < 2; ++p) {
-        const auto& values = perspectives[p]->values;
-        for (size_t j = 0; j < half; ++j) {
-            // Pairwise multiplication of the two halves, each clipped to a byte first. The product
-            // of two clipped values needs 14 bits, so scaling it back down by 128 leaves a byte.
-            int first = std::clamp<int>(values[j], 0, 127);
-            int second = std::clamp<int>(values[j + half], 0, 127);
-            transformed.features[p * half + j] = uint8_t(first * second / 128);
-        }
+        const int16_t* values = perspectives[p]->values.data();
+        transformHalf(values, values + half, transformed.features.data() + p * half, half);
     }
+}
+
+Transformed transform(const Accumulator& white, const Accumulator& black, Color sideToMove,
+                      uint32_t bucket) {
+    Transformed transformed;
+    transform(white, black, sideToMove, bucket, transformed);
 
     return transformed;
 }
@@ -537,19 +627,94 @@ Transformed transform(const FeatureTransformer& transformer, const Position& pos
                      bucket);
 }
 
-std::vector<int32_t> affineForward(const AffineLayer& layer, const std::vector<uint8_t>& input) {
-    dassert(input.size() == layer.inputs);
+void affineForward(const AffineLayer& layer, const uint8_t* input, int32_t* output) {
     dassert(layer.biases.size() == layer.outputs);
     dassert(layer.weights.size() == size_t(layer.outputs) * layer.paddedInputs);
 
-    std::vector<int32_t> output(layer.outputs);
     for (uint32_t i = 0; i < layer.outputs; ++i) {
+        const int8_t* row = layer.weights.data() + size_t(i) * layer.paddedInputs;
         int32_t sum = layer.biases[i];
-        for (uint32_t j = 0; j < layer.inputs; ++j) sum += int32_t(layer.weight(i, j)) * input[j];
+        for (uint32_t j = 0; j < layer.inputs; ++j) sum += int32_t(row[j]) * input[j];
         output[i] = sum;
     }
+}
+
+std::vector<int32_t> affineForward(const AffineLayer& layer, const std::vector<uint8_t>& input) {
+    dassert(input.size() == layer.inputs);
+
+    std::vector<int32_t> output(layer.outputs);
+    affineForward(layer, input.data(), output.data());
 
     return output;
+}
+
+ColumnMajorLayer transpose(const AffineLayer& layer) {
+    ColumnMajorLayer columns;
+    if (layer.outputs != ColumnMajorLayer::kOutputs) return columns;
+
+    columns.inputs = layer.inputs;
+    columns.biases = layer.biases;
+    columns.weights.resize(size_t(layer.inputs) * ColumnMajorLayer::kOutputs);
+    for (uint32_t i = 0; i < layer.outputs; ++i)
+        for (uint32_t j = 0; j < layer.inputs; ++j)
+            columns.weights[size_t(j) * ColumnMajorLayer::kOutputs + i] = layer.weight(i, j);
+
+    return columns;
+}
+
+namespace {
+
+/** Bytes one nonzero scan step covers, being the width of an SSE2 register. */
+constexpr size_t kScanWidth = 16;
+
+/**
+ * Bitmap of which of the `kScanWidth` bytes at `input` are not zero, bit 0 being the first.
+ *
+ * The bytes carry no sign bit to read - the transform's pairwise product cannot exceed 126 - so
+ * this compares against zero and inverts rather than moving the mask straight out. That reads the
+ * same under real SSE2 and under core/sse2emul.h, whose movemask reports "byte is not zero" where
+ * the hardware reports "byte is negative": the two agree on exactly the all-ones and all-zeros
+ * bytes a comparison produces.
+ */
+unsigned nonzeroMask(const uint8_t* input) {
+    __m128i zeros = {0, 0};
+    __m128i chunk;
+    std::memcpy(&chunk, input, sizeof(chunk));
+
+    return ~unsigned(_mm_movemask_epi8(_mm_cmpeq_epi8(chunk, zeros))) & ((1u << kScanWidth) - 1);
+}
+
+}  // namespace
+
+void affineForwardSparse(const ColumnMajorLayer& columns, const uint8_t* input, size_t inputs,
+                         int32_t* output) {
+    constexpr size_t kOutputs = ColumnMajorLayer::kOutputs;
+    dassert(!columns.empty() && inputs == columns.inputs);
+
+    int32_t sums[kOutputs];
+    for (size_t i = 0; i < kOutputs; ++i) sums[i] = columns.biases[i];
+
+    // Scan a register's worth of inputs, then spend its nonzero ones before loading the next: the
+    // whole scan never leaves the accumulators, and no list of indices is built to walk twice.
+    size_t scanned = inputs / kScanWidth * kScanWidth;
+    for (size_t base = 0; base < scanned; base += kScanWidth)
+        for (unsigned mask = nonzeroMask(input + base); mask; mask &= mask - 1) {
+            size_t j = base + size_t(__builtin_ctz(mask));
+            const int8_t* column = columns.column(j);
+            int32_t value = input[j];
+            // A fixed count of kOutputs, which is the whole reason for the transposed layout: the
+            // compiler vectorizes this into a handful of instructions with no loop at all.
+            for (size_t i = 0; i < kOutputs; ++i) sums[i] += column[i] * value;
+        }
+
+    // Whatever a final partial register holds. Real networks have none, l1 being a multiple of 16.
+    for (size_t j = scanned; j < inputs; ++j)
+        if (int32_t value = input[j]) {
+            const int8_t* column = columns.column(j);
+            for (size_t i = 0; i < kOutputs; ++i) sums[i] += column[i] * value;
+        }
+
+    for (size_t i = 0; i < kOutputs; ++i) output[i] = sums[i];
 }
 
 uint8_t clippedReLU(int32_t value) {
@@ -571,10 +736,17 @@ int32_t propagate(const LayerStack& stack, const std::vector<uint8_t>& features,
     dassert(stack.fc2.inputs == stack.fc1.outputs);
     dassert(stack.fc2.outputs == 1);
 
-    Propagation scratch;
+    // Static so that its buffers are allocated once rather than on every node the search reaches.
+    // Everything below overwrites what it holds, so nothing carries over from the previous call.
+    static thread_local Propagation scratch;
     Propagation& p = trace ? *trace : scratch;
 
-    p.fc0 = affineForward(stack.fc0, features);
+    dassert(features.size() == stack.fc0.inputs);
+    p.fc0.resize(stack.fc0.outputs);
+    if (stack.fc0Columns.empty())
+        affineForward(stack.fc0, features.data(), p.fc0.data());
+    else
+        affineForwardSparse(stack.fc0Columns, features.data(), features.size(), p.fc0.data());
 
     // The same fc0 outputs twice over: squared and clipped first, then merely clipped. Feeding
     // the second layer both is how the network gets a nonlinearity that is not piecewise linear.
@@ -584,12 +756,13 @@ int32_t propagate(const LayerStack& stack, const std::vector<uint8_t>& features,
         p.fc1Input[activated + i] = clippedReLU(p.fc0[i]);
     }
 
-    p.fc1 = affineForward(stack.fc1, p.fc1Input);
+    p.fc1.resize(stack.fc1.outputs);
+    affineForward(stack.fc1, p.fc1Input.data(), p.fc1.data());
 
     p.fc2Input.resize(stack.fc1.outputs);
     for (uint32_t i = 0; i < stack.fc1.outputs; ++i) p.fc2Input[i] = clippedReLU(p.fc1[i]);
 
-    p.fc2 = affineForward(stack.fc2, p.fc2Input)[0];
+    affineForward(stack.fc2, p.fc2Input.data(), &p.fc2);
 
     // fc0's last output bypasses the stack, and so is still in the layers' fixed point, where 1.0
     // is 127 << kWeightScaleBits. The result's own scale puts 1.0 at 600 * kOutputScale. Stockfish
@@ -625,8 +798,10 @@ int32_t evaluateValue(const Network& network, const Position& position,
     e.pieceCount = countPieces(position.board);
     e.bucket = materialBucket(e.pieceCount);
 
-    auto transformed =
-        transform(accumulators.white, accumulators.black, position.active(), e.bucket);
+    // Static so that the 2560 byte feature buffer is allocated once rather than on every node.
+    // transform() overwrites all of it, so nothing carries over from the previous call.
+    static thread_local Transformed transformed;
+    transform(accumulators.white, accumulators.black, position.active(), e.bucket, transformed);
     e.psqt = transformed.psqt;
     e.positional = propagate(network.stacks[e.bucket], transformed.features);
 

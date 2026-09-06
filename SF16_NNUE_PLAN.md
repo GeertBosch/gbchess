@@ -15,7 +15,8 @@ this plan covers everything from the layer stacks down to a network that actuall
 | 6 | `6111394` | Layer stack propagation, every intermediate golden |
 | 7 | `f0405d8` | Bucket selection, whole-network evaluation, centipawn scale |
 | 8 | `d44864f` | Engine integration behind `UseSF16`, one `staticEval`, measured |
-| 9 | this commit | Incremental accumulators, an accumulator stack under make/unmake |
+| 9 | `a018b22` | Incremental accumulators, an accumulator stack under make/unmake |
+| 10 | this commit | Sparse fc0 over transposed weights, a fused accumulator update, no allocation |
 
 `src/eval/nnue/sf16.h` today ends at `evaluate(...)`, and everything down to it is an **exact
 oracle**: seven positions are verified bit-for-bit against a patched Stockfish 16.1, across all
@@ -23,7 +24,7 @@ eight buckets, from the transformed bytes through every layer intermediate to th
 and centipawn score. `sf16.cpp` is a complete, standalone, scalar SF16.1 evaluation, and as of
 phase 8 the engine plays with it when `UseSF16` is set.
 
-Not yet implemented, in dependency order: SIMD, strength validation.
+Not yet implemented: strength validation.
 
 The whole port keeps the file's **canonical row-major ordering**. Stockfish scrambles affine
 weights at load time to suit its SIMD kernels; gbchess does not, so the scalar reference stays
@@ -500,7 +501,105 @@ unchanged bit-for-bit from phase 8, and nodes/second in real time is materially 
 
 ---
 
-## Phase 10 — Performance and SIMD
+## Phase 10 — Performance and SIMD — **done**
+
+The evaluation is 5.3x cheaper per node and the search now runs **faster with SF16.1 than with
+SF12** on both middlegame positions, having been 3.0x slower at phase 8 and 1.7x at phase 9. Every
+golden value is unchanged: all 56 propagations, all 56 evaluations, the seven transforms and the
+node counts at depth 8 are bit for bit what phases 6 to 9 recorded. `sf16.h` gained
+`ColumnMajorLayer`, `transpose`, `affineForwardSparse`, a pointer form of `affineForward` and one
+of `transform`; `LayerStack` gained `fc0Columns`. What the plan below asked for is what was built,
+with six notes.
+
+- **The compiler was already vectorizing everything, and that was the problem.** The first move was
+  to read the generated code rather than to reach for intrinsics, and at `-O2` Apple clang had
+  already turned every hot loop into SSE: `affineForward` widened bytes to 32 bit lanes with
+  `pmovsxbd`/`pmaddwd`, `transform` ran 8 values per iteration, the accumulator adds ran 32 int16 at
+  a time. So there was nothing to *start* vectorizing. What the kernels needed was a better
+  algorithm and a better shape, after which the compiler's own output is fine. Only one SSE2 call
+  is written by hand in the whole phase.
+- **The one intrinsic is the nonzero scan, and it goes through `core/sse2.h`.** `nonzeroMask`
+  compares 16 bytes against zero and takes a `_mm_movemask_epi8`, both of which `core/sse2emul.h`
+  already implements. It compares rather than reading the sign bits directly because a transformed
+  feature never has bit 7 set - the pairwise product tops out at 126 - and because comparing is the
+  form that reads the same under the emulation, whose `_mm_movemask_epi8` reports "byte is not zero"
+  where the hardware reports "byte is negative". The two agree on exactly the all-ones and all-zeros
+  bytes a comparison produces, which is all this uses.
+- **fc0 skips the zeros, and 90% of its input is zero.** The transform's pairwise product vanishes
+  whenever either half clipped to zero, and the test now reports the density it measures rather than
+  taking it on faith. Skipping those inputs needs the weights transposed, which is the second,
+  permuted layout the port's design allows: `ColumnMajorLayer` holds fc0's 16 weights per input
+  contiguously and is built at load time *beside* the canonical row major layer, which stays what
+  `affineForward` reads and what the golden tables pin. 327KB more memory across the eight stacks.
+  The kernel's inner loop is a fixed 16 iterations, which is the whole reason for fixing
+  `ColumnMajorLayer::kOutputs` at compile time: a compiler turns that into straight line vector code
+  on any target, and a layer of any other width simply gets no twin and keeps the canonical path.
+- **The other three wins are pure C++ restructuring.** The transform's clip-and-multiply now stays
+  in int16 - both operands clip into `[0, 127]`, so the product needs 14 bits - where writing it in
+  `int` made clang widen to 4 lanes per register; that alone is 2.6x on that loop. The incremental
+  accumulator update was four passes over 5KB (a copy, then one per row) and is now one fused pass,
+  `dst = src + added - removed`, dispatched on the shape of the move so the row counts are compile
+  time constants. And `propagate` and `evaluateValue` no longer allocate: they keep their buffers in
+  `thread_local` scratch, since a search evaluates millions of nodes and the engine runs its search
+  on its own thread.
+- **What is left is memory bandwidth, not arithmetic.** A refresh reads 30 feature rows of 5KB each
+  out of a 65MB weight table and takes 8 us; an incremental update reads at most six and takes 600
+  ns. Both work out to 36-51 GB/s on this machine, so the rows themselves are the floor and there is
+  no more to win there without caching accumulators across positions the way Stockfish's finny
+  tables do.
+- **Stockfish's sparse trick, but not Stockfish's kernel.** SF16.1 finds nonzero *4-byte chunks* and
+  spends them through `maddubs`, which is SSSE3. This finds nonzero bytes and spends each on all 16
+  outputs at once, which needs nothing beyond SSE2 and no permutation of the input.
+
+### Measured
+
+`sf16-test`, `-O2`, i9-9900K. The two right hand columns are the same binary built with
+`-DSSE2EMUL`, so the portable emulation is exercised on real data rather than only compiled.
+
+| | phase 9 | phase 10 | ratio | emulated |
+|---|---|---|---|---|
+| propagation through one layer stack | 5334 ns | 873 ns | 6.1x | 1122 ns |
+| both perspectives of a capture, incrementally | 1040 ns | 600 ns | 1.7x | 585 ns |
+| a whole `evaluate()` from accumulators | 6013 ns | 1142 ns | 5.3x | |
+| of which fc0 | 4661 ns | 616 ns | 7.6x | |
+| of which the transform | 598 ns | 326 ns | 1.8x | |
+
+`build/gbchess`, `go depth 8`, `OwnBook=false`, real time, no nodestime. The node counts are the
+ones phases 8 and 9 recorded, to the node, so nothing about the evaluation moved.
+
+| Position | SF12 nps | SF16 nps, phase 9 | SF16 nps, phase 10 | SF16 against SF12 |
+|---|---|---|---|---|
+| startpos | 330117 | 197000 | 437867 | **1.33x faster** |
+| kiwipete | 230927 | 145000 | 308130 | **1.33x faster** |
+| `8/2k5/2p5/8/1P6/8/3K4/6R1 b` | 498000 | 186000 | 409881 | 1.21x slower |
+
+The phase 9 column is that phase's own figures with its one-off network load excluded, which is how
+it reported them; phase 10's numbers need no such adjustment, the load having moved off the clock in
+`d836299`. **The endgame is the one position where SF12 still leads**, and for the reason phase 9
+gave: five pieces make a refresh cheap and an incremental update no cheaper, and two of the five are
+kings whose every move forces a refresh anyway. It is also the position where the evaluation matters
+least.
+
+### Tests
+
+- `sf16_test.cpp` gains `testSparseAffineForward`, which checks the transposition weight by weight
+  across all eight stacks, then holds the sparse kernel against the canonical one on all 56 golden
+  position-bucket pairs - both as `affineForwardSparse` against `affineForward`, and as a whole
+  `propagate` through a stack stripped of its transposed weights against one that has them. It then
+  runs synthetic layers 1, 15, 16, 17, 31, 33 and 64 inputs wide, which are the widths that exercise
+  the kernel's tail, plus an all-zero input that must leave the biases untouched. The canonical path
+  stays the one the golden tables pin, so this is a comparison against something already exact.
+- `make test` and `make ci` gain `build/sf16-sse2emul.out`: the same test binary built with
+  `-DSSE2EMUL`, which is how the emulated path stays exact rather than merely compiling. It is
+  deliberately not named `*-test`, because `build/test-cpp.out` insists those correspond one to one
+  with `*_test.cpp` files.
+- The invariant phase 9 put inside `push` does the rest of the work for the fused accumulator
+  update: a debug build still compares every pushed position against a fresh `refreshBoth`, over the
+  4114 positions of the make/unmake walk and the two searches in `search_test.cpp`.
+- Checked under real GCC as well as Apple clang, with and without `-DSSE2EMUL`, per
+  `macos-gpp-is-clang-ci-blind-spot`.
+
+*Original plan follows.*
 
 Only after phases 8 and 9 have produced real measurements; this is where the port stops being
 obviously correct and needs the scalar path kept as an oracle.

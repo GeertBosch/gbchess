@@ -493,9 +493,25 @@ build/test-debug.out: ${DBG_TESTS} ${NNUE_FILE} ${SF16_NNUE_FILE}
 		fi); \
 	} $(REDIR)
 
+# The SF16 evaluation's SIMD goes through core/sse2.h, which on a machine without SSE2 resolves to
+# the portable emulation in core/sse2emul.h instead of the hardware's own. Build the SF16 tests
+# against that emulation as well, so the golden values stay exact on the path an ARM build takes.
+# Not named *-test: build/test-cpp.out insists that those correspond one to one with *_test.cpp.
+SF16_EMUL_SRCS=$(call prefix_src,eval/nnue/sf16_test.cpp eval/nnue/sf16.cpp ${MOVES_SRCS} engine/fen/fen.cpp)
+build/sf16-sse2emul: ${SF16_EMUL_SRCS}
+	$(Q)mkdir -p build
+	$(call BUILDCMD,${GPP} ${CCFLAGS} -O2 -DSSE2EMUL -Isrc ${LINKFLAGS} -o $@ $^ ${LIBS})
+
+build/sf16-sse2emul.out: build/sf16-sse2emul ${SF16_NNUE_FILE}
+	$(Q){ \
+		(cd build && echo Symlinking NNUE files && ln -fs ../*.nnue .); \
+		(cd build && ./sf16-sse2emul); \
+	} $(REDIR)
+
 test-cpp: build/test-cpp.out
 test-debug: build/test-debug.out
-test: build/test-cpp.out build/test-debug.out build/fixed-puzzles.out build/searches.out build/evals.out build/uci.out build/magic.out build/book-cli.out
+test-sse2emul: build/sf16-sse2emul.out
+test: build/test-cpp.out build/test-debug.out build/sf16-sse2emul.out build/fixed-puzzles.out build/searches.out build/evals.out build/uci.out build/magic.out build/book-cli.out
 
 # Only macOS builds the debug objects with sanitizers (see DEBUGFLAGS above), so only there is
 # there anything to gain from running them in the gate the pre-push hook uses. On CI the same
@@ -505,7 +521,7 @@ ifeq ($(_system_type),Darwin)
     CI_SANITIZED=build/test-debug.out
 endif
 
-ci: build-ci ${CI_SANITIZED} build/test-cpp.out build/perft-test.out build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate-123.out build/mate-45.out build/puzzles.out build/book-cli.out dead-code
+ci: build-ci ${CI_SANITIZED} build/test-cpp.out build/sf16-sse2emul.out build/perft-test.out build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate-123.out build/mate-45.out build/puzzles.out build/book-cli.out dead-code
 	@echo "\n✅ CI checks passed\n"
 
 install-hooks:

@@ -409,6 +409,7 @@ void testGoldenEvaluations(const nnue::sf16::Network& network);
 void testColorSymmetry(const nnue::sf16::Network& network);
 void testEvaluationClamp(const nnue::sf16::Network& network);
 void testIncrementalAccumulators(const nnue::sf16::Network& network);
+void testSparseAffineForward(const nnue::sf16::Network& network);
 
 void testNetworkFile(const std::string& filename) {
     std::ifstream file(filename, std::ios::binary);
@@ -479,6 +480,7 @@ void testNetworkFile(const std::string& filename) {
     // With a real transformer in hand, check it against Stockfish 16.1 itself.
     testGoldenTransforms(network);
     testGoldenPropagations(network);
+    testSparseAffineForward(network);
     testGoldenEvaluations(network);
     testColorSymmetry(network);
     testEvaluationClamp(network);
@@ -1367,6 +1369,101 @@ void testGoldenPropagations(const nnue::sf16::Network& network) {
     std::cout << "  propagation through one layer stack: "
               << std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count() / kRepeats
               << " ns\n";
+}
+
+// ---------------------------------------------------------------------------------------------
+// The sparse fc0 kernel, against the canonical one
+// ---------------------------------------------------------------------------------------------
+
+using nnue::sf16::affineForwardSparse;
+using nnue::sf16::ColumnMajorLayer;
+using nnue::sf16::transpose;
+
+/**
+ * The transposed weights and the sparse kernel, held against the row major ones on every golden
+ * position and on synthetic layers the real network cannot reach.
+ *
+ * The premise of the kernel is a claim about the data - that most of what reaches fc0 is zero -
+ * and the point of testing it against the canonical kernel rather than against a table of its own
+ * is that the two must agree whatever the input turns out to look like. The canonical path stays
+ * the one the golden tables pin, so this is a comparison against something already known exact.
+ */
+void testSparseAffineForward(const nnue::sf16::Network& network) {
+    // The transposition itself: every weight of every stack, in its new place.
+    for (const auto& stack : network.stacks) {
+        const auto& columns = stack.fc0Columns;
+        assert(!columns.empty() && columns.inputs == stack.fc0.inputs);
+        assert(columns.biases == stack.fc0.biases);
+        for (uint32_t i = 0; i < stack.fc0.outputs; ++i)
+            for (uint32_t j = 0; j < stack.fc0.inputs; ++j)
+                assert(columns.column(j)[i] == stack.fc0.weight(i, j));
+    }
+
+    // Only a layer the kernel is specialized for gets a transposed twin at all; anything else
+    // keeps the canonical path, which is what an empty ColumnMajorLayer means.
+    assert(transpose(makeLayer(4, 3, {0, 0, 0}, std::vector<int8_t>(12, 1))).empty());
+    assert(!transpose(network.stacks[0].fc0).empty());
+    assert(transpose(network.stacks[0].fc1).empty());  // 32 outputs, not 16
+
+    size_t zeros = 0, total = 0;
+    for (size_t index = 0; index < std::size(kGoldenTransforms); ++index) {
+        auto position = fen::parsePosition(kGoldenTransforms[index].fen);
+        auto transformed = transform(network.transformer, position, 0);
+        for (auto feature : transformed.features) zeros += feature == 0;
+        total += transformed.features.size();
+
+        for (uint32_t bucket = 0; bucket < nnue::sf16::Architecture::kLayerStacks; ++bucket) {
+            const auto& stack = network.stacks[bucket];
+            auto canonical = affineForward(stack.fc0, transformed.features);
+
+            std::vector<int32_t> sparse(canonical.size());
+            affineForwardSparse(stack.fc0Columns,
+                                transformed.features.data(),
+                                transformed.features.size(),
+                                sparse.data());
+            assert(sparse == canonical && "the two fc0 kernels must agree value for value");
+
+            // And so must a whole propagation: a stack stripped of its transposed weights takes
+            // the canonical path, which is how the golden tables above were established.
+            nnue::sf16::LayerStack scalarStack;
+            scalarStack.fc0 = stack.fc0;
+            scalarStack.fc1 = stack.fc1;
+            scalarStack.fc2 = stack.fc2;
+            assert(scalarStack.fc0Columns.empty());
+            assert(propagate(scalarStack, transformed.features) ==
+                   propagate(stack, transformed.features));
+        }
+    }
+
+    // Synthetic layers, for the inputs a real network never presents: a width that is not a whole
+    // number of scan steps, so the kernel's tail runs, and an input of nothing but zeros, which
+    // must leave the biases exactly.
+    for (uint32_t inputs : {1u, 15u, 16u, 17u, 31u, 33u, 64u}) {
+        std::vector<int8_t> rows(size_t(inputs) * ColumnMajorLayer::kOutputs);
+        for (size_t i = 0; i < rows.size(); ++i) rows[i] = int8_t(pseudoRandom(i, 127));
+        std::vector<int32_t> biases(ColumnMajorLayer::kOutputs);
+        for (size_t i = 0; i < biases.size(); ++i) biases[i] = pseudoRandom(i + 7, 1000);
+
+        auto layer = makeLayer(inputs, ColumnMajorLayer::kOutputs, biases, rows, 127);
+        auto columns = transpose(layer);
+        assert(!columns.empty());
+
+        // Mostly zero, as a transform's output is, but with the nonzero bytes falling in every
+        // position within a scan step across the widths above.
+        std::vector<uint8_t> input(inputs);
+        for (uint32_t j = 0; j < inputs; ++j) input[j] = (j % 3 == 0) ? uint8_t(1 + j % 126) : 0;
+
+        std::vector<int32_t> sparse(layer.outputs);
+        affineForwardSparse(columns, input.data(), input.size(), sparse.data());
+        assert(sparse == affineForward(layer, input));
+
+        std::vector<uint8_t> nothing(inputs, 0);
+        affineForwardSparse(columns, nothing.data(), nothing.size(), sparse.data());
+        assert(sparse == biases && "no input at all leaves the biases untouched");
+    }
+
+    std::cout << "  fc0's two kernels agree on every golden position, " << 100 * zeros / total
+              << "% of whose transformed features are zero\n";
 }
 
 // ---------------------------------------------------------------------------------------------

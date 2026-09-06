@@ -194,6 +194,47 @@ struct AffineLayer {
 };
 
 /**
+ * An affine layer's weights transposed: the weights one *input* contributes, contiguously.
+ *
+ * The canonical layout holds one row per output, which is what a kernel that computes one output
+ * at a time wants. A kernel that instead walks the inputs and skips the zero ones - and nine of
+ * every ten bytes reaching fc0 are zero - touches every output for each input it keeps, so it
+ * wants the opposite: the `kOutputs` weights of one input, in a single contiguous run.
+ *
+ * This is the second, permuted layout the port's design allows, and it is built *beside* the row
+ * major layer rather than in place of it. The canonical weights stay exactly as the file stores
+ * them, remain what affineForward() reads, and remain what the golden tests check, so the two
+ * kernels can be compared against each other on every position.
+ */
+struct ColumnMajorLayer {
+    /**
+     * Outputs the sparse kernel handles, being fc0's l2 + 1 in both SF16.1 networks.
+     *
+     * Fixing this at compile time is the whole point: the kernel's inner loop is then a fixed
+     * count that a compiler turns into straight line vector code on any target, which is what
+     * makes it fast without a hand written intrinsic in sight. A layer of any other width simply
+     * gets no column major twin and keeps the canonical path.
+     */
+    static constexpr uint32_t kOutputs = 16;
+
+    uint32_t inputs = 0;
+    std::vector<int32_t> biases;
+    std::vector<int8_t> weights;  // weights[j * kOutputs + i] == layer.weight(i, j)
+
+    /** Whether this layer has a transposed twin at all; see kOutputs. */
+    bool empty() const { return weights.empty(); }
+
+    /** The kOutputs weights that input `j` contributes. */
+    const int8_t* column(size_t j) const { return weights.data() + j * kOutputs; }
+};
+
+/**
+ * Transpose `layer` for affineForwardSparse(), or return an empty ColumnMajorLayer if its width
+ * is not the one that kernel is specialized for.
+ */
+ColumnMajorLayer transpose(const AffineLayer& layer);
+
+/**
  * One of the eight layer stacks, which Stockfish selects between by piece count.
  *
  * The stack maps the l1 transformed features to a single value. The first layer produces l2 + 1
@@ -206,6 +247,13 @@ struct LayerStack {
     AffineLayer fc0;  // l1 -> l2 + 1
     AffineLayer fc1;  // 2 * l2 -> l3
     AffineLayer fc2;  // l3 -> 1
+
+    /**
+     * fc0 again, transposed for the sparse kernel, and the only layer worth transposing: fc0 does
+     * 2560 multiplies per output where fc1 does 30. Empty when the network is not one the kernel
+     * applies to, which leaves propagate() on the canonical path.
+     */
+    ColumnMajorLayer fc0Columns;
 };
 
 /**
@@ -334,6 +382,9 @@ struct Accumulators {
     Accumulator white, black;
 
     Accumulator& operator[](Color perspective) { return perspective == Color::w ? white : black; }
+    const Accumulator& operator[](Color perspective) const {
+        return perspective == Color::w ? white : black;
+    }
 };
 
 /**
@@ -488,6 +539,15 @@ struct Transformed {
 Transformed transform(const Accumulator& white, const Accumulator& black, Color sideToMove,
                       uint32_t bucket);
 
+/**
+ * Transform into `transformed`, reusing the buffer it already holds, as transform() above.
+ *
+ * The features are l1 bytes and the search transforms once per evaluated node, so returning a
+ * fresh vector every time is a malloc and a free per node. Both call the same loop.
+ */
+void transform(const Accumulator& white, const Accumulator& black, Color sideToMove,
+               uint32_t bucket, Transformed& transformed);
+
 /** Refresh both perspectives of `position` and transform them, as transform() above. */
 Transformed transform(const FeatureTransformer& transformer, const Position& position,
                       uint32_t bucket);
@@ -520,6 +580,28 @@ constexpr int32_t kOutputScale = 16;
  * extreme 127 * 127 leave the sum below 2^26.
  */
 std::vector<int32_t> affineForward(const AffineLayer& layer, const std::vector<uint8_t>& input);
+
+/**
+ * Affine forward writing `layer.outputs` values through `output`, allocating nothing.
+ *
+ * The evaluation runs this once per layer per node, so the vector the overload above returns is a
+ * malloc and a free the search cannot afford. Both call the same loop.
+ */
+void affineForward(const AffineLayer& layer, const uint8_t* input, int32_t* output);
+
+/**
+ * Affine forward over the transposed weights, visiting only the inputs that are not zero.
+ *
+ * Exactly affineForward(), value for value: a zero input contributes nothing to any output, so
+ * skipping it is not an approximation. What makes it worth doing is what the feature transform
+ * produces - its pairwise product is zero whenever either half clipped to zero, which is about
+ * nine bytes in ten - and what the transposed layout allows, which is spending one nonzero input
+ * on all kOutputs outputs from a single contiguous load.
+ *
+ * Writes ColumnMajorLayer::kOutputs values through `output`. `columns` must not be empty.
+ */
+void affineForwardSparse(const ColumnMajorLayer& columns, const uint8_t* input, size_t inputs,
+                         int32_t* output);
 
 /** Stockfish's ClippedReLU: shift back into byte range, saturating at 127 and at zero. */
 uint8_t clippedReLU(int32_t value);
