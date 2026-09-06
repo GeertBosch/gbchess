@@ -96,11 +96,11 @@ struct GoParams {
 struct Options {
     GoParams goParams;
     std::string engineCmd;
-    std::string puzzleFile;              // empty = read from stdin
-    std::string debugPath;               // empty = disabled
-    std::string puzzleName;              // empty = run all puzzles
-    std::string theme;                   // empty = run all puzzles
-    std::vector<std::string> setoptions; // "name Foo value Bar" strings sent at startup
+    std::string puzzleFile;               // empty = read from stdin
+    std::string debugPath;                // empty = disabled
+    std::string puzzleName;               // empty = run all puzzles
+    std::string theme;                    // empty = run all puzzles
+    std::vector<std::string> setoptions;  // "name Foo value Bar" strings sent at startup
     int numJobs = 1;
     bool firstOnly = false;
     bool minimize = false;
@@ -232,8 +232,7 @@ public:
             auto valuePos = opt.rfind(" value ");
             if (namePos != std::string::npos && valuePos != std::string::npos && valuePos > namePos)
                 optName = opt.substr(namePos + 5, valuePos - namePos - 5);
-            if (!knownOptions.count(optName))
-                usage("engine does not support option: " + optName);
+            if (!knownOptions.count(optName)) usage("engine does not support option: " + optName);
             sendLine("setoption " + opt);
         }
         waitReady();

@@ -3,6 +3,7 @@
 #pragma once
 #include <cstdint>
 
+// clang-format off
 constexpr uint64_t rookMagic[64] = {
   0x8180004000502080ull,
   0x0040002000100040ull,
@@ -136,3 +137,4 @@ constexpr uint64_t bishopMagic[64] = {
   0x0048400308010110ull,
   0x0004502081110200ull,
 };
+// clang-format on

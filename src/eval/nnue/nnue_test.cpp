@@ -41,8 +41,7 @@ std::string makeHeader(uint32_t version, uint32_t hash, uint32_t length, const s
 
 /** A well formed header for the Big network, from which the negative cases are derived. */
 std::string goodHeader(const std::string& desc = "test network") {
-    return makeHeader(
-        nnue::FileHeader::kVersion, nnue::kBigArchitecture.hash(), desc.size(), desc);
+    return makeHeader(nnue::FileHeader::kVersion, nnue::kBigArchitecture.hash(), desc.size(), desc);
 }
 
 /** Check that reading the given bytes is rejected, and report the diagnostic it produced. */
@@ -172,18 +171,18 @@ void testLeb128() {
         {0, "\x00", 1},
         {1, "\x01", 1},
         {-1, "\x7f", 1},
-        {63, "\x3f", 1},                        // largest single byte value
-        {-64, "\x40", 1},                       // smallest single byte value, sign extended
-        {64, "\xc0\x00", 2},                    // needs a second byte to stay positive
-        {-65, "\xbf\x7f", 2},                   //
-        {127, "\xff\x00", 2},                   //
-        {-128, "\x80\x7f", 2},                  //
-        {8191, "\xff\x3f", 2},                  // largest two byte value
-        {-8192, "\x80\x40", 2},                 // smallest two byte value
-        {32767, "\xff\xff\x01", 3},             // INT16_MAX, sign lives outside the last group
-        {-32768, "\x80\x80\x7e", 3},            // INT16_MIN
-        {-1000000, "\xc0\xfb\x42", 3},          //
-        {2147483647, "\xff\xff\xff\xff\x07", 5},  // INT32_MAX
+        {63, "\x3f", 1},                           // largest single byte value
+        {-64, "\x40", 1},                          // smallest single byte value, sign extended
+        {64, "\xc0\x00", 2},                       // needs a second byte to stay positive
+        {-65, "\xbf\x7f", 2},                      //
+        {127, "\xff\x00", 2},                      //
+        {-128, "\x80\x7f", 2},                     //
+        {8191, "\xff\x3f", 2},                     // largest two byte value
+        {-8192, "\x80\x40", 2},                    // smallest two byte value
+        {32767, "\xff\xff\x01", 3},                // INT16_MAX, sign lives outside the last group
+        {-32768, "\x80\x80\x7e", 3},               // INT16_MIN
+        {-1000000, "\xc0\xfb\x42", 3},             //
+        {2147483647, "\xff\xff\xff\xff\x07", 5},   // INT32_MAX
         {-2147483648, "\x80\x80\x80\x80\x78", 5},  // INT32_MIN
     };
 
@@ -217,13 +216,13 @@ void testLeb128() {
     expectBlockRejected<int16_t>("uncompressed block", "0123456789ABCDEFG", values.size());
     expectBlockRejected<int16_t>("truncated marker", block.substr(0, 5), values.size());
     expectBlockRejected<int16_t>("truncated block size", block.substr(0, 19), values.size());
-    expectBlockRejected<int16_t>("truncated block body", block.substr(0, block.size() - 3),
-                                 values.size());
+    expectBlockRejected<int16_t>(
+        "truncated block body", block.substr(0, block.size() - 3), values.size());
     expectBlockRejected<int16_t>("block with too few values", block, values.size() + 1);
     expectBlockRejected<int16_t>("block with too many values", block, values.size() - 1);
     expectBlockRejected<int16_t>("value that never ends", leb128Block(std::string(8, '\xff')), 1);
-    expectBlockRejected<int16_t>("value too wide for its type",
-                                 leb128Block(std::string("\xff\xff\xff\x00", 4)), 1);
+    expectBlockRejected<int16_t>(
+        "value too wide for its type", leb128Block(std::string("\xff\xff\xff\x00", 4)), 1);
 
     std::cout << "Signed LEB128 decoder matches its hand written test vectors\n";
 }
@@ -422,7 +421,7 @@ void testNetworkFile(const std::string& filename) {
     std::cout << "Read " << filename << ": " << network.header.description << "\n";
 
     size_t parameters = network.transformer.biases.size() + network.transformer.weights.size() +
-                        network.transformer.psqtWeights.size();
+        network.transformer.psqtWeights.size();
     for (const auto& stack : network.stacks)
         for (const auto* layer : {&stack.fc0, &stack.fc1, &stack.fc2})
             parameters += layer->biases.size() + layer->weights.size();
@@ -516,7 +515,7 @@ std::vector<uint16_t> featuresOf(const std::string& fen, Color perspective) {
 /** The bucket a king lands in, being the part of its own feature index above the bucket stride. */
 uint16_t bucketOf(Square king, Color perspective) {
     return featureIndex(king, addColor(PieceType::KING, perspective), king, perspective) /
-           kBucketStride;
+        kBucketStride;
 }
 
 /** The piece category of a feature index, between the king bucket and the oriented square. */
@@ -529,7 +528,7 @@ uint16_t categoryOf(Piece piece, Color perspective) {
 }
 
 /** A king that has not moved is in the last bucket, where the hand computed cases below live. */
-constexpr uint16_t kHomeBucket = 31 * kBucketStride;             // 21824
+constexpr uint16_t kHomeBucket = 31 * kBucketStride;                // 21824
 constexpr uint16_t kKingCategory = kHomeBucket + 10 * kNumSquares;  // kings of either color
 
 /** Kings are active features in HalfKAv2_hm, unlike in the HalfKP feature set of Stockfish 12. */
@@ -712,9 +711,18 @@ nnue::FeatureTransformer handTransformer() {
     nnue::FeatureTransformer transformer;
     transformer.biases = {1, 2, 3, 4};
     transformer.weights = {
-        10,  20,  30,  40,   // feature 0
-        -1,  -2,  -3,  -4,   // feature 1
-        100, 100, 100, 100,  // feature 2
+        10,
+        20,
+        30,
+        40,  // feature 0
+        -1,
+        -2,
+        -3,
+        -4,  // feature 1
+        100,
+        100,
+        100,
+        100,  // feature 2
     };
     transformer.psqtWeights = {
         1,  2,  3,  4,  5,  6,  7,  8,   // feature 0
@@ -759,8 +767,8 @@ void testFreshAccumulation() {
 void testTransformArithmetic() {
     // Two entries per half, so each perspective produces two output bytes.
     Accumulator white, black;
-    white.values = {200, -5, 100, 64};    // halves (200, -5) and (100, 64)
-    black.values = {130, 300, 127, -3};   // halves (130, 300) and (127, -3)
+    white.values = {200, -5, 100, 64};   // halves (200, -5) and (100, 64)
+    black.values = {130, 300, 127, -3};  // halves (130, 300) and (127, -3)
     white.psqt = {10, -3, 7, 0, 5, 5, 5, 5};
     black.psqt = {4, 4, 4, 4, 4, 4, 4, 4};
 
@@ -773,11 +781,11 @@ void testTransformArithmetic() {
     assert(forBlack.features == std::vector<uint8_t>({126, 0, 99, 0}));
 
     // The PSQT term is the difference of the two perspectives, halved, truncating towards zero.
-    assert(transform(white, black, Color::w, 0).psqt == 3);    // (10 - 4) / 2
-    assert(transform(white, black, Color::w, 1).psqt == -3);   // (-3 - 4) / 2, not -4
-    assert(transform(white, black, Color::w, 2).psqt == 1);    // (7 - 4) / 2
-    assert(transform(white, black, Color::b, 1).psqt == 3);    // (4 - -3) / 2
-    assert(transform(white, black, Color::b, 3).psqt == 2);    // (4 - 0) / 2
+    assert(transform(white, black, Color::w, 0).psqt == 3);   // (10 - 4) / 2
+    assert(transform(white, black, Color::w, 1).psqt == -3);  // (-3 - 4) / 2, not -4
+    assert(transform(white, black, Color::w, 2).psqt == 1);   // (7 - 4) / 2
+    assert(transform(white, black, Color::b, 1).psqt == 3);   // (4 - -3) / 2
+    assert(transform(white, black, Color::b, 3).psqt == 2);   // (4 - 0) / 2
 
     // Only the PSQT term depends on the bucket; the transformed bytes never do.
     for (uint32_t bucket = 0; bucket < nnue::Architecture::kPSQTBuckets; ++bucket)
@@ -797,8 +805,8 @@ void testTransformArithmetic() {
  */
 struct GoldenTransform {
     const char* fen;
-    uint64_t hash;   // FNV-1a-64 over all l1 output bytes
-    uint32_t sum;    // their plain sum, which localizes a mismatch to ordering rather than values
+    uint64_t hash;     // FNV-1a-64 over all l1 output bytes
+    uint32_t sum;      // their plain sum, which localizes a mismatch to ordering rather than values
     uint8_t bytes[4];  // output[0], [l1/2 - 1], [l1/2] and [l1 - 1], straddling the perspectives
     int32_t psqt[nnue::Architecture::kPSQTBuckets];
 };
@@ -932,8 +940,8 @@ using nnue::affineForward;
 using nnue::AffineLayer;
 using nnue::clippedReLU;
 using nnue::LayerStack;
-using nnue::Propagation;
 using nnue::propagate;
+using nnue::Propagation;
 using nnue::sqrClippedReLU;
 
 /**
@@ -943,8 +951,11 @@ using nnue::sqrClippedReLU;
  * zeros, so only a deliberately poisoned padding can tell a reader that ignores it from one that
  * happens to add nothing.
  */
-AffineLayer makeLayer(uint32_t inputs, uint32_t outputs, const std::vector<int32_t>& biases,
-                      const std::vector<int8_t>& rows, int8_t padFill = 0) {
+AffineLayer makeLayer(uint32_t inputs,
+                      uint32_t outputs,
+                      const std::vector<int32_t>& biases,
+                      const std::vector<int8_t>& rows,
+                      int8_t padFill = 0) {
     assert(biases.size() == outputs && rows.size() == size_t(inputs) * outputs);
 
     AffineLayer layer;
@@ -965,9 +976,9 @@ void testAffineForward() {
     auto layer = makeLayer(2, 3, {10, -100, 0}, {1, 2, 3, -4, -5, 0});
     auto out = affineForward(layer, {7, 11});
     assert(out.size() == 3);
-    assert(out[0] == 10 + 1 * 7 + 2 * 11);     // 39
-    assert(out[1] == -100 + 3 * 7 - 4 * 11);   // -123
-    assert(out[2] == 0 - 5 * 7 + 0 * 11);      // -35
+    assert(out[0] == 10 + 1 * 7 + 2 * 11);    // 39
+    assert(out[1] == -100 + 3 * 7 - 4 * 11);  // -123
+    assert(out[2] == 0 - 5 * 7 + 0 * 11);     // -35
 
     // A zero input leaves nothing but the biases, whatever the weights are.
     assert(affineForward(layer, {0, 0}) == std::vector<int32_t>({10, -100, 0}));
@@ -1018,15 +1029,34 @@ LayerStack handStack() {
     LayerStack stack;
     // fc0[0] = 7928 + 100 * 2 = 8128, fc0[1] = 3715 + 127 * 3 = 4096,
     // fc0[2] = 8001 + 127 * 1 = 8128, the last being the forward skip.
-    stack.fc0 = makeLayer(4, 3, {7928, 3715, 8001},
-                          {100, 0, 0, 0,  //
-                           0, 127, 0, 0,  //
-                           0, 0, 0, 127},
+    stack.fc0 = makeLayer(4,
+                          3,
+                          {7928, 3715, 8001},
+                          {100,
+                           0,
+                           0,
+                           0,  //
+                           0,
+                           127,
+                           0,
+                           0,  //
+                           0,
+                           0,
+                           0,
+                           127},
                           127);
     // fc1[0] = 64 + 64 * 126 = 8128, fc1[1] = 96 + 100 * 32 = 3296.
-    stack.fc1 = makeLayer(4, 2, {64, 96},
-                          {64, 0, 0, 0,  //
-                           0, 100, 0, 0},
+    stack.fc1 = makeLayer(4,
+                          2,
+                          {64, 96},
+                          {64,
+                           0,
+                           0,
+                           0,  //
+                           0,
+                           100,
+                           0,
+                           0},
                           127);
     // fc2 = 1000 + 2 * 127 - 1 * 51 = 1203.
     stack.fc2 = makeLayer(2, 1, {1000}, {2, -1}, 127);
@@ -1104,195 +1134,755 @@ struct GoldenPropagation {
 /** One row per bucket, for each of the seven positions of kGoldenTransforms, in that order. */
 const GoldenPropagation
     kGoldenPropagations[std::size(kGoldenTransforms)][nnue::Architecture::kLayerStacks] = {
-    // rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
-    {
-        {0x4ac047b70a5fc77cull, 68768, 2232, 1515,
-         0x27cddc05eaf94ae9ull, 2460, 0xe41cf993997ac243ull, 79687,
-         0x7151a106fefe16e4ull, 1747, -3298, 1789, -1509},
-        {0x0277265f060dfd95ull, 82408, 20409, 3118,
-         0x354d5b9d54dc3b5cull, 2127, 0x2ed73cd94a716b3bull, -60459,
-         0x6b91bf66732bb1faull, 821, 1323, 3682, 5005},
-        {0x9b401c8400005964ull, 52356, 7623, 1133,
-         0xccce6a56c608c5ccull, 1559, 0xffd5f7990754174full, -54844,
-         0x350bf9720bb7650dull, 726, 199, 1338, 1537},
-        {0xd8404c0d23c6657bull, 20406, 12363, 2663,
-         0x0cb675e9057f13a1ull, 976, 0x675080ef9f477eb8ull, -52085,
-         0x7c8d45303aef1360ull, 493, -2559, 3145, 586},
-        {0x3aaeae5c1685d7adull, -12068, 4812, 2311,
-         0x928bafbfd713f1c2ull, 691, 0x25a9dafbaba16281ull, -44316,
-         0x75fa0792648a1569ull, 502, -1111, 2729, 1618},
-        {0xb636b08f0407e087ull, -8372, 2538, 1646,
-         0xdba200322485c10cull, 527, 0xd9e3d01c2f14a768ull, -37597,
-         0xcd7f993931d6241dull, 352, -1516, 1944, 428},
-        {0xcdda25ba7699c286ull, 14086, 203, 2732,
-         0x79b87bd9620e5dc1ull, 544, 0x74eb4667c6669459ull, -61241,
-         0x046837dc70b58228ull, 409, -2737, 3226, 489},
-        {0xf98fb2d7596b2d4cull, -7552, -1018, 2643,
-         0xc250266a6cefae0full, 452, 0xfedcf3db734d22f9ull, -69433,
-         0xbbc209fa5518528eull, 303, -2548, 3121, 573},
-    },
-    // r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 4 4
-    {
-        {0x4585d258589934f5ull, 47089, 4868, 1214,
-         0xe16ba3b4a596fe35ull, 2594, 0x4aa2e88a2ed78929ull, 67189,
-         0x5fdf1cb3558fe88dull, 1660, -19502, 1433, -18069},
-        {0x851b409085076f0cull, 81674, 19471, 3250,
-         0xbaa673148e6dc8e1ull, 2206, 0x79e42c0d14818e28ull, -57535,
-         0x038a23910cb5e83aull, 855, 663, 3838, 4501},
-        {0xa3b3d8da202517e4ull, 48257, 8149, 1559,
-         0x4c07a53a65290975ull, 1516, 0x8a8e6d4366556d3bull, -52597,
-         0x5b404b5179622136ull, 697, -1684, 1841, 157},
-        {0x3f7b1feee7b82a57ull, 18842, 11763, 2679,
-         0x8aa59cee4edf84aeull, 847, 0x83aa893a8c23ee14ull, -42980,
-         0x45ece28b1062f6a9ull, 434, -3239, 3164, -75},
-        {0x267d6b012d7be399ull, -15158, 3012, 1505,
-         0x35951d67b6d2e9f1ull, 550, 0xb6543f7c06ab0a82ull, -41422,
-         0x8d901961f2ddb56eull, 467, -1749, 1777, 28},
-        {0x5258ddb3a12b9706ull, -9103, 2332, 689,
-         0x024c37cef43a4081ull, 390, 0x2a7bcb362862b2b4ull, -33819,
-         0x1435a2847811839aull, 339, -717, 813, 96},
-        {0x53f4de5eecf87816ull, 7211, -66, 1288,
-         0x1c6208a37e0027bbull, 382, 0xf595a801c462c7b2ull, -48845,
-         0x475f9b309cb31c2aull, 379, -1106, 1521, 415},
-        {0x4ac90f547f63fe70ull, -6198, -1280, 1111,
-         0x6f47d217b379f9b7ull, 268, 0x5807ea5070345eedull, -58296,
-         0x1fc7c169626bbcbcull, 281, -1113, 1312, 199},
-    },
-    // r4rk1/pp2ppbp/2np1np1/q1p5/4P3/2N1BP2/PPPQN1PP/2KR1B1R w - - 4 12
-    {
-        {0x3fcddb9b95df248bull, 85414, 15771, -2410,
-         0xde54013503cad8d9ull, 2736, 0xdda97cba7a6c1ab6ull, 58622,
-         0x25fa8eee1700d851ull, 1550, -30330, -2846, -33176},
-        {0x5d770c215d6e3849ull, 115172, 39765, 1798,
-         0xf296b80153b58503ull, 2224, 0x8d620ae77af38d6eull, -46890,
-         0xeb37318f0bb67d77ull, 872, 2099, 2123, 4222},
-        {0x5e31a187830fab90ull, 41631, 23498, -1331,
-         0x84304a8b6970e1f6ull, 1855, 0xed295df0fea87c74ull, -67030,
-         0x13ea96af40373654ull, 697, 5815, -1572, 4243},
-        {0x4b344c22d36099e1ull, 9534, 11165, 458,
-         0x17b2b8d86e86fb96ull, 1491, 0xef3c8d33005b5653ull, -51109,
-         0x53e9d5dc4b41d217ull, 938, 3262, 540, 3802},
-        {0x59b8ffd08f1ed469ull, -24980, 2900, 445,
-         0x68b3e77fbb51dd20ull, 1105, 0x2ec9c89bec99d1a5ull, -35927,
-         0xdd8f83e56425e833ull, 912, 5743, 525, 6268},
-        {0x5a25004f77ece916ull, -16519, 2046, 178,
-         0x3054c08f3b7fc5f5ull, 838, 0x2bf95ad728fa2da8ull, -54326,
-         0xe167afd7bea3dcc3ull, 794, 7770, 210, 7980},
-        {0x462dd9c87bd7184dull, -40854, -1797, 1558,
-         0xe406b86508f52cdaull, 905, 0x5d6d524447bec194ull, -99471,
-         0x54b4edfe95851897ull, 464, 4954, 1840, 6794},
-        {0xfafaf9f14c675099ull, -23748, -2474, 824,
-         0xe2319c52d0aa7993ull, 940, 0xf6a37ecfa081ee5eull, -121682,
-         0x9f49dd17e55c8909ull, 420, 3828, 973, 4801},
-    },
-    // 2kr1b1r/pppqn1pp/2n1bp2/4p3/Q1P5/2NP1NP1/PP2PPBP/R4RK1 b - - 4 12
-    {
-        {0x3fcddb9b95df248bull, 85414, 15771, -2410,
-         0xde54013503cad8d9ull, 2736, 0xdda97cba7a6c1ab6ull, 58622,
-         0x25fa8eee1700d851ull, 1550, -30330, -2846, -33176},
-        {0x5d770c215d6e3849ull, 115172, 39765, 1798,
-         0xf296b80153b58503ull, 2224, 0x8d620ae77af38d6eull, -46890,
-         0xeb37318f0bb67d77ull, 872, 2099, 2123, 4222},
-        {0x5e31a187830fab90ull, 41631, 23498, -1331,
-         0x84304a8b6970e1f6ull, 1855, 0xed295df0fea87c74ull, -67030,
-         0x13ea96af40373654ull, 697, 5815, -1572, 4243},
-        {0x4b344c22d36099e1ull, 9534, 11165, 458,
-         0x17b2b8d86e86fb96ull, 1491, 0xef3c8d33005b5653ull, -51109,
-         0x53e9d5dc4b41d217ull, 938, 3262, 540, 3802},
-        {0x59b8ffd08f1ed469ull, -24980, 2900, 445,
-         0x68b3e77fbb51dd20ull, 1105, 0x2ec9c89bec99d1a5ull, -35927,
-         0xdd8f83e56425e833ull, 912, 5743, 525, 6268},
-        {0x5a25004f77ece916ull, -16519, 2046, 178,
-         0x3054c08f3b7fc5f5ull, 838, 0x2bf95ad728fa2da8ull, -54326,
-         0xe167afd7bea3dcc3ull, 794, 7770, 210, 7980},
-        {0x462dd9c87bd7184dull, -40854, -1797, 1558,
-         0xe406b86508f52cdaull, 905, 0x5d6d524447bec194ull, -99471,
-         0x54b4edfe95851897ull, 464, 4954, 1840, 6794},
-        {0xfafaf9f14c675099ull, -23748, -2474, 824,
-         0xe2319c52d0aa7993ull, 940, 0xf6a37ecfa081ee5eull, -121682,
-         0x9f49dd17e55c8909ull, 420, 3828, 973, 4801},
-    },
-    // 8/5k2/8/8/3P4/8/5K2/8 w - - 0 1
-    {
-        {0x7e6e4156c6f82a60ull, 3964, 514, 3881,
-         0xd6d94659ed67e080ull, 917, 0xf41a5c68fdaf8e62ull, -13209,
-         0x8acfb75fb0985331ull, 836, -2781, 4583, 1802},
-        {0x5464836930ee8c02ull, 1145, -4210, 384,
-         0x1e9b63a83ec446c8ull, 1109, 0x7025f850571f42b6ull, -24269,
-         0x52ae21c407d98d43ull, 756, 5681, 453, 6134},
-        {0x91cd41c100d212eeull, 18344, -1402, 3401,
-         0xb6f92345ae9cbd87ull, 916, 0x5eff425f69c00a47ull, -23379,
-         0x8761beba747da895ull, 720, -3394, 4016, 622},
-        {0x3dadd7af089fa8c9ull, 10702, 4986, 3246,
-         0xb1295c1b67c24312ull, 1365, 0x2bf8ba9b94d3feefull, -2818,
-         0x576335b594d5cda3ull, 878, -4117, 3833, -284},
-        {0xe86d2714e1acb738ull, 3281, 6217, 2624,
-         0x9cd85622c4767a96ull, 1101, 0x301733cc62de9875ull, -11524,
-         0xe46871e0b44eedd1ull, 936, 882, 3099, 3981},
-        {0x755ca452e5d0f891ull, 32613, 10050, 3374,
-         0xda3002cc58325274ull, 1251, 0xab4b53e0f6c71b0aull, -19185,
-         0x20d2255f7c515ca0ull, 633, -6089, 3985, -2104},
-        {0xa8ef4069c5d87008ull, 92226, 6823, 6599,
-         0x1bf6aad04033dedcull, 2035, 0x969cc8a15f94d1f0ull, -102351,
-         0xb116aa04c0920ef4ull, 785, -2970, 7794, 4824},
-        {0x1b893b70a5f2ace2ull, 75128, 10188, 8514,
-         0xa21edb7ddfdd969eull, 2479, 0xe7d6013c55b1f0d3ull, -210112,
-         0xfdd31f1608d94c43ull, 424, -1513, 10055, 8542},
-    },
-    // 8/2k5/2p5/8/1P6/8/3K4/6R1 b - - 0 1
-    {
-        {0x9d38d2617d730c08ull, -6321, -3224, 1329,
-         0x1fb773b141beca30ull, 1543, 0x7aaeacc036f6e0deull, -15433,
-         0x2bb5f237495e3cc5ull, 1576, -37585, 1569, -36016},
-        {0xa7d4d3b0adc75d61ull, 20372, 10707, 6794,
-         0x969dd155ca3b8e0aull, 1607, 0xebf1dbcce74b8b34ull, 48166,
-         0xe7d6ab6bbb469449ull, 1256, -23355, 8024, -15331},
-        {0xc2cdea101fbd5318ull, 6248, 4229, 7078,
-         0xafcb5058dc2eca45ull, 1148, 0x209278fee6b2d354ull, 5974,
-         0x231b8809a9df7ad8ull, 1345, -20508, 8359, -12149},
-        {0xc0de8fa5a5bb252dull, -2201, 3355, 4226,
-         0xd6aa4043b506c3c3ull, 1116, 0xac3858d2be9e61f7ull, -25128,
-         0x05607c76462c8aabull, 1112, -10480, 4991, -5489},
-        {0x7e7cbed43f2c738aull, 18431, 5379, 2429,
-         0xb2cffc759608c416ull, 1207, 0x3e59bd699ed83f00ull, -10503,
-         0xabea9408467c940bull, 966, -1256, 2868, 1612},
-        {0x9d77a095041ee856ull, 32661, 9794, 1982,
-         0x11863588e2c82899ull, 1624, 0x36262c0fc617fa60ull, -77867,
-         0xa681d9b75c3ed9a7ull, 488, -792, 2340, 1548},
-        {0x1c0643d1beeda1c1ull, 83179, -8253, 3379,
-         0x689e81719ee8f28full, 1734, 0x4796131384f3241aull, -89776,
-         0xca29f7319e8fb082ull, 987, -6119, 3990, -2129},
-        {0x257ed34a26f5ce1aull, 17111, 2836, 6791,
-         0x81280c1d6716a804ull, 1373, 0x2b419d47198cdad7ull, -113541,
-         0xfe0dce28ea3d9faaull, 389, -6870, 8020, 1150},
-    },
-    // 4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1
-    {
-        {0x146412d97e6ec946ull, 52285, -196, 2352,
-         0x998092d7cfbe0dadull, 2334, 0xe13aed7ae17b7d68ull, 41495,
-         0xd4a4d34ce266ef64ull, 1287, 23531, 2777, 26308},
-        {0xeda62ae29ebfcc3dull, 111458, 36999, 292,
-         0x6605e676e7032b13ull, 3040, 0x0183e593fd440168ull, -19369,
-         0x1207765d32bf5961ull, 992, 8622, 344, 8966},
-        {0x7fdb21ee791cbd8cull, 51172, 18292, 313,
-         0x2d219ba6edcf12deull, 2103, 0x28f254fc88c32fafull, -61093,
-         0x99bd994aaccd4c09ull, 992, 11566, 369, 11935},
-        {0x927d9a380674c32full, -9055, 3388, 808,
-         0x6afcfb3b86ad4caeull, 1689, 0x8a699d44f20d7ecaull, -25700,
-         0x8c38872250861dfeull, 1005, -3368, 954, -2414},
-        {0x4acf1ed9272b0e85ull, -25303, -17496, -2803,
-         0xba62880e09d04df9ull, 2398, 0x9611795e7c3ae509ull, -65951,
-         0x7b2ede567578b3b8ull, 1155, -503, -3310, -3813},
-        {0x2f2f3a6bdc2f07f4ull, -45791, 6950, -6123,
-         0x4e3e1e63cd348d50ull, 2185, 0xffd91c1202aff8e0ull, -107858,
-         0x09f7a6c117eb5852ull, 1407, -1008, -7231, -8239},
-        {0x41c8965511a3496aull, -56526, 14867, -7095,
-         0x73a6118a92481784ull, 2047, 0x55a777c68ce67526ull, -164749,
-         0x3402aedcf80af9a6ull, 679, -8722, -8379, -17101},
-        {0xabc03649c7a8ba61ull, -16966, 13643, -9260,
-         0x1ea7023637db8a6aull, 2207, 0x35728a8462095c1aull, -219666,
-         0x0e6d56b8f2cfe254ull, 519, 2585, -10937, -8352},
-    },
+        // rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1
+        {
+            {0x4ac047b70a5fc77cull,
+             68768,
+             2232,
+             1515,
+             0x27cddc05eaf94ae9ull,
+             2460,
+             0xe41cf993997ac243ull,
+             79687,
+             0x7151a106fefe16e4ull,
+             1747,
+             -3298,
+             1789,
+             -1509},
+            {0x0277265f060dfd95ull,
+             82408,
+             20409,
+             3118,
+             0x354d5b9d54dc3b5cull,
+             2127,
+             0x2ed73cd94a716b3bull,
+             -60459,
+             0x6b91bf66732bb1faull,
+             821,
+             1323,
+             3682,
+             5005},
+            {0x9b401c8400005964ull,
+             52356,
+             7623,
+             1133,
+             0xccce6a56c608c5ccull,
+             1559,
+             0xffd5f7990754174full,
+             -54844,
+             0x350bf9720bb7650dull,
+             726,
+             199,
+             1338,
+             1537},
+            {0xd8404c0d23c6657bull,
+             20406,
+             12363,
+             2663,
+             0x0cb675e9057f13a1ull,
+             976,
+             0x675080ef9f477eb8ull,
+             -52085,
+             0x7c8d45303aef1360ull,
+             493,
+             -2559,
+             3145,
+             586},
+            {0x3aaeae5c1685d7adull,
+             -12068,
+             4812,
+             2311,
+             0x928bafbfd713f1c2ull,
+             691,
+             0x25a9dafbaba16281ull,
+             -44316,
+             0x75fa0792648a1569ull,
+             502,
+             -1111,
+             2729,
+             1618},
+            {0xb636b08f0407e087ull,
+             -8372,
+             2538,
+             1646,
+             0xdba200322485c10cull,
+             527,
+             0xd9e3d01c2f14a768ull,
+             -37597,
+             0xcd7f993931d6241dull,
+             352,
+             -1516,
+             1944,
+             428},
+            {0xcdda25ba7699c286ull,
+             14086,
+             203,
+             2732,
+             0x79b87bd9620e5dc1ull,
+             544,
+             0x74eb4667c6669459ull,
+             -61241,
+             0x046837dc70b58228ull,
+             409,
+             -2737,
+             3226,
+             489},
+            {0xf98fb2d7596b2d4cull,
+             -7552,
+             -1018,
+             2643,
+             0xc250266a6cefae0full,
+             452,
+             0xfedcf3db734d22f9ull,
+             -69433,
+             0xbbc209fa5518528eull,
+             303,
+             -2548,
+             3121,
+             573},
+        },
+        // r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 4 4
+        {
+            {0x4585d258589934f5ull,
+             47089,
+             4868,
+             1214,
+             0xe16ba3b4a596fe35ull,
+             2594,
+             0x4aa2e88a2ed78929ull,
+             67189,
+             0x5fdf1cb3558fe88dull,
+             1660,
+             -19502,
+             1433,
+             -18069},
+            {0x851b409085076f0cull,
+             81674,
+             19471,
+             3250,
+             0xbaa673148e6dc8e1ull,
+             2206,
+             0x79e42c0d14818e28ull,
+             -57535,
+             0x038a23910cb5e83aull,
+             855,
+             663,
+             3838,
+             4501},
+            {0xa3b3d8da202517e4ull,
+             48257,
+             8149,
+             1559,
+             0x4c07a53a65290975ull,
+             1516,
+             0x8a8e6d4366556d3bull,
+             -52597,
+             0x5b404b5179622136ull,
+             697,
+             -1684,
+             1841,
+             157},
+            {0x3f7b1feee7b82a57ull,
+             18842,
+             11763,
+             2679,
+             0x8aa59cee4edf84aeull,
+             847,
+             0x83aa893a8c23ee14ull,
+             -42980,
+             0x45ece28b1062f6a9ull,
+             434,
+             -3239,
+             3164,
+             -75},
+            {0x267d6b012d7be399ull,
+             -15158,
+             3012,
+             1505,
+             0x35951d67b6d2e9f1ull,
+             550,
+             0xb6543f7c06ab0a82ull,
+             -41422,
+             0x8d901961f2ddb56eull,
+             467,
+             -1749,
+             1777,
+             28},
+            {0x5258ddb3a12b9706ull,
+             -9103,
+             2332,
+             689,
+             0x024c37cef43a4081ull,
+             390,
+             0x2a7bcb362862b2b4ull,
+             -33819,
+             0x1435a2847811839aull,
+             339,
+             -717,
+             813,
+             96},
+            {0x53f4de5eecf87816ull,
+             7211,
+             -66,
+             1288,
+             0x1c6208a37e0027bbull,
+             382,
+             0xf595a801c462c7b2ull,
+             -48845,
+             0x475f9b309cb31c2aull,
+             379,
+             -1106,
+             1521,
+             415},
+            {0x4ac90f547f63fe70ull,
+             -6198,
+             -1280,
+             1111,
+             0x6f47d217b379f9b7ull,
+             268,
+             0x5807ea5070345eedull,
+             -58296,
+             0x1fc7c169626bbcbcull,
+             281,
+             -1113,
+             1312,
+             199},
+        },
+        // r4rk1/pp2ppbp/2np1np1/q1p5/4P3/2N1BP2/PPPQN1PP/2KR1B1R w - - 4 12
+        {
+            {0x3fcddb9b95df248bull,
+             85414,
+             15771,
+             -2410,
+             0xde54013503cad8d9ull,
+             2736,
+             0xdda97cba7a6c1ab6ull,
+             58622,
+             0x25fa8eee1700d851ull,
+             1550,
+             -30330,
+             -2846,
+             -33176},
+            {0x5d770c215d6e3849ull,
+             115172,
+             39765,
+             1798,
+             0xf296b80153b58503ull,
+             2224,
+             0x8d620ae77af38d6eull,
+             -46890,
+             0xeb37318f0bb67d77ull,
+             872,
+             2099,
+             2123,
+             4222},
+            {0x5e31a187830fab90ull,
+             41631,
+             23498,
+             -1331,
+             0x84304a8b6970e1f6ull,
+             1855,
+             0xed295df0fea87c74ull,
+             -67030,
+             0x13ea96af40373654ull,
+             697,
+             5815,
+             -1572,
+             4243},
+            {0x4b344c22d36099e1ull,
+             9534,
+             11165,
+             458,
+             0x17b2b8d86e86fb96ull,
+             1491,
+             0xef3c8d33005b5653ull,
+             -51109,
+             0x53e9d5dc4b41d217ull,
+             938,
+             3262,
+             540,
+             3802},
+            {0x59b8ffd08f1ed469ull,
+             -24980,
+             2900,
+             445,
+             0x68b3e77fbb51dd20ull,
+             1105,
+             0x2ec9c89bec99d1a5ull,
+             -35927,
+             0xdd8f83e56425e833ull,
+             912,
+             5743,
+             525,
+             6268},
+            {0x5a25004f77ece916ull,
+             -16519,
+             2046,
+             178,
+             0x3054c08f3b7fc5f5ull,
+             838,
+             0x2bf95ad728fa2da8ull,
+             -54326,
+             0xe167afd7bea3dcc3ull,
+             794,
+             7770,
+             210,
+             7980},
+            {0x462dd9c87bd7184dull,
+             -40854,
+             -1797,
+             1558,
+             0xe406b86508f52cdaull,
+             905,
+             0x5d6d524447bec194ull,
+             -99471,
+             0x54b4edfe95851897ull,
+             464,
+             4954,
+             1840,
+             6794},
+            {0xfafaf9f14c675099ull,
+             -23748,
+             -2474,
+             824,
+             0xe2319c52d0aa7993ull,
+             940,
+             0xf6a37ecfa081ee5eull,
+             -121682,
+             0x9f49dd17e55c8909ull,
+             420,
+             3828,
+             973,
+             4801},
+        },
+        // 2kr1b1r/pppqn1pp/2n1bp2/4p3/Q1P5/2NP1NP1/PP2PPBP/R4RK1 b - - 4 12
+        {
+            {0x3fcddb9b95df248bull,
+             85414,
+             15771,
+             -2410,
+             0xde54013503cad8d9ull,
+             2736,
+             0xdda97cba7a6c1ab6ull,
+             58622,
+             0x25fa8eee1700d851ull,
+             1550,
+             -30330,
+             -2846,
+             -33176},
+            {0x5d770c215d6e3849ull,
+             115172,
+             39765,
+             1798,
+             0xf296b80153b58503ull,
+             2224,
+             0x8d620ae77af38d6eull,
+             -46890,
+             0xeb37318f0bb67d77ull,
+             872,
+             2099,
+             2123,
+             4222},
+            {0x5e31a187830fab90ull,
+             41631,
+             23498,
+             -1331,
+             0x84304a8b6970e1f6ull,
+             1855,
+             0xed295df0fea87c74ull,
+             -67030,
+             0x13ea96af40373654ull,
+             697,
+             5815,
+             -1572,
+             4243},
+            {0x4b344c22d36099e1ull,
+             9534,
+             11165,
+             458,
+             0x17b2b8d86e86fb96ull,
+             1491,
+             0xef3c8d33005b5653ull,
+             -51109,
+             0x53e9d5dc4b41d217ull,
+             938,
+             3262,
+             540,
+             3802},
+            {0x59b8ffd08f1ed469ull,
+             -24980,
+             2900,
+             445,
+             0x68b3e77fbb51dd20ull,
+             1105,
+             0x2ec9c89bec99d1a5ull,
+             -35927,
+             0xdd8f83e56425e833ull,
+             912,
+             5743,
+             525,
+             6268},
+            {0x5a25004f77ece916ull,
+             -16519,
+             2046,
+             178,
+             0x3054c08f3b7fc5f5ull,
+             838,
+             0x2bf95ad728fa2da8ull,
+             -54326,
+             0xe167afd7bea3dcc3ull,
+             794,
+             7770,
+             210,
+             7980},
+            {0x462dd9c87bd7184dull,
+             -40854,
+             -1797,
+             1558,
+             0xe406b86508f52cdaull,
+             905,
+             0x5d6d524447bec194ull,
+             -99471,
+             0x54b4edfe95851897ull,
+             464,
+             4954,
+             1840,
+             6794},
+            {0xfafaf9f14c675099ull,
+             -23748,
+             -2474,
+             824,
+             0xe2319c52d0aa7993ull,
+             940,
+             0xf6a37ecfa081ee5eull,
+             -121682,
+             0x9f49dd17e55c8909ull,
+             420,
+             3828,
+             973,
+             4801},
+        },
+        // 8/5k2/8/8/3P4/8/5K2/8 w - - 0 1
+        {
+            {0x7e6e4156c6f82a60ull,
+             3964,
+             514,
+             3881,
+             0xd6d94659ed67e080ull,
+             917,
+             0xf41a5c68fdaf8e62ull,
+             -13209,
+             0x8acfb75fb0985331ull,
+             836,
+             -2781,
+             4583,
+             1802},
+            {0x5464836930ee8c02ull,
+             1145,
+             -4210,
+             384,
+             0x1e9b63a83ec446c8ull,
+             1109,
+             0x7025f850571f42b6ull,
+             -24269,
+             0x52ae21c407d98d43ull,
+             756,
+             5681,
+             453,
+             6134},
+            {0x91cd41c100d212eeull,
+             18344,
+             -1402,
+             3401,
+             0xb6f92345ae9cbd87ull,
+             916,
+             0x5eff425f69c00a47ull,
+             -23379,
+             0x8761beba747da895ull,
+             720,
+             -3394,
+             4016,
+             622},
+            {0x3dadd7af089fa8c9ull,
+             10702,
+             4986,
+             3246,
+             0xb1295c1b67c24312ull,
+             1365,
+             0x2bf8ba9b94d3feefull,
+             -2818,
+             0x576335b594d5cda3ull,
+             878,
+             -4117,
+             3833,
+             -284},
+            {0xe86d2714e1acb738ull,
+             3281,
+             6217,
+             2624,
+             0x9cd85622c4767a96ull,
+             1101,
+             0x301733cc62de9875ull,
+             -11524,
+             0xe46871e0b44eedd1ull,
+             936,
+             882,
+             3099,
+             3981},
+            {0x755ca452e5d0f891ull,
+             32613,
+             10050,
+             3374,
+             0xda3002cc58325274ull,
+             1251,
+             0xab4b53e0f6c71b0aull,
+             -19185,
+             0x20d2255f7c515ca0ull,
+             633,
+             -6089,
+             3985,
+             -2104},
+            {0xa8ef4069c5d87008ull,
+             92226,
+             6823,
+             6599,
+             0x1bf6aad04033dedcull,
+             2035,
+             0x969cc8a15f94d1f0ull,
+             -102351,
+             0xb116aa04c0920ef4ull,
+             785,
+             -2970,
+             7794,
+             4824},
+            {0x1b893b70a5f2ace2ull,
+             75128,
+             10188,
+             8514,
+             0xa21edb7ddfdd969eull,
+             2479,
+             0xe7d6013c55b1f0d3ull,
+             -210112,
+             0xfdd31f1608d94c43ull,
+             424,
+             -1513,
+             10055,
+             8542},
+        },
+        // 8/2k5/2p5/8/1P6/8/3K4/6R1 b - - 0 1
+        {
+            {0x9d38d2617d730c08ull,
+             -6321,
+             -3224,
+             1329,
+             0x1fb773b141beca30ull,
+             1543,
+             0x7aaeacc036f6e0deull,
+             -15433,
+             0x2bb5f237495e3cc5ull,
+             1576,
+             -37585,
+             1569,
+             -36016},
+            {0xa7d4d3b0adc75d61ull,
+             20372,
+             10707,
+             6794,
+             0x969dd155ca3b8e0aull,
+             1607,
+             0xebf1dbcce74b8b34ull,
+             48166,
+             0xe7d6ab6bbb469449ull,
+             1256,
+             -23355,
+             8024,
+             -15331},
+            {0xc2cdea101fbd5318ull,
+             6248,
+             4229,
+             7078,
+             0xafcb5058dc2eca45ull,
+             1148,
+             0x209278fee6b2d354ull,
+             5974,
+             0x231b8809a9df7ad8ull,
+             1345,
+             -20508,
+             8359,
+             -12149},
+            {0xc0de8fa5a5bb252dull,
+             -2201,
+             3355,
+             4226,
+             0xd6aa4043b506c3c3ull,
+             1116,
+             0xac3858d2be9e61f7ull,
+             -25128,
+             0x05607c76462c8aabull,
+             1112,
+             -10480,
+             4991,
+             -5489},
+            {0x7e7cbed43f2c738aull,
+             18431,
+             5379,
+             2429,
+             0xb2cffc759608c416ull,
+             1207,
+             0x3e59bd699ed83f00ull,
+             -10503,
+             0xabea9408467c940bull,
+             966,
+             -1256,
+             2868,
+             1612},
+            {0x9d77a095041ee856ull,
+             32661,
+             9794,
+             1982,
+             0x11863588e2c82899ull,
+             1624,
+             0x36262c0fc617fa60ull,
+             -77867,
+             0xa681d9b75c3ed9a7ull,
+             488,
+             -792,
+             2340,
+             1548},
+            {0x1c0643d1beeda1c1ull,
+             83179,
+             -8253,
+             3379,
+             0x689e81719ee8f28full,
+             1734,
+             0x4796131384f3241aull,
+             -89776,
+             0xca29f7319e8fb082ull,
+             987,
+             -6119,
+             3990,
+             -2129},
+            {0x257ed34a26f5ce1aull,
+             17111,
+             2836,
+             6791,
+             0x81280c1d6716a804ull,
+             1373,
+             0x2b419d47198cdad7ull,
+             -113541,
+             0xfe0dce28ea3d9faaull,
+             389,
+             -6870,
+             8020,
+             1150},
+        },
+        // 4k3/8/8/8/8/8/8/R3K2R w KQ - 0 1
+        {
+            {0x146412d97e6ec946ull,
+             52285,
+             -196,
+             2352,
+             0x998092d7cfbe0dadull,
+             2334,
+             0xe13aed7ae17b7d68ull,
+             41495,
+             0xd4a4d34ce266ef64ull,
+             1287,
+             23531,
+             2777,
+             26308},
+            {0xeda62ae29ebfcc3dull,
+             111458,
+             36999,
+             292,
+             0x6605e676e7032b13ull,
+             3040,
+             0x0183e593fd440168ull,
+             -19369,
+             0x1207765d32bf5961ull,
+             992,
+             8622,
+             344,
+             8966},
+            {0x7fdb21ee791cbd8cull,
+             51172,
+             18292,
+             313,
+             0x2d219ba6edcf12deull,
+             2103,
+             0x28f254fc88c32fafull,
+             -61093,
+             0x99bd994aaccd4c09ull,
+             992,
+             11566,
+             369,
+             11935},
+            {0x927d9a380674c32full,
+             -9055,
+             3388,
+             808,
+             0x6afcfb3b86ad4caeull,
+             1689,
+             0x8a699d44f20d7ecaull,
+             -25700,
+             0x8c38872250861dfeull,
+             1005,
+             -3368,
+             954,
+             -2414},
+            {0x4acf1ed9272b0e85ull,
+             -25303,
+             -17496,
+             -2803,
+             0xba62880e09d04df9ull,
+             2398,
+             0x9611795e7c3ae509ull,
+             -65951,
+             0x7b2ede567578b3b8ull,
+             1155,
+             -503,
+             -3310,
+             -3813},
+            {0x2f2f3a6bdc2f07f4ull,
+             -45791,
+             6950,
+             -6123,
+             0x4e3e1e63cd348d50ull,
+             2185,
+             0xffd91c1202aff8e0ull,
+             -107858,
+             0x09f7a6c117eb5852ull,
+             1407,
+             -1008,
+             -7231,
+             -8239},
+            {0x41c8965511a3496aull,
+             -56526,
+             14867,
+             -7095,
+             0x73a6118a92481784ull,
+             2047,
+             0x55a777c68ce67526ull,
+             -164749,
+             0x3402aedcf80af9a6ull,
+             679,
+             -8722,
+             -8379,
+             -17101},
+            {0xabc03649c7a8ba61ull,
+             -16966,
+             13643,
+             -9260,
+             0x1ea7023637db8a6aull,
+             2207,
+             0x35728a8462095c1aull,
+             -219666,
+             0x0e6d56b8f2cfe254ull,
+             519,
+             2585,
+             -10937,
+             -8352},
+        },
 };
 
 /**
@@ -1315,14 +1905,15 @@ void testGoldenPropagations(const nnue::Network& network) {
 
             // Report before asserting: which layer first disagrees is the entire diagnostic, and
             // it is lost once the assertion aborts.
-            auto agrees = [&](const char* what, uint64_t hash, uint64_t wantHash, int64_t got,
-                              int64_t want) {
-                if (hash != wantHash || got != want)
-                    std::cerr << fen << " bucket " << bucket << ": " << what << " expected hash "
-                              << std::hex << wantHash << " got " << hash << std::dec
-                              << ", expected sum " << want << " got " << got << "\n";
-                return hash == wantHash && got == want;
-            };
+            auto agrees =
+                [&](const char* what, uint64_t hash, uint64_t wantHash, int64_t got, int64_t want) {
+                    if (hash != wantHash || got != want)
+                        std::cerr << fen << " bucket " << bucket << ": " << what
+                                  << " expected hash " << std::hex << wantHash << " got " << hash
+                                  << std::dec << ", expected sum " << want << " got " << got
+                                  << "\n";
+                    return hash == wantHash && got == want;
+                };
 
             assert(p.fc0.size() == network.arch.l2 + 1);
             assert(agrees("fc0", fnv1a64(p.fc0), golden.fc0Hash, sum(p.fc0), golden.fc0Sum));
@@ -1330,14 +1921,20 @@ void testGoldenPropagations(const nnue::Network& network) {
             assert(p.fc0.back() == golden.fc0Skip);
 
             assert(p.fc1Input.size() == 2 * network.arch.l2);
-            assert(agrees("fc1 input", fnv1a64(p.fc1Input), golden.fc1InputHash, sum(p.fc1Input),
+            assert(agrees("fc1 input",
+                          fnv1a64(p.fc1Input),
+                          golden.fc1InputHash,
+                          sum(p.fc1Input),
                           golden.fc1InputSum));
 
             assert(p.fc1.size() == network.arch.l3);
             assert(agrees("fc1", fnv1a64(p.fc1), golden.fc1Hash, sum(p.fc1), golden.fc1Sum));
 
             assert(p.fc2Input.size() == network.arch.l3);
-            assert(agrees("fc2 input", fnv1a64(p.fc2Input), golden.fc2InputHash, sum(p.fc2Input),
+            assert(agrees("fc2 input",
+                          fnv1a64(p.fc2Input),
+                          golden.fc2InputHash,
+                          sum(p.fc2Input),
                           golden.fc2InputSum));
 
             if (p.fc2 != golden.fc2 || p.forwardSkip != golden.forwardSkip)
@@ -1470,9 +2067,9 @@ void testSparseAffineForward(const nnue::Network& network) {
 // Whole network evaluation
 // ---------------------------------------------------------------------------------------------
 
-using nnue::Evaluation;
 using nnue::evaluate;
 using nnue::evaluateValue;
+using nnue::Evaluation;
 using nnue::kMaxEvaluation;
 using nnue::kNormalizeToPawnValue;
 using nnue::kOutputScale;
@@ -1485,9 +2082,23 @@ void testMaterialBuckets() {
     const struct {
         uint32_t pieces;
         uint32_t bucket;
-    } kCases[] = {{2, 0},  {3, 0},  {4, 0},  {5, 1},  {8, 1},  {9, 2},
-                  {12, 2}, {13, 3}, {16, 3}, {17, 4}, {20, 4}, {21, 5},
-                  {24, 5}, {25, 6}, {28, 6}, {29, 7}, {32, 7}};
+    } kCases[] = {{2, 0},
+                  {3, 0},
+                  {4, 0},
+                  {5, 1},
+                  {8, 1},
+                  {9, 2},
+                  {12, 2},
+                  {13, 3},
+                  {16, 3},
+                  {17, 4},
+                  {20, 4},
+                  {21, 5},
+                  {24, 5},
+                  {25, 6},
+                  {28, 6},
+                  {29, 7},
+                  {32, 7}};
     for (const auto& c : kCases) assert(materialBucket(c.pieces) == c.bucket);
 
     // The same over real boards, which is where a piece count that forgot the kings would show.
@@ -1676,7 +2287,9 @@ std::vector<std::string> placementsOf(const PieceChanges& changes, bool removed)
  * from a BoardChange rather than from the move kind, so every kind of compound move is a case
  * worth writing out: the derivation has no branch on MoveKind to read.
  */
-void expectChanges(const std::string& fen, Move move, std::vector<std::string> removed,
+void expectChanges(const std::string& fen,
+                   Move move,
+                   std::vector<std::string> removed,
                    std::vector<std::string> added) {
     auto position = fen::parsePosition(fen);
     auto change = moves::prepareMove(position.board, move);
@@ -1731,8 +2344,10 @@ void testPieceChanges() {
  * the moves made from it have been unmade, which is what makes a stack the right shape for a
  * search: the entry a node comes back to must be the one it built on the way down.
  */
-size_t walkPositions(const nnue::Network& network, Position& position,
-                     AccumulatorStack& stack, int depth) {
+size_t walkPositions(const nnue::Network& network,
+                     Position& position,
+                     AccumulatorStack& stack,
+                     int depth) {
     const auto& transformer = network.transformer;
     assert(stack.top() == refreshBoth(transformer, position));
     assert(evaluate(network, position, stack.top()) == evaluate(network, position));

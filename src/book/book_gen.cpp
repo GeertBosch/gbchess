@@ -62,7 +62,7 @@ struct Opening {
     operator bool() const { return plies; }
     std::string name;  // Like "Grünfeld Defense: Exchange Variation"
     ECO eco;
-    int plies = 0;     // Number of plies in this opening, 0 means no opening
+    int plies = 0;  // Number of plies in this opening, 0 means no opening
 };
 
 std::string commonPrefix(const std::string& a, const std::string& b) {

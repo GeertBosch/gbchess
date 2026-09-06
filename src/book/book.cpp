@@ -130,9 +130,8 @@ Move selectMove(const Position& position,
         uint64_t l = position.active() == Color::w ? entry.black : entry.white;
 
         // Swap ɑW/ɑL so the prior reflects the active player's expected win rate
-        DirichletPrior activePrior = position.active() == Color::w
-            ? prior
-            : DirichletPrior{prior.ɑL, prior.ɑD, prior.ɑW};
+        DirichletPrior activePrior =
+            position.active() == Color::w ? prior : DirichletPrior{prior.ɑL, prior.ɑD, prior.ɑW};
         double sampledScore = samplePosteriorScore(w, d, l, activePrior);
 
         // Apply temperature to the sampled score (the stochastic component)

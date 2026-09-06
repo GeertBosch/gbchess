@@ -75,6 +75,7 @@ void generateMagic(std::ostream& out) {
     out << "#pragma once\n";
     out << "#include <cstdint>\n\n";
 
+    out << "// clang-format off\n";
     out << "constexpr uint64_t rookMagic[" << kNumSquares << "] = {\n";
     for (auto square : SquareSet::all())
         out << "  0x" << std::setfill('0') << std::setw(16) << std::hex << std::nouppercase
@@ -88,6 +89,7 @@ void generateMagic(std::ostream& out) {
             << findMagic(square, 1) << "ull,\n";
 
     out << "};\n" << std::dec;
+    out << "// clang-format on\n";
 }
 
 /**

@@ -1,8 +1,8 @@
 
 #include <cstring>
 
-#include "square_set.h"
 #include "core/sse2.h"
+#include "square_set.h"
 
 /**
  * Returns the bits corresponding to the bytes in the input that contain the nibble.

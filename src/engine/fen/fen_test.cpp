@@ -46,8 +46,8 @@ int testparse() {
     std::cout << "Piece Placement: " << fen::to_string(position.board) << "\n";
     std::cout << "Active Color: " << to_string(turn.activeColor()) << "\n";
     std::cout << "Castling Availability: " << (int)turn.castling() << "\n";
-    std::cout << "En Passant Target: "
-              << (turn.enPassant() ? to_string(turn.enPassant()) : "-") << "\n";
+    std::cout << "En Passant Target: " << (turn.enPassant() ? to_string(turn.enPassant()) : "-")
+              << "\n";
     std::cout << "Halfmove Clock: " << (int)turn.halfmove() << "\n";
     std::cout << "Fullmove Number: " << turn.fullmove() << "\n";
 

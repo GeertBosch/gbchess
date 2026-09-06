@@ -372,7 +372,8 @@ struct Accumulator {
 Accumulator refresh(const FeatureTransformer& transformer, const ActiveFeatures& features);
 
 /** Accumulate the features `position` sets from `perspective`, as refresh() above. */
-Accumulator refresh(const FeatureTransformer& transformer, const Position& position,
+Accumulator refresh(const FeatureTransformer& transformer,
+                    const Position& position,
                     Color perspective);
 
 /**
@@ -491,7 +492,8 @@ public:
      * entire correctness argument for the incremental update, it catches every class of indexing
      * and delta error this can make, and it costs nothing in an optimized build.
      */
-    void push(const FeatureTransformer& transformer, const Position& position,
+    void push(const FeatureTransformer& transformer,
+              const Position& position,
               const PieceChanges& changes);
 
     /** Push a fresh accumulation of `position`, for a caller with no PieceChanges to offer. */
@@ -536,7 +538,9 @@ struct Transformed {
  * property of how a position is evaluated rather than of the transformer, and passing it in lets
  * one position exercise all eight.
  */
-Transformed transform(const Accumulator& white, const Accumulator& black, Color sideToMove,
+Transformed transform(const Accumulator& white,
+                      const Accumulator& black,
+                      Color sideToMove,
                       uint32_t bucket);
 
 /**
@@ -545,11 +549,15 @@ Transformed transform(const Accumulator& white, const Accumulator& black, Color 
  * The features are l1 bytes and the search transforms once per evaluated node, so returning a
  * fresh vector every time is a malloc and a free per node. Both call the same loop.
  */
-void transform(const Accumulator& white, const Accumulator& black, Color sideToMove,
-               uint32_t bucket, Transformed& transformed);
+void transform(const Accumulator& white,
+               const Accumulator& black,
+               Color sideToMove,
+               uint32_t bucket,
+               Transformed& transformed);
 
 /** Refresh both perspectives of `position` and transform them, as transform() above. */
-Transformed transform(const FeatureTransformer& transformer, const Position& position,
+Transformed transform(const FeatureTransformer& transformer,
+                      const Position& position,
                       uint32_t bucket);
 
 /**
@@ -600,7 +608,9 @@ void affineForward(const AffineLayer& layer, const uint8_t* input, int32_t* outp
  *
  * Writes ColumnMajorLayer::kOutputs values through `output`. `columns` must not be empty.
  */
-void affineForwardSparse(const ColumnMajorLayer& columns, const uint8_t* input, size_t inputs,
+void affineForwardSparse(const ColumnMajorLayer& columns,
+                         const uint8_t* input,
+                         size_t inputs,
                          int32_t* output);
 
 /** Stockfish's ClippedReLU: shift back into byte range, saturating at 127 and at zero. */
@@ -649,7 +659,8 @@ struct Propagation {
  * If `trace` is given it receives every intermediate. The traced and untraced calls run the
  * same code, so a test may trust what one reports about the other.
  */
-int32_t propagate(const LayerStack& stack, const std::vector<uint8_t>& features,
+int32_t propagate(const LayerStack& stack,
+                  const std::vector<uint8_t>& features,
                   Propagation* trace = nullptr);
 
 
@@ -715,7 +726,8 @@ struct Evaluation {
  *
  * If `trace` is given it receives the bucket and the two terms the value is made of.
  */
-int32_t evaluateValue(const Network& network, const Position& position,
+int32_t evaluateValue(const Network& network,
+                      const Position& position,
                       Evaluation* trace = nullptr);
 
 /**
@@ -725,8 +737,10 @@ int32_t evaluateValue(const Network& network, const Position& position,
  * the board only through them, so a stale pair does not evaluate this position approximately: it
  * evaluates the position it was built from, and says nothing at all about this one.
  */
-int32_t evaluateValue(const Network& network, const Position& position,
-                      const Accumulators& accumulators, Evaluation* trace = nullptr);
+int32_t evaluateValue(const Network& network,
+                      const Position& position,
+                      const Accumulators& accumulators,
+                      Evaluation* trace = nullptr);
 
 /**
  * Evaluate `position` in centipawns, positive when White stands better.
@@ -737,7 +751,8 @@ int32_t evaluateValue(const Network& network, const Position& position,
 int32_t evaluate(const Network& network, const Position& position);
 
 /** Evaluate `position` in centipawns from accumulators already computed for it, as above. */
-int32_t evaluate(const Network& network, const Position& position,
+int32_t evaluate(const Network& network,
+                 const Position& position,
                  const Accumulators& accumulators);
 
 }  // namespace nnue

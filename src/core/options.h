@@ -98,7 +98,7 @@ inline UCIOption iidDepthReduction{"IidDepthReduction", 2, 1, 10};
 inline UCIOption nodestime{"nodestime", 0, 0, 100000};       // nodes/ms; 0 = disabled
 inline UCIOption moveOverhead{"MoveOverhead", 10, 0, 5000};  // Reserved ms per move for overhead
 inline UCIOption softTimecheckPct{"SoftTimecheckPct", 70, 1, 100};  // Root node time check pct
-inline UCIOption bookTemperature{"BookTemperature", 140, 50, 400};  // percent; higher = more variety
+inline UCIOption bookTemperature{"BookTemperature", 140, 50, 400};  // pct; higher = more variety
 
 /**
  * Caching options for the perft program.

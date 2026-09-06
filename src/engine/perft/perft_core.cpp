@@ -103,10 +103,8 @@ private:
 // Some libstdc++ implementations do not provide fetch_add for atomic uint128_t.
 inline void atomicAddRelaxed(std::atomic<NodeCount>& counter, NodeCount delta) {
     auto current = counter.load(std::memory_order_relaxed);
-    while (!counter.compare_exchange_weak(current,
-                                          current + delta,
-                                          std::memory_order_relaxed,
-                                          std::memory_order_relaxed));
+    while (!counter.compare_exchange_weak(
+        current, current + delta, std::memory_order_relaxed, std::memory_order_relaxed));
 }
 
 /**
@@ -369,8 +367,7 @@ NodeCount perft(Position position, int depth, const ProgressCallback& callback, 
         return result;
     }
 
-    if (depth <= 5 || numThreads == 1)
-        return perft(position.board, state, depth, callback);
+    if (depth <= 5 || numThreads == 1) return perft(position.board, state, depth, callback);
 
     if (numThreads == 0) {
         // Auto mode: check if threading would be worthwhile for this position.

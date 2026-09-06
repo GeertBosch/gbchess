@@ -6,6 +6,8 @@ CI_NONMATE_PUZZLES=lichess/ci_nonmate_100.csv
 CCFLAGS=-std=c++17 -Werror -Wall -Wextra
 CLANGPP=clang++
 GPP=g++
+# Pinned to LLVM 19 (the version CI installs) so `make format`/`format-check` agree with CI.
+CLANG_FORMAT=clang-format-19
 LLVM_PROFDATA=llvm-profdata
 DEBUGFLAGS=-DDEBUG -O0 -g
 OPTOBJ=build/opt
@@ -63,6 +65,12 @@ ifeq ($(_system_type),Darwin)
     # -fno-sanitize-recover makes a finding abort the test instead of merely printing to stderr.
     DEBUGFLAGS:=${DEBUGFLAGS} -fsanitize=address,undefined -fno-sanitize-recover=undefined
     LINKFLAGS:=${LINKFLAGS} -Wl,-syslibroot,${sdk},-dead_strip_dylibs -mmacosx-version-min=11.0 -target darwin17.0.0 -arch ${arch}
+    # Homebrew's llvm@19 is keg-only and doesn't symlink clang-format-19 onto PATH.
+    ifneq (,$(wildcard /usr/local/opt/llvm@19/bin/clang-format))
+        CLANG_FORMAT:=/usr/local/opt/llvm@19/bin/clang-format
+    else ifneq (,$(wildcard /opt/homebrew/opt/llvm@19/bin/clang-format))
+        CLANG_FORMAT:=/opt/homebrew/opt/llvm@19/bin/clang-format
+    endif
 endif
 
 # CPP Tests
@@ -516,6 +524,16 @@ endif
 ci: build-ci ${CI_SANITIZED} build/test-cpp.out build/nnue-sse2emul.out build/perft-test.out build/fixed-puzzles.out build/searches.out build/uci.out build/magic.out build/mate-123.out build/mate-45.out build/puzzles.out build/book-cli.out dead-code
 	@echo "\n✅ CI checks passed\n"
 
+# Reformats every tracked source file in place. CLANG_FORMAT is pinned to LLVM 19 (see above)
+# so a local `make format` agrees with what format-check runs on CI.
+format:
+	$(Q)${CLANG_FORMAT} -i ${ALLSRCS} ${ALLHDRS}
+
+# Fails if any tracked source file isn't already clang-format clean. Kept separate from `ci` so
+# a formatting nit reports as its own, clearly-named failure instead of muddying the build status.
+format-check:
+	$(Q)${CLANG_FORMAT} --dry-run --Werror ${ALLSRCS} ${ALLHDRS}
+
 install-hooks:
 	$(Q)git config core.hooksPath .githooks
 	$(Q)chmod +x .githooks/pre-push
@@ -549,7 +567,7 @@ $(COMPILE_COMMANDS): ${SOURCE_LIST}
 	$(Q)echo ']' >> $@
 	$(call BUILDCMD, true)
 
-.PHONY: ci install-hooks generate-book force check-prereqs check-download-prereqs check-dead-code-prereqs
+.PHONY: ci format format-check install-hooks generate-book force check-prereqs check-download-prereqs check-dead-code-prereqs
 
 SPRT_NEW ?= build/gbchess
 SPRT_BASE ?= build/gbchess-base

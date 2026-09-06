@@ -1,7 +1,7 @@
 #include <algorithm>
 #include <chrono>
-#include <cstring>
 #include <cstdlib>  // For std::exit
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <iterator>

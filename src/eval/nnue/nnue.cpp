@@ -126,9 +126,8 @@ void readLeb128(std::istream& in, Int* out, size_t count) {
     for (size_t i = 0; i < count; ++i) out[i] = decodeLeb128<Int>(block);
 
     if (block.remaining())
-        throw std::runtime_error("Malformed NNUE block: " +
-                                 std::to_string(block.remaining()) + " bytes left after " +
-                                 std::to_string(count) + " values");
+        throw std::runtime_error("Malformed NNUE block: " + std::to_string(block.remaining()) +
+                                 " bytes left after " + std::to_string(count) + " values");
 }
 
 template void readLeb128<int16_t>(std::istream&, int16_t*, size_t);
@@ -148,8 +147,7 @@ FileHeader readFileHeader(std::istream& in, const Architecture& arch) {
         throw std::runtime_error("Unsupported NNUE architecture: " + toHex(header.hash) +
                                  ", expected " + toHex(arch.hash()));
     if (!length || length > FileHeader::kMaxDescriptionLength)
-        throw std::runtime_error("Implausible NNUE description length: " +
-                                 std::to_string(length));
+        throw std::runtime_error("Implausible NNUE description length: " + std::to_string(length));
 
     header.description.resize(length);
     in.read(header.description.data(), length);
@@ -166,8 +164,8 @@ namespace {
 void expectStructureHash(std::istream& in, uint32_t expected, const std::string& what) {
     auto hash = readUint32(in, "structure hash of " + what);
     if (hash != expected)
-        throw std::runtime_error("Unexpected NNUE structure hash for " + what + ": " +
-                                 toHex(hash) + ", expected " + toHex(expected));
+        throw std::runtime_error("Unexpected NNUE structure hash for " + what + ": " + toHex(hash) +
+                                 ", expected " + toHex(expected));
 }
 
 FeatureTransformer readFeatureTransformer(std::istream& in, const Architecture& arch) {
@@ -185,7 +183,9 @@ FeatureTransformer readFeatureTransformer(std::istream& in, const Architecture& 
     return transformer;
 }
 
-AffineLayer readAffineLayer(std::istream& in, uint32_t inputs, uint32_t outputs,
+AffineLayer readAffineLayer(std::istream& in,
+                            uint32_t inputs,
+                            uint32_t outputs,
                             const std::string& what) {
     AffineLayer layer;
     layer.inputs = inputs;
@@ -285,8 +285,7 @@ Square kingSquare(const Board& board, Color color) {
  * the network was trained against, so we must not widen the sum here. It is also why subtracting
  * a row undoes adding it exactly, which is what makes an incremental update sound at all.
  */
-void addFeature(Accumulator& accumulator, const FeatureTransformer& transformer,
-                uint16_t feature) {
+void addFeature(Accumulator& accumulator, const FeatureTransformer& transformer, uint16_t feature) {
     auto l1 = accumulator.values.size();
     dassert((size_t(feature) + 1) * l1 <= transformer.weights.size());
     const auto* weights = transformer.weights.data() + size_t(feature) * l1;
@@ -307,7 +306,8 @@ void addFeature(Accumulator& accumulator, const FeatureTransformer& transformer,
  * already holds. A stack that refreshes a perspective every time a king moves does that often
  * enough for the allocation a fresh Accumulator would need to be worth not making.
  */
-void accumulate(Accumulator& accumulator, const FeatureTransformer& transformer,
+void accumulate(Accumulator& accumulator,
+                const FeatureTransformer& transformer,
                 const ActiveFeatures& features) {
     dassert(transformer.biases.size() &&
             transformer.weights.size() % transformer.biases.size() == 0);
@@ -344,7 +344,8 @@ Accumulator refresh(const FeatureTransformer& transformer, const ActiveFeatures&
     return accumulator;
 }
 
-Accumulator refresh(const FeatureTransformer& transformer, const Position& position,
+Accumulator refresh(const FeatureTransformer& transformer,
+                    const Position& position,
                     Color perspective) {
     return refresh(transformer, activeFeatures(position, perspective));
 }
@@ -352,8 +353,10 @@ Accumulator refresh(const FeatureTransformer& transformer, const Position& posit
 namespace {
 
 /** Rebuild one perspective of `position` in place, as refresh() does but without allocating. */
-void refreshInto(Accumulator& accumulator, const FeatureTransformer& transformer,
-                 const Position& position, Color perspective) {
+void refreshInto(Accumulator& accumulator,
+                 const FeatureTransformer& transformer,
+                 const Position& position,
+                 Color perspective) {
     accumulate(accumulator, transformer, activeFeatures(position, perspective));
 }
 
@@ -370,8 +373,11 @@ void refreshInto(Accumulator& accumulator, const FeatureTransformer& transformer
  * than passing counts. Arithmetic stays 16 bit and wraps, as addFeature explains.
  */
 template <size_t kAdded, size_t kRemoved>
-void combineRows(int16_t* __restrict dst, const int16_t* __restrict src,
-                 const int16_t* const* added, const int16_t* const* removed, size_t count) {
+void combineRows(int16_t* __restrict dst,
+                 const int16_t* __restrict src,
+                 const int16_t* const* added,
+                 const int16_t* const* removed,
+                 size_t count) {
     for (size_t i = 0; i < count; ++i) {
         auto value = uint16_t(src[i]);
         for (size_t a = 0; a < kAdded; ++a) value = uint16_t(value + uint16_t(added[a][i]));
@@ -386,9 +392,12 @@ void combineRows(int16_t* __restrict dst, const int16_t* __restrict src,
  *
  * Removals come first only for readability; the rows commute, as int16 addition does.
  */
-void updatePerspective(Accumulator& dst, const Accumulator& src,
-                       const FeatureTransformer& transformer, const PieceChanges& changes,
-                       Square king, Color perspective) {
+void updatePerspective(Accumulator& dst,
+                       const Accumulator& src,
+                       const FeatureTransformer& transformer,
+                       const PieceChanges& changes,
+                       Square king,
+                       Color perspective) {
     auto l1 = src.values.size();
     dassert(l1 && transformer.weights.size() % l1 == 0);
 
@@ -533,7 +542,8 @@ void AccumulatorStack::push(const FeatureTransformer& transformer, const Positio
     refreshInto(entries[count - 1].black, transformer, position, Color::b);
 }
 
-void AccumulatorStack::push(const FeatureTransformer& transformer, const Position& position,
+void AccumulatorStack::push(const FeatureTransformer& transformer,
+                            const Position& position,
                             const PieceChanges& changes) {
     if (!active()) return;
 
@@ -575,8 +585,10 @@ namespace {
  * lets a compiler see that the halves and the output cannot overlap, drop the runtime alias check
  * it would otherwise emit around the loop, and vectorize the whole thing.
  */
-void transformHalf(const int16_t* __restrict first, const int16_t* __restrict second,
-                   uint8_t* __restrict output, size_t count) {
+void transformHalf(const int16_t* __restrict first,
+                   const int16_t* __restrict second,
+                   uint8_t* __restrict output,
+                   size_t count) {
     for (size_t j = 0; j < count; ++j) {
         // Both clips land in [0, 127], so their product needs 14 bits and the whole step stays in
         // int16 - which is what lets a vectorized loop keep 8 values per register instead of
@@ -589,8 +601,11 @@ void transformHalf(const int16_t* __restrict first, const int16_t* __restrict se
 
 }  // namespace
 
-void transform(const Accumulator& white, const Accumulator& black, Color sideToMove,
-               uint32_t bucket, Transformed& transformed) {
+void transform(const Accumulator& white,
+               const Accumulator& black,
+               Color sideToMove,
+               uint32_t bucket,
+               Transformed& transformed) {
     dassert(bucket < Architecture::kPSQTBuckets);
     dassert(white.values.size() == black.values.size());
 
@@ -611,7 +626,9 @@ void transform(const Accumulator& white, const Accumulator& black, Color sideToM
     }
 }
 
-Transformed transform(const Accumulator& white, const Accumulator& black, Color sideToMove,
+Transformed transform(const Accumulator& white,
+                      const Accumulator& black,
+                      Color sideToMove,
                       uint32_t bucket) {
     Transformed transformed;
     transform(white, black, sideToMove, bucket, transformed);
@@ -619,7 +636,8 @@ Transformed transform(const Accumulator& white, const Accumulator& black, Color 
     return transformed;
 }
 
-Transformed transform(const FeatureTransformer& transformer, const Position& position,
+Transformed transform(const FeatureTransformer& transformer,
+                      const Position& position,
                       uint32_t bucket) {
     return transform(refresh(transformer, position, Color::w),
                      refresh(transformer, position, Color::b),
@@ -686,7 +704,9 @@ unsigned nonzeroMask(const uint8_t* input) {
 
 }  // namespace
 
-void affineForwardSparse(const ColumnMajorLayer& columns, const uint8_t* input, size_t inputs,
+void affineForwardSparse(const ColumnMajorLayer& columns,
+                         const uint8_t* input,
+                         size_t inputs,
                          int32_t* output) {
     constexpr size_t kOutputs = ColumnMajorLayer::kOutputs;
     dassert(!columns.empty() && inputs == columns.inputs);
@@ -727,7 +747,8 @@ uint8_t sqrClippedReLU(int32_t value) {
     return uint8_t(std::min<int64_t>(127, square >> (2 * kWeightScaleBits + 7)));
 }
 
-int32_t propagate(const LayerStack& stack, const std::vector<uint8_t>& features,
+int32_t propagate(const LayerStack& stack,
+                  const std::vector<uint8_t>& features,
                   Propagation* trace) {
     // The forward skip is fc0's last output, so the activations see one output fewer than fc0 has.
     dassert(stack.fc0.outputs > 1);
@@ -768,8 +789,8 @@ int32_t propagate(const LayerStack& stack, const std::vector<uint8_t>& features,
     // is 127 << kWeightScaleBits. The result's own scale puts 1.0 at 600 * kOutputScale. Stockfish
     // scales it in 32 bits, which a trained network keeps far from overflowing but an untrained or
     // corrupt one need not; widening the product changes no value this can actually see.
-    p.forwardSkip = int32_t(int64_t(p.fc0[activated]) * (600 * kOutputScale) /
-                            (127 * (1 << kWeightScaleBits)));
+    p.forwardSkip =
+        int32_t(int64_t(p.fc0[activated]) * (600 * kOutputScale) / (127 * (1 << kWeightScaleBits)));
     p.output = p.fc2 + p.forwardSkip;
 
     return p.output;
@@ -788,8 +809,10 @@ uint32_t materialBucket(const Position& position) {
     return materialBucket(countPieces(position.board));
 }
 
-int32_t evaluateValue(const Network& network, const Position& position,
-                      const Accumulators& accumulators, Evaluation* trace) {
+int32_t evaluateValue(const Network& network,
+                      const Position& position,
+                      const Accumulators& accumulators,
+                      Evaluation* trace) {
     Evaluation scratch;
     Evaluation& e = trace ? *trace : scratch;
 
@@ -816,7 +839,8 @@ int32_t evaluateValue(const Network& network, const Position& position, Evaluati
     return evaluateValue(network, position, refreshBoth(network.transformer, position), trace);
 }
 
-int32_t evaluate(const Network& network, const Position& position,
+int32_t evaluate(const Network& network,
+                 const Position& position,
                  const Accumulators& accumulators) {
     // Into centipawns, then out of the side to move's frame and into White's, which is the
     // convention the search expects. Truncation toward zero makes the order of the two

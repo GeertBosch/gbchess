@@ -31,10 +31,10 @@ int maxSelDepth = 0;
 
 // Diagnostic counters
 uint64_t evalCount = 0;
-uint64_t nodeCount = 0;      // total: all alphaBeta calls + inner QS recursion (used for node limit)
+uint64_t nodeCount = 0;  // total: all alphaBeta calls + inner QS recursion (node limit)
 uint64_t cacheCount = 0;
 uint64_t quiescenceCount = 0;
-uint64_t qsNodeCount = 0;    // inner quiesce() recursive calls
+uint64_t qsNodeCount = 0;  // inner quiesce() recursive calls
 
 extern uint64_t evalCount;
 extern uint64_t nodeCount;
@@ -154,8 +154,9 @@ class Repetitions {
     // Number of positions belonging to the pre-root game history (set by setRoot() at the start of
     // each search). Positions at indices [0, rootSize) occurred before the position being searched;
     // positions at indices >= rootSize are visited during the search itself. Used to tell apart a
-    // repetition formed within the search (a safe fact about the subtree) from one that depends on
-    // the pre-root game history (a Graph-History-Interaction hazard that must not become a TT bound).
+    // repetition formed within the search (a safe fact about the subtree) from one that depends
+    // on the pre-root game history (a Graph-History-Interaction hazard that must not become a
+    // TT bound).
     size_t rootSize = 0;
     void push_back(Hash hash) { hashes.push_back(hash); }
     void pop_back() { hashes.pop_back(); }
@@ -316,12 +317,8 @@ struct TranspositionTable {
         Scope scope = Scope::Main;
         Entry() = default;
 
-        Entry(uint64_t key,
-              Eval eval,
-              uint8_t depth,
-              EntryType type,
-              uint8_t generation,
-              Scope scope)
+        Entry(
+            uint64_t key, Eval eval, uint8_t depth, EntryType type, uint8_t generation, Scope scope)
             : key(key),
               eval(eval),
               depthleft(depth),
@@ -492,11 +489,8 @@ struct TranspositionTable {
         return true;
     }
 
-    void insert(Hash hash,
-                Eval eval,
-                uint8_t depthleft,
-                EntryType type,
-                Scope scope = Scope::Main) {
+    void insert(
+        Hash hash, Eval eval, uint8_t depthleft, EntryType type, Scope scope = Scope::Main) {
         if (clusters.empty()) return;
         if (!eval.move && eval.score.mate()) return;
 
@@ -520,11 +514,20 @@ struct TranspositionTable {
                     return;
                 }
                 // Keep deeper entries; for equal depth prefer EXACT, then LOWERBOUND.
-                if (e.depthleft > depthleft) { ++stats.numWorse; return; }
+                if (e.depthleft > depthleft) {
+                    ++stats.numWorse;
+                    return;
+                }
                 if (e.depthleft == depthleft) {
-                    if (e.type == EntryType::EXACT) { ++stats.numWorse; return; }
+                    if (e.type == EntryType::EXACT) {
+                        ++stats.numWorse;
+                        return;
+                    }
                     if (type != EntryType::EXACT && e.type == EntryType::LOWERBOUND &&
-                        type == EntryType::UPPERBOUND) { ++stats.numWorse; return; }
+                        type == EntryType::UPPERBOUND) {
+                        ++stats.numWorse;
+                        return;
+                    }
                 }
                 ++stats.numImproved;
                 ++stats.numInserted;
@@ -591,7 +594,10 @@ struct TranspositionTable {
     // Called once per search (go command) to enable aging.
     // Skipped after clear/restore so the first search sees generation-0 entries as current.
     void newSearch() {
-        if (skipNextAging) { skipNextAging = false; return; }
+        if (skipNextAging) {
+            skipNextAging = false;
+            return;
+        }
         ++numGenerations;
     }
 
@@ -743,8 +749,8 @@ void warmEvaluation() {
 }
 
 Score staticEval(const Position& position) {
-    Score white = options::useNNUE ? Score::fromCP(evaluateNetwork(position))
-                                   : evaluateBoard(position.board);
+    Score white =
+        options::useNNUE ? Score::fromCP(evaluateNetwork(position)) : evaluateBoard(position.board);
     return position.active() == Color::b ? -white : white;
 }
 
@@ -1136,8 +1142,7 @@ PrincipalVariation alphaBeta(Position& position,
 
     // Check the transposition table, which may tighten one or both search bounds
     Move ttMove;
-    if (auto pv = tryTTCutoff(position, hash, depth.left, alpha, beta, ttMove))
-        return pv;
+    if (auto pv = tryTTCutoff(position, hash, depth.left, alpha, beta, ttMove)) return pv;
 
     // Try null move pruning (only in non-PV nodes)
     if (tryNullMovePruning(position, hash, alpha, beta, depth)) return {{}, beta};
@@ -1205,9 +1210,8 @@ PrincipalVariation alphaBeta(Position& position,
             depth.left <= options::moveFutilityMaxDepthLeft &&
             moveCount >= options::moveFutilityMinMoveCount && !beta.mate() &&
             (move.kind == MoveKind::Quiet_Move || move.kind == MoveKind::Double_Push)) {
-            Score moveFutilityMargin =
-                Score::fromCP(options::moveFutilityMarginSlope * depth.left +
-                              options::moveFutilityMarginBase);
+            Score moveFutilityMargin = Score::fromCP(options::moveFutilityMarginSlope * depth.left +
+                                                     options::moveFutilityMarginBase);
             if (getStaticEval() + moveFutilityMargin <= curAlpha) {
                 ++futilityPruned;
                 continue;
