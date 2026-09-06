@@ -16,20 +16,23 @@ this plan covers everything from the layer stacks down to a network that actuall
 | 7 | `f0405d8` | Bucket selection, whole-network evaluation, centipawn scale |
 | 8 | `d44864f` | Engine integration behind `UseSF16`, one `staticEval`, measured |
 | 9 | `a018b22` | Incremental accumulators, an accumulator stack under make/unmake |
-| 10 | this commit | Sparse fc0 over transposed weights, a fused accumulator update, no allocation |
+| 10 | `42ae86a` | Sparse fc0 over transposed weights, a fused update, no allocation |
+| 11 | | Strength validation, cutover, and the removal of the SF12 evaluation |
 
-`src/eval/nnue/sf16.h` today ends at `evaluate(...)`, and everything down to it is an **exact
+`src/eval/nnue/sf16.h` ends at `evaluate(...)`, and everything down to it is an **exact
 oracle**: seven positions are verified bit-for-bit against a patched Stockfish 16.1, across all
 eight buckets, from the transformed bytes through every layer intermediate to the final `Value`
-and centipawn score. `sf16.cpp` is a complete, standalone, scalar SF16.1 evaluation, and as of
-phase 8 the engine plays with it when `UseSF16` is set.
+and centipawn score. `sf16.cpp` is a complete, standalone SF16.1 evaluation -- scalar
+through phase 9, with the sparse and SSE2 kernels of phase 10 checked against that scalar path --
+and since phase 8 the engine plays with it when `UseSF16` is set.
 
-Not yet implemented: strength validation.
+Not yet implemented: strength validation. Phase 11 is the last one, and it ends with the SF12
+evaluation deleted and `sf16.*` renamed to `nnue.*`, so nothing after it refers to two networks.
 
 The whole port keeps the file's **canonical row-major ordering**. Stockfish scrambles affine
 weights at load time to suit its SIMD kernels; gbchess does not, so the scalar reference stays
-debuggable. Phase 10 is the only place that may introduce a second, permuted layout, and only
-alongside the canonical one.
+debuggable. Phase 10 introduced the one permuted layout in the tree, the transposed `fc_0` weights,
+built at load time alongside the canonical ones and held against them by test.
 
 ---
 
@@ -128,44 +131,6 @@ transform of a 30-piece position is 9 us, and propagation through one layer stac
 a full scalar evaluation is ~14 us per node today, which is what phase 8 will measure honestly
 in real time.
 
-*Original plan follows.*
-
-The first phase that computes something new. Purely arithmetic: `Transformed::features` in,
-one int32 out. No position, no search, no engine.
-
-**API added to `sf16.h`:**
-
-```cpp
-/** Propagate the transformed features through one layer stack, yielding its raw output. */
-int32_t propagate(const LayerStack& stack, const std::vector<uint8_t>& features);
-```
-
-Internally three small steps worth naming and testing separately: an affine forward over an
-`AffineLayer` in canonical row-major order (`layer.weight(i, j)`, summing over `inputs`, not
-`paddedInputs` — the padding is zero in practice but reading it is how a layout bug hides), the
-clipped ReLU, and the squared clipped ReLU.
-
-Two details that are easy to get subtly wrong and that the golden data will catch:
-
-- `fc_0` has `l2 + 1 = 16` outputs. Outputs `0..14` feed the activations; output `15` bypasses
-  the stack entirely and is rescaled into the result. Its scaling exists because `1.0` is
-  `127 << WeightScaleBits` there but `600 * OutputScale` in the output.
-- `fc_1`'s input is the concatenation **sqr-clipped first, then plain-clipped**, both derived
-  from the same 15 `fc_0` outputs, giving 30 values padded to 32.
-
-**Non-goals:** bucket selection, PSQT, centipawns, SIMD, incremental anything.
-
-**Tests** (`sf16_test.cpp`, extending the existing synthetic + golden split):
-
-- synthetic hand-computed affine forward, clipped ReLU and sqr-clipped ReLU on tiny layers,
-  including the saturation boundaries (`>= 127 << 6` clips, and the sqr branch's `min(127, ...)`);
-- a synthetic stack whose weights make every intermediate hand-checkable;
-- golden: for each of the seven FENs and all eight buckets, every intermediate from `nndump`
-  must match exactly — not just the final int32. Matching only the last value can hide two
-  compensating errors.
-
-**Done when:** all seven golden positions propagate bit-identically through all eight stacks.
-
 ---
 
 ## Phase 7 — Whole-network evaluation — **done**
@@ -207,53 +172,6 @@ loads the network once:
 **One warning for later phases:** the checked-in sources are *not* formatted by clang-format 20,
 which is what is on this machine; running it over `sf16_test.cpp` rewrites 1300 lines it should
 not touch. Format new code by hand to match its neighbours.
-
-*Original plan follows.*
-
-Wires the transform to the stacks and produces a score.
-
-**API added:**
-
-```cpp
-/** The layer stack Stockfish selects for a position, by total piece count. */
-uint32_t materialBucket(const Position& position);
-
-/** Evaluate `position` with `network`, in Stockfish's internal Value units. */
-int32_t evaluateValue(const Network& network, const Position& position);
-
-/** Evaluate `position` in centipawns, from White's perspective. */
-int32_t evaluate(const Network& network, const Position& position);
-```
-
-- **Bucket:** `(pieceCount - 1) / 4`, which is also the PSQT bucket — one bucket selects both.
-  `ActiveFeatures::size` is already exactly the piece count (HalfKAv2_hm counts kings), so no
-  new popcount is needed; `SquareSet::size()` is an O(n) `std::distance` and should not be used
-  on this path.
-- **Combination:** `(psqt + positional) / OutputScale`, where `psqt` is `Transformed::psqt` for
-  that bucket and `positional` is phase 6's output.
-- **Sign convention:** the result is relative to the side to move (the transform puts the side
-  to move's perspective first). `nnue::evaluate` for SF12 returns a *White-relative* score by
-  negating when Black is to move; match that so the four call sites in `search.cpp` need no
-  sign changes.
-- **Scale:** Stockfish `Value` units are not gbchess centipawns. Start from the principled
-  conversion `cp = v * 100 / NormalizeToPawnValue` (**356** at the tag) and treat it as tunable,
-  the way SF12's `kScale = 0.0300682` in `nnue.cpp:307` is.
-- **Clamp before `Score`:** `Score` is an `int16_t` that *asserts* `-9999 <= cp <= 9999`, and
-  mate scores live in the top band via `Score::mateIn`. An NNUE evaluation of a won position
-  can exceed that. Clamp to something like `±9000` inside `evaluate` so a legitimate blowout
-  cannot abort a debug build or collide with mate scores.
-
-**Explicit non-goals**, all of which are Stockfish *search* heuristics rather than network
-evaluation, and none of which gbchess has the inputs for: the `adjusted` psqt/positional blend
-in `evaluate_nnue.cpp`, and `evaluate.cpp`'s optimism, complexity, non-pawn-material and
-rule-50 damping. Port them later as separate, individually SPRT'd search changes, if at all.
-
-**Tests:** golden final `Value` and centipawn score for the seven FENs; bucket selection over a
-table of piece counts including the boundaries (2 pieces → bucket 0, 32 pieces → bucket 7);
-symmetry — a position and its color-swapped mirror must evaluate to opposite scores.
-
-**Done when:** the seven golden positions produce Stockfish 16.1's exact `Value`, and a
-`--verbose` mode prints the score for an arbitrary FEN.
 
 ---
 
@@ -311,44 +229,6 @@ removes.
 Self-play at depth 6 from the start position, `UseSF16=true`, plays a normal game — 1.e4 c5 2.Nf3
 Nc6 3.Nc3 e5 4.Bc4 d6 5.O-O h6 6.Nd5 Nf6 7.Bb5 a6 8.Bxc6+ bxc6 9.Nxf6+ Qxf6 10.c3 Bg4 11.Qa4 Kd7
 12.d4 Bxf3 — with castling, captures and evaluations that stay in a sane band.
-
-*Original plan follows.*
-
-Deliberately before any optimization: get the network playing, exactly, and *measure* it. This
-is the phase that turns an oracle-verified library into an engine feature.
-
-- **Loading.** `search.cpp:92` eagerly constructs a global SF12 network at static-init time.
-  The SF16.1 Big network is ~116 MB of heap; load it lazily, only when selected, and only once.
-- **Selection.** `options::useNNUE` is a bool. Add `inline UCIOption useSF16{"UseSF16", false};`
-  next to it in `options.h`, defaulting **off** so nothing regresses while this phase lands.
-  A string-valued `EvalFile` option would be nicer but `UCIOption` has no string type today;
-  that is a separate, optional change, not a blocker — hardcode the filename next to the SF12
-  one for now.
-- **Refactor first.** `search.cpp` calls `nnue::evaluate(position, *network)` at four sites
-  (798, 872, 938, 1061 as of phase 7). Collapse them into one `Score staticEval(const Position&)`
-  helper before adding a second network. Phase 9 needs exactly one place to hook the
-  accumulator stack, and four divergent call sites is how that goes wrong.
-- **The four sites are not interchangeable, which makes that refactor a decision and not a
-  rename.** Checked at phase 7: 798 and 872 are gated on `options::useNNUE` and fall back to
-  `evaluateBoard`, while 938 and 1061 call the network unconditionally, so `UseNNUE=false` does
-  not actually turn the network off today. All four then negate for the side to move, because
-  `nnue::evaluate` hands back a White-relative score and the search wants a side-to-move one.
-  Decide deliberately what the collapsed helper does when the option is off; do not preserve
-  the current inconsistency by accident.
-- **The sign convention needs no changes at those sites.** Phase 7's `sf16::evaluate` returns
-  White-relative centipawns exactly as SF12's does, which was the point of matching it.
-- **Measure honestly.** Expect this to be *slower per node* than SF12: a full refresh is
-  2560 int16 adds per active feature, ~32 features per position, versus SF12's 256-wide
-  accumulator. The phase-4 test already prints "fresh transform of a 30 piece position: N us" —
-  that is the baseline to beat, and it should be reported before and after every later phase.
-  **Do not evaluate this phase under nodestime**: nodestime hides cost-per-node regressions
-  entirely, and cost per node is the entire subject of phases 9 and 10.
-- **Keep debug builds sane.** Debug builds run with ASan+UBSan and `make test-debug` runs them.
-  A full-refresh-per-node SF16 search under ASan will be brutally slow; keep `UseSF16` off in
-  the debug search tests, or exercise it there only through a small synthetic network.
-
-**Done when:** `UseSF16=true` plays legal, sensible games at full strength-per-node; `make -j`
-is green; a documented nodes/second figure exists for both networks in real time.
 
 ---
 
@@ -464,41 +344,6 @@ occasional `uci-move-overhead` failure on the 1 ms-budget case under a loaded ma
 fix belongs to time management, not to this port: the root must complete at least one move before
 it may honour an abort. Worth closing before phase 11 puts the network on a clock in anger.
 
-*Original plan follows.*
-
-The single largest speedup available, and the one with a clean correctness invariant.
-
-- **Where state lives:** an accumulator stack indexed by search ply, pushed in `makeMove` and
-  popped in `unmakeMove`, and it must survive `unmakeMove` intact.
-- **Correction, checked at phase 7:** `makeMoveWithEval` (search.cpp:789) is *not* on every move.
-  It has a single caller, in quiescence at line 858; the main search makes moves with plain
-  `makeMove` and evaluates lazily through `getStaticEval`. So the accumulator stack must hang off
-  every `makeMove`/`unmakeMove` pair, not off `makeMoveWithEval`, or the quiescence path will be
-  the only one that is ever correct.
-- **Update rule:** for each perspective, if that perspective's **own king moved**, refresh from
-  scratch — HalfKAv2_hm indices all depend on the king bucket and the mirroring flip, and
-  Stockfish itself refreshes on any own-king move. Otherwise apply deltas: subtract the moved
-  piece's old feature row, add its new one, subtract a captured piece's row. Castling moves the
-  king, so it always takes the refresh path.
-- **What describes the delta: `BoardChange` is already sufficient, checked at phase 7.** No
-  dirty-piece record needs adding. `prepareMove` (move.cpp:78) fills in `captured` (the piece)
-  and `first = {move.from, compound.to}`, and because `captured = board[compound.to]`, `first.to`
-  *is* the square the captured piece stood on — including for en passant, where `compoundMove`
-  sets `to` to the captured pawn's own square and uses `second` to walk the capturing pawn on to
-  its real destination. `second` likewise carries the rook in castling and the square in a
-  promotion, and `promo` is an index delta on the piece.
-  The one thing `BoardChange` does *not* name is the **moving** piece: `makeMove` recovers it as
-  `board[change.first.from]` before the board is touched. Compute the feature delta there, on the
-  pre-move board, or reconstruct it after the fact from `first.to` and `promo`.
-- **The invariant, as a test:** in debug builds, assert at every node that the incrementally
-  maintained accumulator equals a fresh `refresh()` of the same position, for both perspectives.
-  This single assertion catches essentially every class of bug this phase can introduce, and it
-  costs nothing in optimized builds. Run it over a perft-style walk of a few thousand positions
-  and over the fixed puzzle suite.
-
-**Done when:** the equality assertion holds across the debug test suite, evaluations are
-unchanged bit-for-bit from phase 8, and nodes/second in real time is materially higher.
-
 ---
 
 ## Phase 10 — Performance and SIMD — **done**
@@ -599,56 +444,123 @@ least.
 - Checked under real GCC as well as Apple clang, with and without `-DSSE2EMUL`, per
   `macos-gpp-is-clang-ci-blind-spot`.
 
-*Original plan follows.*
-
-Only after phases 8 and 9 have produced real measurements; this is where the port stops being
-obviously correct and needs the scalar path kept as an oracle.
-
-- Keep the canonical row-major layout as the reference implementation and the thing tests check.
-  If a permuted layout is needed for the affine kernels, build it at load time into a *separate*
-  runtime structure, and keep a test asserting that both paths produce identical output for the
-  golden positions. This preserves the ladder's founding design choice.
-- `AGENTS.md` (line 80) asks for well-known x86 SSE2 APIs implemented in standard C++ where
-  possible, and that abstraction already exists in the tree: `core/sse2.h` selects `<emmintrin.h>`
-  or the portable `core/sse2emul.h` and declares `constexpr bool haveSSE2 = true` either way.
-  Only `square_set.cpp` uses it today and neither NNUE does. Use it rather than raw intrinsics,
-  and run the golden tests under `-DSSE2EMUL` as well, so the emulated path stays exact.
-- The obvious targets, in expected payoff order: the feature-transformer delta adds (16-wide
-  int16), the clip-and-pairwise-multiply in `transform`, and the `fc_0` affine forward (2560
-  int8 MACs per output). `fc_1` and `fc_2` are tiny and not worth vectorizing.
-- Stockfish's sparse-input affine trick for `fc_0` exploits the many zero bytes in the
-  transformed features. Worth considering, but it is an optimization *of a verified kernel*,
-  so it belongs at the end, not the start.
-- Remember `make -j` builds with Apple clang locally but real GCC on CI; syntax-check anything
-  intrinsic-adjacent with `/usr/local/bin/g++-15 -fsyntax-only` before pushing.
-
-**Done when:** nodes/second with SF16.1 is within a stated factor of the SF12 path, and the
-scalar and optimized paths agree exactly on the golden positions.
-
 ---
 
 ## Phase 11 — Strength validation and cutover
 
-- SPRT SF16.1 against the SF12 evaluation **in real time, not nodestime**. A network that is
-  400 Elo better per node and 6x slower per node is not obviously an improvement, and nodestime
-  will report it as a triumph.
-- Watch for the known first-mover time-forfeit artifact in real-time SPRT runs
-  (`first-mover-time-forfeits`); a slower evaluation makes that failure mode more likely, and a
-  forfeit is not an evaluation result. Use `test/sprt_summary.py` to separate the two.
-- `book.csv` is tracked as of `c405f31` (confirmed at phase 7: it is in `git ls-files`, and
-  `.gitignore` un-ignores it with `!book.csv`), so start positions vary; but note that `sprt-self`
-  replays the fixed 10-puzzle endgame fixture, which is a narrow sample for an evaluation
-  change. Prefer a book-driven run for the cutover decision.
-- Retune what the evaluation feeds: the aspiration windows, futility margins and reverse
-  futility margins in `options.h` are all in centipawns and were tuned against SF12's scale.
-  A different evaluation scale silently changes all of them. Re-tune, or at minimum re-SPRT the
-  margins, before concluding the network itself is neutral.
-- Cutover: flip `UseSF16` on by default only after a passing SPRT. Keep the SF12 path and its
-  network file; two evaluations that can be switched between are worth more than a deleted one,
-  and it matches the project's "turn algorithms on and off" goal.
+The last phase: five steps in three movements, in this order. Measure (steps 1-2), because the
+measurement is what licenses everything after it. Delete (step 3), so the tree stops carrying two
+evaluations and stops talking about the one that lost. Then make what remains honest (steps 4-5):
+docs that describe the engine as it is, and a puzzle suite that cannot improve in silence.
 
-**Done when:** a passing SPRT in real time at a sane time control, with the option defaulted on
-and the result recorded.
+### Step 1 — SPRT prerequisites
+
+- `sprt-self` starts from `build/book-openings.epd`: book-exit positions generated from `book.csv`
+  by `book-gen --sprt-suite`, passed as `--openings-file` with `OwnBook=false` on both sides so
+  the book does not play on top of the suite position. That is a wide enough sample for an
+  evaluation change; run `make book-openings` and go.
+- `book.csv` is tracked and must not be regenerated: `make generate-book` downloads tens of GB.
+
+### Step 2 — The strength measurement
+
+- SPRT the SF16.1 evaluation against the current default **in real time, not nodestime**. A
+  network that is 400 Elo better per node and several times slower per node is not obviously an
+  improvement, and nodestime reports it as a triumph. This is the one measurement in the ladder
+  that nodestime cannot stand in for.
+- Watch for the known first-mover time-forfeit artifact (`first-mover-time-forfeits`): a more
+  expensive evaluation makes it likelier, and a forfeit is not an evaluation result. Use
+  `test/sprt_summary.py` to separate forfeits from losses before reading any Elo number.
+- The endgame position from phase 10 is the one place the old evaluation still leads on speed,
+  so a book-driven run (which starts from book exits, not endgames) is the honest sample.
+
+**Non-goal, deliberately deferred:** retuning what the evaluation feeds. The aspiration windows
+and futility / reverse-futility margins in `options.h` are in centipawns and were tuned against
+the old scale, so the new network is being judged with somebody else's margins. Measure it that
+way anyway. If it passes untuned it passes, and retuning becomes a separate later phase with its
+own SPRT — a tuning pass folded into the cutover would make it impossible to say which of the
+two changes bought the Elo.
+
+### Step 3 — Cutover: delete SF12, root and branch
+
+Once the bar is met, there is one evaluation. No option, no fallback path, no second network
+file, no `sf16` in an identifier. Everything below comes out in the same commit; git history is
+where the old evaluation lives from then on.
+
+- **Delete** `src/eval/nnue/nnue.{h,cpp}` and `src/eval/nnue/nnue_test.cpp` (the SF12
+  implementation), and drop `nnue.cpp` from `NNUE_SRCS`.
+- **Rename** `sf16.h` → `nnue.h`, `sf16.cpp` → `nnue.cpp`, `sf16_test.cpp` → `nnue_test.cpp`,
+  and flatten `namespace nnue::sf16` to `namespace nnue`. Use `git mv` so the history follows
+  the file. Update the `test_rules` registration and every include.
+- **Remove the switch:** the `UseSF16` option in `options.h`, `sf12Network()` in `search.cpp`,
+  and the branch in `staticEval` that chooses between them. One evaluation call remains.
+- **Makefile:** `NNUE_URL`/`NNUE_FILE` become the SF16.1 net (`nn-b1a57edbea57.nnue`); the
+  separate `SF16_NNUE_URL`/`SF16_NNUE_FILE` pair and the `nn-82215d0fd0df.nnue` download rule go
+  away; `build/sf16-sse2emul` becomes `build/nnue-sse2emul` in both `test` and `ci`. Delete the
+  local `nn-82215d0fd0df.nnue`.
+- **Two callers that are not just renames, and are the likeliest way this step breaks:**
+  - `eval_test.cpp` hardcodes `loadNNUE("nn-82215d0fd0df.nnue", nnue::kNormal)` and drives
+    `build/evals.out` against the lichess eval CSVs. It has to be repointed at the new network,
+    and its accepted error bands re-derived, because the two networks do not share a centipawn
+    scale. If the comparison is not worth re-deriving, say so and delete the target rather than
+    leaving it aimed at a deleted network.
+  - `nnue_stats.{h,cpp}` counters are only ever incremented from the SF12 `nnue.cpp`; its
+    callers in `eval_test.cpp` and `search_test.cpp` would print zeros forever. Either move the
+    instrumentation into the surviving evaluation or delete the module with its callers. Do not
+    leave dead counters.
+- **Done check for this step:** `grep -ri 'sf12\|sf16' src Makefile test` returns nothing except
+  `sprt-sf12`, which is an SPRT against the external `stockfish-12` binary and unrelated to the
+  evaluation. `make -j` and `make ci` pass.
+
+### Step 4 — Documentation pass
+
+Every doc in the tree gets read, not just the ones that mention NNUE. The rule is that a comment
+describing how the code used to behave is a bug unless it is warning about a pitfall that is
+still reachable.
+
+- Sweep at least: `README.md`, `AGENTS.md`, `USING_SPRT.md`, `USING_PUZZLES.md`, `MakeMove.md`,
+  `QSTT.md`, `SEARCH_OPTIMIZATION_ANALYSIS.md`, and the file-header comments in `search.h`,
+  `search.cpp`, `options.h` and `eval.h`.
+- Delete stale statements outright — "the SF12 network gbchess itself evaluates with", "only read
+  by the SF16 format unit test so far", the `search.h` sentence about which network is used when
+  `UseSF16` is on. Keep only what still warns about a live pitfall (nodestime hiding per-node
+  cost, first-mover forfeits, `make generate-book` downloading tens of GB, `make clean` reaching
+  into worktrees).
+- This plan file keeps its name and its phase 1-10 text: phases 5-10 are a record of porting one
+  network against another, and the contrast is the point there. Nothing *after* phase 10 should
+  mention SF12 at all.
+- `dairy.md` is a dated log; append, do not rewrite.
+- Update the `sf16-nnue-port-ladder` memory: the ladder is complete and the files are `nnue.*`.
+
+### Step 5 — Make the puzzle suites ratchet
+
+The `ci_nonmate_100` suite went from 93/100 to 98/100 solved and nothing said so. A test that can
+only silently improve can also silently regress back, and the improvement is exactly the moment the
+bar should have been raised.
+
+- `puzzle_test.cpp` reports `<stats>, <N> rating` and exits nonzero only when the *engine* fails;
+  the solved count and the derived rating are printed and then thrown away.
+  `kExpectedPuzzleRating = 2000` is only the ELO seed, not an expectation.
+- Add `--expect-rating N` (and a `--rating-tolerance` defaulting to something wider than observed
+  run-to-run noise). Below the band: fail as a regression -- the per-puzzle failure output the
+  test already prints is the diagnostic.
+  **Above the band: also fail**, with a diagnostic that says the suite got better, gives the
+  measured rating, and names the exact `Makefile` line to raise. A ratchet that only catches
+  regressions is the bug being fixed here.
+- Expectations are per suite and per depth (`ci_mate123_4000` at depth 7, `ci_mate45_100` at
+  depth 11, `ci_nonmate_100` at depth 7), so each of the three Makefile rules carries its own
+  number.
+- Before picking the band, establish how repeatable the number is: fixed depth with a fixed
+  binary should be deterministic, but the worker pool and any time-based cutoff can make it not
+  so. Measure a handful of runs. If it is deterministic, the band can be tight (a few rating
+  points); if not, the band has to cover the spread, and a too-wide band is worth less than
+  gating on the solved count instead.
+- Land the expectation numbers from the SF16.1 engine, i.e. after step 3, so the ratchet records
+  the new strength rather than immediately failing on it.
+
+**Done when:** a passing real-time SPRT is recorded here with its time control, node rates and
+forfeit count; no `sf12`/`sf16` identifier survives outside `sprt-sf12`; `make -j` and `make ci`
+are green; the docs describe the engine as it is; and the puzzle suites fail in both directions
+against a recorded expectation.
 
 ---
 
@@ -657,21 +569,26 @@ and the result recorded.
 **Working conventions.** One squashed commit per phase on master, single-line message, no PR.
 Each phase carries its own tests and states its own non-goals, as phases 1-4 did.
 
+**Nothing is kept for reference.** No commented-out code, no `#if 0`, no superseded copy of a
+function left alongside its replacement, no doc paragraph preserved as "the old plan". History is
+the archive, and it is a better one: a `log -S` search finds a deleted implementation faster than
+reading past it in the working tree does. When something is replaced, delete it.
+
 **Worktrees.** A fresh worktree has no `*.nnue`; symlink them
 (`ln -sf /Users/bosch/gbchess/nn-*.nnue <worktree>/`) or `make` re-downloads 65 MB.
 `EnterWorktree` branches from a possibly-stale `origin/master` — check and `git reset --hard
 master`. A `make clean` in the main checkout deletes matching files inside `.claude/worktrees/*`
 too; suspect it if tracked files vanish mid-session.
 
-**Test wiring.** `sf16_test.cpp` is already registered
-(`$(eval $(call test_rules,eval/nnue/sf16,...))`) and both `test-cpp` and `test-debug` depend on
-`${SF16_NNUE_FILE}` and symlink the nets into `build/`. New phases need no Makefile changes
-until phase 8 adds `sf16.cpp` to `NNUE_SRCS`/`SEARCH_SRCS`.
+**Test wiring.** `sf16_test.cpp` is registered via `$(eval $(call test_rules,eval/nnue/sf16,...))`;
+`test-cpp` and `test-debug` depend on `${SF16_NNUE_FILE}` and symlink the nets into `build/`, and
+`build/sf16-sse2emul.out` rebuilds the same test with `-DSSE2EMUL`. All three names change in
+phase 11's rename.
 
-**Sequencing risk.** The temptation is to jump from phase 6 to SIMD, because the scalar full
-refresh is visibly slow. Resist it: phase 8's measurement is what tells you whether phase 9 or
-phase 10 is the real bottleneck, and phase 9's exactness invariant is much harder to establish
-on top of a vectorized kernel than under one.
+**Sequencing risk.** Phases 8 through 10 confirmed the order: the measurement at phase 8 is
+what identified the real bottleneck, and phase 9's exactness invariant would have been much harder
+to establish on top of a vectorized kernel than under one. The same order applies to phase 11 --
+the SPRT decides, and only then does anything get deleted.
 
 **The oracle is the whole method.** Approximate agreement on a 116 MB parameter file hides
 layout and indexing errors indefinitely. Every phase above lands with exact golden values or it
